@@ -142,6 +142,10 @@ class OpenWebifApi @Inject constructor(
         return OpenWebifJson.parsePower(get(config, endpoints.powerState(config)))
     }
 
+    override suspend fun wake(config: ReceiverConfig) {
+        get(config, endpoints.powerState(config, newState = 4))
+    }
+
     override suspend fun volume(config: ReceiverConfig): VolumeStatus {
         return OpenWebifJson.parseVolume(get(config, endpoints.volume(config)))
     }

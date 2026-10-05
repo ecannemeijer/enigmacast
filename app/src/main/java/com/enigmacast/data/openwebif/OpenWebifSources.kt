@@ -81,6 +81,7 @@ class OpenWebifReceiverInfoSource @Inject constructor(
 ) : ReceiverInfoSource {
     override suspend fun capabilities(config: ReceiverConfig): ReceiverCapabilities = api.capabilities(config)
     override suspend fun powerState(config: ReceiverConfig): PowerStatus = api.powerState(config)
+    override suspend fun wake(config: ReceiverConfig) = api.wake(config)
     override suspend fun volume(config: ReceiverConfig): VolumeStatus = api.volume(config)
     override suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry> = api.bouquets(config)
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {

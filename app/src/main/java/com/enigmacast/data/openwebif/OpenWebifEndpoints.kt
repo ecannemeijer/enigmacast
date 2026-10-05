@@ -40,7 +40,10 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/epgservice?sRef=${encode(serviceReference)}")
     }
 
-    fun powerState(config: ReceiverConfig): String = api(config, "/api/powerstate")
+    fun powerState(config: ReceiverConfig, newState: Int? = null): String {
+        val query = if (newState == null) "" else "?newstate=$newState"
+        return api(config, "/api/powerstate$query")
+    }
 
     fun volume(config: ReceiverConfig): String = api(config, "/api/vol")
 

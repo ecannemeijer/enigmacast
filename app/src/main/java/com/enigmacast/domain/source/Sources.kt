@@ -35,6 +35,7 @@ interface ServiceStateSource {
 interface ReceiverInfoSource {
     suspend fun capabilities(config: ReceiverConfig): ReceiverCapabilities
     suspend fun powerState(config: ReceiverConfig): PowerStatus
+    suspend fun wake(config: ReceiverConfig)
     suspend fun volume(config: ReceiverConfig): VolumeStatus
     suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry>
     suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry>

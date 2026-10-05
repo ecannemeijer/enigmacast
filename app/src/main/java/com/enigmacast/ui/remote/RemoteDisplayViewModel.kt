@@ -99,6 +99,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private var backJob: Job? = null
     private var okMenuSent = false
     private var okJob: Job? = null
+    private var blueTextSent = false
+    private var blueJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -263,6 +265,7 @@ class RemoteDisplayViewModel @Inject constructor(
         val mapped = EnigmaKeyMapper.fromAndroidKeyCode(event.keyCode) ?: return false
         if (mapped == EnigmaKey.EXIT) return handleBack(event)
         if (mapped == EnigmaKey.OK) return handleOk(event)
+        if (mapped == EnigmaKey.BLUE) return handleBlue(event)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) keys?.onDown(mapped)
             KeyEvent.ACTION_UP -> keys?.onUp(mapped)
@@ -326,6 +329,32 @@ class RemoteDisplayViewModel @Inject constructor(
                     keys?.onUp(EnigmaKey.OK)
                 }
                 okMenuSent = false
+            }
+        }
+        return true
+    }
+
+    private fun handleBlue(event: KeyEvent): Boolean {
+        val threshold = settingsSnapshot.remote.longPressMs
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount != 0) return true
+                blueTextSent = false
+                blueJob?.cancel()
+                blueJob = viewModelScope.launch {
+                    delay(threshold)
+                    blueTextSent = true
+                    keys?.onDown(EnigmaKey.TEXT)
+                    keys?.onUp(EnigmaKey.TEXT)
+                }
+            }
+            KeyEvent.ACTION_UP -> {
+                blueJob?.cancel()
+                if (!blueTextSent) {
+                    keys?.onDown(EnigmaKey.BLUE)
+                    keys?.onUp(EnigmaKey.BLUE)
+                }
+                blueTextSent = false
             }
         }
         return true

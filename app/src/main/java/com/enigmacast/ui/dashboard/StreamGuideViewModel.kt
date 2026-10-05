@@ -11,6 +11,7 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
@@ -24,6 +25,7 @@ import javax.inject.Inject
 class StreamGuideViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val serviceSource: ServiceStateSource,
+    private val infoSource: ReceiverInfoSource,
     private val playback: LivePlaybackController,
     private val endpoints: OpenWebifEndpoints,
 ) : ViewModel() {
@@ -43,6 +45,10 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var status by mutableStateOf("")
         private set
+    var askWake by mutableStateOf(false)
+        private set
+    var waking by mutableStateOf(false)
+        private set
     private var tuneJob: Job? = null
     private var lastPressedReference = ""
     private var previewJob: Job? = null
@@ -52,9 +58,27 @@ class StreamGuideViewModel @Inject constructor(
     private var bouquetPinned = false
     private var bouquetJob: Job? = null
     private var bouquetToken = 0
+    private var powerCheckStarted = false
+    private var powerKnown = false
+    private var leaveOff = false
 
     fun refresh() {
+        val shouldCheckPower = !powerCheckStarted
+        if (shouldCheckPower) powerCheckStarted = true
         viewModelScope.launch {
+            if (shouldCheckPower) {
+                val receiver = settingsRepository.current().activeReceiver()
+                val standby = receiver?.let { box ->
+                    runCatching { infoSource.powerState(box).inStandby }.getOrNull()
+                }
+                if (standby == true) {
+                    askWake = true
+                    status = "Ontvanger staat uit"
+                    return@launch
+                }
+                powerKnown = true
+            }
+            if (askWake || leaveOff || waking || !powerKnown) return@launch
             if (browsingAwayFromTuned()) {
                 reloadShownGuide()
             } else {
@@ -64,7 +88,51 @@ class StreamGuideViewModel @Inject constructor(
         }
     }
 
+    fun confirmWake() {
+        if (waking) return
+        viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver()
+            if (receiver == null) {
+                askWake = false
+                return@launch
+            }
+            waking = true
+            val woke = runCatching { infoSource.wake(receiver) }.isSuccess
+            if (!woke) {
+                waking = false
+                status = "Aanzetten mislukt"
+                return@launch
+            }
+            var awake = false
+            for (attempt in 1..15) {
+                delay(1_000)
+                awake = runCatching { !infoSource.powerState(receiver).inStandby }.getOrDefault(false)
+                if (awake) break
+            }
+            waking = false
+            if (!awake) {
+                status = "Ontvanger reageert nog niet"
+                return@launch
+            }
+            askWake = false
+            leaveOff = false
+            powerKnown = true
+            status = ""
+            loadGuide()
+            if (!bouquetLoaded) loadBouquet()
+        }
+    }
+
+    fun declineWake() {
+        if (waking) return
+        askWake = false
+        leaveOff = true
+        powerKnown = true
+        status = "Ontvanger staat uit"
+    }
+
     fun refreshIfServiceChanged() {
+        if (!powerKnown || askWake || leaveOff || waking) return
         if (browsingAwayFromTuned() || previewJob?.isActive == true || tuneJob?.isActive == true || bouquetJob?.isActive == true) return
         viewModelScope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch

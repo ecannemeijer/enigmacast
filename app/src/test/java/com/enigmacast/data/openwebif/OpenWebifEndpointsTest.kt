@@ -47,6 +47,8 @@ class OpenWebifEndpointsTest {
             "http://192.168.1.100/api/zap?sRef=1%3A0%3A19%3A1%3A2%3A3%3A4%3A0%3A0%3A0%3A",
             endpoints.zap(config, "1:0:19:1:2:3:4:0:0:0:"),
         )
+        assertEquals("http://192.168.1.100/api/powerstate", endpoints.powerState(config))
+        assertEquals("http://192.168.1.100/api/powerstate?newstate=4", endpoints.powerState(config, 4))
     }
 
     @Test

@@ -85,6 +85,7 @@ import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.ui.settings.SettingsViewModel
+import com.enigmacast.ui.theme.TvButton
 
 private val SubmenuSurface = Color.Black
 private val FocusedButton = Color(0xFF8A5610)
@@ -110,6 +111,7 @@ fun DashboardScreen(
     onMiniPlayer: () -> Unit,
     onExit: () -> Unit,
     onBindBack: ((() -> Boolean)?) -> Unit,
+    guideModel: StreamGuideViewModel = hiltViewModel(),
 ) {
     var section by remember { mutableStateOf(DashSection.Stream) }
     var contentFocused by remember { mutableStateOf(false) }
@@ -125,9 +127,12 @@ fun DashboardScreen(
     var rcTop by remember { mutableIntStateOf(0) }
     var settingsTop by remember { mutableIntStateOf(0) }
     fun alignedHeight(itemTop: Int) = with(density) { (itemTop - contentTop).coerceAtLeast(0).toDp() }
-    DisposableEffect(contentFocused, section) {
+    DisposableEffect(contentFocused, section, guideModel.askWake) {
         onBindBack {
-            if (contentFocused) {
+            if (guideModel.askWake) {
+                guideModel.declineWake()
+                true
+            } else if (contentFocused) {
                 runCatching {
                     when (section) {
                         DashSection.Stream -> streamFocus.requestFocus()
@@ -240,6 +245,48 @@ fun DashboardScreen(
                         }
                     }
                 }
+            }
+        }
+        if (guideModel.askWake) {
+            WakePrompt(
+                waking = guideModel.waking,
+                onYes = guideModel::confirmWake,
+                onNo = guideModel::declineWake,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WakePrompt(
+    waking: Boolean,
+    onYes: () -> Unit,
+    onNo: () -> Unit,
+) {
+    val yesFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { yesFocus.requestFocus() }
+    }
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color(0xE0101010)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 640.dp)
+                .background(Color(0xFF161616))
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("De ontvanger staat uit.", color = Color.White, fontSize = 22.sp)
+            Text(
+                if (waking) "Bezig met aanzetten…" else "Zal ik de Enigma2 aanzetten?",
+                color = Color(0xFFB7C0D0),
+                fontSize = 18.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton("Ja", onYes, modifier = Modifier.focusRequester(yesFocus), enabled = !waking)
+                TvButton("Nee", onNo, enabled = !waking)
             }
         }
     }
@@ -725,6 +772,7 @@ private fun RcInfoPanel(modifier: Modifier = Modifier) {
         RcRow("Guide", "EPG")
         RcRow("P+ / P-", "Zender omhoog of omlaag")
         RcRow("Kleurknoppen", "Rood, groen, geel, blauw")
+        RcRow("Blauw vasthouden", "Teletekst")
         RcRow("0–9", "Cijfers")
         RcRow("Play / Pause / Stop", "Afspelen, pauze, stop")
     }
