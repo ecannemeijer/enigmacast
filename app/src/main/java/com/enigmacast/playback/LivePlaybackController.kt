@@ -63,6 +63,7 @@ class LivePlaybackController @Inject constructor(
 ) {
     private var player: ExoPlayer? = null
     private var currentUrl: String? = null
+    private var playbackEnabled = true
     private var settings = PlaybackSettings()
     private var scope: CoroutineScope? = null
     private var reconnectJob: Job? = null
@@ -92,7 +93,22 @@ class LivePlaybackController @Inject constructor(
         }
     }
 
+    fun stop() {
+        playbackEnabled = false
+        currentUrl = null
+        reconnectJob?.cancel()
+        releasePlayer()
+        _cues.value = emptyList()
+        _subtitlesAvailable.value = false
+        _state.value = PlayerState()
+    }
+
+    fun allowPlayback() {
+        playbackEnabled = true
+    }
+
     fun play(url: String, force: Boolean = false) {
+        if (!playbackEnabled) return
         val exo = ensurePlayer()
         if (!force && url == currentUrl && exo.playerError == null && exo.playbackState != Player.STATE_IDLE) {
             return

@@ -32,12 +32,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -106,11 +108,15 @@ fun DashboardScreen(
     showMiniPlayer: Boolean,
     onStream: () -> Unit,
     onMiniPlayer: () -> Unit,
+    onExit: () -> Unit,
+    onBindBack: ((() -> Boolean)?) -> Unit,
 ) {
     var section by remember { mutableStateOf(DashSection.Stream) }
+    var contentFocused by remember { mutableStateOf(false) }
     val streamFocus = remember { FocusRequester() }
     val channelFocus = remember { FocusRequester() }
     val epgFocus = remember { FocusRequester() }
+    val rcMenuFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
     val bouquetFocus = remember { FocusRequester() }
@@ -119,6 +125,23 @@ fun DashboardScreen(
     var rcTop by remember { mutableIntStateOf(0) }
     var settingsTop by remember { mutableIntStateOf(0) }
     fun alignedHeight(itemTop: Int) = with(density) { (itemTop - contentTop).coerceAtLeast(0).toDp() }
+    DisposableEffect(contentFocused, section) {
+        onBindBack {
+            if (contentFocused) {
+                runCatching {
+                    when (section) {
+                        DashSection.Stream -> streamFocus.requestFocus()
+                        DashSection.RcInfo -> rcMenuFocus.requestFocus()
+                        DashSection.Settings -> settingsMenuFocus.requestFocus()
+                    }
+                }
+                true
+            } else {
+                false
+            }
+        }
+        onDispose { onBindBack(null) }
+    }
     LaunchedEffect(Unit) {
         streamFocus.requestFocus()
     }
@@ -152,7 +175,9 @@ fun DashboardScreen(
                 MenuEntry(
                     icon = Icons.Filled.Info,
                     label = "RC Info",
-                    modifier = Modifier.onGloballyPositioned { rcTop = it.positionInRoot().y.roundToInt() },
+                    modifier = Modifier
+                        .focusRequester(rcMenuFocus)
+                        .onGloballyPositioned { rcTop = it.positionInRoot().y.roundToInt() },
                     onFocus = { section = DashSection.RcInfo },
                     onClick = { section = DashSection.RcInfo },
                 )
@@ -166,6 +191,20 @@ fun DashboardScreen(
                     onFocus = { section = DashSection.Settings },
                     onClick = { section = DashSection.Settings },
                 )
+                MenuEntry(
+                    icon = Icons.Filled.Close,
+                    label = "Exit",
+                    onFocus = {},
+                    onClick = onExit,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${BuildConfig.VERSION_NAME}\nbuild ${BuildConfig.VERSION_CODE}",
+                    color = Color(0xFFB7C0D0),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                )
             }
             Box(
                 modifier = Modifier
@@ -177,6 +216,7 @@ fun DashboardScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .onFocusChanged { contentFocused = it.hasFocus }
                         .onGloballyPositioned { contentTop = it.positionInRoot().y.roundToInt() },
                 ) {
                     when (section) {
@@ -680,6 +720,7 @@ private fun RcInfoPanel(modifier: Modifier = Modifier) {
         RcRow("OK vasthouden", "Enigma-menu")
         RcRow("Back kort", "Exit op de tuner")
         RcRow("Back vasthouden", "Terug naar EnigmaCast")
+        RcRow("Back in het menu", "App sluiten en stream stoppen")
         RcRow("Info", "Infobalk")
         RcRow("Guide", "EPG")
         RcRow("P+ / P-", "Zender omhoog of omlaag")

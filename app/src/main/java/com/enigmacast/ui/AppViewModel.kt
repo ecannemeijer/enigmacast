@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.BuildConfig
 import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.update.AppUpdateClient
 import com.enigmacast.update.RemoteRelease
 import com.enigmacast.update.isNewerRelease
@@ -28,6 +29,7 @@ data class UpdatePrompt(
 class AppViewModel @Inject constructor(
     settingsRepository: SettingsRepository,
     private val updates: AppUpdateClient,
+    private val playback: LivePlaybackController,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -35,12 +37,15 @@ class AppViewModel @Inject constructor(
         private set
     var updatePrompt by mutableStateOf<UpdatePrompt?>(null)
         private set
+    var onDashboardBack: (() -> Boolean)? = null
+    var requestFinish: (() -> Unit)? = null
     private var downloadJob: Job? = null
 
     private var returnScreen = AppScreen.Connection
     private var decided = false
 
     init {
+        playback.allowPlayback()
         viewModelScope.launch {
             val settings = settingsRepository.current()
             if (!decided) {
@@ -131,5 +136,11 @@ class AppViewModel @Inject constructor(
 
     fun back() {
         screen = returnScreen
+    }
+
+    fun exit() {
+        playback.stop()
+        streamRunning = false
+        requestFinish?.invoke()
     }
 }

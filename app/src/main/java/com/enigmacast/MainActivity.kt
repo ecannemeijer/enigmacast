@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         insets.hide(WindowInsetsCompat.Type.systemBars())
         insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        appViewModel.requestFinish = { finish() }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (appViewModel.updatePrompt != null) {
@@ -59,7 +60,10 @@ class MainActivity : ComponentActivity() {
                     AppScreen.Remote -> {
                         remoteInputBus.handler?.invoke(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
                     }
-                    AppScreen.Loading, AppScreen.Dashboard -> Unit
+                    AppScreen.Loading -> Unit
+                    AppScreen.Dashboard -> {
+                        if (appViewModel.onDashboardBack?.invoke() != true) appViewModel.exit()
+                    }
                 }
             }
         })
@@ -98,6 +102,8 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
                 showMiniPlayer = appViewModel.streamRunning,
                 onStream = appViewModel::openStream,
                 onMiniPlayer = appViewModel::showMiniPlayer,
+                onExit = appViewModel::exit,
+                onBindBack = { appViewModel.onDashboardBack = it },
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,

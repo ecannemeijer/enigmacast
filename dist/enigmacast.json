@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "1.0.0-beta.2",
+  "versionCode": 6,
+  "versionName": "1.0.0-beta.3",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Dashboard channel list and EPG, bouquet switching, Stable and Fast playback, HDMI audio passthrough, and DVB subtitles."
+  "notes": "Shows the version in the menu. Back or Exit from the left menu closes the app and stops the stream."
 }
