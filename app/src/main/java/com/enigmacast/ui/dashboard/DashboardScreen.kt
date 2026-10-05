@@ -51,6 +51,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -108,6 +113,7 @@ fun DashboardScreen(
     val epgFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
+    val bouquetFocus = remember { FocusRequester() }
     val density = LocalDensity.current
     var contentTop by remember { mutableIntStateOf(0) }
     var rcTop by remember { mutableIntStateOf(0) }
@@ -178,7 +184,9 @@ fun DashboardScreen(
                             showMiniPlayer,
                             channelFocus,
                             epgFocus,
+                            bouquetFocus,
                             streamFocus,
+                            settingsMenuFocus,
                             onMiniPlayer,
                             onStream,
                         )
@@ -231,7 +239,9 @@ private fun StreamPanel(
     showMiniPlayer: Boolean,
     channelFocus: FocusRequester,
     epgFocus: FocusRequester,
+    bouquetFocus: FocusRequester,
     menuFocus: FocusRequester,
+    settingsFocus: FocusRequester,
     onMiniPlayer: () -> Unit,
     onFullscreen: () -> Unit,
     guideModel: StreamGuideViewModel = hiltViewModel(),
@@ -257,7 +267,11 @@ private fun StreamPanel(
     }
     val events = guide?.events.orEmpty()
     val channels = guideModel.channels
+    val bouquets = guideModel.bouquets
     val tuned = guideModel.tunedReference.ifBlank { guide?.serviceReference.orEmpty() }
+    var bouquetsOpen by remember { mutableStateOf(false) }
+    var bouquetOpenToken by remember { mutableIntStateOf(0) }
+    var channelFocusToken by remember { mutableIntStateOf(0) }
     val shown = focusedEvent?.takeIf { selected -> events.any { it.beginEpochSec == selected.beginEpochSec && it.title == selected.title } }
         ?: guide?.currentEvent
     Column(modifier = Modifier.fillMaxSize()) {
@@ -314,15 +328,36 @@ private fun StreamPanel(
                 .padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (bouquetsOpen) {
+                BouquetColumn(
+                    bouquets = bouquets,
+                    selectedReference = guideModel.selectedBouquetReference,
+                    bouquetFocus = bouquetFocus,
+                    settingsFocus = settingsFocus,
+                    openToken = bouquetOpenToken,
+                    onPreview = guideModel::previewBouquet,
+                    onClose = {
+                        bouquetsOpen = false
+                        channelFocusToken += 1
+                    },
+                    modifier = Modifier.width(220.dp).fillMaxHeight(),
+                )
+            }
             ChannelColumn(
                 bouquetName = guideModel.bouquetName,
                 channels = channels,
                 tuned = tuned,
                 channelFocus = channelFocus,
-                menuFocus = menuFocus,
+                bouquetFocus = bouquetFocus,
                 epgFocus = epgFocus,
+                bouquetsOpen = bouquetsOpen,
                 onTune = { channel -> guideModel.tune(channel, onMiniPlayer, onFullscreen) },
                 onPreview = guideModel::preview,
+                onOpenBouquets = {
+                    bouquetsOpen = true
+                    bouquetOpenToken += 1
+                },
+                channelFocusToken = channelFocusToken,
                 modifier = Modifier.width(220.dp).fillMaxHeight(),
             )
             val anchor = events.indexOfFirst { it.current }.let { if (it >= 0) it else 0 }
@@ -360,15 +395,117 @@ private fun StreamPanel(
 }
 
 @Composable
+private fun BouquetColumn(
+    bouquets: List<BouquetEntry>,
+    selectedReference: String,
+    bouquetFocus: FocusRequester,
+    settingsFocus: FocusRequester,
+    openToken: Int,
+    onPreview: (BouquetEntry) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    val focusIndex = remember(openToken) {
+        bouquets.indexOfFirst { it.reference == selectedReference }.let { if (it >= 0) it else 0 }
+    }
+    LaunchedEffect(openToken) {
+        if (openToken == 0) return@LaunchedEffect
+        if (bouquets.isNotEmpty()) listState.scrollToItem(focusIndex)
+        runCatching { bouquetFocus.requestFocus() }
+    }
+    Column(modifier) {
+        Text(
+            "Bouquets",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 4.dp, start = 8.dp),
+        )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (bouquets.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(bouquetFocus)
+                            .focusProperties { left = settingsFocus }
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                                onClose()
+                                true
+                            }
+                            .focusable(),
+                    )
+                }
+            } else {
+                itemsIndexed(bouquets) { index, bouquet ->
+                    BouquetRow(
+                        name = bouquet.name,
+                        selected = bouquet.reference == selectedReference,
+                        onFocus = { onPreview(bouquet) },
+                        modifier = Modifier
+                            .then(if (index == focusIndex) Modifier.focusRequester(bouquetFocus) else Modifier)
+                            .focusProperties { left = settingsFocus }
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                                onClose()
+                                true
+                            },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BouquetRow(
+    name: String,
+    selected: Boolean,
+    onFocus: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = {},
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { if (it.isFocused) onFocus() },
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) Color(0xFF161616) else Color.Black,
+            contentColor = if (selected) Color(0xFFE8B84A) else Color.White,
+            focusedContainerColor = FocusedButton,
+            focusedContentColor = FocusedButtonText,
+        ),
+    ) {
+        Text(
+            name,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
 private fun ChannelColumn(
     bouquetName: String,
     channels: List<BouquetEntry>,
     tuned: String,
     channelFocus: FocusRequester,
-    menuFocus: FocusRequester,
+    bouquetFocus: FocusRequester,
     epgFocus: FocusRequester,
+    bouquetsOpen: Boolean,
     onTune: (BouquetEntry) -> Unit,
     onPreview: (BouquetEntry) -> Unit,
+    onOpenBouquets: () -> Unit,
+    channelFocusToken: Int,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -377,6 +514,11 @@ private fun ChannelColumn(
         if (channels.isEmpty()) return@LaunchedEffect
         val visible = listState.layoutInfo.visibleItemsInfo.any { it.index == anchor }
         if (!visible) listState.scrollToItem(anchor)
+    }
+    LaunchedEffect(channelFocusToken) {
+        if (channelFocusToken == 0) return@LaunchedEffect
+        if (channels.isNotEmpty()) listState.scrollToItem(anchor)
+        runCatching { channelFocus.requestFocus() }
     }
     Column(modifier.fillMaxHeight()) {
         Text(
@@ -408,8 +550,15 @@ private fun ChannelColumn(
                             .fillMaxWidth()
                             .focusRequester(channelFocus)
                             .focusProperties {
-                                left = menuFocus
+                                if (bouquetsOpen) left = bouquetFocus
                                 right = epgFocus
+                            }
+                            .onPreviewKeyEvent { event ->
+                                if (bouquetsOpen || event.type != KeyEventType.KeyDown || event.key != Key.DirectionLeft) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                onOpenBouquets()
+                                true
                             }
                             .focusable(),
                     )
@@ -424,8 +573,15 @@ private fun ChannelColumn(
                         modifier = Modifier
                             .then(if (index == anchor) Modifier.focusRequester(channelFocus) else Modifier)
                             .focusProperties {
-                                left = menuFocus
+                                if (bouquetsOpen) left = bouquetFocus
                                 right = epgFocus
+                            }
+                            .onPreviewKeyEvent { event ->
+                                if (bouquetsOpen || event.type != KeyEventType.KeyDown || event.key != Key.DirectionLeft) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                onOpenBouquets()
+                                true
                             },
                     )
                 }

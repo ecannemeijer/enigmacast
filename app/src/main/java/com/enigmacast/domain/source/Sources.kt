@@ -28,6 +28,8 @@ interface ServiceStateSource {
     suspend fun channelGuide(config: ReceiverConfig, serviceReference: String, channelName: String): ChannelGuide
     suspend fun zap(config: ReceiverConfig, serviceReference: String)
     suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList
+    suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry>
+    suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry>
 }
 
 interface ReceiverInfoSource {

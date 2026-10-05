@@ -65,6 +65,14 @@ class OpenWebifServiceStateSource @Inject constructor(
     override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList {
         return api.currentBouquetChannels(config)
     }
+
+    override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {
+        return api.televisionBouquets(config)
+    }
+
+    override suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
+        return api.channelsInBouquet(config, bouquetReference)
+    }
 }
 
 @Singleton

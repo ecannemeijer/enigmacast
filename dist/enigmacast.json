@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.0.0-alpha.3",
+  "versionCode": 5,
+  "versionName": "1.0.0-beta.2",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Shows the Enigma2 OSD on top of the live video. The previous build drew the OSD into the video surface, so it never appeared."
+  "notes": "Dashboard channel list and EPG, bouquet switching, Stable and Fast playback, HDMI audio passthrough, and DVB subtitles."
 }

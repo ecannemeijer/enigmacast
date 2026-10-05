@@ -116,6 +116,7 @@ data class BouquetEntry(
 
 data class BouquetChannelList(
     val bouquetName: String,
+    val bouquetReference: String = "",
     val channels: List<BouquetEntry>,
 )
 

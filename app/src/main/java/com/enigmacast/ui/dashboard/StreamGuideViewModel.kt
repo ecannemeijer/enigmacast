@@ -33,6 +33,10 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var bouquetName by mutableStateOf("")
         private set
+    var bouquets by mutableStateOf<List<BouquetEntry>>(emptyList())
+        private set
+    var selectedBouquetReference by mutableStateOf("")
+        private set
     var tunedReference by mutableStateOf("")
         private set
     var displayName by mutableStateOf("")
@@ -45,6 +49,9 @@ class StreamGuideViewModel @Inject constructor(
     private var shownReference = ""
     private var guideToken = 0
     private var bouquetLoaded = false
+    private var bouquetPinned = false
+    private var bouquetJob: Job? = null
+    private var bouquetToken = 0
 
     fun refresh() {
         viewModelScope.launch {
@@ -58,7 +65,7 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     fun refreshIfServiceChanged() {
-        if (browsingAwayFromTuned() || previewJob?.isActive == true || tuneJob?.isActive == true) return
+        if (browsingAwayFromTuned() || previewJob?.isActive == true || tuneJob?.isActive == true || bouquetJob?.isActive == true) return
         viewModelScope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
             val reference = runCatching { serviceSource.currentService(receiver).reference }.getOrNull()
@@ -67,7 +74,7 @@ class StreamGuideViewModel @Inject constructor(
                 loadGuide()
             }
             val known = channels.any { BouquetChannels.sameService(it.reference, reference) }
-            if (bouquetLoaded && !known) loadBouquet()
+            if (bouquetLoaded && !known && !bouquetPinned) loadBouquet()
         }
     }
 
@@ -122,6 +129,7 @@ class StreamGuideViewModel @Inject constructor(
                 }
             startPlayback(receiver, channel.reference)
             onStarted()
+            bouquetPinned = false
             runCatching { serviceSource.channelGuide(receiver, channel.reference, channel.name) }
                 .onSuccess { loaded ->
                     if (token != guideToken) return@onSuccess
@@ -188,12 +196,49 @@ class StreamGuideViewModel @Inject constructor(
             }
     }
 
+    fun previewBouquet(bouquet: BouquetEntry) {
+        if (bouquet.reference == selectedBouquetReference && bouquetLoaded) return
+        bouquetPinned = true
+        lastPressedReference = ""
+        selectedBouquetReference = bouquet.reference
+        val token = ++bouquetToken
+        bouquetJob?.cancel()
+        bouquetJob = viewModelScope.launch {
+            delay(500)
+            if (token != bouquetToken) return@launch
+            showBouquet(bouquet, token)
+        }
+    }
+
+    private suspend fun showBouquet(bouquet: BouquetEntry, token: Int) {
+        val receiver = settingsRepository.current().activeReceiver() ?: return
+        runCatching { serviceSource.channelsInBouquet(receiver, bouquet.reference) }
+            .onSuccess { loaded ->
+                if (token != bouquetToken) return@onSuccess
+                bouquetName = bouquet.name
+                channels = loaded
+                bouquetLoaded = true
+                status = ""
+                EnigmaLog.service("bouquet ${bouquet.name} channels=${loaded.size}")
+            }
+            .onFailure { error ->
+                if (token != bouquetToken) return@onFailure
+                status = error.message ?: "Kanalen niet beschikbaar"
+            }
+    }
+
     private suspend fun loadBouquet() {
         val receiver = settingsRepository.current().activeReceiver() ?: return
+        if (!bouquetPinned) {
+            runCatching { serviceSource.televisionBouquets(receiver) }
+                .onSuccess { bouquets = it }
+        }
         runCatching { serviceSource.currentBouquetChannels(receiver) }
             .onSuccess { loaded ->
+                if (bouquetPinned) return@onSuccess
                 bouquetName = loaded.bouquetName
                 channels = loaded.channels
+                selectedBouquetReference = loaded.bouquetReference
                 bouquetLoaded = true
                 EnigmaLog.service("bouquet ${loaded.bouquetName} channels=${loaded.channels.size}")
             }

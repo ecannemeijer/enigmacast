@@ -111,11 +111,19 @@ class OpenWebifApi @Inject constructor(
         for (bouquet in ordered) {
             val channels = services(config, bouquet.reference)
                 .filter { BouquetChannels.isPlayableChannel(it.reference) }
-            val list = BouquetChannelList(bouquet.name, channels)
+            val list = BouquetChannelList(bouquet.name, bouquet.reference, channels)
             if (fallback == null && channels.isNotEmpty()) fallback = list
             if (channels.any { BouquetChannels.sameService(it.reference, service.reference) }) return list
         }
-        return fallback ?: BouquetChannelList("", emptyList())
+        return fallback ?: BouquetChannelList("", "", emptyList())
+    }
+
+    override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {
+        return bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+    }
+
+    override suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
+        return services(config, bouquetReference).filter { BouquetChannels.isPlayableChannel(it.reference) }
     }
 
     override suspend fun currentService(config: ReceiverConfig): EnigmaService {

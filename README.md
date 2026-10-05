@@ -12,7 +12,7 @@ Enigma2 receiver
     /api/getcurrent --------------------> service monitor -------+--> new stream URL
 ```
 
-Android does not rebuild the infobar, channel list, EPG, menus, timers, or plugins. Those stay on the receiver and appear through the OSD grab.
+The full-screen player still shows the receiver's own OSD. The dashboard adds a local channel list and EPG so you can browse and zap without opening that player.
 
 ## Requirements
 
@@ -60,6 +60,29 @@ gradlew.bat testDebugUnitTest
 
 The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
+## Dashboard
+
+The left menu is Stream, RC Info, and Settings. With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
+
+Right from Stream enters the channel list of the current TV bouquet. Moving the focus previews that channel's EPG on the right and in the header. OK zaps and starts the mini player. OK again on the same channel opens the full-screen player. Right from a channel opens the EPG rows.
+
+Left from the channel list opens the bouquet list and focuses it. Resting on a bouquet for half a second loads its playable channels to the right. Right closes the bouquet list and returns to the channels. Left from the bouquet list focuses Settings.
+
+Bouquet rows from OpenWebif are accepted as `[reference, name]` or `[name, reference]`. The current bouquet is `info.bqref` / `info.bqname`. TV bouquets are service type 7, and playable channels are type 0. Empty bouquets stay in the list.
+
+## Settings
+
+Right from Settings opens a black submenu lined up with the Settings item: Receiver, Playback, OSD, and Info. RC Info lines up with its menu item the same way.
+
+- Receiver: host, ports, credentials, and connection test
+- Playback: Stable or Fast, Stereo or HDMI, DVB subtitles on or off, auto-reconnect
+- OSD: PNG or JPG, and the fast poll after a key
+- Info: version and build, debug overlay, verbose logging, OSD border
+
+Stable is the default. It uses a larger live buffer (about 2–15 s) and a 4 s live offset. Fast uses the short buffer (about 0.5–5 s) and a 1 s offset. Changing playback rebuilds the player.
+
+Stereo downmixes AC3 and E-AC3 to PCM. HDMI leaves passthrough to the device when the HDMI output reports those formats. DVB subtitles are drawn on the video when the transport stream has a text track. The Playback page says whether the current stream has subtitles.
+
 ## Receiver setup
 
 1. Enable OpenWebif on the receiver (OpenATV: menu, plugins, OpenWebif).
@@ -83,7 +106,7 @@ Network discovery is a Search button. It browses mDNS `_http._tcp` and fills in 
 
 All paths are built in `OpenWebifEndpoints`.
 
-- JSON API: `/api/about`, `/api/statusinfo`, `/api/getcurrent`, `/api/powerstate`, `/api/vol`, `/api/bouquets`, `/api/getservices`, `/api/remotecontrol`
+- JSON API: `/api/about`, `/api/statusinfo`, `/api/getcurrent`, `/api/powerstate`, `/api/vol`, `/api/bouquets`, `/api/getservices`, `/api/epgservice`, `/api/zap`, `/api/remotecontrol`
 - OSD: `/grab?format=png|jpg&mode=osd|all|video`
 - Stream: `http://HOST:8001/<percent-encoded service reference>`
 
@@ -95,7 +118,7 @@ Android Back sends Enigma2 EXIT. It does not close the app. Hold Back to open Se
 
 ## Streaming and OSD
 
-`LivePlaybackController` keeps a single ExoPlayer. A zap calls `setMediaItem` and `prepare`. Playback uses a small live buffer (about 0.5 s to start, 5 s maximum) when low-latency mode is on. Decoders are the TV's MediaCodec decoders, with fallback enabled: MPEG-2, H.264, H.265, AAC, AC3, and E-AC3 work when the hardware exposes them. There is no bundled FFmpeg decoder.
+`LivePlaybackController` keeps a single ExoPlayer for the dashboard and the full-screen player. A zap replaces the media item. The item is marked `video/mp2t` and read as a single program, so ExoPlayer does not sniff the first bytes. The stream connection has no read timeout. A player error is shown on the mini player. Decoders are the TV's MediaCodec decoders, with fallback enabled: MPEG-2, H.264, H.265, AAC, AC3, and E-AC3 work when the hardware exposes them. There is no bundled FFmpeg decoder.
 
 The OSD is the Enigma2 GUI framebuffer (commonly 720p or 1080p), not the active video rectangle. A 4:3 broadcast is letterboxed inside that framebuffer while menus still cover the full GUI. The overlay is therefore aligned to the video surface. When the OSD aspect and the surface aspect match (both 16:9), it uses fill-bounds. When they differ, it is scaled uniformly and centered so the GUI is not stretched.
 
@@ -117,7 +140,8 @@ Settings can enable:
 
 - OpenWebif cannot send a bare key-up or a kernel auto-repeat. Repeat is a series of short commands.
 - PNG OSD alpha depends on the image and the `grab` binary. On some boxes `mode=osd` is opaque black outside the widgets. Use OSD diagnostics on the SF8008 to see which mode keeps transparency.
-- AC3, E-AC3, and MPEG-2 depend on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
+- AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
+- DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
 - mDNS discovery is best-effort.
 - Passwords are not encrypted at rest.
 - A future receiver-side plugin can replace the OpenWebif sources (`OsdSource`, `RemoteControlSource`, `ServiceStateSource`) with a push transport without rewriting the player screen.
