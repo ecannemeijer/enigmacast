@@ -18,7 +18,7 @@ data class ReceiverConfig(
 
 @Serializable
 data class PlaybackSettings(
-    val lowLatency: Boolean = true,
+    val lowLatency: Boolean = false,
     val minBufferMs: Int = 1_500,
     val maxBufferMs: Int = 5_000,
     val bufferForPlaybackMs: Int = 500,

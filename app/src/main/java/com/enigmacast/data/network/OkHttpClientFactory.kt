@@ -46,7 +46,7 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
         streamClient?.let { return it }
         synchronized(this) {
             streamClient?.let { return it }
-            val built = baseBuilder(readTimeoutSeconds = 20)
+            val built = baseBuilder(readTimeoutSeconds = 0)
                 .retryOnConnectionFailure(true)
                 .build()
             streamClient = built

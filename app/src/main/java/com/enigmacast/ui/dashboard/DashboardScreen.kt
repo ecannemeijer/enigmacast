@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,6 +40,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,22 +62,38 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
+import com.enigmacast.BuildConfig
 import com.enigmacast.R
+import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.EpgEvent
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
+import com.enigmacast.ui.settings.SettingsViewModel
+
+private val SubmenuSurface = Color.Black
+private val FocusedButton = Color(0xFF8A5610)
+private val FocusedButtonText = Color.White
 
 private enum class DashSection {
     Stream,
     RcInfo,
     Settings,
+}
+
+private enum class SettingPage {
+    Receiver,
+    Playback,
+    Osd,
+    Info,
 }
 
 @Composable
@@ -85,6 +106,13 @@ fun DashboardScreen(
     val streamFocus = remember { FocusRequester() }
     val channelFocus = remember { FocusRequester() }
     val epgFocus = remember { FocusRequester() }
+    val settingsMenuFocus = remember { FocusRequester() }
+    val settingsPageFocus = remember { FocusRequester() }
+    val density = LocalDensity.current
+    var contentTop by remember { mutableIntStateOf(0) }
+    var rcTop by remember { mutableIntStateOf(0) }
+    var settingsTop by remember { mutableIntStateOf(0) }
+    fun alignedHeight(itemTop: Int) = with(density) { (itemTop - contentTop).coerceAtLeast(0).toDp() }
     LaunchedEffect(Unit) {
         streamFocus.requestFocus()
     }
@@ -118,12 +146,17 @@ fun DashboardScreen(
                 MenuEntry(
                     icon = Icons.Filled.Info,
                     label = "RC Info",
+                    modifier = Modifier.onGloballyPositioned { rcTop = it.positionInRoot().y.roundToInt() },
                     onFocus = { section = DashSection.RcInfo },
                     onClick = { section = DashSection.RcInfo },
                 )
                 MenuEntry(
                     icon = Icons.Filled.Settings,
                     label = "Settings",
+                    modifier = Modifier
+                        .focusRequester(settingsMenuFocus)
+                        .focusProperties { right = settingsPageFocus }
+                        .onGloballyPositioned { settingsTop = it.positionInRoot().y.roundToInt() },
                     onFocus = { section = DashSection.Settings },
                     onClick = { section = DashSection.Settings },
                 )
@@ -135,17 +168,29 @@ fun DashboardScreen(
                     .background(Color.Black)
                     .padding(start = 8.dp, top = 28.dp, end = 24.dp, bottom = 24.dp),
             ) {
-                when (section) {
-                    DashSection.Stream -> StreamPanel(
-                        showMiniPlayer,
-                        channelFocus,
-                        epgFocus,
-                        streamFocus,
-                        onMiniPlayer,
-                        onStream,
-                    )
-                    DashSection.RcInfo -> RcInfoPanel()
-                    DashSection.Settings -> ReceiverSettingsPanel()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onGloballyPositioned { contentTop = it.positionInRoot().y.roundToInt() },
+                ) {
+                    when (section) {
+                        DashSection.Stream -> StreamPanel(
+                            showMiniPlayer,
+                            channelFocus,
+                            epgFocus,
+                            streamFocus,
+                            onMiniPlayer,
+                            onStream,
+                        )
+                        DashSection.RcInfo -> Column(Modifier.fillMaxSize()) {
+                            Spacer(Modifier.height(alignedHeight(rcTop)))
+                            RcInfoPanel(Modifier.weight(1f))
+                        }
+                        DashSection.Settings -> Column(Modifier.fillMaxSize()) {
+                            Spacer(Modifier.height(alignedHeight(settingsTop)))
+                            SettingsHub(settingsPageFocus, settingsMenuFocus, Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -169,8 +214,8 @@ private fun MenuEntry(
         colors = ButtonDefaults.colors(
             containerColor = Color.Black,
             contentColor = Color.White,
-            focusedContainerColor = Color(0xFFE8B84A),
-            focusedContentColor = Color(0xFF1A1404),
+            focusedContainerColor = FocusedButton,
+            focusedContentColor = FocusedButtonText,
         ),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -406,8 +451,8 @@ private fun ChannelRow(
         colors = ButtonDefaults.colors(
             containerColor = if (tuned) Color(0xFF161616) else Color.Black,
             contentColor = if (tuned) Color(0xFFE8B84A) else Color.White,
-            focusedContainerColor = Color(0xFFE8B84A),
-            focusedContentColor = Color(0xFF1A1404),
+            focusedContainerColor = FocusedButton,
+            focusedContentColor = FocusedButtonText,
         ),
     ) {
         Text(
@@ -467,10 +512,9 @@ private fun EpgRow(
 }
 
 @Composable
-private fun RcInfoPanel() {
+private fun RcInfoPanel(modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = modifier
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -498,6 +542,151 @@ private fun RcRow(button: String, action: String) {
 }
 
 @Composable
+private fun SettingsHub(
+    pageFocus: FocusRequester,
+    menuFocus: FocusRequester,
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    var page by remember { mutableStateOf(SettingPage.Receiver) }
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    Row(modifier = modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(
+            modifier = Modifier
+                .width(160.dp)
+                .fillMaxHeight()
+                .background(SubmenuSurface)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            SettingNav("Ontvanger", page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
+            SettingNav("Weergave", page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
+            SettingNav("OSD", page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+            SettingNav("Info", page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
+        }
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            when (page) {
+                SettingPage.Receiver -> ReceiverSettingsPanel()
+                SettingPage.Playback -> PlaybackSettingsPanel(settings.playback.lowLatency, settings.playback.autoReconnect, viewModel)
+                SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
+                SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingNav(
+    label: String,
+    selected: Boolean,
+    pageFocus: FocusRequester?,
+    menuFocus: FocusRequester,
+    onSelect: () -> Unit,
+) {
+    Button(
+        onClick = onSelect,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (pageFocus != null) Modifier.focusRequester(pageFocus) else Modifier)
+            .focusProperties { left = menuFocus }
+            .onFocusChanged { if (it.isFocused) onSelect() },
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) Color(0xFF161616) else Color.Black,
+            contentColor = if (selected) Color(0xFFE8B84A) else Color.White,
+            focusedContainerColor = FocusedButton,
+            focusedContentColor = FocusedButtonText,
+        ),
+    ) {
+        Text(label, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun PlaybackSettingsPanel(
+    fast: Boolean,
+    autoReconnect: Boolean,
+    viewModel: SettingsViewModel,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 420.dp)) {
+        Text("Weergave", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            if (fast) "Snel: minder vertraging, meer kans op haperen." else "Stabiel: grotere buffer, rustiger beeld.",
+            color = Color(0xFFB7C0D0),
+            fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProfileButton("Stabiel", !fast) { viewModel.setLowLatency(false) }
+            ProfileButton("Snel", fast) { viewModel.setLowLatency(true) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Automatisch hervatten", color = Color.White, fontSize = 13.sp)
+            Switch(checked = autoReconnect, onCheckedChange = viewModel::setAutoReconnect)
+        }
+    }
+}
+
+@Composable
+private fun ProfileButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) Color(0xFF161616) else Color.Black,
+            contentColor = if (selected) Color(0xFFE8B84A) else Color.White,
+            focusedContainerColor = FocusedButton,
+            focusedContentColor = FocusedButtonText,
+        ),
+    ) {
+        Text(label, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun OsdSettingsPanel(
+    format: String,
+    fastPolling: Boolean,
+    viewModel: SettingsViewModel,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 420.dp)) {
+        Text("OSD", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        ProfileButton(if (format == "jpg") "Formaat: JPG" else "Formaat: PNG", selected = true) {
+            viewModel.setOsdFormat(if (format == "jpg") "png" else "jpg")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Snel verversen", color = Color.White, fontSize = 13.sp)
+            Switch(checked = fastPolling, onCheckedChange = viewModel::setFastPolling)
+        }
+    }
+}
+
+@Composable
+private fun InfoSettingsPanel(
+    settings: AppSettings,
+    viewModel: SettingsViewModel,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 460.dp)) {
+        Text("Info", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "${BuildConfig.VERSION_NAME}  ·  build ${BuildConfig.VERSION_CODE}",
+            color = Color(0xFFB7C0D0),
+            fontSize = 13.sp,
+        )
+        DebugSwitch("Debug-overlay", settings.debug.overlay, viewModel::setDebugOverlay)
+        DebugSwitch("Uitgebreide logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
+        DebugSwitch("OSD-rand", settings.osd.debugBorders, viewModel::setDebugBorders)
+    }
+}
+
+@Composable
+private fun DebugSwitch(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, color = Color.White, fontSize = 13.sp)
+        Switch(checked = checked, onCheckedChange = onChecked)
+    }
+}
+
+@Composable
 private fun ReceiverSettingsPanel(
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
@@ -508,7 +697,7 @@ private fun ReceiverSettingsPanel(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Receiver", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text("Ontvanger", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CompactField("Naam", viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
             CompactField("IP-adres", viewModel.host, { viewModel.host = it }, Modifier.weight(1f))
@@ -532,8 +721,8 @@ private fun ReceiverSettingsPanel(
             colors = ButtonDefaults.colors(
                 containerColor = Color(0xFF161616),
                 contentColor = Color.White,
-                focusedContainerColor = Color(0xFFE8B84A),
-                focusedContentColor = Color(0xFF1A1404),
+                focusedContainerColor = FocusedButton,
+                focusedContentColor = FocusedButtonText,
             ),
         ) {
             Text("Opslaan", fontSize = 15.sp)
@@ -575,5 +764,19 @@ private fun MiniStreamPlayer(
     modifier: Modifier = Modifier,
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
 ) {
-    EnigmaVideoTexture(viewModel.player(), modifier)
+    val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    Box(modifier) {
+        EnigmaVideoTexture(viewModel.player(), Modifier.fillMaxSize())
+        val error = ui.playerState.error
+        if (!error.isNullOrBlank()) {
+            Text(
+                error,
+                color = Color(0xFFE8B84A),
+                fontSize = 11.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
+            )
+        }
+    }
 }

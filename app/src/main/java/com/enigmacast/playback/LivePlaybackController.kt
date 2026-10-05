@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -16,6 +17,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.domain.model.PlaybackSettings
 import com.enigmacast.domain.model.PlayerState
@@ -84,13 +86,8 @@ class LivePlaybackController @Inject constructor(
         currentUrl = url
         val item = MediaItem.Builder()
             .setUri(url)
-            .setLiveConfiguration(
-                MediaItem.LiveConfiguration.Builder()
-                    .setTargetOffsetMs(1_000)
-                    .setMinOffsetMs(500)
-                    .setMaxOffsetMs(5_000)
-                    .build(),
-            )
+            .setMimeType(MimeTypes.VIDEO_MP2T)
+            .setLiveConfiguration(liveConfiguration())
             .build()
         exo.setMediaItem(item, true)
         exo.prepare()
@@ -114,27 +111,47 @@ class LivePlaybackController @Inject constructor(
         return buildPlayer().also { player = it }
     }
 
-    private fun buildPlayer(): ExoPlayer {
-        val loadControl = if (settings.lowLatency) {
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    settings.minBufferMs,
-                    settings.maxBufferMs,
-                    settings.bufferForPlaybackMs,
-                    settings.bufferForRebufferMs,
-                )
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .build()
+    private fun liveConfiguration(): MediaItem.LiveConfiguration {
+        val builder = MediaItem.LiveConfiguration.Builder()
+        return if (settings.lowLatency) {
+            builder.setTargetOffsetMs(1_000).setMinOffsetMs(500).setMaxOffsetMs(5_000).build()
         } else {
-            DefaultLoadControl()
+            builder.setTargetOffsetMs(4_000).setMinOffsetMs(2_000).setMaxOffsetMs(15_000).build()
         }
+    }
+
+    private fun loadControl(): DefaultLoadControl {
+        val minBuffer: Int
+        val maxBuffer: Int
+        val playback: Int
+        val rebuffer: Int
+        if (settings.lowLatency) {
+            minBuffer = settings.minBufferMs
+            maxBuffer = settings.maxBufferMs
+            playback = settings.bufferForPlaybackMs
+            rebuffer = settings.bufferForRebufferMs
+        } else {
+            minBuffer = 2_000
+            maxBuffer = 15_000
+            playback = 2_000
+            rebuffer = 2_000
+        }
+        return DefaultLoadControl.Builder()
+            .setBufferDurationsMs(minBuffer, maxBuffer, playback, rebuffer)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+    }
+
+    private fun buildPlayer(): ExoPlayer {
         val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        val extractors = DefaultExtractorsFactory()
+            .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
         val mediaSourceFactory = DefaultMediaSourceFactory(
             OkHttpDataSource.Factory(clientFactory.streamClient()),
-            DefaultExtractorsFactory(),
+            extractors,
         ).setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy())
         val exo = ExoPlayer.Builder(context)
-            .setLoadControl(loadControl)
+            .setLoadControl(loadControl())
             .setRenderersFactory(renderers)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()

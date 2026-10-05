@@ -43,7 +43,7 @@ fun SettingsScreen(
             fontSize = 20.sp,
         )
         TvButton("Edit receiver", onEditReceiver)
-        Toggle("Low latency playback", settings.playback.lowLatency, viewModel::setLowLatency)
+        Toggle("Fast playback", settings.playback.lowLatency, viewModel::setLowLatency)
         Toggle("Auto reconnect", settings.playback.autoReconnect, viewModel::setAutoReconnect)
         Toggle("Fast OSD polling", settings.osd.fastPolling, viewModel::setFastPolling)
         Toggle("OSD debug border", settings.osd.debugBorders, viewModel::setDebugBorders)
