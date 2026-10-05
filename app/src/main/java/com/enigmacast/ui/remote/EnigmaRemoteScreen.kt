@@ -1,6 +1,10 @@
 package com.enigmacast.ui.remote
 
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.view.TextureView
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -22,6 +26,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.Text
 import com.enigmacast.domain.model.ConnectionState
@@ -41,7 +46,7 @@ fun EnigmaRemoteScreen(
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val player = viewModel.player()
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        EnigmaVideoPlayer(player, ui.osdFrame, ui.osdDebugBorders)
+        EnigmaVideoPlayer(player, ui.osdFrame, ui.osdDebugBorders, ui.cues)
         if (ui.connectionState !is ConnectionState.Connected && ui.connectionState !is ConnectionState.Idle) {
             ConnectionProblemOverlay(ui.connectionState)
         }
@@ -53,37 +58,46 @@ fun EnigmaRemoteScreen(
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun EnigmaVideoTexture(player: Player, modifier: Modifier = Modifier) {
+fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            TextureView(context).apply { isFocusable = false }
-        },
-        update = { texture ->
-            val bound = texture.tag as? Player
-            if (bound !== player) {
-                bound?.clearVideoTextureView(texture)
-                player.setVideoTextureView(texture)
-                texture.tag = player
+            val texture = TextureView(context).apply { isFocusable = false }
+            val subtitles = CueOverlayView(context)
+            FrameLayout(context).apply {
+                addView(texture, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(subtitles, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                tag = MiniVideoLayer(texture, subtitles, boundPlayer = null)
             }
         },
-        onRelease = { texture ->
-            (texture.tag as? Player)?.clearVideoTextureView(texture)
-            texture.tag = null
+        update = { layout ->
+            val layer = layout.tag as MiniVideoLayer
+            if (layer.boundPlayer !== player) {
+                layer.boundPlayer?.clearVideoTextureView(layer.texture)
+                player.setVideoTextureView(layer.texture)
+                layer.boundPlayer = player
+            }
+            layer.subtitles.cues = cues
+        },
+        onRelease = { layout ->
+            val layer = layout.tag as MiniVideoLayer
+            layer.boundPlayer?.clearVideoTextureView(layer.texture)
+            layer.boundPlayer = null
         },
     )
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Boolean) {
+private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Boolean, cues: List<Cue>) {
     // Compose draws into the parent canvas. An Android child such as TextureView is
     // composited above that canvas, so an OSD Image in Compose stays hidden behind the video.
-    // The OSD ImageView is the next child of the same FrameLayout and is therefore on top.
+    // Subtitles sit above the video and under the tuner OSD.
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
             val texture = TextureView(context)
+            val subtitles = CueOverlayView(context)
             val osd = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 isFocusable = false
@@ -91,8 +105,9 @@ private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Bo
             }
             FrameLayout(context).apply {
                 addView(texture, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(subtitles, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 addView(osd, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                tag = VideoLayer(texture, osd, boundPlayer = null)
+                tag = VideoLayer(texture, subtitles, osd, boundPlayer = null)
             }
         },
         update = { layout ->
@@ -102,6 +117,7 @@ private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Bo
                 player.setVideoTextureView(layer.texture)
                 layer.boundPlayer = player
             }
+            layer.subtitles.cues = cues
             val scale = OsdScale.choose(
                 frame?.width ?: 0,
                 frame?.height ?: 0,
@@ -130,10 +146,73 @@ private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Bo
 
 private class VideoLayer(
     val texture: TextureView,
+    val subtitles: CueOverlayView,
     val osd: ImageView,
     var boundPlayer: Player?,
     var shownHash: Long? = null,
 )
+
+private class MiniVideoLayer(
+    val texture: TextureView,
+    val subtitles: CueOverlayView,
+    var boundPlayer: Player?,
+)
+
+private class CueOverlayView(context: android.content.Context) : View(context) {
+    var cues: List<Cue> = emptyList()
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 42f
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(6f, 0f, 2f, android.graphics.Color.BLACK)
+    }
+
+    init {
+        isFocusable = false
+        isClickable = false
+        setWillNotDraw(false)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+        if (viewWidth <= 0f || viewHeight <= 0f) return
+        for (cue in cues) {
+            val bitmap = cue.bitmap
+            if (bitmap != null && !bitmap.isRecycled) {
+                drawBitmapCue(canvas, cue, bitmap, viewWidth, viewHeight)
+            } else if (!cue.text.isNullOrEmpty()) {
+                canvas.drawText(cue.text.toString(), viewWidth / 2f, viewHeight - 48f, textPaint)
+            }
+        }
+    }
+
+    private fun drawBitmapCue(canvas: Canvas, cue: Cue, bitmap: android.graphics.Bitmap, viewWidth: Float, viewHeight: Float) {
+        val unset = Cue.DIMEN_UNSET
+        val cueWidth = if (cue.size != unset) cue.size * viewWidth else bitmap.width.toFloat()
+        val cueHeight = if (cue.bitmapHeight != unset) {
+            cue.bitmapHeight * viewHeight
+        } else {
+            bitmap.height * (cueWidth / bitmap.width.coerceAtLeast(1))
+        }
+        var x = if (cue.position != unset) cue.position * viewWidth else (viewWidth - cueWidth) / 2f
+        var y = if (cue.lineType == Cue.LINE_TYPE_FRACTION && cue.line != unset) {
+            cue.line * viewHeight
+        } else {
+            viewHeight - cueHeight
+        }
+        if (cue.positionAnchor == Cue.ANCHOR_TYPE_MIDDLE) x -= cueWidth / 2f
+        if (cue.positionAnchor == Cue.ANCHOR_TYPE_END) x -= cueWidth
+        if (cue.lineAnchor == Cue.ANCHOR_TYPE_MIDDLE) y -= cueHeight / 2f
+        if (cue.lineAnchor == Cue.ANCHOR_TYPE_END) y -= cueHeight
+        canvas.drawBitmap(bitmap, null, RectF(x, y, x + cueWidth, y + cueHeight), null)
+    }
+}
 
 @Composable
 private fun ConnectionProblemOverlay(state: ConnectionState) {

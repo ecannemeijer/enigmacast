@@ -571,6 +571,7 @@ private fun SettingsHub(
                     settings.playback.lowLatency,
                     settings.playback.autoReconnect,
                     settings.playback.hdmiPassthrough,
+                    settings.playback.subtitlesEnabled,
                     viewModel,
                 )
                 SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
@@ -612,8 +613,11 @@ private fun PlaybackSettingsPanel(
     fast: Boolean,
     autoReconnect: Boolean,
     hdmiPassthrough: Boolean,
+    subtitlesEnabled: Boolean,
     viewModel: SettingsViewModel,
+    remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
+    val playback by remote.uiState.collectAsStateWithLifecycle()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 460.dp)) {
         Text("Weergave", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text(
@@ -637,6 +641,19 @@ private fun PlaybackSettingsPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ProfileButton("Stereo", !hdmiPassthrough) { viewModel.setHdmiPassthrough(false) }
             ProfileButton("HDMI", hdmiPassthrough) { viewModel.setHdmiPassthrough(true) }
+        }
+        Text(
+            if (playback.subtitlesAvailable) {
+                "Deze stream heeft ondertiteling."
+            } else {
+                "Geen ondertiteling in deze stream."
+            },
+            color = Color(0xFFB7C0D0),
+            fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProfileButton("Uit", !subtitlesEnabled) { viewModel.setSubtitlesEnabled(false) }
+            ProfileButton("Aan", subtitlesEnabled) { viewModel.setSubtitlesEnabled(true) }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Automatisch hervatten", color = Color.White, fontSize = 13.sp)
@@ -785,7 +802,7 @@ private fun MiniStreamPlayer(
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     Box(modifier) {
-        EnigmaVideoTexture(viewModel.player(), Modifier.fillMaxSize())
+        EnigmaVideoTexture(viewModel.player(), ui.cues, Modifier.fillMaxSize())
         val error = ui.playerState.error
         if (!error.isNullOrBlank()) {
             Text(

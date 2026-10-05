@@ -26,6 +26,7 @@ data class PlaybackSettings(
     val hardwareDecoder: Boolean = true,
     val autoReconnect: Boolean = true,
     val hdmiPassthrough: Boolean = false,
+    val subtitlesEnabled: Boolean = true,
 )
 
 @Serializable

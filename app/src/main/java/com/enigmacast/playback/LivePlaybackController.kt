@@ -8,6 +8,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -65,6 +69,10 @@ class LivePlaybackController @Inject constructor(
     private var failures = 0
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
+    private val _cues = MutableStateFlow<List<Cue>>(emptyList())
+    val cues: StateFlow<List<Cue>> = _cues.asStateFlow()
+    private val _subtitlesAvailable = MutableStateFlow(false)
+    val subtitlesAvailable: StateFlow<Boolean> = _subtitlesAvailable.asStateFlow()
 
     fun attach(scope: CoroutineScope) {
         this.scope = scope
@@ -159,6 +167,8 @@ class LivePlaybackController @Inject constructor(
         }
         trackSelector.parameters = trackSelector.buildUponParameters()
             .setPreferredAudioMimeTypes(*preferredAudio)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !settings.subtitlesEnabled)
+            .setSelectUndeterminedTextLanguage(settings.subtitlesEnabled)
             .build()
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
@@ -219,6 +229,33 @@ class LivePlaybackController @Inject constructor(
         }
     }
 
+    private fun selectSubtitles(exo: ExoPlayer) {
+        val enabled = settings.subtitlesEnabled
+        val available = exo.currentTracks.groups.any { group ->
+            group.type == C.TRACK_TYPE_TEXT && group.length > 0
+        }
+        _subtitlesAvailable.value = available
+        val parameters = exo.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enabled)
+        if (!enabled) {
+            exo.trackSelectionParameters = parameters.clearOverridesOfType(C.TRACK_TYPE_TEXT).build()
+            _cues.value = emptyList()
+            return
+        }
+        exo.trackSelectionParameters = parameters.build()
+        if (!available) return
+        val alreadySelected = exo.currentTracks.groups.any { group ->
+            group.type == C.TRACK_TYPE_TEXT && group.isSelected
+        }
+        if (alreadySelected) return
+        val group = exo.currentTracks.groups.firstOrNull { candidate ->
+            candidate.type == C.TRACK_TYPE_TEXT && candidate.isTrackSupported(0)
+        } ?: return
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+            .build()
+    }
+
     private fun releasePlayer() {
         player?.release()
         player = null
@@ -240,8 +277,13 @@ class LivePlaybackController @Inject constructor(
             publish()
         }
 
-        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+        override fun onTracksChanged(tracks: Tracks) {
             publish()
+            selectSubtitles(player ?: return)
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            _cues.value = if (settings.subtitlesEnabled) cueGroup.cues else emptyList()
         }
     }
 }

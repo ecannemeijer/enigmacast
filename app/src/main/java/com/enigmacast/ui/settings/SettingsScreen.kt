@@ -45,6 +45,7 @@ fun SettingsScreen(
         TvButton("Edit receiver", onEditReceiver)
         Toggle("Fast playback", settings.playback.lowLatency, viewModel::setLowLatency)
         Toggle("HDMI audio passthrough", settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
+        Toggle("DVB subtitles", settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
         Toggle("Auto reconnect", settings.playback.autoReconnect, viewModel::setAutoReconnect)
         Toggle("Fast OSD polling", settings.osd.fastPolling, viewModel::setFastPolling)
         Toggle("OSD debug border", settings.osd.debugBorders, viewModel::setDebugBorders)

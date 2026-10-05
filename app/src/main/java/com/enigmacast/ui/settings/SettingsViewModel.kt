@@ -23,6 +23,7 @@ class SettingsViewModel @Inject constructor(
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }
     fun setAutoReconnect(enabled: Boolean) = update { it.copy(playback = it.playback.copy(autoReconnect = enabled)) }
     fun setHdmiPassthrough(enabled: Boolean) = update { it.copy(playback = it.playback.copy(hdmiPassthrough = enabled)) }
+    fun setSubtitlesEnabled(enabled: Boolean) = update { it.copy(playback = it.playback.copy(subtitlesEnabled = enabled)) }
     fun setOsdFormat(format: String) = update { it.copy(osd = it.osd.copy(format = format)) }
     fun setFastPolling(enabled: Boolean) = update { it.copy(osd = it.osd.copy(fastPolling = enabled)) }
     fun setDebugOverlay(enabled: Boolean) = update { it.copy(debug = it.debug.copy(overlay = enabled)) }

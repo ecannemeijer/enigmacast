@@ -10,6 +10,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.text.Cue
 import com.enigmacast.connection.ConnectionCoordinator
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
@@ -64,6 +65,8 @@ data class RemoteDisplayUiState(
     val osdDebugBorders: Boolean = false,
     val showExitDialog: Boolean = false,
     val osdState: OsdPollState = OsdPollState.IDLE,
+    val cues: List<Cue> = emptyList(),
+    val subtitlesAvailable: Boolean = false,
 )
 
 @HiltViewModel
@@ -126,6 +129,14 @@ class RemoteDisplayViewModel @Inject constructor(
             }
         }
         registerNetwork()
+        viewModelScope.launch {
+            playback.cues.collect { cues -> _ui.update { it.copy(cues = cues) } }
+        }
+        viewModelScope.launch {
+            playback.subtitlesAvailable.collect { available ->
+                _ui.update { it.copy(subtitlesAvailable = available) }
+            }
+        }
     }
 
     fun player() = playback.exoPlayer()
