@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Local OpenWebif is commonly plain HTTP. The connection screen warns about that. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

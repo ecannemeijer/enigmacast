@@ -1,0 +1,6 @@
+{
+  "versionCode": 3,
+  "versionName": "1.0.0-alpha.3",
+  "apkUrl": "https://update.velixatv.com/enigmacast.apk",
+  "notes": "Shows the Enigma2 OSD on top of the live video. The previous build drew the OSD into the video surface, so it never appeared."
+}
