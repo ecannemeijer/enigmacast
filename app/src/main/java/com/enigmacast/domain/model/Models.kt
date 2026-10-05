@@ -25,6 +25,7 @@ data class PlaybackSettings(
     val bufferForRebufferMs: Int = 1_000,
     val hardwareDecoder: Boolean = true,
     val autoReconnect: Boolean = true,
+    val hdmiPassthrough: Boolean = false,
 )
 
 @Serializable

@@ -567,7 +567,12 @@ private fun SettingsHub(
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             when (page) {
                 SettingPage.Receiver -> ReceiverSettingsPanel()
-                SettingPage.Playback -> PlaybackSettingsPanel(settings.playback.lowLatency, settings.playback.autoReconnect, viewModel)
+                SettingPage.Playback -> PlaybackSettingsPanel(
+                    settings.playback.lowLatency,
+                    settings.playback.autoReconnect,
+                    settings.playback.hdmiPassthrough,
+                    viewModel,
+                )
                 SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
                 SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
             }
@@ -606,9 +611,10 @@ private fun SettingNav(
 private fun PlaybackSettingsPanel(
     fast: Boolean,
     autoReconnect: Boolean,
+    hdmiPassthrough: Boolean,
     viewModel: SettingsViewModel,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 420.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 460.dp)) {
         Text("Weergave", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text(
             if (fast) "Snel: minder vertraging, meer kans op haperen." else "Stabiel: grotere buffer, rustiger beeld.",
@@ -618,6 +624,19 @@ private fun PlaybackSettingsPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ProfileButton("Stabiel", !fast) { viewModel.setLowLatency(false) }
             ProfileButton("Snel", fast) { viewModel.setLowLatency(true) }
+        }
+        Text(
+            if (hdmiPassthrough) {
+                "HDMI stuurt AC3 en E-AC3 ongewijzigd door als de tv dat ondersteunt."
+            } else {
+                "Stereo mixt het geluid, ook als de zender AC3 of E-AC3 stuurt."
+            },
+            color = Color(0xFFB7C0D0),
+            fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ProfileButton("Stereo", !hdmiPassthrough) { viewModel.setHdmiPassthrough(false) }
+            ProfileButton("HDMI", hdmiPassthrough) { viewModel.setHdmiPassthrough(true) }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Automatisch hervatten", color = Color.White, fontSize = 13.sp)

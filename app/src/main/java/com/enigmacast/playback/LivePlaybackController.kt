@@ -13,7 +13,13 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioOutputProvider
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -143,7 +149,17 @@ class LivePlaybackController @Inject constructor(
     }
 
     private fun buildPlayer(): ExoPlayer {
-        val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough)
+            .setEnableDecoderFallback(true)
+        val trackSelector = DefaultTrackSelector(context)
+        val preferredAudio = if (settings.hdmiPassthrough) {
+            arrayOf(MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_AC3, MimeTypes.AUDIO_AAC, MimeTypes.AUDIO_MPEG)
+        } else {
+            arrayOf(MimeTypes.AUDIO_AAC, MimeTypes.AUDIO_MPEG, MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_AC3)
+        }
+        trackSelector.parameters = trackSelector.buildUponParameters()
+            .setPreferredAudioMimeTypes(*preferredAudio)
+            .build()
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
         val mediaSourceFactory = DefaultMediaSourceFactory(
@@ -153,6 +169,7 @@ class LivePlaybackController @Inject constructor(
         val exo = ExoPlayer.Builder(context)
             .setLoadControl(loadControl())
             .setRenderersFactory(renderers)
+            .setTrackSelector(trackSelector)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
         exo.setAudioAttributes(
@@ -164,6 +181,7 @@ class LivePlaybackController @Inject constructor(
         )
         exo.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
         exo.addListener(listener)
+        EnigmaLog.player(if (settings.hdmiPassthrough) "audio HDMI passthrough" else "audio stereo downmix")
         return exo
     }
 
@@ -225,5 +243,38 @@ class LivePlaybackController @Inject constructor(
         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
             publish()
         }
+    }
+}
+
+@OptIn(UnstableApi::class)
+private class LiveRenderersFactory(
+    context: Context,
+    private val passthrough: Boolean,
+) : DefaultRenderersFactory(context) {
+    override fun buildAudioSink(
+        context: Context,
+        enableFloatOutput: Boolean,
+        enableAudioOutputPlaybackParams: Boolean,
+    ): AudioSink {
+        val detected = AudioTrackAudioOutputProvider.Builder(context).build()
+        val output = if (passthrough) detected else PcmAudioOutputProvider(detected)
+        return DefaultAudioSink.Builder(context)
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+            .setAudioOutputProvider(output)
+            .build()
+    }
+}
+
+@OptIn(UnstableApi::class)
+private class PcmAudioOutputProvider(
+    delegate: AudioOutputProvider,
+) : ForwardingAudioOutputProvider(delegate) {
+    override fun getFormatSupport(formatConfig: AudioOutputProvider.FormatConfig): AudioOutputProvider.FormatSupport {
+        val mime = formatConfig.format.sampleMimeType
+        if (mime != null && mime != MimeTypes.AUDIO_RAW) {
+            return AudioOutputProvider.FormatSupport.UNSUPPORTED
+        }
+        return super.getFormatSupport(formatConfig)
     }
 }
