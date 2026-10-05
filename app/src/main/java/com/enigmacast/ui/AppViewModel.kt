@@ -45,7 +45,9 @@ class AppViewModel @Inject constructor(
             val settings = settingsRepository.current()
             if (!decided) {
                 decided = true
-                screen = if (settings.activeReceiver() != null) AppScreen.Dashboard else AppScreen.Connection
+                val receiver = settings.activeReceiver()
+                screen = if (receiver != null) AppScreen.Dashboard else AppScreen.Connection
+                if (receiver != null) streamRunning = true
             }
         }
         viewModelScope.launch {
@@ -100,6 +102,10 @@ class AppViewModel @Inject constructor(
         decided = true
         streamRunning = true
         screen = AppScreen.Remote
+    }
+
+    fun showMiniPlayer() {
+        streamRunning = true
     }
 
     fun showDashboard() {

@@ -112,6 +112,11 @@ data class BouquetEntry(
     val reference: String,
 )
 
+data class BouquetChannelList(
+    val bouquetName: String,
+    val channels: List<BouquetEntry>,
+)
+
 data class VolumeStatus(
     val level: Int,
     val muted: Boolean,

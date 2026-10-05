@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Singleton
 
 @OptIn(UnstableApi::class)
 class LiveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(8) {
@@ -43,6 +44,7 @@ class LiveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(8) {
  * long-lived MPEG-TS response cannot exhaust the OSD connection pool.
  */
 @OptIn(UnstableApi::class)
+@Singleton
 class LivePlaybackController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val clientFactory: OkHttpClientFactory,

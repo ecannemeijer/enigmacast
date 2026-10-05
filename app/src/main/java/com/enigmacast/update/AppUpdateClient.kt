@@ -3,7 +3,6 @@ package com.enigmacast.update
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.enigmacast.BuildConfig
@@ -68,7 +67,7 @@ class AppUpdateClient @Inject constructor(
     }
 
     fun canRequestInstall(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()
+        return context.packageManager.canRequestPackageInstalls()
     }
 
     fun openInstallPermission() {

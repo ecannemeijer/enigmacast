@@ -1,6 +1,7 @@
 package com.enigmacast.data.openwebif
 
 import com.enigmacast.data.network.OkHttpClientFactory
+import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.ConnectionTestResult
@@ -15,6 +16,7 @@ import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.osd.PngInspector
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
@@ -22,6 +24,8 @@ import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.util.EnigmaLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Credentials
 import okhttp3.Request
 import java.io.IOException
@@ -69,6 +73,49 @@ class OpenWebifApi @Inject constructor(
         if (reference.isBlank()) return OpenWebifJson.parseGuide(currentBody, """{"events":[]}""")
         val epgBody = get(config, endpoints.epgService(config, reference))
         return OpenWebifJson.parseGuide(currentBody, epgBody)
+    }
+
+    override suspend fun channelGuide(
+        config: ReceiverConfig,
+        serviceReference: String,
+        channelName: String,
+    ): ChannelGuide {
+        val epgBody = get(config, endpoints.epgService(config, serviceReference))
+        val currentBody = buildJsonObject {
+            put("info", buildJsonObject {
+                put("name", channelName)
+                put("ref", serviceReference)
+            })
+        }.toString()
+        return OpenWebifJson.parseGuide(currentBody, epgBody)
+    }
+
+    override suspend fun zap(config: ReceiverConfig, serviceReference: String) {
+        val response = execute(config, endpoints.zap(config, serviceReference), accept = "application/json")
+        val body = response.bytes.toString(Charsets.UTF_8)
+        if (response.code !in 200..299 || !OpenWebifJson.isSuccess(body)) {
+            throw OpenWebifException("Zap mislukt (${response.code})", response.code)
+        }
+    }
+
+    override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList {
+        val currentBody = get(config, endpoints.current(config))
+        val service = OpenWebifJson.parseService(currentBody)
+        val hinted = OpenWebifJson.bouquetReference(currentBody)
+        val bouquets = bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+        val hintedBouquet = bouquets.firstOrNull { bouquet ->
+            hinted != null && bouquetIdentity(bouquet.reference) == bouquetIdentity(hinted)
+        }
+        val ordered = listOfNotNull(hintedBouquet) + bouquets.filter { it.reference != hintedBouquet?.reference }
+        var fallback: BouquetChannelList? = null
+        for (bouquet in ordered) {
+            val channels = services(config, bouquet.reference)
+                .filter { BouquetChannels.isPlayableChannel(it.reference) }
+            val list = BouquetChannelList(bouquet.name, channels)
+            if (fallback == null && channels.isNotEmpty()) fallback = list
+            if (channels.any { BouquetChannels.sameService(it.reference, service.reference) }) return list
+        }
+        return fallback ?: BouquetChannelList("", emptyList())
     }
 
     override suspend fun currentService(config: ReceiverConfig): EnigmaService {
@@ -119,6 +166,13 @@ class OpenWebifApi @Inject constructor(
         } catch (error: Exception) {
             ConnectionTestResult(false, error.message ?: "Connection failed")
         }
+    }
+
+    private fun bouquetIdentity(reference: String): String {
+        val decoded = reference.replace("%22", "\"").replace("&quot;", "\"")
+        val marker = "FROM BOUQUET"
+        val index = decoded.indexOf(marker, ignoreCase = true)
+        return if (index >= 0) decoded.substring(index) else decoded
     }
 
     private suspend fun probe(config: ReceiverConfig): Probe {

@@ -59,4 +59,28 @@ class OpenWebifJsonTest {
         assertTrue(now?.current == true)
         assertEquals("09:35", guide.events[1].beginLabel)
     }
+
+    @Test
+    fun bouquetEntriesCanListTheReferenceBeforeTheName() {
+        val body = """
+            {"bouquets":[["1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.fav.tv\" ORDER BY bouquet","Nederland"]]}
+        """.trimIndent()
+        val parsed = OpenWebifJson.parseBouquets(body)
+        assertEquals("Nederland", parsed.single().name)
+        assertEquals(
+            "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.fav.tv\" ORDER BY bouquet",
+            parsed.single().reference,
+        )
+    }
+
+    @Test
+    fun readsBouquetReferenceFromCurrentService() {
+        val current = """
+            {"info":{"name":"NPO3 HD","ref":"1:0:19:1:0:0:0:0:0:0:","bqref":"1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"fav\" ORDER BY bouquet"}}
+        """.trimIndent()
+        assertEquals(
+            "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"fav\" ORDER BY bouquet",
+            OpenWebifJson.bouquetReference(current),
+        )
+    }
 }

@@ -97,6 +97,7 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
             AppScreen.Dashboard -> DashboardScreen(
                 showMiniPlayer = appViewModel.streamRunning,
                 onStream = appViewModel::openStream,
+                onMiniPlayer = appViewModel::showMiniPlayer,
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,

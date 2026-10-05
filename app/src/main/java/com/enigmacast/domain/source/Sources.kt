@@ -1,5 +1,6 @@
 package com.enigmacast.domain.source
 
+import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EnigmaService
@@ -24,6 +25,9 @@ interface RemoteControlSource {
 interface ServiceStateSource {
     suspend fun currentService(config: ReceiverConfig): EnigmaService
     suspend fun channelGuide(config: ReceiverConfig): ChannelGuide
+    suspend fun channelGuide(config: ReceiverConfig, serviceReference: String, channelName: String): ChannelGuide
+    suspend fun zap(config: ReceiverConfig, serviceReference: String)
+    suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList
 }
 
 interface ReceiverInfoSource {

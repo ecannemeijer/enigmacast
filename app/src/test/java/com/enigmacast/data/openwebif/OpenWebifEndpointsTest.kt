@@ -43,6 +43,10 @@ class OpenWebifEndpointsTest {
             "http://192.168.1.100/grab?format=jpg&mode=all",
             endpoints.grab(config, GrabFormat.JPG, GrabMode.ALL),
         )
+        assertEquals(
+            "http://192.168.1.100/api/zap?sRef=1%3A0%3A19%3A1%3A2%3A3%3A4%3A0%3A0%3A0%3A",
+            endpoints.zap(config, "1:0:19:1:2:3:4:0:0:0:"),
+        )
     }
 
     @Test

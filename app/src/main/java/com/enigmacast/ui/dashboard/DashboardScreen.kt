@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +62,9 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.EpgEvent
+import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
@@ -76,9 +79,11 @@ private enum class DashSection {
 fun DashboardScreen(
     showMiniPlayer: Boolean,
     onStream: () -> Unit,
+    onMiniPlayer: () -> Unit,
 ) {
     var section by remember { mutableStateOf(DashSection.Stream) }
     val streamFocus = remember { FocusRequester() }
+    val channelFocus = remember { FocusRequester() }
     val epgFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         streamFocus.requestFocus()
@@ -106,7 +111,7 @@ fun DashboardScreen(
                     label = "Stream",
                     modifier = Modifier
                         .focusRequester(streamFocus)
-                        .focusProperties { right = epgFocus },
+                        .focusProperties { right = channelFocus },
                     onFocus = { section = DashSection.Stream },
                     onClick = onStream,
                 )
@@ -131,7 +136,14 @@ fun DashboardScreen(
                     .padding(start = 8.dp, top = 28.dp, end = 24.dp, bottom = 24.dp),
             ) {
                 when (section) {
-                    DashSection.Stream -> StreamPanel(showMiniPlayer, epgFocus, streamFocus)
+                    DashSection.Stream -> StreamPanel(
+                        showMiniPlayer,
+                        channelFocus,
+                        epgFocus,
+                        streamFocus,
+                        onMiniPlayer,
+                        onStream,
+                    )
                     DashSection.RcInfo -> RcInfoPanel()
                     DashSection.Settings -> ReceiverSettingsPanel()
                 }
@@ -172,8 +184,11 @@ private fun MenuEntry(
 @Composable
 private fun StreamPanel(
     showMiniPlayer: Boolean,
+    channelFocus: FocusRequester,
     epgFocus: FocusRequester,
     menuFocus: FocusRequester,
+    onMiniPlayer: () -> Unit,
+    onFullscreen: () -> Unit,
     guideModel: StreamGuideViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(Unit) {
@@ -192,7 +207,12 @@ private fun StreamPanel(
     }
     val guide = guideModel.guide
     var focusedEvent by remember { mutableStateOf<EpgEvent?>(null) }
+    LaunchedEffect(guide?.serviceReference) {
+        focusedEvent = null
+    }
     val events = guide?.events.orEmpty()
+    val channels = guideModel.channels
+    val tuned = guideModel.tunedReference.ifBlank { guide?.serviceReference.orEmpty() }
     val shown = focusedEvent?.takeIf { selected -> events.any { it.beginEpochSec == selected.beginEpochSec && it.title == selected.title } }
         ?: guide?.currentEvent
     Column(modifier = Modifier.fillMaxSize()) {
@@ -212,7 +232,7 @@ private fun StreamPanel(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    guide?.channelName?.ifBlank { "Geen kanaal" } ?: "Kanaal laden",
+                    guideModel.displayName.ifBlank { guide?.channelName?.ifBlank { "Geen kanaal" } ?: "Kanaal laden" },
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -242,39 +262,161 @@ private fun StreamPanel(
                 }
             }
         }
-        val anchor = events.indexOfFirst { it.current }.let { if (it >= 0) it else 0 }
-        LazyColumn(
+        Row(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ChannelColumn(
+                bouquetName = guideModel.bouquetName,
+                channels = channels,
+                tuned = tuned,
+                channelFocus = channelFocus,
+                menuFocus = menuFocus,
+                epgFocus = epgFocus,
+                onTune = { channel -> guideModel.tune(channel, onMiniPlayer, onFullscreen) },
+                onPreview = guideModel::preview,
+                modifier = Modifier.width(220.dp).fillMaxHeight(),
+            )
+            val anchor = events.indexOfFirst { it.current }.let { if (it >= 0) it else 0 }
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (events.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(epgFocus)
+                                .focusProperties { left = channelFocus }
+                                .focusable(),
+                        )
+                    }
+                } else {
+                    itemsIndexed(events) { index, event ->
+                        EpgRow(
+                            begin = event.beginLabel,
+                            end = event.endLabel,
+                            title = event.title,
+                            current = event.current,
+                            onFocus = { focusedEvent = event },
+                            modifier = Modifier
+                                .then(if (index == anchor) Modifier.focusRequester(epgFocus) else Modifier)
+                                .focusProperties { left = channelFocus },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelColumn(
+    bouquetName: String,
+    channels: List<BouquetEntry>,
+    tuned: String,
+    channelFocus: FocusRequester,
+    menuFocus: FocusRequester,
+    epgFocus: FocusRequester,
+    onTune: (BouquetEntry) -> Unit,
+    onPreview: (BouquetEntry) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    val anchor = channels.indexOfFirst { BouquetChannels.sameService(it.reference, tuned) }.let { if (it >= 0) it else 0 }
+    LaunchedEffect(anchor, channels.size) {
+        if (channels.isEmpty()) return@LaunchedEffect
+        val visible = listState.layoutInfo.visibleItemsInfo.any { it.index == anchor }
+        if (!visible) listState.scrollToItem(anchor)
+    }
+    Column(modifier.fillMaxHeight()) {
+        Text(
+            "Kanalen",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 4.dp, start = 8.dp),
+        )
+        if (bouquetName.isNotBlank()) {
+            Text(
+                bouquetName,
+                color = Color(0xFFB7C0D0),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 6.dp, start = 8.dp),
+            )
+        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (events.isEmpty()) {
+            if (channels.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .focusRequester(epgFocus)
-                            .focusProperties { left = menuFocus }
+                            .focusRequester(channelFocus)
+                            .focusProperties {
+                                left = menuFocus
+                                right = epgFocus
+                            }
                             .focusable(),
                     )
                 }
             } else {
-                itemsIndexed(events) { index, event ->
-                    EpgRow(
-                        begin = event.beginLabel,
-                        end = event.endLabel,
-                        title = event.title,
-                        current = event.current,
-                        onFocus = { focusedEvent = event },
+                itemsIndexed(channels) { index, channel ->
+                    ChannelRow(
+                        name = channel.name,
+                        tuned = BouquetChannels.sameService(channel.reference, tuned),
+                        onTune = { onTune(channel) },
+                        onFocus = { onPreview(channel) },
                         modifier = Modifier
-                            .then(if (index == anchor) Modifier.focusRequester(epgFocus) else Modifier)
-                            .focusProperties { left = menuFocus },
+                            .then(if (index == anchor) Modifier.focusRequester(channelFocus) else Modifier)
+                            .focusProperties {
+                                left = menuFocus
+                                right = epgFocus
+                            },
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ChannelRow(
+    name: String,
+    tuned: Boolean,
+    onTune: () -> Unit,
+    onFocus: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onTune,
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { if (it.isFocused) onFocus() },
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        colors = ButtonDefaults.colors(
+            containerColor = if (tuned) Color(0xFF161616) else Color.Black,
+            contentColor = if (tuned) Color(0xFFE8B84A) else Color.White,
+            focusedContainerColor = Color(0xFFE8B84A),
+            focusedContentColor = Color(0xFF1A1404),
+        ),
+    ) {
+        Text(
+            name,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

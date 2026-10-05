@@ -19,7 +19,7 @@ Android does not rebuild the infobar, channel list, EPG, menus, timers, or plugi
 - Android Studio Quail 4 (2026.1.4) or newer, with AGP 9.4 support
 - JDK 17 or newer. Android Studio's bundled JDK 21 is the one used for development
 - Android SDK platform 37 and build-tools. Gradle downloads platform 37 when the SDK licenses are accepted
-- An Android TV device or an Android TV emulator. `minSdk` is 26 (Android 8.0). That covers current Android TV and Google TV devices without dropping Media3 or Compose for TV features
+- An Android TV device or an Android TV emulator. `minSdk` is 28 (Android 9). Android 10, 11, and newer are included.
 - A receiver on the same LAN with OpenWebif enabled and the stream server on port 8001
 
 `compileSdk` and `targetSdk` are 37 because Compose 1.12 and AndroidX Hilt 1.4 require compile SDK 37. Android 17 ignores a forced landscape lock on large screens. The activity still requests landscape, and the UI is a fullscreen 16:9 surface, which is how Android TV presents the app.
@@ -44,7 +44,7 @@ Pinned in `gradle/libs.versions.toml` (stable releases checked on 5 October 2026
 | DataStore | 1.2.1 |
 | kotlinx-coroutines / serialization | 1.11.0 |
 | compileSdk / targetSdk | 37 |
-| minSdk | 26 |
+| minSdk | 28 |
 | applicationId | com.enigmacast.app |
 
 Gradle 9.8.0 exists, but Kotlin 2.4.20 documents full compatibility through 9.7.0, so the wrapper stays on 9.7.0.

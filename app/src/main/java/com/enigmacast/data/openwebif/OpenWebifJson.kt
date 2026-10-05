@@ -140,6 +140,11 @@ internal object OpenWebifJson {
         return VolumeStatus(level = int(root, "current", "volume") ?: 0, muted = muted)
     }
 
+    fun bouquetReference(body: String): String? {
+        val root = openWebifJson.parseToJsonElement(body).jsonObject
+        return text(root, "bqref", "bouquet", "bouquetref", "bouquetreference")
+    }
+
     fun parseBouquets(body: String): List<BouquetEntry> = parseServiceList(body, "bouquets")
 
     fun parseServices(body: String): List<BouquetEntry> = parseServiceList(body, "services")
@@ -160,9 +165,12 @@ internal object OpenWebifJson {
         return array.mapNotNull { element ->
             when (element) {
                 is JsonArray -> {
-                    val name = element.getOrNull(0)?.primitiveText().orEmpty()
-                    val reference = element.getOrNull(1)?.primitiveText().orEmpty()
-                    if (reference.isBlank()) null else BouquetEntry(name, reference)
+                    val first = element.getOrNull(0)?.primitiveText().orEmpty()
+                    val second = element.getOrNull(1)?.primitiveText().orEmpty()
+                    val referenceFirst = looksLikeReference(first)
+                    val name = if (referenceFirst) second else first
+                    val reference = if (referenceFirst) first else second
+                    if (!looksLikeReference(reference)) null else BouquetEntry(name.ifBlank { reference }, reference)
                 }
                 is JsonObject -> {
                     val name = text(element, "servicename", "name").orEmpty()
@@ -196,6 +204,8 @@ internal object OpenWebifJson {
     private fun int(root: JsonObject, vararg keys: String): Int? {
         return text(root, *keys)?.toIntOrNull()
     }
+
+    private fun looksLikeReference(value: String): Boolean = value.count { it == ':' } >= 8
 
     private fun findArray(root: JsonObject, key: String): JsonArray? {
         (root[key] as? JsonArray)?.let { return it }

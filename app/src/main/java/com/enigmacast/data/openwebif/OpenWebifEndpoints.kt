@@ -51,6 +51,10 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/getservices?sRef=$encoded")
     }
 
+    fun zap(config: ReceiverConfig, serviceReference: String): String {
+        return api(config, "/api/zap?sRef=${encode(serviceReference)}")
+    }
+
     fun remoteControl(config: ReceiverConfig, key: EnigmaKey, action: KeyAction): String {
         val type = if (action == KeyAction.LONG) "&type=long" else ""
         return api(config, "/api/remotecontrol?command=${key.code}$type")

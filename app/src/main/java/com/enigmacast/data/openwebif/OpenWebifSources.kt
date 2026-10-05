@@ -1,5 +1,6 @@
 package com.enigmacast.data.openwebif
 
+import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EnigmaService
@@ -47,6 +48,22 @@ class OpenWebifServiceStateSource @Inject constructor(
 
     override suspend fun channelGuide(config: ReceiverConfig): ChannelGuide {
         return api.channelGuide(config)
+    }
+
+    override suspend fun channelGuide(
+        config: ReceiverConfig,
+        serviceReference: String,
+        channelName: String,
+    ): ChannelGuide {
+        return api.channelGuide(config, serviceReference, channelName)
+    }
+
+    override suspend fun zap(config: ReceiverConfig, serviceReference: String) {
+        api.zap(config, serviceReference)
+    }
+
+    override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList {
+        return api.currentBouquetChannels(config)
     }
 }
 
