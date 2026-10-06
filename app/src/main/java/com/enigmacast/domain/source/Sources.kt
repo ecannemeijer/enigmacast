@@ -17,6 +17,7 @@ import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
 
 interface OsdSource {
@@ -64,4 +65,7 @@ interface TunerStatusSource {
 
     /** Raw picon bytes from the receiver, or null when it has none. */
     suspend fun picon(config: ReceiverConfig, path: String): ByteArray?
+
+    /** What is on air now on every channel of a bouquet. */
+    suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent>
 }

@@ -224,4 +224,19 @@ class OpenWebifJsonTest {
         val starts = OpenWebifJson.parseBouquetStartPositions(root)
         assertEquals(120, starts["1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.sport.tv\" ORDER BY bouquet"])
     }
+
+    @Test
+    fun parsesNowEventsForABouquetAndSkipsChannelsWithoutEpg() {
+        val body = """
+            {"events":[
+              {"id":1,"begin_timestamp":1000,"duration_sec":1800,"title":"NOS Journaal &amp; Weer","shortdesc":"","longdesc":"","sref":"1:0:19:4651:3FC:1:C00000:0:0:0:","sname":"NPO 1","now_timestamp":1200,"remaining":1600},
+              {"id":null,"begin_timestamp":0,"duration_sec":0,"title":"N/A","shortdesc":"","longdesc":"","sref":"1:0:19:4652:3FC:1:C00000:0:0:0:","sname":"NPO 2"}
+            ],"result":true}
+        """.trimIndent()
+        val events = OpenWebifJson.parseNowEvents(body)
+        assertEquals(1, events.size)
+        assertEquals("NOS Journaal & Weer", events[0].title)
+        assertEquals(2800L, events[0].endEpochSec)
+        assertEquals(0, OpenWebifJson.parseNowEvents("not json").size)
+    }
 }

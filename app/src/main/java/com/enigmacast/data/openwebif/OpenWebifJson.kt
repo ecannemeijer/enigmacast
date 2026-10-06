@@ -10,6 +10,7 @@ import com.enigmacast.domain.model.ReceiverDetails
 import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
+import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.StreamClient
 import com.enigmacast.domain.tuner.TunerSlot
 import com.enigmacast.domain.tuner.TunerSnapshot
@@ -209,6 +210,25 @@ internal object OpenWebifJson {
     fun parseBouquets(body: String): List<BouquetEntry> = parseServiceList(body, "bouquets")
 
     fun parseServices(body: String): List<BouquetEntry> = parseServiceList(body, "services")
+
+    /**
+     * `/api/epgnow?bRef=…`: one event per channel with `sref`, `title`, `begin_timestamp`
+     * and `duration_sec`. Channels without EPG come back as title "N/A" and begin 0; they
+     * are left out.
+     */
+    fun parseNowEvents(body: String): List<NowEvent> {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+        val array = findArray(root, "events") ?: return emptyList()
+        return array.mapNotNull { element ->
+            val event = element as? JsonObject ?: return@mapNotNull null
+            val reference = event.primitive("sref") ?: return@mapNotNull null
+            val begin = event.primitive("begin_timestamp")?.toLongOrNull() ?: 0L
+            val duration = event.primitive("duration_sec")?.toLongOrNull() ?: 0L
+            val title = unescape(event.primitive("title").orEmpty()).trim()
+            if (begin <= 0L || duration <= 0L || title.isBlank() || title == "N/A") return@mapNotNull null
+            NowEvent(reference, title, begin, duration)
+        }
+    }
 
     /** Root `/api/getservices`: bouquet reference → number of channels before that bouquet. */
     fun parseBouquetStartPositions(body: String): Map<String, Int> {

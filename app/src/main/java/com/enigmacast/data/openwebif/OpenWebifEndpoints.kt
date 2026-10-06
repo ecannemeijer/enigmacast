@@ -73,6 +73,11 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
 
     fun timerList(config: ReceiverConfig): String = api(config, "/api/timerlist")
 
+    /** The programme on air for every channel of one bouquet, in a single request. */
+    fun epgNow(config: ReceiverConfig, bouquetReference: String): String {
+        return api(config, "/api/epgnow?bRef=${encode(bouquetReference)}")
+    }
+
     /** A path from OpenWebif such as `/picon/1_0_19_….png`, on the web interface host. */
     fun picon(config: ReceiverConfig, path: String): String = api(config, path)
 

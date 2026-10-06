@@ -25,6 +25,7 @@ import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
 import com.enigmacast.util.EnigmaLog
 import kotlinx.coroutines.Dispatchers
@@ -245,6 +246,10 @@ class OpenWebifApi @Inject constructor(
         val response = execute(config, endpoints.picon(config, path), accept = "image/*")
         if (response.code !in 200..299 || response.bytes.isEmpty()) return null
         return response.bytes
+    }
+
+    suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent> {
+        return OpenWebifJson.parseNowEvents(get(config, endpoints.epgNow(config, bouquetReference)))
     }
 
     suspend fun testConnection(config: ReceiverConfig): ConnectionTestResult {

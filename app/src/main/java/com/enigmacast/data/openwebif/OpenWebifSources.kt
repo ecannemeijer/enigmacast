@@ -22,6 +22,7 @@ import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
+import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -111,4 +112,6 @@ class OpenWebifTunerStatusSource @Inject constructor(
     override suspend fun snapshot(config: ReceiverConfig): TunerSnapshot = api.tunerSnapshot(config)
     override suspend fun bouquetStartPositions(config: ReceiverConfig): Map<String, Int> = api.bouquetStartPositions(config)
     override suspend fun picon(config: ReceiverConfig, path: String): ByteArray? = api.picon(config, path)
+    override suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent> =
+        api.nowEvents(config, bouquetReference)
 }

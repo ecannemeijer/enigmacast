@@ -122,4 +122,12 @@ class OpenWebifEndpointsTest {
         assertEquals("http://192.168.1.100/api/getservices", endpoints.bouquetStartPositions(config))
         assertEquals("http://192.168.1.100/picon/1_0_1.png", endpoints.picon(config, "/picon/1_0_1.png"))
     }
+
+    @Test
+    fun nowEpgIsOneRequestPerBouquet() {
+        assertEquals(
+            "http://192.168.1.100/api/epgnow?bRef=1%3A7%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A0%3AFROM%20BOUQUET%20%22userbouquet.favourites.tv%22%20ORDER%20BY%20bouquet",
+            endpoints.epgNow(config, "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.favourites.tv\" ORDER BY bouquet"),
+        )
+    }
 }
