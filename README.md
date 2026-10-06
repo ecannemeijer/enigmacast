@@ -66,11 +66,15 @@ The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Dashboard
 
-The left menu is Stream, Receiver, RC Info, Settings, and Exit. The open section stays marked while focus is in its panel, and a pill under the logo shows the receiver power state (Aan, Stand-by, Niet bereikbaar, Herstart…). With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
+The left menu is Stream, Receiver, RC Info, OSD skins, Settings, and Exit. The open section stays marked while focus is in its panel, and a pill under the logo shows the receiver power state (Aan, Stand-by, Niet bereikbaar, Herstart…). With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
 
 Right from Stream enters the channel list of the current TV bouquet. Moving the focus previews that channel's EPG on the right and in the header. OK zaps and starts the mini player. OK again on the same channel opens the full-screen player. Right from a channel opens the EPG rows.
 
 Left from the channel list opens the bouquet list and focuses it. Resting on a bouquet for half a second loads its playable channels to the right. Right closes the bouquet list and returns to the channels. Left from the bouquet list focuses Settings.
+
+OSD skins will let you choose the look of the OSD that EnigmaCast draws itself (channel banner, channel list, notices). For now it only shows "Coming soon"; the choice will be saved as `osdSkin` in the settings (currently always `STANDARD`).
+
+When a newer release is found at startup, the update prompt opens in its own dialog window. Focus starts on Update and cannot leave the dialog, and Back or Cancel closes it. Pressing Update stops the live stream (full screen, mini player and audio-sync preview, in both viewing modes) so the APK downloads at full speed, and shows the progress. Nothing restarts the stream during the download. Cancel or Back stops the download and resumes the stream that was playing. After a failed download, Update tries again and Cancel resumes the stream.
 
 Bouquet rows from OpenWebif are accepted as `[reference, name]` or `[name, reference]`. The current bouquet is `info.bqref` / `info.bqname`. TV bouquets are service type 7, and playable channels are type 0. Empty bouquets stay in the list.
 
