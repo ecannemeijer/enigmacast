@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.0.0-beta.3",
+  "versionCode": 7,
+  "versionName": "1.0.0-beta.4",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Shows the version in the menu. Back or Exit from the left menu closes the app and stops the stream."
+  "notes": "Asks to wake the receiver when it is in standby. Hold blue in the full-screen player to open teletext."
 }
