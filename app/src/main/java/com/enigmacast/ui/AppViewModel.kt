@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.BuildConfig
 import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.update.AppUpdateClient
 import com.enigmacast.update.RemoteRelease
@@ -30,6 +31,7 @@ class AppViewModel @Inject constructor(
     settingsRepository: SettingsRepository,
     private val updates: AppUpdateClient,
     private val playback: LivePlaybackController,
+    private val ownTuner: OwnTunerSession,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -139,6 +141,7 @@ class AppViewModel @Inject constructor(
     }
 
     fun exit() {
+        ownTuner.deactivate()
         playback.stop()
         streamRunning = false
         requestFinish?.invoke()

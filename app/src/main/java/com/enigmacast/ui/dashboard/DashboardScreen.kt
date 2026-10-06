@@ -82,6 +82,7 @@ import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.domain.model.PowerAction
+import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.PowerEvent
 import com.enigmacast.ui.power.ReceiverPowerPanel
 import com.enigmacast.ui.power.ReceiverPowerViewModel
@@ -174,7 +175,7 @@ fun DashboardScreen(
         powerModel.events.collect { event ->
             when (event) {
                 PowerEvent.WentToStandby -> guideModel.onReceiverOff("Ontvanger staat in stand-by")
-                is PowerEvent.GoingOffline -> guideModel.onReceiverOff(
+                is PowerEvent.GoingOffline -> guideModel.onReceiverGoingOffline(
                     if (event.action == PowerAction.DEEP_STANDBY) "Ontvanger is uitgeschakeld" else "Ontvanger herstart…",
                 )
                 PowerEvent.WokeUp -> guideModel.onReceiverOn()
@@ -823,6 +824,7 @@ private fun SettingsHub(
                 when (page) {
                     SettingPage.Receiver -> ReceiverSettingsPanel()
                     SettingPage.Playback -> PlaybackSettingsPanel(
+                        settings.streamMode,
                         settings.playback.lowLatency,
                         settings.playback.autoReconnect,
                         settings.playback.hdmiPassthrough,
@@ -862,6 +864,7 @@ private fun SettingNav(
 
 @Composable
 private fun PlaybackSettingsPanel(
+    streamMode: StreamMode,
     fast: Boolean,
     autoReconnect: Boolean,
     hdmiPassthrough: Boolean,
@@ -873,6 +876,22 @@ private fun PlaybackSettingsPanel(
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
     val passthroughActive by remote.audioPassthroughActive.collectAsStateWithLifecycle()
+    SettingsCard("Kijkmodus") {
+        ChoiceRow(
+            title = "Hoe dit apparaat kijkt",
+            description = if (streamMode == StreamMode.OWN_TUNER) {
+                "Eigen tuner: dit apparaat kiest zelf een zender, los van de ontvanger. Meerdere apparaten " +
+                    "kunnen tegelijk kijken, één per vrije tuner. De ontvanger mag in stand-by blijven; " +
+                    "de zenderbalk en zenderlijst tekent de app zelf."
+            } else {
+                "Ontvanger volgen: de app zet de ontvanger op de gekozen zender en toont wat de ontvanger " +
+                    "laat zien, met het menu van de ontvanger. De afstandsbediening bedient de ontvanger."
+            },
+            options = listOf("Eigen tuner (meerdere kijkers)", "Ontvanger volgen"),
+            selectedIndex = if (streamMode == StreamMode.OWN_TUNER) 0 else 1,
+            onSelect = { viewModel.setStreamMode(if (it == 0) StreamMode.OWN_TUNER else StreamMode.FOLLOW_RECEIVER) },
+        )
+    }
     SettingsCard("Beeld") {
         ChoiceRow(
             title = "Buffer",

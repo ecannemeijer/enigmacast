@@ -11,17 +11,24 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.ReceiverPowerFlow
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.LiveZapFlow
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.StreamModePolicy
+import com.enigmacast.live.OwnTunerSession
+import com.enigmacast.live.OwnTunerState
+import com.enigmacast.live.TunerStatus
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -32,6 +39,7 @@ class StreamGuideViewModel @Inject constructor(
     private val infoSource: ReceiverInfoSource,
     private val playback: LivePlaybackController,
     private val endpoints: OpenWebifEndpoints,
+    private val session: OwnTunerSession,
 ) : ViewModel() {
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
@@ -65,8 +73,86 @@ class StreamGuideViewModel @Inject constructor(
     private var powerCheckStarted = false
     private var powerKnown = false
     private var leaveOff = false
+    private var mode: StreamMode? = null
+
+    /** True while the guide drives this device's own stream instead of the receiver. */
+    val ownTuner: Boolean get() = mode == StreamMode.OWN_TUNER
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.settings.map { it.streamMode }.distinctUntilChanged().collect(::onModeChanged)
+        }
+        viewModelScope.launch {
+            session.state.collect(::mirror)
+        }
+    }
+
+    /**
+     * Switching modes drops the running stream: the follow mode streams what the receiver
+     * shows, the own-tuner mode streams its own channel, and they must not mix.
+     */
+    private fun onModeChanged(next: StreamMode) {
+        val previous = mode
+        mode = next
+        if (previous == null || previous == next) return
+        EnigmaLog.service("stream mode $previous → $next")
+        tuneJob?.cancel()
+        previewJob?.cancel()
+        guideToken += 1
+        if (previous == StreamMode.OWN_TUNER) session.deactivate() else playback.stopForZap()
+        powerCheckStarted = false
+        powerKnown = false
+        leaveOff = false
+        askWake = false
+        lastPressedReference = ""
+        status = ""
+        refresh()
+    }
+
+    private fun mirror(state: OwnTunerState) {
+        if (mode != StreamMode.OWN_TUNER) return
+        if (!bouquetPinned && state.channels.isNotEmpty()) {
+            channels = state.channels
+            bouquetName = state.bouquetName
+            selectedBouquetReference = state.bouquetReference
+            bouquetLoaded = true
+        }
+        val channel = state.channel
+        if (channel != null) {
+            val browsing = browsingAwayFromTuned()
+            tunedReference = channel.reference
+            if (!browsing) {
+                shownReference = channel.reference
+                displayName = channel.name
+                guide = state.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) }
+            }
+        }
+        status = when (state.tuner.status) {
+            TunerStatus.PLAYING, TunerStatus.IDLE -> ""
+            TunerStatus.FULL -> (listOf(state.tuner.message) + state.tuner.users.map { "• ${it.label}" }).joinToString("\n")
+            else -> state.tuner.message
+        }
+    }
 
     fun refresh() {
+        viewModelScope.launch {
+            val current = mode ?: settingsRepository.current().streamMode.also { mode = it }
+            if (current == StreamMode.OWN_TUNER) refreshOwnTuner() else refreshFollowing()
+        }
+    }
+
+    /** Own tuner: never wake or zap the receiver; it may stay in standby. */
+    private suspend fun refreshOwnTuner() {
+        session.ensureStarted()
+        session.refreshGuideIfStale()
+        if (bouquets.isEmpty()) {
+            val receiver = settingsRepository.current().activeReceiver() ?: return
+            runCatching { serviceSource.televisionBouquets(receiver) }.onSuccess { bouquets = it }
+        }
+        if (browsingAwayFromTuned()) reloadShownGuide()
+    }
+
+    private fun refreshFollowing() {
         val shouldCheckPower = !powerCheckStarted
         if (shouldCheckPower) powerCheckStarted = true
         viewModelScope.launch {
@@ -138,6 +224,7 @@ class StreamGuideViewModel @Inject constructor(
      * the Receiver section. Free the stream so the tuner can sleep and stop loading the guide.
      */
     fun onReceiverOff(message: String) {
+        if (!StreamModePolicy.stopsStreamOnStandby(mode ?: StreamMode.OWN_TUNER)) return
         if (askWake || waking) return
         tuneJob?.cancel()
         previewJob?.cancel()
@@ -148,8 +235,20 @@ class StreamGuideViewModel @Inject constructor(
         status = message
     }
 
+    /**
+     * The receiver is shutting down or restarting. In own-tuner mode its stream server
+     * goes away too, so the stream stops either way.
+     */
+    fun onReceiverGoingOffline(message: String) {
+        if (mode == StreamMode.FOLLOW_RECEIVER) onReceiverOff(message) else session.onReceiverOffline(message)
+    }
+
     /** The receiver is on again; resume only if the guide had stopped because it was off. */
     fun onReceiverOn() {
+        if (mode != StreamMode.FOLLOW_RECEIVER) {
+            session.onReceiverBack()
+            return
+        }
         if (!leaveOff || askWake || waking) return
         leaveOff = false
         powerKnown = true
@@ -161,6 +260,7 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     fun refreshIfServiceChanged() {
+        if (mode != StreamMode.FOLLOW_RECEIVER) return
         if (!powerKnown || askWake || leaveOff || waking) return
         if (browsingAwayFromTuned() || previewJob?.isActive == true || tuneJob?.isActive == true || bouquetJob?.isActive == true) return
         viewModelScope.launch {
@@ -204,10 +304,22 @@ class StreamGuideViewModel @Inject constructor(
 
     fun tune(channel: BouquetEntry, onStarted: () -> Unit, onFullscreen: () -> Unit) {
         if (lastPressedReference.isNotBlank() && BouquetChannels.sameService(channel.reference, lastPressedReference)) {
-            onFullscreen()
+            val refused = session.state.value.tuner.status.let { it == TunerStatus.FULL || it == TunerStatus.PROBLEM }
+            if (mode != StreamMode.FOLLOW_RECEIVER && refused) session.retry() else onFullscreen()
             return
         }
         lastPressedReference = channel.reference
+        if (mode != StreamMode.FOLLOW_RECEIVER) {
+            previewJob?.cancel()
+            guideToken += 1
+            bouquetPinned = false
+            tunedReference = channel.reference
+            shownReference = channel.reference
+            displayName = channel.name
+            session.start(channel, channels, bouquetName, selectedBouquetReference)
+            onStarted()
+            return
+        }
         val token = ++guideToken
         tuneJob?.cancel()
         previewJob?.cancel()
@@ -232,7 +344,9 @@ class StreamGuideViewModel @Inject constructor(
                 releaseStream = { playback.stopForZap() },
                 zap = { serviceSource.zap(receiver, channel.reference) },
                 currentReference = { serviceSource.currentService(receiver).reference },
-                startStream = { playback.play(streamUrl, force = true) },
+                startStream = {
+                    playback.play(streamUrl, force = true, authorization = endpoints.streamAuthorization(receiver))
+                },
             )
             if (token != guideToken || outcome is LiveZapFlow.Outcome.Stale) return@launch
             when (outcome) {
@@ -268,7 +382,7 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     private fun startPlayback(receiver: ReceiverConfig, reference: String) {
-        playback.play(endpoints.stream(receiver, reference), force = true)
+        playback.play(endpoints.stream(receiver, reference), force = true, authorization = endpoints.streamAuthorization(receiver))
     }
 
     private suspend fun loadGuide() {

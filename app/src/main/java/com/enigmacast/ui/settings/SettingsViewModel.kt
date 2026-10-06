@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.AppSettings
+import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.playback.AudioSync
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +22,7 @@ class SettingsViewModel @Inject constructor(
         AppSettings(),
     )
 
+    fun setStreamMode(mode: StreamMode) = update { it.copy(streamMode = mode) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }
     fun setAutoReconnect(enabled: Boolean) = update { it.copy(playback = it.playback.copy(autoReconnect = enabled)) }
     fun setHdmiPassthrough(enabled: Boolean) = update { it.copy(playback = it.playback.copy(hdmiPassthrough = enabled)) }
