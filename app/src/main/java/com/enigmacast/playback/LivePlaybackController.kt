@@ -103,6 +103,22 @@ class LivePlaybackController @Inject constructor(
         _state.value = PlayerState()
     }
 
+    /**
+     * Drops the live MPEG-TS source before a zap so the receiver can free the tuner.
+     * The same ExoPlayer is kept; [release] is for leaving the screen.
+     */
+    fun stopForZap() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        currentUrl = null
+        failures = 0
+        val exo = player ?: return
+        exo.playWhenReady = false
+        exo.stop()
+        exo.clearMediaItems()
+        EnigmaLog.player("live stream released for zap")
+    }
+
     fun allowPlayback() {
         playbackEnabled = true
     }

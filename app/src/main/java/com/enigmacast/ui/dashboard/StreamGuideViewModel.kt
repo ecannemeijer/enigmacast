@@ -11,11 +11,13 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.LiveZapFlow
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -151,6 +153,7 @@ class StreamGuideViewModel @Inject constructor(
             lastPressedReference = ""
         }
         if (BouquetChannels.sameService(channel.reference, shownReference)) return
+        if (tuneJob?.isActive == true) return
         displayName = channel.name
         shownReference = channel.reference
         val token = ++guideToken
@@ -178,39 +181,62 @@ class StreamGuideViewModel @Inject constructor(
             return
         }
         lastPressedReference = channel.reference
+        val token = ++guideToken
         tuneJob?.cancel()
         previewJob?.cancel()
-        val token = ++guideToken
+        val previous = tunedReference
+        tunedReference = channel.reference
         tuneJob = viewModelScope.launch {
             val receiver = settingsRepository.current().activeReceiver()
             if (receiver == null) {
+                if (token != guideToken) {
+                    EnigmaLog.service("stale tune ignored")
+                    return@launch
+                }
                 status = "Geen ontvanger"
                 return@launch
             }
-            val previous = tunedReference
-            tunedReference = channel.reference
-            runCatching { serviceSource.zap(receiver, channel.reference) }
-                .onFailure { error ->
+            val streamUrl = endpoints.stream(receiver, channel.reference)
+            val outcome = LiveZapFlow.run(
+                token = token,
+                isCurrent = { it == guideToken },
+                reference = channel.reference,
+                streamUrl = streamUrl,
+                releaseStream = { playback.stopForZap() },
+                zap = { serviceSource.zap(receiver, channel.reference) },
+                currentReference = { serviceSource.currentService(receiver).reference },
+                startStream = { playback.play(streamUrl, force = true) },
+            )
+            if (token != guideToken || outcome is LiveZapFlow.Outcome.Stale) return@launch
+            when (outcome) {
+                LiveZapFlow.Outcome.Stale -> return@launch
+                LiveZapFlow.Outcome.Started -> {
+                    onStarted()
+                    bouquetPinned = false
+                    try {
+                        val loaded = serviceSource.channelGuide(receiver, channel.reference, channel.name)
+                        if (token != guideToken) return@launch
+                        guide = loaded
+                        val reference = loaded.serviceReference.ifBlank { channel.reference }
+                        tunedReference = reference
+                        shownReference = reference
+                        displayName = loaded.channelName.ifBlank { channel.name }
+                        status = ""
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        if (token != guideToken) return@launch
+                        status = error.message ?: "EPG niet beschikbaar"
+                    }
+                }
+                is LiveZapFlow.Outcome.ZapFailed -> {
                     tunedReference = previous
-                    status = error.message ?: "Kanaal starten mislukt"
-                    return@launch
+                    status = outcome.error.message ?: "Kanaal starten mislukt"
                 }
-            startPlayback(receiver, channel.reference)
-            onStarted()
-            bouquetPinned = false
-            runCatching { serviceSource.channelGuide(receiver, channel.reference, channel.name) }
-                .onSuccess { loaded ->
-                    if (token != guideToken) return@onSuccess
-                    guide = loaded
-                    val reference = loaded.serviceReference.ifBlank { channel.reference }
-                    tunedReference = reference
-                    shownReference = reference
-                    displayName = loaded.channelName.ifBlank { channel.name }
-                    status = ""
+                LiveZapFlow.Outcome.TimedOut -> {
+                    status = "Zender niet bevestigd"
                 }
-                .onFailure { error ->
-                    status = error.message ?: "EPG niet beschikbaar"
-                }
+            }
         }
     }
 
@@ -219,6 +245,7 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     private suspend fun loadGuide() {
+        if (tuneJob?.isActive == true) return
         val receiver = settingsRepository.current().activeReceiver()
         if (receiver == null) {
             status = "Geen ontvanger"
@@ -251,6 +278,7 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     private suspend fun reloadShownGuide() {
+        if (tuneJob?.isActive == true) return
         val receiver = settingsRepository.current().activeReceiver() ?: return
         val reference = shownReference
         val name = displayName

@@ -23,11 +23,15 @@ import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.util.EnigmaLog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Credentials
 import okhttp3.Request
+import okhttp3.Response
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -243,25 +247,58 @@ class OpenWebifApi @Inject constructor(
     }
 
     /**
-     * The body is read here, on [Dispatchers.IO]. Returning the open [okhttp3.Response]
-     * and calling `body.bytes()` later runs that read on the caller, which is Main.
+     * The body is read on OkHttp's dispatcher, not on Main.
+     * Cancelling the coroutine cancels the call, so a stale zap or poll cannot
+     * finish and then drive playback.
      */
-    private suspend fun execute(config: ReceiverConfig, url: String, accept: String): HttpBytes =
-        withContext(Dispatchers.IO) {
-            val client = clientFactory.webifClient(config.allowInsecureCertificates, config.timeoutSeconds)
-            val builder = Request.Builder().url(url).header("Accept", accept)
-            if (config.username.isNotEmpty()) {
-                builder.header("Authorization", Credentials.basic(config.username, config.password))
-            }
-            EnigmaLog.connection("request ${EnigmaLog.sanitizeUrl(url)}")
-            client.newCall(builder.build()).execute().use { response ->
-                HttpBytes(
-                    code = response.code,
-                    bytes = response.body.bytes(),
-                    contentType = response.header("Content-Type"),
-                )
-            }
+    private suspend fun execute(config: ReceiverConfig, url: String, accept: String): HttpBytes {
+        val client = clientFactory.webifClient(config.allowInsecureCertificates, config.timeoutSeconds)
+        val builder = Request.Builder().url(url).header("Accept", accept)
+        if (config.username.isNotEmpty()) {
+            builder.header("Authorization", Credentials.basic(config.username, config.password))
         }
+        EnigmaLog.connection("request ${EnigmaLog.sanitizeUrl(url)}")
+        return client.newCall(builder.build()).awaitBytes()
+    }
+
+    private suspend fun Call.awaitBytes(): HttpBytes = suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { cancel() }
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (call.isCanceled()) return
+                resumeOnce(continuation, Result.failure(e))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val result = try {
+                    response.use { open ->
+                        Result.success(
+                            HttpBytes(
+                                code = open.code,
+                                bytes = open.body.bytes(),
+                                contentType = open.header("Content-Type"),
+                            ),
+                        )
+                    }
+                } catch (error: Exception) {
+                    val failure = error as? IOException ?: IOException(error)
+                    Result.failure(failure)
+                }
+                resumeOnce(continuation, result)
+            }
+        })
+    }
+
+    private fun resumeOnce(
+        continuation: kotlinx.coroutines.CancellableContinuation<HttpBytes>,
+        result: Result<HttpBytes>,
+    ) {
+        try {
+            if (continuation.isActive) continuation.resumeWith(result)
+        } catch (_: IllegalStateException) {
+            // The coroutine was cancelled while this callback was resuming.
+        }
+    }
 
     private data class HttpBytes(
         val code: Int,
