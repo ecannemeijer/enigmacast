@@ -130,4 +130,16 @@ class OpenWebifEndpointsTest {
             endpoints.epgNow(config, "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.favourites.tv\" ORDER BY bouquet"),
         )
     }
+
+    @Test
+    fun buildsBouquetGuideAndRecordUrls() {
+        assertEquals(
+            "http://192.168.1.100/api/epgmulti?bRef=1%3A7%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A0%3AFROM%20BOUQUET%20%22userbouquet.favourites.tv%22%20ORDER%20BY%20bouquet&time=1700000000&endTime=180",
+            endpoints.epgMulti(config, "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.favourites.tv\" ORDER BY bouquet", 1_700_000_000L, 180),
+        )
+        assertEquals(
+            "http://192.168.1.100/api/timeraddbyeventid?sRef=1%3A0%3A19%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A&eventid=4711",
+            endpoints.timerAddByEventId(config, "1:0:19:1:0:0:0:0:0:0:", 4711),
+        )
+    }
 }

@@ -1,10 +1,12 @@
 package com.enigmacast.di
 
+import com.enigmacast.data.openwebif.OpenWebifEpgSource
 import com.enigmacast.data.openwebif.OpenWebifOsdSource
 import com.enigmacast.data.openwebif.OpenWebifReceiverInfoSource
 import com.enigmacast.data.openwebif.OpenWebifRemoteControlSource
 import com.enigmacast.data.openwebif.OpenWebifServiceStateSource
 import com.enigmacast.data.openwebif.OpenWebifTunerStatusSource
+import com.enigmacast.domain.source.EpgSource
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
@@ -38,4 +40,8 @@ abstract class SourceModule {
     @Binds
     @Singleton
     abstract fun tunerSource(impl: OpenWebifTunerStatusSource): TunerStatusSource
+
+    @Binds
+    @Singleton
+    abstract fun epgSource(impl: OpenWebifEpgSource): EpgSource
 }

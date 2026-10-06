@@ -1,5 +1,7 @@
 package com.enigmacast.data.openwebif
 
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
@@ -17,6 +19,7 @@ import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.domain.source.EpgSource
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
@@ -114,4 +117,22 @@ class OpenWebifTunerStatusSource @Inject constructor(
     override suspend fun picon(config: ReceiverConfig, path: String): ByteArray? = api.picon(config, path)
     override suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent> =
         api.nowEvents(config, bouquetReference)
+}
+
+@Singleton
+class OpenWebifEpgSource @Inject constructor(
+    private val api: OpenWebifApi,
+) : EpgSource {
+    override suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> =
+        api.serviceEvents(config, serviceReference)
+
+    override suspend fun bouquetEvents(
+        config: ReceiverConfig,
+        bouquetReference: String,
+        startSec: Long,
+        minutes: Int,
+    ): List<GuideEvent> = api.bouquetEvents(config, bouquetReference, startSec, minutes)
+
+    override suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult =
+        api.addTimer(config, serviceReference, eventId)
 }

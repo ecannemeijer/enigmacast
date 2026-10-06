@@ -239,4 +239,35 @@ class OpenWebifJsonTest {
         assertEquals(2800L, events[0].endEpochSec)
         assertEquals(0, OpenWebifJson.parseNowEvents("not json").size)
     }
+
+    @Test
+    fun parsesGuideEventsWithIdsAndReferences() {
+        val body = """
+            {"events":[
+              {"id":101,"sref":"1:0:19:A:0:0:0:0:0:0:","title":"Nieuws &amp; Sport","shortdesc":"Kort","longdesc":"Lang verhaal","begin_timestamp":1000,"duration_sec":1800},
+              {"id":102,"title":"Zonder sref","shortdesc":"Alleen kort","longdesc":"","begin_timestamp":2800,"duration_sec":600},
+              {"id":103,"sref":"1:0:19:A:0:0:0:0:0:0:","title":"N/A","begin_timestamp":3400,"duration_sec":60},
+              {"id":104,"sref":"1:0:19:A:0:0:0:0:0:0:","title":"Geen duur","begin_timestamp":3400,"duration_sec":0}
+            ]}
+        """.trimIndent()
+        val events = OpenWebifJson.parseGuideEvents(body, fallbackReference = "1:0:1:B:0:0:0:0:0:0:")
+        assertEquals(2, events.size)
+        assertEquals(101, events[0].eventId)
+        assertEquals("Nieuws & Sport", events[0].title)
+        assertEquals("Lang verhaal", events[0].description)
+        assertEquals(2800L, events[0].endEpochSec)
+        assertEquals("1:0:1:B:0:0:0:0:0:0:", events[1].reference)
+        assertEquals("Alleen kort", events[1].description)
+        assertEquals(0, OpenWebifJson.parseGuideEvents("<html>").size)
+    }
+
+    @Test
+    fun parsesTimerResults() {
+        val added = OpenWebifJson.parseTimerResult("""{"result": true, "message": "Timer 'Journaal' added"}""")
+        assertTrue(added.success)
+        assertEquals("Timer 'Journaal' added", added.message)
+        val conflict = OpenWebifJson.parseTimerResult("""{"result": false, "message": "Conflicting Timer(s) detected!"}""")
+        assertFalse(conflict.success)
+        assertFalse(OpenWebifJson.parseTimerResult("oops").success)
+    }
 }

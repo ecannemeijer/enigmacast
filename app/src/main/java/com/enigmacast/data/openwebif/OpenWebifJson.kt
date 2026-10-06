@@ -1,6 +1,8 @@
 package com.enigmacast.data.openwebif
 
 import com.enigmacast.R
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EnigmaService
@@ -235,6 +237,43 @@ internal object OpenWebifJson {
             if (begin <= 0L || duration <= 0L || title.isBlank() || title == "N/A") return@mapNotNull null
             NowEvent(reference, title, begin, duration)
         }
+    }
+
+    /**
+     * Programmes from `/api/epgservice` or `/api/epgmulti`: `id`, `sref`, `title`,
+     * `shortdesc`, `longdesc`, `begin_timestamp` and `duration_sec` per event. Events
+     * without a reference (older epgservice answers) get [fallbackReference].
+     */
+    fun parseGuideEvents(body: String, fallbackReference: String = ""): List<GuideEvent> {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+        val array = findArray(root, "events") ?: return emptyList()
+        return array.mapNotNull { element ->
+            val event = element as? JsonObject ?: return@mapNotNull null
+            val reference = event.primitive("sref") ?: fallbackReference
+            val begin = event.primitive("begin_timestamp")?.toLongOrNull() ?: 0L
+            val duration = event.primitive("duration_sec")?.toLongOrNull() ?: 0L
+            val title = unescape(event.primitive("title").orEmpty()).trim()
+            if (reference.isBlank() || begin <= 0L || duration <= 0L || title.isBlank() || title == "N/A") {
+                return@mapNotNull null
+            }
+            GuideEvent(
+                eventId = event.primitive("id")?.toIntOrNull() ?: -1,
+                reference = reference,
+                title = title,
+                shortDescription = unescape(event.primitive("shortdesc").orEmpty()).trim(),
+                plot = unescape(event.primitive("longdesc").orEmpty()).trim(),
+                beginEpochSec = begin,
+                durationSec = duration,
+            )
+        }
+    }
+
+    /** `/api/timeraddbyeventid`: `{"result": true|false, "message": "…"}`. */
+    fun parseTimerResult(body: String): TimerResult {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull()
+            ?: return TimerResult(false, "")
+        val result = (root["result"] as? JsonPrimitive)?.let { it.booleanOrNull ?: it.contentOrNull.equals("true", true) } ?: false
+        return TimerResult(result, unescape(root.primitive("message").orEmpty()))
     }
 
     /** Root `/api/getservices`: bouquet reference → number of channels before that bouquet. */

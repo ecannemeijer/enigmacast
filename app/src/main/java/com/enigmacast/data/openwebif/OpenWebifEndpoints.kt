@@ -78,6 +78,19 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/epgnow?bRef=${encode(bouquetReference)}")
     }
 
+    /**
+     * The programmes of every channel in a bouquet from [startSec] on. OpenWebif reads
+     * `endTime` as minutes after `time` and includes the programme already running at `time`.
+     */
+    fun epgMulti(config: ReceiverConfig, bouquetReference: String, startSec: Long, minutes: Int): String {
+        return api(config, "/api/epgmulti?bRef=${encode(bouquetReference)}&time=$startSec&endTime=$minutes")
+    }
+
+    /** Records one programme with the receiver's default recording settings. */
+    fun timerAddByEventId(config: ReceiverConfig, serviceReference: String, eventId: Int): String {
+        return api(config, "/api/timeraddbyeventid?sRef=${encode(serviceReference)}&eventid=$eventId")
+    }
+
     /** A path from OpenWebif such as `/picon/1_0_19_….png`, on the web interface host. */
     fun picon(config: ReceiverConfig, path: String): String = api(config, path)
 

@@ -1,5 +1,7 @@
 package com.enigmacast.domain.source
 
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
@@ -68,4 +70,15 @@ interface TunerStatusSource {
 
     /** What is on air now on every channel of a bouquet. */
     suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent>
+}
+
+interface EpgSource {
+    /** Every programme the receiver knows for one channel. */
+    suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent>
+
+    /** The programmes of all channels in a bouquet between [startSec] and [minutes] later. */
+    suspend fun bouquetEvents(config: ReceiverConfig, bouquetReference: String, startSec: Long, minutes: Int): List<GuideEvent>
+
+    /** Asks the receiver to record one programme. */
+    suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult
 }
