@@ -14,6 +14,7 @@ import com.enigmacast.update.RemoteRelease
 import com.enigmacast.update.isNewerRelease
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -68,9 +69,15 @@ class AppViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Cancel or Back in the update dialog. Stops a running download and lets the stream
+     * that was stopped for it play again.
+     */
     fun dismissUpdate() {
         downloadJob?.cancel()
+        downloadJob = null
         updatePrompt = null
+        playback.releaseHold(resume = true)
     }
 
     fun installUpdate() {
@@ -82,6 +89,8 @@ class AppViewModel @Inject constructor(
         }
         downloadJob?.cancel()
         downloadJob = viewModelScope.launch {
+            // A live MPEG-TS stream takes most of the bandwidth; the APK would crawl.
+            playback.holdForUpdate()
             updatePrompt = prompt.copy(progress = 0, message = null)
             val apk = runCatching {
                 updates.download(prompt.release) { percent ->
@@ -90,7 +99,11 @@ class AppViewModel @Inject constructor(
                     }
                 }
             }.getOrElse { error ->
-                updatePrompt = prompt.copy(progress = null, message = error.message ?: "Download failed")
+                if (error is CancellationException) throw error
+                updatePrompt = prompt.copy(
+                    progress = null,
+                    message = (error.message ?: "Download failed").trimEnd('.') + ". Press Update to try again, or Cancel to resume the stream.",
+                )
                 return@launch
             }
             updatePrompt = prompt.copy(progress = null, message = null)
