@@ -152,6 +152,18 @@ class AppViewModel @Inject constructor(
         focusPlayingChannel = false
     }
 
+    /** Set just before the activity is recreated for a new language; Settings › Language then gets focus. */
+    var focusLanguageSetting by mutableStateOf(false)
+        private set
+
+    fun requestLanguageFocus() {
+        focusLanguageSetting = true
+    }
+
+    fun languageSettingFocused() {
+        focusLanguageSetting = false
+    }
+
     fun openConnection() {
         decided = true
         returnScreen = AppScreen.Connection

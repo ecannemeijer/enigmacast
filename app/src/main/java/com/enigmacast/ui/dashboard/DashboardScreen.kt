@@ -88,6 +88,8 @@ import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.PowerEvent
+import com.enigmacast.locale.AppLanguage
+import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.ui.power.ReceiverPowerPanel
 import com.enigmacast.ui.power.ReceiverPowerViewModel
 import com.enigmacast.ui.power.powerStateColor
@@ -127,6 +129,7 @@ private enum class SettingPage {
     Playback,
     Osd,
     Info,
+    Language,
 }
 
 @Composable
@@ -139,10 +142,14 @@ fun DashboardScreen(
     focusPlayingChannel: Boolean = false,
     onPlayingChannelFocused: () -> Unit = {},
     updatePromptShown: Boolean = false,
+    focusLanguageSetting: Boolean = false,
+    onLanguageSettingFocused: () -> Unit = {},
+    onChooseLanguage: (AppLanguage) -> Unit = {},
     guideModel: StreamGuideViewModel = hiltViewModel(),
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
 ) {
-    var section by remember { mutableStateOf(DashSection.Stream) }
+    // After a language change the activity is recreated; reopen Settings › Language then.
+    var section by remember { mutableStateOf(if (focusLanguageSetting) DashSection.Settings else DashSection.Stream) }
     var contentFocused by remember { mutableStateOf(false) }
     val streamFocus = remember { FocusRequester() }
     var streamItemFocused by remember { mutableStateOf(false) }
@@ -178,7 +185,7 @@ fun DashboardScreen(
         onDispose { onBindBack(null) }
     }
     LaunchedEffect(Unit) {
-        streamFocus.requestFocus()
+        if (!focusLanguageSetting) streamFocus.requestFocus()
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -317,7 +324,14 @@ fun DashboardScreen(
                         )
                         DashSection.RcInfo -> RcInfoPanel(Modifier.fillMaxSize())
                         DashSection.Skins -> OsdSkinsPanel(Modifier.fillMaxSize())
-                        DashSection.Settings -> SettingsHub(settingsPageFocus, settingsMenuFocus, Modifier.fillMaxSize())
+                        DashSection.Settings -> SettingsHub(
+                            settingsPageFocus,
+                            settingsMenuFocus,
+                            focusLanguageSetting,
+                            onLanguageSettingFocused,
+                            onChooseLanguage,
+                            Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }
@@ -866,10 +880,13 @@ private fun RcRow(button: String, action: String) {
 private fun SettingsHub(
     pageFocus: FocusRequester,
     menuFocus: FocusRequester,
+    focusLanguage: Boolean,
+    onLanguageFocused: () -> Unit,
+    onChooseLanguage: (AppLanguage) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    var page by remember { mutableStateOf(SettingPage.Receiver) }
+    var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Language else SettingPage.Receiver) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     Column(modifier) {
         PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
@@ -884,6 +901,7 @@ private fun SettingsHub(
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
                 SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
+                SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, null, menuFocus) { page = SettingPage.Language }
             }
             Column(
                 modifier = Modifier
@@ -906,6 +924,7 @@ private fun SettingsHub(
                     )
                     SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
+                    SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus)
                 }
             }
         }
@@ -1073,6 +1092,38 @@ private fun AudioDelayRow(
         onReset = { viewModel.resetAudioDelay(passthrough) },
         badge = if (active) stringResource(R.string.active_now) else null,
     )
+}
+
+/**
+ * App language. Choosing one recreates the screen in that language; focus then comes
+ * back here, on the chosen language.
+ */
+@Composable
+private fun LanguageSettingsPanel(
+    restoreFocus: Boolean,
+    onFocusRestored: () -> Unit,
+    onChoose: (AppLanguage) -> Unit,
+    menuFocus: FocusRequester,
+) {
+    val context = LocalContext.current
+    val current = remember { AppLanguageStore.current(context) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(restoreFocus) {
+        if (!restoreFocus) return@LaunchedEffect
+        focus.requestWhenReady()
+        onFocusRestored()
+    }
+    SettingsCard(stringResource(R.string.language_card)) {
+        ChoiceRow(
+            title = stringResource(R.string.language_choice),
+            description = stringResource(R.string.language_desc),
+            options = AppLanguage.entries.map { it.nativeName },
+            selectedIndex = AppLanguage.entries.indexOf(current),
+            onSelect = { onChoose(AppLanguage.entries[it]) },
+            firstOptionModifier = Modifier.focusProperties { left = menuFocus },
+            selectedOptionModifier = Modifier.focusRequester(focus),
+        )
+    }
 }
 
 @Composable

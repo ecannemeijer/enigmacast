@@ -226,6 +226,10 @@
     <string name="settings_playback">Weergave</string>
     <string name="settings_osd">OSD</string>
     <string name="settings_info">Info</string>
+    <string name="settings_language">Taal</string>
+    <string name="language_card">Taal van de app</string>
+    <string name="language_choice">Taal</string>
+    <string name="language_desc">De teksten van EnigmaCast. Gegevens van de ontvanger, zoals zender- en programmanamen, blijven zoals de ontvanger ze stuurt.</string>
     <string name="viewing_mode">Kijkmodus</string>
     <string name="viewing_mode_title">Hoe dit apparaat kijkt</string>
     <string name="viewing_mode_own_desc">Eigen tuner: dit apparaat kiest zelf een zender, los van de ontvanger. Meerdere apparaten kunnen tegelijk kijken, één per vrije tuner. De ontvanger mag in stand-by blijven; de zenderbalk en zenderlijst tekent de app zelf.</string>
