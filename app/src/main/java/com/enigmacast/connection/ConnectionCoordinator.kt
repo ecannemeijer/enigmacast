@@ -34,7 +34,7 @@ class ConnectionCoordinator(
             try {
                 if (needsFullProbe) {
                     _state.value = if (connected) {
-                        ConnectionState.Reconnecting("Reconnecting")
+                        ConnectionState.Reconnecting("")
                     } else {
                         ConnectionState.Connecting
                     }
@@ -57,7 +57,8 @@ class ConnectionCoordinator(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                val reason = error.message ?: "Receiver offline"
+                // Raw system text (not translated); the screen adds its own translated wording.
+                val reason = error.message.orEmpty()
                 EnigmaLog.connection("receiver unreachable")
                 _state.value = if (connected) ConnectionState.Reconnecting(reason) else ConnectionState.Failed(reason)
                 needsFullProbe = true

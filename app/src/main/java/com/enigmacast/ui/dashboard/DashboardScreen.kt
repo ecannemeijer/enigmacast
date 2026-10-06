@@ -60,7 +60,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -105,6 +107,9 @@ import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.util.UiText
+import com.enigmacast.util.asString
+import com.enigmacast.util.isNotEmpty
 
 private val FocusedButton = Color(0xFF8A5610)
 private val FocusedButtonText = Color.White
@@ -184,9 +189,9 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         powerModel.events.collect { event ->
             when (event) {
-                PowerEvent.WentToStandby -> guideModel.onReceiverOff("Ontvanger staat in stand-by")
+                PowerEvent.WentToStandby -> guideModel.onReceiverOff(UiText.res(R.string.power_receiver_off_now))
                 is PowerEvent.GoingOffline -> guideModel.onReceiverGoingOffline(
-                    if (event.action == PowerAction.DEEP_STANDBY) "Ontvanger is uitgeschakeld" else "Ontvanger herstart…",
+                    UiText.res(if (event.action == PowerAction.DEEP_STANDBY) R.string.power_receiver_switched_off else R.string.power_receiver_restarting),
                 )
                 PowerEvent.WokeUp -> guideModel.onReceiverOn()
             }
@@ -212,13 +217,13 @@ fun DashboardScreen(
                     contentScale = ContentScale.FillWidth,
                 )
                 StatusPill(
-                    text = powerModel.stateLabel,
+                    text = powerModel.stateLabel.asString(),
                     color = powerStateColor(powerModel.powerState, powerModel.restarting),
                     modifier = Modifier.padding(start = 8.dp, bottom = 10.dp),
                 )
                 NavItem(
                     icon = Icons.Filled.PlayArrow,
-                    label = "Stream",
+                    label = stringResource(R.string.nav_stream),
                     selected = section == DashSection.Stream,
                     modifier = Modifier
                         .focusRequester(streamFocus)
@@ -229,7 +234,7 @@ fun DashboardScreen(
                 )
                 NavItem(
                     icon = EnigmaIcons.Power,
-                    label = "Receiver",
+                    label = stringResource(R.string.nav_receiver),
                     selected = section == DashSection.Receiver,
                     modifier = Modifier
                         .focusRequester(receiverMenuFocus)
@@ -239,7 +244,7 @@ fun DashboardScreen(
                 )
                 NavItem(
                     icon = Icons.Filled.Info,
-                    label = "RC Info",
+                    label = stringResource(R.string.nav_rc_info),
                     selected = section == DashSection.RcInfo,
                     modifier = Modifier.focusRequester(rcMenuFocus),
                     onFocus = { section = DashSection.RcInfo },
@@ -247,7 +252,7 @@ fun DashboardScreen(
                 )
                 NavItem(
                     icon = EnigmaIcons.Palette,
-                    label = "OSD skins",
+                    label = stringResource(R.string.nav_osd_skins),
                     selected = section == DashSection.Skins,
                     modifier = Modifier.focusRequester(skinsMenuFocus),
                     onFocus = { section = DashSection.Skins },
@@ -255,7 +260,7 @@ fun DashboardScreen(
                 )
                 NavItem(
                     icon = Icons.Filled.Settings,
-                    label = "Settings",
+                    label = stringResource(R.string.nav_settings),
                     selected = section == DashSection.Settings,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
@@ -266,7 +271,7 @@ fun DashboardScreen(
                 Spacer(Modifier.height(8.dp))
                 NavItem(
                     icon = Icons.Filled.Close,
-                    label = "Exit",
+                    label = stringResource(R.string.nav_exit),
                     selected = false,
                     onClick = onExit,
                 )
@@ -320,10 +325,10 @@ fun DashboardScreen(
         // Wait until the update prompt is closed: a second dialog window would take its focus.
         if (guideModel.askWake && !updatePromptShown) {
             TvConfirmDialog(
-                title = "De ontvanger staat uit",
-                message = if (guideModel.waking) "Bezig met aanzetten…" else "Zal ik de Enigma2 aanzetten?",
-                confirmLabel = "Ja, aanzetten",
-                dismissLabel = "Nee",
+                title = stringResource(R.string.wake_title),
+                message = if (guideModel.waking) stringResource(R.string.wake_busy) else stringResource(R.string.wake_question),
+                confirmLabel = stringResource(R.string.wake_yes),
+                dismissLabel = stringResource(R.string.no),
                 onConfirm = guideModel::confirmWake,
                 onDismiss = guideModel::declineWake,
                 busy = guideModel.waking,
@@ -335,7 +340,7 @@ fun DashboardScreen(
                 powerModel.dismissFeedback(feedback.id)
             }
             FeedbackSnackbar(
-                message = feedback.message,
+                message = feedback.message.asString(),
                 isError = feedback.isError,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -415,7 +420,7 @@ private fun StreamPanel(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    guideModel.displayName.ifBlank { guide?.channelName?.ifBlank { "Geen kanaal" } ?: "Kanaal laden" },
+                    guideModel.displayName.ifBlank { guide?.channelName?.ifBlank { stringResource(R.string.no_channel) } ?: stringResource(R.string.loading_channel) },
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -423,7 +428,7 @@ private fun StreamPanel(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    shown?.title ?: "Geen programma",
+                    shown?.title ?: stringResource(R.string.no_programme),
                     color = Color.White,
                     fontSize = 15.sp,
                     maxLines = 1,
@@ -440,8 +445,8 @@ private fun StreamPanel(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (guideModel.status.isNotBlank()) {
-                    Text(guideModel.status, color = Color(0xFFE8B84A), fontSize = 13.sp)
+                if (guideModel.status.isNotEmpty()) {
+                    Text(guideModel.status.asString(), color = Color(0xFFE8B84A), fontSize = 13.sp)
                 }
             }
         }
@@ -540,7 +545,7 @@ private fun BouquetColumn(
     }
     Column(modifier) {
         Text(
-            "Bouquets",
+            stringResource(R.string.bouquets),
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
@@ -646,7 +651,7 @@ private fun ChannelColumn(
     }
     Column(modifier.fillMaxHeight()) {
         Text(
-            "Kanalen",
+            stringResource(R.string.channels),
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
@@ -798,7 +803,7 @@ private fun EpgRow(
 @Composable
 private fun OsdSkinsPanel(modifier: Modifier = Modifier) {
     Column(modifier) {
-        PanelHeader("OSD skins", "Hier kun je straks een skin voor het OSD kiezen.")
+        PanelHeader(stringResource(R.string.nav_osd_skins), stringResource(R.string.skins_subtitle))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -809,9 +814,9 @@ private fun OsdSkinsPanel(modifier: Modifier = Modifier) {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(EnigmaIcons.Palette, contentDescription = null, tint = EnigmaColors.Accent, modifier = Modifier.size(32.dp))
-                Text("Coming soon", color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.coming_soon), color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Een skin verandert straks de zenderbalk, de zenderlijst en de meldingen die EnigmaCast zelf tekent.",
+                    stringResource(R.string.skins_detail),
                     color = EnigmaColors.Muted,
                     fontSize = 13.sp,
                 )
@@ -823,24 +828,24 @@ private fun OsdSkinsPanel(modifier: Modifier = Modifier) {
 @Composable
 private fun RcInfoPanel(modifier: Modifier = Modifier) {
     Column(modifier) {
-        PanelHeader("Afstandsbediening", "Zo werken de knoppen van je tv-afstandsbediening in EnigmaCast")
+        PanelHeader(stringResource(R.string.rc_title), stringResource(R.string.rc_subtitle))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-            SettingsCard("Navigatie", Modifier.weight(1f)) {
-                RcRow("Pijltjes", "Omhoog, omlaag, links, rechts")
-                RcRow("OK kort", "Bevestigen")
-                RcRow("OK vasthouden", "Enigma-menu")
-                RcRow("Back kort", "Exit op de tuner")
-                RcRow("Back vasthouden", "Terug naar EnigmaCast")
-                RcRow("Back in het menu", "App sluiten en stream stoppen")
+            SettingsCard(stringResource(R.string.rc_navigation), Modifier.weight(1f)) {
+                RcRow(stringResource(R.string.rc_arrows), stringResource(R.string.rc_arrows_desc))
+                RcRow(stringResource(R.string.rc_ok_short), stringResource(R.string.rc_ok_short_desc))
+                RcRow(stringResource(R.string.rc_ok_long), stringResource(R.string.rc_ok_long_desc))
+                RcRow(stringResource(R.string.rc_back_short), stringResource(R.string.rc_back_short_desc))
+                RcRow(stringResource(R.string.rc_back_long), stringResource(R.string.rc_back_long_desc))
+                RcRow(stringResource(R.string.rc_back_menu), stringResource(R.string.rc_back_menu_desc))
             }
-            SettingsCard("Tv-knoppen", Modifier.weight(1f)) {
-                RcRow("Info", "Infobalk")
-                RcRow("Guide", "EPG")
-                RcRow("P+ / P-", "Zender omhoog of omlaag")
-                RcRow("Kleurknoppen", "Rood, groen, geel, blauw")
-                RcRow("Blauw vasthouden", "Teletekst")
-                RcRow("0–9", "Cijfers")
-                RcRow("Play / Pause / Stop", "Afspelen, pauze, stop")
+            SettingsCard(stringResource(R.string.rc_tv_buttons), Modifier.weight(1f)) {
+                RcRow(stringResource(R.string.rc_info), stringResource(R.string.rc_info_desc))
+                RcRow(stringResource(R.string.rc_guide), stringResource(R.string.rc_guide_desc))
+                RcRow("P+ / P-", stringResource(R.string.rc_channel_desc))
+                RcRow(stringResource(R.string.rc_colours), stringResource(R.string.rc_colours_desc))
+                RcRow(stringResource(R.string.rc_blue_long), stringResource(R.string.rc_blue_long_desc))
+                RcRow("0–9", stringResource(R.string.rc_digits_desc))
+                RcRow("Play / Pause / Stop", stringResource(R.string.rc_play_desc))
             }
         }
     }
@@ -867,7 +872,7 @@ private fun SettingsHub(
     var page by remember { mutableStateOf(SettingPage.Receiver) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     Column(modifier) {
-        PanelHeader("Instellingen", settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
+        PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(
                 modifier = Modifier
@@ -875,10 +880,10 @@ private fun SettingsHub(
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                SettingNav(EnigmaIcons.Tv, "Ontvanger", page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
-                SettingNav(Icons.Filled.PlayArrow, "Weergave", page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
-                SettingNav(EnigmaIcons.Layers, "OSD", page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
-                SettingNav(Icons.Filled.Info, "Info", page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
+                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receiver), page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
+                SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
+                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
             }
             Column(
                 modifier = Modifier
@@ -942,40 +947,37 @@ private fun PlaybackSettingsPanel(
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
     val passthroughActive by remote.audioPassthroughActive.collectAsStateWithLifecycle()
-    SettingsCard("Kijkmodus") {
+    SettingsCard(stringResource(R.string.viewing_mode)) {
         ChoiceRow(
-            title = "Hoe dit apparaat kijkt",
+            title = stringResource(R.string.viewing_mode_title),
             description = if (streamMode == StreamMode.OWN_TUNER) {
-                "Eigen tuner: dit apparaat kiest zelf een zender, los van de ontvanger. Meerdere apparaten " +
-                    "kunnen tegelijk kijken, één per vrije tuner. De ontvanger mag in stand-by blijven; " +
-                    "de zenderbalk en zenderlijst tekent de app zelf."
+                stringResource(R.string.viewing_mode_own_desc)
             } else {
-                "Ontvanger volgen: de app zet de ontvanger op de gekozen zender en toont wat de ontvanger " +
-                    "laat zien, met het menu van de ontvanger. De afstandsbediening bedient de ontvanger."
+                stringResource(R.string.viewing_mode_follow_desc)
             },
-            options = listOf("Eigen tuner (meerdere kijkers)", "Ontvanger volgen"),
+            options = listOf(stringResource(R.string.viewing_mode_own), stringResource(R.string.viewing_mode_follow)),
             selectedIndex = if (streamMode == StreamMode.OWN_TUNER) 0 else 1,
             onSelect = { viewModel.setStreamMode(if (it == 0) StreamMode.OWN_TUNER else StreamMode.FOLLOW_RECEIVER) },
         )
     }
-    SettingsCard("Beeld") {
+    SettingsCard(stringResource(R.string.picture)) {
         ChoiceRow(
-            title = "Buffer",
-            description = if (fast) "Snel: minder vertraging, meer kans op haperen." else "Stabiel: grotere buffer, rustiger beeld.",
-            options = listOf("Stabiel", "Snel"),
+            title = stringResource(R.string.buffer),
+            description = if (fast) stringResource(R.string.buffer_fast_desc) else stringResource(R.string.buffer_stable_desc),
+            options = listOf(stringResource(R.string.buffer_stable), stringResource(R.string.buffer_fast)),
             selectedIndex = if (fast) 1 else 0,
             onSelect = { viewModel.setLowLatency(it == 1) },
         )
     }
-    SettingsCard("Geluid") {
+    SettingsCard(stringResource(R.string.sound)) {
         ChoiceRow(
-            title = "Audio-uitvoer",
+            title = stringResource(R.string.audio_output),
             description = if (hdmiPassthrough) {
-                "HDMI stuurt AC3 en E-AC3 ongewijzigd door als de tv dat ondersteunt."
+                stringResource(R.string.audio_output_hdmi_desc)
             } else {
-                "Stereo mixt het geluid, ook als de zender AC3 of E-AC3 stuurt."
+                stringResource(R.string.audio_output_stereo_desc)
             },
-            options = listOf("Stereo", "HDMI"),
+            options = listOf(stringResource(R.string.stereo), stringResource(R.string.hdmi)),
             selectedIndex = if (hdmiPassthrough) 1 else 0,
             onSelect = { viewModel.setHdmiPassthrough(it == 1) },
         )
@@ -988,23 +990,23 @@ private fun PlaybackSettingsPanel(
         player = { remote.player() },
         viewModel = viewModel,
     )
-    SettingsCard("Ondertiteling") {
+    SettingsCard(stringResource(R.string.subtitles)) {
         ChoiceRow(
-            title = "DVB-ondertiteling",
+            title = stringResource(R.string.dvb_subtitles),
             description = if (playback.subtitlesAvailable) {
-                "Deze stream heeft ondertiteling."
+                stringResource(R.string.subtitles_available_desc)
             } else {
-                "Geen ondertiteling in deze stream."
+                stringResource(R.string.subtitles_none_desc)
             },
-            options = listOf("Uit", "Aan"),
+            options = listOf(stringResource(R.string.off), stringResource(R.string.on)),
             selectedIndex = if (subtitlesEnabled) 1 else 0,
             onSelect = { viewModel.setSubtitlesEnabled(it == 1) },
         )
     }
-    SettingsCard("Verbinding") {
+    SettingsCard(stringResource(R.string.connection)) {
         ToggleRow(
-            title = "Automatisch hervatten",
-            description = "Start de stream opnieuw als de verbinding wegvalt.",
+            title = stringResource(R.string.auto_resume),
+            description = stringResource(R.string.auto_resume_desc),
             checked = autoReconnect,
             onCheckedChange = viewModel::setAutoReconnect,
         )
@@ -1024,18 +1026,18 @@ private fun AudioSyncCard(
     player: () -> androidx.media3.common.Player,
     viewModel: SettingsViewModel,
 ) {
-    SettingsCard("Geluid synchroniseren") {
+    SettingsCard(stringResource(R.string.audio_sync)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Loopt het geluid achter op het beeld? Zet de waarde hoger tot lippen en stem gelijk lopen.",
+                    stringResource(R.string.audio_sync_desc),
                     color = EnigmaColors.Muted,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
-                AudioDelayRow("Stereo", pcmMs, passthroughActive == false, passthrough = false, viewModel)
-                AudioDelayRow("HDMI-passthrough", passthroughMs, passthroughActive == true, passthrough = true, viewModel)
+                AudioDelayRow(stringResource(R.string.stereo), pcmMs, passthroughActive == false, passthrough = false, viewModel)
+                AudioDelayRow(stringResource(R.string.hdmi_passthrough), passthroughMs, passthroughActive == true, passthrough = true, viewModel)
             }
             if (streamVisible) {
                 Box(
@@ -1063,13 +1065,13 @@ private fun AudioDelayRow(
     StepperRow(
         title = title,
         value = AudioSync.label(valueMs),
-        description = AudioSync.describe(valueMs),
+        description = AudioSync.describe(valueMs).asString(),
         decreaseLabel = "−${AudioSync.STEP_MS}",
         increaseLabel = "+${AudioSync.STEP_MS}",
         onDecrease = { viewModel.stepAudioDelay(passthrough, -1) },
         onIncrease = { viewModel.stepAudioDelay(passthrough, 1) },
         onReset = { viewModel.resetAudioDelay(passthrough) },
-        badge = if (active) "nu actief" else null,
+        badge = if (active) stringResource(R.string.active_now) else null,
     )
 }
 
@@ -1079,17 +1081,17 @@ private fun OsdSettingsPanel(
     fastPolling: Boolean,
     viewModel: SettingsViewModel,
 ) {
-    SettingsCard("OSD van de ontvanger") {
+    SettingsCard(stringResource(R.string.receiver_osd)) {
         ChoiceRow(
-            title = "Formaat",
-            description = "PNG is scherper, JPG is sneller op een trage verbinding.",
+            title = stringResource(R.string.osd_format),
+            description = stringResource(R.string.osd_format_desc),
             options = listOf("PNG", "JPG"),
             selectedIndex = if (format == "jpg") 1 else 0,
             onSelect = { viewModel.setOsdFormat(if (it == 1) "jpg" else "png") },
         )
         ToggleRow(
-            title = "Snel verversen",
-            description = "Haalt het menu vaker op terwijl je bedient.",
+            title = stringResource(R.string.fast_refresh),
+            description = stringResource(R.string.fast_refresh_desc),
             checked = fastPolling,
             onCheckedChange = viewModel::setFastPolling,
         )
@@ -1101,14 +1103,14 @@ private fun InfoSettingsPanel(
     settings: AppSettings,
     viewModel: SettingsViewModel,
 ) {
-    SettingsCard("App") {
-        InfoRow("Versie", BuildConfig.VERSION_NAME)
-        InfoRow("Build", BuildConfig.VERSION_CODE.toString())
+    SettingsCard(stringResource(R.string.app)) {
+        InfoRow(stringResource(R.string.version), BuildConfig.VERSION_NAME)
+        InfoRow(stringResource(R.string.build), BuildConfig.VERSION_CODE.toString())
     }
-    SettingsCard("Diagnose") {
-        ToggleRow("Debug-overlay", settings.debug.overlay, viewModel::setDebugOverlay)
-        ToggleRow("Uitgebreide logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
-        ToggleRow("OSD-rand", settings.osd.debugBorders, viewModel::setDebugBorders)
+    SettingsCard(stringResource(R.string.diagnostics)) {
+        ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay)
+        ToggleRow(stringResource(R.string.verbose_logging), settings.debug.verboseLogging, viewModel::setVerboseLogging)
+        ToggleRow(stringResource(R.string.osd_border), settings.osd.debugBorders, viewModel::setDebugBorders)
     }
 }
 
@@ -1116,24 +1118,24 @@ private fun InfoSettingsPanel(
 private fun ReceiverSettingsPanel(
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
-    SettingsCard("Verbinding") {
+    SettingsCard(stringResource(R.string.connection)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField("Naam", viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
-            CompactField("IP-adres", viewModel.host, { viewModel.host = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_name), viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_ip), viewModel.host, { viewModel.host = it }, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField("Webif-poort", viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f))
-            CompactField("Stream-poort", viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_webif_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_stream_port_short), viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f))
         }
     }
-    SettingsCard("Inloggen") {
+    SettingsCard(stringResource(R.string.login)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField("Gebruiker", viewModel.username, { viewModel.username = it }, Modifier.weight(1f))
-            CompactField("Wachtwoord", viewModel.password, { viewModel.password = it }, Modifier.weight(1f), password = true)
+            CompactField(stringResource(R.string.field_user), viewModel.username, { viewModel.username = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_password), viewModel.password, { viewModel.password = it }, Modifier.weight(1f), password = true)
         }
         ToggleRow(
             title = "HTTPS",
-            description = "Versleutelde verbinding met OpenWebif.",
+            description = stringResource(R.string.https_desc),
             checked = viewModel.useHttps,
             onCheckedChange = { viewModel.useHttps = it },
         )
@@ -1141,13 +1143,13 @@ private fun ReceiverSettingsPanel(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         ActionTile(
             icon = Icons.Filled.Check,
-            label = "Opslaan",
+            label = stringResource(R.string.action_save),
             onClick = { viewModel.save() },
             enabled = !viewModel.busy,
             tone = TileTone.Primary,
         )
-        if (viewModel.status.isNotBlank()) {
-            Text(viewModel.status, color = EnigmaColors.Muted, fontSize = 14.sp)
+        if (viewModel.status.isNotEmpty()) {
+            Text(viewModel.status.asString(), color = EnigmaColors.Muted, fontSize = 14.sp)
         }
     }
 }

@@ -42,11 +42,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
+import com.enigmacast.R
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EpgEvent
@@ -58,10 +61,13 @@ import com.enigmacast.domain.tuner.NowEvents
 import com.enigmacast.domain.tuner.TunerUserKind
 import com.enigmacast.live.TunerState
 import com.enigmacast.live.TunerStatus
+import com.enigmacast.live.text
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.util.asString
+import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
@@ -87,7 +93,7 @@ fun OwnTunerOverlay(
         val channel = own.channel
         if (tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING) {
             StatusPill(
-                text = tuner.message.ifBlank { "Laden…" },
+                text = tuner.message.asString().ifBlank { stringResource(R.string.loading) },
                 color = EnigmaColors.Accent,
                 modifier = Modifier.align(Alignment.TopEnd).padding(32.dp),
             )
@@ -112,9 +118,9 @@ fun OwnTunerOverlay(
                     .padding(horizontal = 24.dp, vertical = 8.dp),
             )
         }
-        if (ui.notice.isNotBlank()) {
+        if (ui.notice.isNotEmpty()) {
             Text(
-                ui.notice,
+                ui.notice.asString(),
                 color = Color.White,
                 fontSize = 20.sp,
                 modifier = Modifier
@@ -205,14 +211,14 @@ private fun ChannelBanner(
                     modifier = Modifier.weight(1f),
                 )
                 if (tuner.status == TunerStatus.FULL) {
-                    StatusPill("Tuners bezet", EnigmaColors.Danger)
+                    StatusPill(stringResource(R.string.osd_tuners_busy), EnigmaColors.Danger)
                 }
             }
             if (current != null) {
                 EventLine(current, emphasised = true)
                 ProgressBar(current, nowSec)
             } else {
-                Text("Geen programmagegevens", color = EnigmaColors.Muted, fontSize = 16.sp)
+                Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 16.sp)
             }
             if (next != null) EventLine(next, emphasised = false)
             if (details && current != null) {
@@ -237,15 +243,19 @@ private fun ChannelBanner(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             videoLabel(player).takeIf { it.isNotBlank() }?.let { Tag(it) }
-            if (player.audioLabel.isNotBlank()) {
-                val more = if (player.audioTrackCount > 1) "  (${player.audioTrackCount} talen)" else ""
-                Tag("Audio: ${player.audioLabel}$more")
+            if (player.audioLabel.isNotEmpty()) {
+                val more = if (player.audioTrackCount > 1) {
+                    pluralStringResource(R.plurals.osd_audio_languages, player.audioTrackCount, player.audioTrackCount)
+                } else {
+                    ""
+                }
+                Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more)
             }
             when {
-                player.subtitleLabel.isNotBlank() -> Tag("Ondertitels: ${player.subtitleLabel}")
-                player.subtitleTrackCount > 0 -> Tag("Ondertitels beschikbaar")
+                player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()))
+                player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available))
             }
-            Text("OK: zenderlijst · Info: details", color = EnigmaColors.Subtle, fontSize = 12.sp)
+            Text(stringResource(R.string.osd_banner_hint), color = EnigmaColors.Subtle, fontSize = 12.sp)
         }
     }
 }
@@ -260,7 +270,7 @@ private fun EventLine(event: EpgEvent, emphasised: Boolean) {
             modifier = Modifier.width(130.dp),
         )
         Text(
-            event.title.ifBlank { "Onbekend programma" },
+            event.title.ifBlank { stringResource(R.string.osd_unknown_programme) },
             color = if (emphasised) Color.White else EnigmaColors.Muted,
             fontSize = if (emphasised) 18.sp else 15.sp,
             maxLines = 1,
@@ -346,9 +356,9 @@ private fun Picon(
 @Composable
 private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifier = Modifier) {
     val title = when (tuner.status) {
-        TunerStatus.FULL -> "Geen tuner vrij"
-        TunerStatus.NO_PICTURE -> "Geen beeld"
-        else -> "Stream niet gestart"
+        TunerStatus.FULL -> stringResource(R.string.osd_no_tuner_free)
+        TunerStatus.NO_PICTURE -> stringResource(R.string.osd_no_picture)
+        else -> stringResource(R.string.osd_stream_not_started)
     }
     Column(
         modifier = modifier
@@ -369,22 +379,22 @@ private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifi
                 Text("  ·  $channelName", color = EnigmaColors.Muted, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Text(tuner.message, color = Color.White, fontSize = 18.sp, lineHeight = 25.sp)
+        Text(tuner.message.asString(), color = Color.White, fontSize = 18.sp, lineHeight = 25.sp)
         if (tuner.users.isNotEmpty()) {
-            Text("In gebruik:", color = EnigmaColors.Muted, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.osd_in_use), color = EnigmaColors.Muted, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
             tuner.users.forEach { user ->
                 val prefix = when (user.kind) {
                     TunerUserKind.LIVE -> "📺"
                     TunerUserKind.RECORDING -> "⏺"
                     TunerUserKind.STREAM -> "📱"
                 }
-                Text("$prefix  ${user.label}", color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("$prefix  ${user.text().asString()}", color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         val hint = if (tuner.status == TunerStatus.NO_PICTURE) {
-            "▲▼ andere zender · Terug: menu"
+            stringResource(R.string.osd_hint_no_picture)
         } else {
-            "OK: opnieuw proberen · ▲▼ andere zender · Terug: menu"
+            stringResource(R.string.osd_hint_retry)
         }
         Text(hint, color = EnigmaColors.Subtle, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
     }
@@ -444,10 +454,10 @@ private fun BouquetPanel(
             .width(210.dp)
             .padding(horizontal = 10.dp, vertical = 20.dp),
     ) {
-        Text("Bouquets", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        Text("OK of ▶ kiest", color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
+        Text(stringResource(R.string.osd_bouquets), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.osd_bouquet_choose_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
         if (bouquets.isEmpty()) {
-            Text("Bouquets laden…", color = EnigmaColors.Muted, fontSize = 13.sp)
+            Text(stringResource(R.string.osd_bouquets_loading), color = EnigmaColors.Muted, fontSize = 13.sp)
         }
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             itemsIndexed(bouquets, key = { index, entry -> "$index:${entry.reference}" }) { index, bouquet ->
@@ -510,7 +520,7 @@ private fun ChannelPanel(
             .padding(horizontal = 12.dp, vertical = 20.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 8.dp)) {
-            Text("Zenders", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.osd_channels), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 own.bouquetName,
                 color = EnigmaColors.Muted,
@@ -520,11 +530,11 @@ private fun ChannelPanel(
                 modifier = Modifier.weight(1f).padding(start = 10.dp, bottom = 2.dp),
             )
             if (!ui.bouquetPanel) {
-                Text("◀ Bouquets", color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
+                Text(stringResource(R.string.osd_bouquets_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
             }
         }
         if (channels.isEmpty()) {
-            Text("Geen zenders geladen", color = EnigmaColors.Muted, fontSize = 13.sp)
+            Text(stringResource(R.string.osd_no_channels_loaded), color = EnigmaColors.Muted, fontSize = 13.sp)
         }
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->

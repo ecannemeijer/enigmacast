@@ -1,5 +1,8 @@
 package com.enigmacast.domain.model
 
+import androidx.annotation.StringRes
+import com.enigmacast.R
+import com.enigmacast.util.UiText
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -66,8 +69,8 @@ data class DebugSettings(
  * these entries and store the choice in [AppSettings.osdSkin].
  */
 @Serializable
-enum class OsdSkin(val label: String) {
-    STANDARD("Standaard"),
+enum class OsdSkin(@StringRes val label: Int) {
+    STANDARD(R.string.skin_standard),
 }
 
 @Serializable
@@ -216,6 +219,9 @@ data class ReceiverDetails(
 sealed interface ConnectionState {
     data object Idle : ConnectionState
     data object Connecting : ConnectionState
+
+    /** No receiver saved yet. */
+    data object NotConfigured : ConnectionState
     data class Connected(val capabilities: ReceiverCapabilities) : ConnectionState
     data class Reconnecting(val reason: String) : ConnectionState
     data class Failed(val reason: String) : ConnectionState
@@ -232,10 +238,10 @@ data class PlayerState(
     val liveOffsetMs: Long = -1,
     val error: String? = null,
     /** "Nederlands · AC3 5.1"; empty before the first audio track. */
-    val audioLabel: String = "",
+    val audioLabel: UiText = UiText.Empty,
     val audioTrackCount: Int = 0,
     /** Language of the subtitles being shown, or empty when none are on. */
-    val subtitleLabel: String = "",
+    val subtitleLabel: UiText = UiText.Empty,
     val subtitleTrackCount: Int = 0,
 )
 
@@ -256,7 +262,7 @@ data class DebugInfo(
 
 data class ConnectionTestResult(
     val success: Boolean,
-    val message: String,
+    val message: UiText,
     val capabilities: ReceiverCapabilities? = null,
     val service: EnigmaService? = null,
 )

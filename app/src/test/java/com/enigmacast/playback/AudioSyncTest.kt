@@ -1,6 +1,8 @@
 package com.enigmacast.playback
 
 import androidx.media3.exoplayer.audio.AudioSink
+import com.enigmacast.R
+import com.enigmacast.util.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -47,9 +49,9 @@ class AudioSyncTest {
         assertEquals("+120 ms", AudioSync.label(120))
         assertEquals("-40 ms", AudioSync.label(-40))
         assertEquals("0 ms", AudioSync.label(0))
-        assertEquals("Beeld wacht 120 ms op het geluid.", AudioSync.describe(120))
-        assertEquals("Beeld loopt 40 ms voor op het geluid.", AudioSync.describe(-40))
-        assertEquals("Geen correctie.", AudioSync.describe(0))
+        assertEquals(UiText.res(R.string.audio_sync_wait, 120), AudioSync.describe(120))
+        assertEquals(UiText.res(R.string.audio_sync_ahead, 40), AudioSync.describe(-40))
+        assertEquals(UiText.res(R.string.audio_sync_none), AudioSync.describe(0))
     }
 
     @Test

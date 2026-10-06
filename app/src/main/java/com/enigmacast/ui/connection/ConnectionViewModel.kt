@@ -1,26 +1,33 @@
 package com.enigmacast.ui.connection
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.enigmacast.R
 import com.enigmacast.data.discovery.NsdReceiverDiscovery
 import com.enigmacast.data.openwebif.OpenWebifApi
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.validation.ReceiverConfigValidator
+import com.enigmacast.locale.AppLanguageStore
+import com.enigmacast.util.UiText
+import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class ConnectionViewModel @Inject constructor(
+    @ApplicationContext context: Context,
     private val settingsRepository: SettingsRepository,
     private val api: OpenWebifApi,
     private val discovery: NsdReceiverDiscovery,
 ) : ViewModel() {
-    var name by mutableStateOf("Living room")
+    var name by mutableStateOf(AppLanguageStore.wrap(context).getString(R.string.default_receiver_name))
     var host by mutableStateOf("")
     var httpPort by mutableStateOf("80")
     var streamPort by mutableStateOf("8001")
@@ -28,7 +35,7 @@ class ConnectionViewModel @Inject constructor(
     var username by mutableStateOf("")
     var password by mutableStateOf("")
     var allowInsecureCertificates by mutableStateOf(false)
-    var status by mutableStateOf("")
+    var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
     var discoveredHosts by mutableStateOf<List<String>>(emptyList())
     private var receiverId: String = ""
@@ -56,7 +63,7 @@ class ConnectionViewModel @Inject constructor(
 
     fun save(onSaved: () -> Unit = {}) = launchAction { config ->
         settingsRepository.upsertReceiver(config)
-        status = "Saved ${config.name}"
+        status = UiText.res(R.string.conn_saved, config.name)
         onSaved()
     }
 
@@ -72,14 +79,14 @@ class ConnectionViewModel @Inject constructor(
     fun discover() {
         if (busy) return
         busy = true
-        status = "Searching the network"
+        status = UiText.res(R.string.conn_searching)
         viewModelScope.launch {
             val hosts = runCatching { discovery.discoverHosts() }.getOrDefault(emptyList())
             discoveredHosts = hosts
             status = if (hosts.isEmpty()) {
-                "No receivers found. Enter the IP address manually."
+                UiText.res(R.string.conn_none_found)
             } else {
-                "Found ${hosts.size} host(s). Select one, then test the connection."
+                UiText.plural(R.plurals.conn_found_hosts, hosts.size, hosts.size)
             }
             busy = false
         }
@@ -93,7 +100,7 @@ class ConnectionViewModel @Inject constructor(
         val config = currentConfig()
         val validation = ReceiverConfigValidator.validate(config)
         if (!validation.isValid) {
-            status = validation.errors.joinToString("\n")
+            status = UiText.Joined(validation.errors)
             return
         }
         if (busy) return
@@ -102,7 +109,7 @@ class ConnectionViewModel @Inject constructor(
             try {
                 block(config)
             } catch (error: Exception) {
-                status = error.message ?: "Request failed"
+                status = error.uiMessage(UiText.res(R.string.conn_request_failed))
             } finally {
                 busy = false
             }

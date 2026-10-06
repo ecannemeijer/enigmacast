@@ -1,5 +1,6 @@
 package com.enigmacast.live
 
+import com.enigmacast.R
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
@@ -17,6 +18,8 @@ import com.enigmacast.domain.tuner.TunerUser
 import com.enigmacast.domain.tuner.TunerVerdict
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
+import com.enigmacast.util.uiMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +42,7 @@ enum class TunerStatus { IDLE, CHECKING, STARTING, PLAYING, FULL, NO_PICTURE, PR
 
 data class TunerState(
     val status: TunerStatus = TunerStatus.IDLE,
-    val message: String = "",
+    val message: UiText = UiText.Empty,
     val used: Int = 0,
     val total: Int = 0,
     val users: List<TunerUser> = emptyList(),
@@ -104,7 +107,7 @@ class OwnTunerSession @Inject constructor(
             val settings = settingsRepository.current()
             val receiver = settings.activeReceiver() ?: return@launch
             val last = settings.lastChannel
-            _state.update { it.copy(tuner = TunerState(TunerStatus.CHECKING, "Zenders laden…")) }
+            _state.update { it.copy(tuner = TunerState(TunerStatus.CHECKING, UiText.res(R.string.tuner_loading_channels))) }
             val list = runCatching {
                 if (last.bouquetReference.isNotBlank()) {
                     val channels = serviceSource.channelsInBouquet(receiver, last.bouquetReference)
@@ -117,7 +120,7 @@ class OwnTunerSession @Inject constructor(
                 }
             }.getOrElse { error ->
                 if (error is CancellationException) throw error
-                _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, error.message ?: "Zenders laden mislukt")) }
+                _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, error.uiMessage(UiText.res(R.string.tuner_channels_failed)))) }
                 return@launch
             }
             val (bouquetName, bouquetReference, channels) = list
@@ -132,7 +135,7 @@ class OwnTunerSession @Inject constructor(
                 ?: channels.firstOrNull()
             _state.update { it.copy(channels = channels, bouquetName = bouquetName, bouquetReference = bouquetReference) }
             if (target == null) {
-                _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, "Geen zenders gevonden")) }
+                _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
                 return@launch
             }
             startNow(receiver, target)
@@ -204,7 +207,7 @@ class OwnTunerSession @Inject constructor(
     fun numberOf(entry: BouquetEntry): Int = ChannelNavigator.numberOf(_state.value.channels, entry)
 
     /** The receiver is shutting down or restarting: its stream server goes away with it. */
-    fun onReceiverOffline(message: String) {
+    fun onReceiverOffline(message: UiText) {
         if (!active) return
         token += 1
         startJob?.cancel()
@@ -255,7 +258,7 @@ class OwnTunerSession @Inject constructor(
             it.copy(
                 channel = channel,
                 guide = it.guide?.takeIf { guide -> BouquetChannels.sameService(guide.serviceReference, channel.reference) },
-                tuner = TunerState(TunerStatus.CHECKING, "Tuner controleren…"),
+                tuner = TunerState(TunerStatus.CHECKING, UiText.res(R.string.tuner_checking)),
                 zapCount = it.zapCount + 1,
             )
         }
@@ -283,7 +286,7 @@ class OwnTunerSession @Inject constructor(
             }
             return
         }
-        _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, "Stream starten…")) }
+        _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
         playback.play(
             endpoints.stream(receiver, channel.reference),
             force = true,
@@ -310,7 +313,7 @@ class OwnTunerSession @Inject constructor(
         if (!active || !streaming) return
         val tuner = when (health) {
             StreamHealth.IDLE -> return
-            StreamHealth.STARTING -> TunerState(TunerStatus.STARTING, "Stream starten…")
+            StreamHealth.STARTING -> TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))
             StreamHealth.PLAYING -> TunerState(TunerStatus.PLAYING)
             StreamHealth.NO_TUNER -> {
                 val refused = TunerAvailability.refused(lastSnapshot, _state.value.channel?.reference.orEmpty(), lastOwnAddresses)
@@ -318,18 +321,18 @@ class OwnTunerSession @Inject constructor(
             }
             StreamHealth.AUTH_REQUIRED -> TunerState(
                 TunerStatus.PROBLEM,
-                "De ontvanger vraagt een wachtwoord voor streams. Vul de gebruikersnaam en het wachtwoord van de ontvanger in bij Ontvangers.",
+                UiText.res(R.string.tuner_auth_required),
             )
             StreamHealth.UNREACHABLE -> TunerState(
                 TunerStatus.PROBLEM,
-                "Streampoort niet bereikbaar. Staat de ontvanger uit of in diepe stand-by, of klopt de streampoort niet?",
+                UiText.res(R.string.tuner_stream_port_unreachable),
                 autoRetry = true,
             )
             StreamHealth.NO_PICTURE -> TunerState(
                 TunerStatus.NO_PICTURE,
-                "Wel signaal, geen beeld. De zender is mogelijk gecodeerd en de CI-module of smartcard kan hem nu niet vrijgeven.",
+                UiText.res(R.string.tuner_no_picture_detail),
             )
-            StreamHealth.FAILED -> TunerState(TunerStatus.PROBLEM, "Stream onderbroken, opnieuw verbinden…")
+            StreamHealth.FAILED -> TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_stream_interrupted))
         }
         if (health == StreamHealth.NO_TUNER || health == StreamHealth.AUTH_REQUIRED || health == StreamHealth.UNREACHABLE) {
             streaming = false
@@ -368,9 +371,8 @@ class OwnTunerSession @Inject constructor(
     companion object {
         private const val STREAM_RELEASE_MS = 400L
 
-        fun fullMessage(used: Int, total: Int): String {
-            val count = if (total > 0) " ($used/$total)" else ""
-            return "Alle tuners zijn bezet$count. Probeer het later opnieuw of kies een zender op dezelfde transponder."
+        fun fullMessage(used: Int, total: Int): UiText {
+            return if (total > 0) UiText.res(R.string.tuner_full_count, used, total) else UiText.res(R.string.tuner_full)
         }
     }
 }

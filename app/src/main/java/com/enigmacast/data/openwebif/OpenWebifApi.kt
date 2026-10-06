@@ -1,5 +1,6 @@
 package com.enigmacast.data.openwebif
 
+import com.enigmacast.R
 import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
@@ -28,6 +29,9 @@ import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.HasUiText
+import com.enigmacast.util.UiText
+import com.enigmacast.util.uiMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -44,7 +48,12 @@ import java.net.Socket
 import javax.inject.Inject
 import javax.inject.Singleton
 
-class OpenWebifException(message: String, val statusCode: Int? = null) : IOException(message)
+/** [uiText] is what the screen shows; app-made failures are translated, others pass the raw message. */
+class OpenWebifException(
+    message: String,
+    val statusCode: Int? = null,
+    override val uiText: UiText = UiText.Raw(message),
+) : IOException(message), HasUiText
 
 @Singleton
 class OpenWebifApi @Inject constructor(
@@ -57,7 +66,7 @@ class OpenWebifApi @Inject constructor(
         val started = System.currentTimeMillis()
         val response = execute(config, url, accept = "*/*")
         if (response.code !in 200..299) {
-            throw OpenWebifException("Grab failed (${response.code})", response.code)
+            throw OpenWebifException("Grab failed (${response.code})", response.code, UiText.res(R.string.error_grab_failed, response.code))
         }
         return GrabbedImage(
             bytes = response.bytes,
@@ -72,7 +81,7 @@ class OpenWebifApi @Inject constructor(
         val response = execute(config, url, accept = "application/json")
         val body = response.bytes.toString(Charsets.UTF_8)
         if (response.code !in 200..299 || !OpenWebifJson.isSuccess(body)) {
-            throw OpenWebifException("Remote command failed (${response.code})", response.code)
+            throw OpenWebifException("Remote command failed (${response.code})", response.code, UiText.res(R.string.error_remote_failed, response.code))
         }
         EnigmaLog.remote("${key.name} ${action.name}")
     }
@@ -104,7 +113,7 @@ class OpenWebifApi @Inject constructor(
         val response = execute(config, endpoints.zap(config, serviceReference), accept = "application/json")
         val body = response.bytes.toString(Charsets.UTF_8)
         if (response.code !in 200..299 || !OpenWebifJson.isSuccess(body)) {
-            throw OpenWebifException("Zap mislukt (${response.code})", response.code)
+            throw OpenWebifException("Zap failed (${response.code})", response.code, UiText.res(R.string.error_zap_failed, response.code))
         }
     }
 
@@ -175,7 +184,7 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun capabilities(config: ReceiverConfig): ReceiverCapabilities {
-        return probe(config).capabilities ?: throw OpenWebifException("OpenWebif did not return receiver info")
+        return probe(config).capabilities ?: throw OpenWebifException("OpenWebif did not return receiver info", uiText = UiText.res(R.string.error_no_receiver_info))
     }
 
     override suspend fun powerState(config: ReceiverConfig): PowerStatus {
@@ -189,7 +198,7 @@ class OpenWebifApi @Inject constructor(
     override suspend fun setPowerState(config: ReceiverConfig, action: PowerAction) {
         val body = get(config, endpoints.powerState(config, action))
         if (!OpenWebifJson.isSuccess(body)) {
-            throw OpenWebifException("Ontvanger weigerde het commando")
+            throw OpenWebifException("Receiver refused the command", uiText = UiText.res(R.string.error_command_refused))
         }
         EnigmaLog.connection("power ${action.name}")
     }
@@ -256,21 +265,24 @@ class OpenWebifApi @Inject constructor(
         return try {
             val probe = probe(config)
             val capabilities = probe.capabilities
-                ?: return ConnectionTestResult(false, probe.failure ?: "OpenWebif is not available")
+                ?: return ConnectionTestResult(
+                    false,
+                    probe.failure?.let(UiText::Raw) ?: UiText.res(R.string.conn_openwebif_unavailable),
+                )
             val service = runCatching { currentService(config) }.getOrNull()
-            val summary = buildString {
-                append("Connected")
-                if (capabilities.model.isNotBlank()) append("\nReceiver: ${capabilities.model}")
+            val summary = buildList {
+                add(UiText.res(R.string.conn_connected))
+                if (capabilities.model.isNotBlank()) add(UiText.res(R.string.conn_receiver_line, capabilities.model))
                 if (capabilities.imageDistro.isNotBlank()) {
-                    append("\nImage: ${capabilities.imageDistro} ${capabilities.imageVersion}".trim())
+                    add(UiText.res(R.string.conn_image_line, "${capabilities.imageDistro} ${capabilities.imageVersion}".trim()))
                 }
-                if (capabilities.enigmaVersion.isNotBlank()) append("\nEnigma: ${capabilities.enigmaVersion}")
-                append("\nIP: ${config.host}")
-                if (!config.useHttps) append("\nHTTP is not encrypted")
+                if (capabilities.enigmaVersion.isNotBlank()) add(UiText.res(R.string.conn_enigma_line, capabilities.enigmaVersion))
+                add(UiText.res(R.string.conn_ip_line, config.host))
+                if (!config.useHttps) add(UiText.res(R.string.conn_http_unencrypted))
             }
-            ConnectionTestResult(true, summary, capabilities, service)
+            ConnectionTestResult(true, UiText.Joined(summary), capabilities, service)
         } catch (error: Exception) {
-            ConnectionTestResult(false, error.message ?: "Connection failed")
+            ConnectionTestResult(false, error.uiMessage(UiText.res(R.string.conn_failed)))
         }
     }
 
@@ -331,7 +343,7 @@ class OpenWebifApi @Inject constructor(
 
     private suspend fun get(config: ReceiverConfig, url: String): String {
         val response = execute(config, url, accept = "application/json")
-        if (response.code == 401) throw OpenWebifException("Authentication failed", 401)
+        if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
         if (response.code !in 200..299) throw OpenWebifException("HTTP ${response.code}", response.code)
         return response.bytes.toString(Charsets.UTF_8)
     }

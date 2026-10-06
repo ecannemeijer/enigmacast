@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.enigmacast.R
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
@@ -21,8 +22,12 @@ import com.enigmacast.domain.tuner.StreamModePolicy
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.TunerStatus
+import com.enigmacast.live.text
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
+import com.enigmacast.util.isEmpty
+import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -55,7 +60,7 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var displayName by mutableStateOf("")
         private set
-    var status by mutableStateOf("")
+    var status by mutableStateOf(UiText.Empty)
         private set
     var askWake by mutableStateOf(false)
         private set
@@ -105,7 +110,7 @@ class StreamGuideViewModel @Inject constructor(
         leaveOff = false
         askWake = false
         lastPressedReference = ""
-        status = ""
+        status = UiText.Empty
         refresh()
     }
 
@@ -128,8 +133,10 @@ class StreamGuideViewModel @Inject constructor(
             }
         }
         status = when (state.tuner.status) {
-            TunerStatus.PLAYING, TunerStatus.IDLE -> ""
-            TunerStatus.FULL -> (listOf(state.tuner.message) + state.tuner.users.map { "• ${it.label}" }).joinToString("\n")
+            TunerStatus.PLAYING, TunerStatus.IDLE -> UiText.Empty
+            TunerStatus.FULL -> UiText.Joined(
+                listOf(state.tuner.message) + state.tuner.users.map { UiText.res(R.string.bullet_item, it.text()) },
+            )
             else -> state.tuner.message
         }
     }
@@ -164,7 +171,7 @@ class StreamGuideViewModel @Inject constructor(
                 }
                 if (standby == true) {
                     askWake = true
-                    status = "Ontvanger staat uit"
+                    status = UiText.res(R.string.guide_receiver_off)
                     return@launch
                 }
                 powerKnown = true
@@ -196,17 +203,17 @@ class StreamGuideViewModel @Inject constructor(
             )
             waking = false
             if (outcome is ReceiverPowerFlow.Outcome.Failed) {
-                status = "Aanzetten mislukt"
+                status = UiText.res(R.string.guide_wake_failed)
                 return@launch
             }
             if (outcome != ReceiverPowerFlow.Outcome.Confirmed(inStandby = false)) {
-                status = "Ontvanger reageert nog niet"
+                status = UiText.res(R.string.guide_receiver_not_responding)
                 return@launch
             }
             askWake = false
             leaveOff = false
             powerKnown = true
-            status = ""
+            status = UiText.Empty
             loadGuide()
             if (!bouquetLoaded) loadBouquet()
         }
@@ -217,14 +224,14 @@ class StreamGuideViewModel @Inject constructor(
         askWake = false
         leaveOff = true
         powerKnown = true
-        status = "Ontvanger staat uit"
+        status = UiText.res(R.string.guide_receiver_off)
     }
 
     /**
      * The receiver went to standby, or is restarting or shutting down, after a command from
      * the Receiver section. Free the stream so the tuner can sleep and stop loading the guide.
      */
-    fun onReceiverOff(message: String) {
+    fun onReceiverOff(message: UiText) {
         if (!StreamModePolicy.stopsStreamOnStandby(mode ?: StreamMode.OWN_TUNER)) return
         if (askWake || waking) return
         tuneJob?.cancel()
@@ -240,7 +247,7 @@ class StreamGuideViewModel @Inject constructor(
      * The receiver is shutting down or restarting. In own-tuner mode its stream server
      * goes away too, so the stream stops either way.
      */
-    fun onReceiverGoingOffline(message: String) {
+    fun onReceiverGoingOffline(message: UiText) {
         if (mode == StreamMode.FOLLOW_RECEIVER) onReceiverOff(message) else session.onReceiverOffline(message)
     }
 
@@ -253,7 +260,7 @@ class StreamGuideViewModel @Inject constructor(
         if (!leaveOff || askWake || waking) return
         leaveOff = false
         powerKnown = true
-        status = ""
+        status = UiText.Empty
         viewModelScope.launch {
             loadGuide()
             if (!bouquetLoaded) loadBouquet()
@@ -294,11 +301,11 @@ class StreamGuideViewModel @Inject constructor(
                     if (token != guideToken) return@onSuccess
                     guide = loaded
                     displayName = loaded.channelName.ifBlank { channel.name }
-                    status = ""
+                    status = UiText.Empty
                 }
                 .onFailure { error ->
                     if (token != guideToken) return@onFailure
-                    status = error.message ?: "EPG niet beschikbaar"
+                    status = error.uiMessage(UiText.res(R.string.guide_epg_unavailable))
                 }
         }
     }
@@ -333,7 +340,7 @@ class StreamGuideViewModel @Inject constructor(
                     EnigmaLog.service("stale tune ignored")
                     return@launch
                 }
-                status = "Geen ontvanger"
+                status = UiText.res(R.string.guide_no_receiver)
                 return@launch
             }
             val streamUrl = endpoints.stream(receiver, channel.reference)
@@ -363,20 +370,20 @@ class StreamGuideViewModel @Inject constructor(
                         tunedReference = reference
                         shownReference = reference
                         displayName = loaded.channelName.ifBlank { channel.name }
-                        status = ""
+                        status = UiText.Empty
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
                         if (token != guideToken) return@launch
-                        status = error.message ?: "EPG niet beschikbaar"
+                        status = error.uiMessage(UiText.res(R.string.guide_epg_unavailable))
                     }
                 }
                 is LiveZapFlow.Outcome.ZapFailed -> {
                     tunedReference = previous
-                    status = outcome.error.message ?: "Kanaal starten mislukt"
+                    status = outcome.error.uiMessage(UiText.res(R.string.guide_start_failed))
                 }
                 LiveZapFlow.Outcome.TimedOut -> {
-                    status = "Zender niet bevestigd"
+                    status = UiText.res(R.string.guide_zap_not_confirmed)
                 }
             }
         }
@@ -390,7 +397,7 @@ class StreamGuideViewModel @Inject constructor(
         if (tuneJob?.isActive == true) return
         val receiver = settingsRepository.current().activeReceiver()
         if (receiver == null) {
-            status = "Geen ontvanger"
+            status = UiText.res(R.string.guide_no_receiver)
             return
         }
         val token = ++guideToken
@@ -406,10 +413,10 @@ class StreamGuideViewModel @Inject constructor(
                         startPlayback(receiver, loaded.serviceReference)
                     }
                 }
-                status = ""
+                status = UiText.Empty
             }
             .onFailure { error ->
-                status = error.message ?: "EPG niet beschikbaar"
+                status = error.uiMessage(UiText.res(R.string.guide_epg_unavailable))
             }
     }
 
@@ -456,12 +463,12 @@ class StreamGuideViewModel @Inject constructor(
                 bouquetName = bouquet.name
                 channels = loaded
                 bouquetLoaded = true
-                status = ""
+                status = UiText.Empty
                 EnigmaLog.service("bouquet ${bouquet.name} channels=${loaded.size}")
             }
             .onFailure { error ->
                 if (token != bouquetToken) return@onFailure
-                status = error.message ?: "Kanalen niet beschikbaar"
+                status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
             }
     }
 
@@ -481,7 +488,7 @@ class StreamGuideViewModel @Inject constructor(
                 EnigmaLog.service("bouquet ${loaded.bouquetName} channels=${loaded.channels.size}")
             }
             .onFailure { error ->
-                if (status.isBlank()) status = error.message ?: "Kanalen niet beschikbaar"
+                if (status.isEmpty()) status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
             }
     }
 }

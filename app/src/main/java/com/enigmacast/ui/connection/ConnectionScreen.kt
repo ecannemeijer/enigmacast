@@ -17,13 +17,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.MaterialTheme
+import com.enigmacast.R
 import com.enigmacast.ui.theme.TvButton
+import com.enigmacast.util.asString
+import com.enigmacast.util.isNotEmpty
 
 @Composable
 fun ConnectionScreen(
@@ -49,37 +53,37 @@ fun ConnectionScreen(
     ) {
         Text("EnigmaCast", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Connect an Enigma2 receiver. The Android TV shows the live stream and the real receiver OSD.",
+            stringResource(R.string.conn_intro),
             color = Color(0xFFB7C0D0),
             fontSize = 18.sp,
         )
         if (!viewModel.useHttps) {
             Text(
-                "HTTP is not encrypted. Use it only on a trusted local network.",
+                stringResource(R.string.conn_http_warning),
                 color = Color(0xFFE8B84A),
                 fontSize = 16.sp,
             )
         }
-        LabeledField("Receiver name", viewModel.name, { viewModel.name = it }, fieldColors)
-        LabeledField("IP address or hostname", viewModel.host, { viewModel.host = it }, fieldColors)
+        LabeledField(stringResource(R.string.field_receiver_name), viewModel.name, { viewModel.name = it }, fieldColors)
+        LabeledField(stringResource(R.string.field_host), viewModel.host, { viewModel.host = it }, fieldColors)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            LabeledField("OpenWebif port", viewModel.httpPort, { viewModel.httpPort = it }, fieldColors, Modifier.weight(1f))
-            LabeledField("Streaming port", viewModel.streamPort, { viewModel.streamPort = it }, fieldColors, Modifier.weight(1f))
+            LabeledField(stringResource(R.string.field_http_port), viewModel.httpPort, { viewModel.httpPort = it }, fieldColors, Modifier.weight(1f))
+            LabeledField(stringResource(R.string.field_stream_port), viewModel.streamPort, { viewModel.streamPort = it }, fieldColors, Modifier.weight(1f))
         }
-        LabeledField("Username", viewModel.username, { viewModel.username = it }, fieldColors)
+        LabeledField(stringResource(R.string.field_username), viewModel.username, { viewModel.username = it }, fieldColors)
         LabeledField(
-            label = "Password",
+            label = stringResource(R.string.field_password),
             value = viewModel.password,
             onValueChange = { viewModel.password = it },
             colors = fieldColors,
             password = true,
         )
         ToggleRow("HTTPS", viewModel.useHttps) { viewModel.useHttps = it }
-        ToggleRow("Allow self-signed certificate", viewModel.allowInsecureCertificates) {
+        ToggleRow(stringResource(R.string.allow_self_signed), viewModel.allowInsecureCertificates) {
             viewModel.allowInsecureCertificates = it
         }
         if (viewModel.discoveredHosts.isNotEmpty()) {
-            Text("Discovered hosts", color = Color.White, fontSize = 18.sp)
+            Text(stringResource(R.string.discovered_hosts), color = Color.White, fontSize = 18.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 viewModel.discoveredHosts.take(6).forEach { found ->
                     TvButton(text = found, onClick = { viewModel.selectHost(found) })
@@ -87,14 +91,14 @@ fun ConnectionScreen(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TvButton("Search", viewModel::discover, enabled = !viewModel.busy)
-            TvButton("Test connection", viewModel::test, enabled = !viewModel.busy)
-            TvButton("Save", { viewModel.save() }, enabled = !viewModel.busy)
-            TvButton("Connect", { viewModel.connect(onConnected) }, enabled = !viewModel.busy)
-            TvButton("Settings", onSettings)
+            TvButton(stringResource(R.string.action_search), viewModel::discover, enabled = !viewModel.busy)
+            TvButton(stringResource(R.string.action_test_connection), viewModel::test, enabled = !viewModel.busy)
+            TvButton(stringResource(R.string.action_save), { viewModel.save() }, enabled = !viewModel.busy)
+            TvButton(stringResource(R.string.action_connect), { viewModel.connect(onConnected) }, enabled = !viewModel.busy)
+            TvButton(stringResource(R.string.settings), onSettings)
         }
-        if (viewModel.status.isNotBlank()) {
-            Text(viewModel.status, color = Color.White, fontSize = 18.sp)
+        if (viewModel.status.isNotEmpty()) {
+            Text(viewModel.status.asString(), color = Color.White, fontSize = 18.sp)
         }
     }
 }

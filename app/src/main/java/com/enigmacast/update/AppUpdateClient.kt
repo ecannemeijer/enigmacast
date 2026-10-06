@@ -6,7 +6,10 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.enigmacast.BuildConfig
+import com.enigmacast.R
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
+import com.enigmacast.util.UiTextException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,7 +47,9 @@ class AppUpdateClient @Inject constructor(
         val url = release.apkUrl.ifBlank { UPDATE_APK_URL }
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("Download failed (${response.code})")
+            if (!response.isSuccessful) {
+                throw UiTextException(UiText.res(R.string.error_download_failed_code, response.code), "Download failed (${response.code})")
+            }
             val body = response.body
             val total = body.contentLength()
             val dir = File(context.cacheDir, "updates").apply { mkdirs() }

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -20,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import com.enigmacast.R
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.ui.theme.TvButton
@@ -36,26 +38,26 @@ fun OsdDiagnosticsScreen(
         modifier = Modifier.fillMaxSize().padding(48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("OSD diagnostics", color = Color.White, fontSize = 36.sp)
+        Text(stringResource(R.string.osd_diagnostics), color = Color.White, fontSize = 36.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TvButton("Grab PNG OSD", { viewModel.grab(GrabFormat.PNG, GrabMode.OSD) }, enabled = !busy)
-            TvButton("Grab JPG OSD", { viewModel.grab(GrabFormat.JPG, GrabMode.OSD) }, enabled = !busy)
-            TvButton("Grab PNG ALL", { viewModel.grab(GrabFormat.PNG, GrabMode.ALL) }, enabled = !busy)
-            TvButton("Grab JPG ALL", { viewModel.grab(GrabFormat.JPG, GrabMode.ALL) }, enabled = !busy)
-            TvButton("Back", onBack)
+            TvButton(stringResource(R.string.diag_grab, "PNG", "OSD"), { viewModel.grab(GrabFormat.PNG, GrabMode.OSD) }, enabled = !busy)
+            TvButton(stringResource(R.string.diag_grab, "JPG", "OSD"), { viewModel.grab(GrabFormat.JPG, GrabMode.OSD) }, enabled = !busy)
+            TvButton(stringResource(R.string.diag_grab, "PNG", "ALL"), { viewModel.grab(GrabFormat.PNG, GrabMode.ALL) }, enabled = !busy)
+            TvButton(stringResource(R.string.diag_grab, "JPG", "ALL"), { viewModel.grab(GrabFormat.JPG, GrabMode.ALL) }, enabled = !busy)
+            TvButton(stringResource(R.string.back), onBack)
         }
         result?.let { grab ->
-            Text("Request: ${grab.label}", color = Color.White, fontSize = 20.sp)
-            Text("HTTP status: ${grab.status}", color = Color.White, fontSize = 20.sp)
-            Text("Content-Type: ${grab.contentType}", color = Color.White, fontSize = 20.sp)
-            Text("Resolution: ${grab.width}x${grab.height}", color = Color.White, fontSize = 20.sp)
-            Text("Download size: ${grab.sizeBytes} bytes", color = Color.White, fontSize = 20.sp)
-            Text("Request duration: ${grab.durationMs} ms", color = Color.White, fontSize = 20.sp)
-            Text("Alpha channel: ${if (grab.alpha) "yes" else "no"}", color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_request, grab.label), color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_http_status, grab.status), color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_content_type, grab.contentType), color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_resolution, grab.width, grab.height), color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_size, grab.sizeBytes), color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_duration, grab.durationMs), color = Color.White, fontSize = 20.sp)
+            Text(stringResource(R.string.diag_alpha, stringResource(R.string.yes).takeIf { grab.alpha } ?: stringResource(R.string.no_lower)), color = Color.White, fontSize = 20.sp)
             grab.bytes?.let { bytes ->
                 AsyncImage(
                     model = ImageRequest.Builder(context).data(bytes).build(),
-                    contentDescription = "Grabbed OSD",
+                    contentDescription = stringResource(R.string.diag_grabbed),
                     modifier = Modifier.fillMaxWidth().height(420.dp),
                     contentScale = ContentScale.Fit,
                 )

@@ -34,7 +34,8 @@ data class TunerSnapshot(
 
 enum class TunerUserKind { LIVE, RECORDING, STREAM }
 
-data class TunerUser(val kind: TunerUserKind, val label: String)
+/** Who holds a tuner. [name] is the channel or client name, [address] the client's address for streams. */
+data class TunerUser(val kind: TunerUserKind, val name: String, val address: String = "")
 
 sealed interface TunerVerdict {
     /** IPTV or a file: no tuner involved. */
@@ -120,14 +121,14 @@ object TunerAvailability {
             val ownStreamOnly = slot.stream.isNotBlank() &&
                 ownStreams.any { it.tunerNumber == slot.index } && !otherStreamHere
             val streamHere = otherStreamHere || (slot.stream.isNotBlank() && !ownStreamOnly)
-            if (liveHere) users += TunerUser(TunerUserKind.LIVE, "Ontvanger: ${slot.live}")
+            if (liveHere) users += TunerUser(TunerUserKind.LIVE, slot.live)
             if (recordingHere && !recordingIsOtherStream) {
-                users += TunerUser(TunerUserKind.RECORDING, "Opname: ${slot.recording}")
+                users += TunerUser(TunerUserKind.RECORDING, slot.recording)
             }
             if (liveHere || recordingHere || streamHere) busy += slot.index
         }
         otherStreams.forEach { client ->
-            users += TunerUser(TunerUserKind.STREAM, "Stream naar ${ServiceRef.normalizeAddress(client.address)}: ${client.name}")
+            users += TunerUser(TunerUserKind.STREAM, client.name, ServiceRef.normalizeAddress(client.address))
         }
 
         val inUseReferences = buildList {
