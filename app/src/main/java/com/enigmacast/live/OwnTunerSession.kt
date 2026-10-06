@@ -163,6 +163,26 @@ class OwnTunerSession @Inject constructor(
         }
     }
 
+    /**
+     * Shows [bouquet]'s channels for zapping (list, CH+/CH−, digits) without changing the
+     * channel that plays. The choice is saved, so the list opens on it next time.
+     * Returns false when the channels could not be loaded.
+     */
+    suspend fun selectBouquet(bouquet: BouquetEntry): Boolean {
+        val receiver = settingsRepository.current().activeReceiver() ?: return false
+        val channels = runCatching { serviceSource.channelsInBouquet(receiver, bouquet.reference) }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            EnigmaLog.service("bouquet ${bouquet.name} failed: ${error.javaClass.simpleName}")
+            return false
+        }
+        _state.update { it.copy(channels = channels, bouquetName = bouquet.name, bouquetReference = bouquet.reference) }
+        settingsRepository.update { settings ->
+            settings.copy(lastChannel = settings.lastChannel.copy(bouquetReference = bouquet.reference))
+        }
+        EnigmaLog.service("bouquet ${bouquet.name} channels=${channels.size}")
+        return true
+    }
+
     fun zapRelative(delta: Int) {
         val current = _state.value
         val next = ChannelNavigator.step(current.channels, current.channel?.reference.orEmpty(), delta) ?: return
