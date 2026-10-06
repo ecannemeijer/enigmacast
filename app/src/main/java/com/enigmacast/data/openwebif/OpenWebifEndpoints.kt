@@ -1,6 +1,8 @@
 package com.enigmacast.data.openwebif
 
+import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.remote.EnigmaKey
@@ -43,6 +45,17 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
     fun powerState(config: ReceiverConfig, newState: Int? = null): String {
         val query = if (newState == null) "" else "?newstate=$newState"
         return api(config, "/api/powerstate$query")
+    }
+
+    fun powerState(config: ReceiverConfig, action: PowerAction): String = powerState(config, action.newState)
+
+    fun sleepTimer(config: ReceiverConfig): String = api(config, "/api/sleeptimer?cmd=get")
+
+    /** OpenWebif reads `enabled` as the literal text `True`/`False` and clamps `time` to 0..999 minutes. */
+    fun setSleepTimer(config: ReceiverConfig, minutes: Int, action: SleepTimerAction, enabled: Boolean): String {
+        val time = minutes.coerceIn(0, 999)
+        val flag = if (enabled) "True" else "False"
+        return api(config, "/api/sleeptimer?cmd=set&time=$time&action=${action.wire}&enabled=$flag")
     }
 
     fun volume(config: ReceiverConfig): String = api(config, "/api/vol")

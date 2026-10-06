@@ -9,7 +9,9 @@ import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
+import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.power.ReceiverPowerFlow
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.LiveZapFlow
 import com.enigmacast.domain.source.ReceiverInfoSource
@@ -99,20 +101,18 @@ class StreamGuideViewModel @Inject constructor(
                 return@launch
             }
             waking = true
-            val woke = runCatching { infoSource.wake(receiver) }.isSuccess
-            if (!woke) {
-                waking = false
+            val outcome = ReceiverPowerFlow.run(
+                action = PowerAction.WAKE_UP,
+                wasInStandby = true,
+                send = { infoSource.wake(receiver) },
+                readStandby = { infoSource.powerState(receiver).inStandby },
+            )
+            waking = false
+            if (outcome is ReceiverPowerFlow.Outcome.Failed) {
                 status = "Aanzetten mislukt"
                 return@launch
             }
-            var awake = false
-            for (attempt in 1..15) {
-                delay(1_000)
-                awake = runCatching { !infoSource.powerState(receiver).inStandby }.getOrDefault(false)
-                if (awake) break
-            }
-            waking = false
-            if (!awake) {
+            if (outcome != ReceiverPowerFlow.Outcome.Confirmed(inStandby = false)) {
                 status = "Ontvanger reageert nog niet"
                 return@launch
             }

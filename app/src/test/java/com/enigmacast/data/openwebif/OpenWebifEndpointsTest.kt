@@ -1,6 +1,8 @@
 package com.enigmacast.data.openwebif
 
+import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.remote.EnigmaKey
@@ -49,6 +51,41 @@ class OpenWebifEndpointsTest {
         )
         assertEquals("http://192.168.1.100/api/powerstate", endpoints.powerState(config))
         assertEquals("http://192.168.1.100/api/powerstate?newstate=4", endpoints.powerState(config, 4))
+    }
+
+    @Test
+    fun mapsPowerActionsToOpenWebifStates() {
+        val expected = mapOf(
+            PowerAction.TOGGLE_STANDBY to 0,
+            PowerAction.DEEP_STANDBY to 1,
+            PowerAction.REBOOT to 2,
+            PowerAction.RESTART_GUI to 3,
+            PowerAction.WAKE_UP to 4,
+            PowerAction.STANDBY to 5,
+        )
+        expected.forEach { (action, state) ->
+            assertEquals(
+                "http://192.168.1.100/api/powerstate?newstate=$state",
+                endpoints.powerState(config, action),
+            )
+        }
+    }
+
+    @Test
+    fun buildsSleepTimerUrls() {
+        assertEquals("http://192.168.1.100/api/sleeptimer?cmd=get", endpoints.sleepTimer(config))
+        assertEquals(
+            "http://192.168.1.100/api/sleeptimer?cmd=set&time=60&action=standby&enabled=True",
+            endpoints.setSleepTimer(config, 60, SleepTimerAction.STANDBY, enabled = true),
+        )
+        assertEquals(
+            "http://192.168.1.100/api/sleeptimer?cmd=set&time=0&action=shutdown&enabled=False",
+            endpoints.setSleepTimer(config, -5, SleepTimerAction.SHUTDOWN, enabled = false),
+        )
+        assertEquals(
+            "http://192.168.1.100/api/sleeptimer?cmd=set&time=999&action=standby&enabled=True",
+            endpoints.setSleepTimer(config, 5_000, SleepTimerAction.STANDBY, enabled = true),
+        )
     }
 
     @Test

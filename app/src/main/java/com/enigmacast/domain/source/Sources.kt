@@ -4,9 +4,13 @@ import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EnigmaService
+import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.PowerStatus
 import com.enigmacast.domain.model.ReceiverCapabilities
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.ReceiverDetails
+import com.enigmacast.domain.model.SleepTimerAction
+import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
@@ -36,6 +40,15 @@ interface ReceiverInfoSource {
     suspend fun capabilities(config: ReceiverConfig): ReceiverCapabilities
     suspend fun powerState(config: ReceiverConfig): PowerStatus
     suspend fun wake(config: ReceiverConfig)
+    suspend fun setPowerState(config: ReceiverConfig, action: PowerAction)
+    suspend fun details(config: ReceiverConfig): ReceiverDetails
+    suspend fun sleepTimer(config: ReceiverConfig): SleepTimerStatus
+    suspend fun setSleepTimer(
+        config: ReceiverConfig,
+        minutes: Int,
+        action: SleepTimerAction,
+        enabled: Boolean,
+    ): SleepTimerStatus
     suspend fun volume(config: ReceiverConfig): VolumeStatus
     suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry>
     suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry>

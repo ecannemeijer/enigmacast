@@ -6,9 +6,13 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.ConnectionTestResult
 import com.enigmacast.domain.model.EnigmaService
+import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.PowerStatus
 import com.enigmacast.domain.model.ReceiverCapabilities
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.ReceiverDetails
+import com.enigmacast.domain.model.SleepTimerAction
+import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
@@ -147,7 +151,33 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun wake(config: ReceiverConfig) {
-        get(config, endpoints.powerState(config, newState = 4))
+        setPowerState(config, PowerAction.WAKE_UP)
+    }
+
+    override suspend fun setPowerState(config: ReceiverConfig, action: PowerAction) {
+        val body = get(config, endpoints.powerState(config, action))
+        if (!OpenWebifJson.isSuccess(body)) {
+            throw OpenWebifException("Ontvanger weigerde het commando")
+        }
+        EnigmaLog.connection("power ${action.name}")
+    }
+
+    override suspend fun details(config: ReceiverConfig): ReceiverDetails {
+        return OpenWebifJson.parseReceiverDetails(get(config, endpoints.about(config)))
+    }
+
+    override suspend fun sleepTimer(config: ReceiverConfig): SleepTimerStatus {
+        return OpenWebifJson.parseSleepTimer(get(config, endpoints.sleepTimer(config)))
+    }
+
+    override suspend fun setSleepTimer(
+        config: ReceiverConfig,
+        minutes: Int,
+        action: SleepTimerAction,
+        enabled: Boolean,
+    ): SleepTimerStatus {
+        val body = get(config, endpoints.setSleepTimer(config, minutes, action, enabled))
+        return OpenWebifJson.parseSleepTimer(body)
     }
 
     override suspend fun volume(config: ReceiverConfig): VolumeStatus {

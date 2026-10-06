@@ -129,6 +129,48 @@ data class PowerStatus(
     val inStandby: Boolean,
 )
 
+/**
+ * OpenWebif `/api/powerstate?newstate=N` values (oe-alliance and E2OpenPlugins `control.py`).
+ * The reply carries `instandby` as it was *before* the command, so callers poll the state afterwards.
+ */
+enum class PowerAction(val newState: Int) {
+    TOGGLE_STANDBY(0),
+    DEEP_STANDBY(1),
+    REBOOT(2),
+    RESTART_GUI(3),
+    WAKE_UP(4),
+    STANDBY(5),
+    ;
+
+    /** Reboot, GUI restart and deep standby take the receiver off the network for a while. */
+    val dropsConnection: Boolean get() = this == DEEP_STANDBY || this == REBOOT || this == RESTART_GUI
+}
+
+enum class SleepTimerAction(val wire: String) {
+    STANDBY("standby"),
+    SHUTDOWN("shutdown"),
+}
+
+data class SleepTimerStatus(
+    val enabled: Boolean,
+    val minutes: Int,
+    val action: SleepTimerAction,
+    val message: String = "",
+)
+
+data class ReceiverDetails(
+    val model: String = "",
+    val brand: String = "",
+    val imageDistro: String = "",
+    val imageVersion: String = "",
+    val enigmaVersion: String = "",
+    val webifVersion: String = "",
+    val kernelVersion: String = "",
+    val chipset: String = "",
+    val uptime: String = "",
+    val tuners: List<String> = emptyList(),
+)
+
 sealed interface ConnectionState {
     data object Idle : ConnectionState
     data object Connecting : ConnectionState

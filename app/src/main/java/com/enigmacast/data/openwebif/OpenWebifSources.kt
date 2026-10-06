@@ -4,9 +4,13 @@ import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EnigmaService
+import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.PowerStatus
 import com.enigmacast.domain.model.ReceiverCapabilities
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.ReceiverDetails
+import com.enigmacast.domain.model.SleepTimerAction
+import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
@@ -82,6 +86,15 @@ class OpenWebifReceiverInfoSource @Inject constructor(
     override suspend fun capabilities(config: ReceiverConfig): ReceiverCapabilities = api.capabilities(config)
     override suspend fun powerState(config: ReceiverConfig): PowerStatus = api.powerState(config)
     override suspend fun wake(config: ReceiverConfig) = api.wake(config)
+    override suspend fun setPowerState(config: ReceiverConfig, action: PowerAction) = api.setPowerState(config, action)
+    override suspend fun details(config: ReceiverConfig): ReceiverDetails = api.details(config)
+    override suspend fun sleepTimer(config: ReceiverConfig): SleepTimerStatus = api.sleepTimer(config)
+    override suspend fun setSleepTimer(
+        config: ReceiverConfig,
+        minutes: Int,
+        action: SleepTimerAction,
+        enabled: Boolean,
+    ): SleepTimerStatus = api.setSleepTimer(config, minutes, action, enabled)
     override suspend fun volume(config: ReceiverConfig): VolumeStatus = api.volume(config)
     override suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry> = api.bouquets(config)
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {

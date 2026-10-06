@@ -6,6 +6,9 @@ import com.enigmacast.domain.model.EnigmaService
 import com.enigmacast.domain.model.EpgEvent
 import com.enigmacast.domain.model.PowerStatus
 import com.enigmacast.domain.model.ReceiverCapabilities
+import com.enigmacast.domain.model.ReceiverDetails
+import com.enigmacast.domain.model.SleepTimerAction
+import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -131,6 +134,61 @@ internal object OpenWebifJson {
         val raw = text(root, "instandby")
         val standby = raw.equals("true", ignoreCase = true) || raw == "1"
         return PowerStatus(standby)
+    }
+
+    /** `/api/about`: the fields sit under `info`, tuners are objects with `name` and `type`. */
+    fun parseReceiverDetails(body: String): ReceiverDetails {
+        val root = openWebifJson.parseToJsonElement(body).jsonObject
+        val info = root["info"] as? JsonObject ?: root
+        val tuners = (info["tuners"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val tuner = element as? JsonObject ?: return@mapNotNull null
+            val name = tuner.primitive("name").orEmpty()
+            val type = tuner.primitive("type").orEmpty()
+            when {
+                name.isNotBlank() && type.isNotBlank() -> "$name: $type"
+                else -> name.ifBlank { type }.ifBlank { null }
+            }
+        }
+        return ReceiverDetails(
+            model = text(root, "model", "boxtype", "friendlyname").orEmpty(),
+            brand = text(root, "brand", "manufacturer").orEmpty(),
+            imageDistro = text(root, "friendlyimagedistro", "imagedistro", "distro").orEmpty(),
+            imageVersion = text(root, "imagever", "imageversion", "imagedistroversion").orEmpty(),
+            enigmaVersion = text(root, "enigmaver", "e2enigmaversion", "enigmaversion").orEmpty(),
+            webifVersion = text(root, "webifver", "e2webifversion", "webifversion").orEmpty(),
+            kernelVersion = text(root, "kernelver").orEmpty(),
+            chipset = text(root, "friendlychipsettext", "chipset").orEmpty(),
+            uptime = text(root, "uptime").orEmpty(),
+            tuners = tuners,
+        )
+    }
+
+    /**
+     * `/api/sleeptimer`. Images differ: `minutes` may be a string, the body may be
+     * `{"result": false, ...}` on error, and a set call reports refusals as `"ERROR: ..."` in `message`.
+     */
+    fun parseSleepTimer(body: String): SleepTimerStatus {
+        val root = runCatching { openWebifJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
+            ?: throw OpenWebifException("Slaaptimer niet ondersteund")
+        val message = root.primitive("message").orEmpty()
+        val failed = (root["result"] as? JsonPrimitive)?.let { result ->
+            result.booleanOrNull == false || result.contentOrNull.equals("false", ignoreCase = true)
+        } == true
+        if (failed || message.startsWith("ERROR", ignoreCase = true)) {
+            throw OpenWebifException(message.removePrefix("ERROR:").trim().ifBlank { "Slaaptimer mislukt" })
+        }
+        val enabledRaw = root.primitive("enabled")
+        val action = if (root.primitive("action").equals("shutdown", ignoreCase = true)) {
+            SleepTimerAction.SHUTDOWN
+        } else {
+            SleepTimerAction.STANDBY
+        }
+        return SleepTimerStatus(
+            enabled = enabledRaw.equals("true", ignoreCase = true) || enabledRaw == "1",
+            minutes = root.primitive("minutes")?.toDoubleOrNull()?.toInt() ?: 0,
+            action = action,
+            message = message,
+        )
     }
 
     fun parseVolume(body: String): VolumeStatus {
