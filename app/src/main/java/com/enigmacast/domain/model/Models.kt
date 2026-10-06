@@ -56,6 +56,27 @@ data class DebugSettings(
     val verboseLogging: Boolean = false,
 )
 
+/**
+ * How the app gets its picture. [OWN_TUNER] is the default, also for installs that saved
+ * settings before this option existed (the field is missing there, so the default applies).
+ */
+@Serializable
+enum class StreamMode {
+    /** Each device streams its own channel from the stream port; the receiver can stay in standby. */
+    OWN_TUNER,
+
+    /** Zap the receiver and stream what it shows, with its OSD (the behaviour before 1.0.0-beta.4). */
+    FOLLOW_RECEIVER,
+}
+
+/** The channel this device last watched in [StreamMode.OWN_TUNER]. */
+@Serializable
+data class LastChannel(
+    val reference: String = "",
+    val name: String = "",
+    val bouquetReference: String = "",
+)
+
 @Serializable
 data class AppSettings(
     val receivers: List<ReceiverConfig> = emptyList(),
@@ -64,6 +85,8 @@ data class AppSettings(
     val osd: OsdSettings = OsdSettings(),
     val remote: RemoteSettings = RemoteSettings(),
     val debug: DebugSettings = DebugSettings(),
+    val streamMode: StreamMode = StreamMode.OWN_TUNER,
+    val lastChannel: LastChannel = LastChannel(),
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
@@ -116,6 +139,10 @@ data class ChannelGuide(
 data class BouquetEntry(
     val name: String,
     val reference: String,
+    /** Enigma2 channel number (bouquet start + position), or 0 when OpenWebif did not say. */
+    val number: Int = 0,
+    /** Picon path on the receiver, e.g. `/picon/1_0_19_….png`, or empty. */
+    val picon: String = "",
 )
 
 data class BouquetChannelList(
@@ -193,6 +220,12 @@ data class PlayerState(
     val bufferMs: Long = 0,
     val liveOffsetMs: Long = -1,
     val error: String? = null,
+    /** "Nederlands · AC3 5.1"; empty before the first audio track. */
+    val audioLabel: String = "",
+    val audioTrackCount: Int = 0,
+    /** Language of the subtitles being shown, or empty when none are on. */
+    val subtitleLabel: String = "",
+    val subtitleTrackCount: Int = 0,
 )
 
 data class DebugInfo(
