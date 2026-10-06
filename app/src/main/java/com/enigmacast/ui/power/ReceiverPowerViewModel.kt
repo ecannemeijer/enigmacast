@@ -69,9 +69,16 @@ class ReceiverPowerViewModel @Inject constructor(
 
     val stateLabel: String get() = PowerCopy.stateLabel(powerState, restarting)
 
+    /** One light `/api/powerstate` request. Never throws except for cancellation. */
     suspend fun poll() {
         if (busyAction != null) return
-        val receiver = settingsRepository.current().activeReceiver() ?: return
+        val receiver = try {
+            settingsRepository.current().activeReceiver()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        } ?: return
         receiverName = receiver.name
         receiverHost = receiver.host
         val standby = try {
@@ -204,8 +211,12 @@ class ReceiverPowerViewModel @Inject constructor(
         restarting = tracker.restarting
         if (event == null) return
         // A command reports its own result; a short network blip is not worth a message.
-        if (event == PowerEvent.WokeUp && busyAction == null && (wasRestarting || wasStandby)) {
-            showFeedback(PowerFeedback("Ontvanger staat weer aan", isError = false))
+        if (busyAction == null) {
+            if (event == PowerEvent.WokeUp && (wasRestarting || wasStandby)) {
+                showFeedback(PowerFeedback("Ontvanger staat weer aan", isError = false))
+            } else if (event == PowerEvent.WentToStandby) {
+                showFeedback(PowerFeedback("Ontvanger is in stand-by gegaan; de stream is gestopt", isError = false))
+            }
         }
         _events.tryEmit(event)
     }

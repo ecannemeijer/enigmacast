@@ -25,6 +25,19 @@ class PowerStateTrackerTest {
     }
 
     @Test
+    fun standbyFromTheRemoteOrSleepTimerIsReported() {
+        tracker.onPoll(false)
+        assertEquals(PowerEvent.WentToStandby, tracker.onPoll(true))
+        assertNull(tracker.onPoll(true))
+    }
+
+    @Test
+    fun standbyAtStartIsNotReportedAsAChange() {
+        assertNull(tracker.onPoll(true))
+        assertEquals(ReceiverPowerState.STANDBY, tracker.state)
+    }
+
+    @Test
     fun comingBackAfterANetworkDropIsReported() {
         tracker.onPoll(false)
         assertNull(tracker.onPoll(null))
@@ -85,7 +98,7 @@ class PowerStateTrackerTest {
     @Test
     fun restartIntoStandbyEndsTheRestart() {
         tracker.onCommandResult(PowerAction.REBOOT, ReceiverPowerFlow.Outcome.Sent)
-        assertNull(tracker.onPoll(true))
+        assertEquals(PowerEvent.WentToStandby, tracker.onPoll(true))
         assertNull(tracker.restarting)
         assertEquals(ReceiverPowerState.STANDBY, tracker.state)
     }

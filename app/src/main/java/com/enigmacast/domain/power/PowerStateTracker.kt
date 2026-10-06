@@ -11,7 +11,7 @@ enum class ReceiverPowerState {
 
 /** What the rest of the dashboard should do after a power change. */
 sealed interface PowerEvent {
-    /** Standby was confirmed after a command from the app. */
+    /** Standby was confirmed after a command, or the receiver went to standby on its own (remote, sleep timer). */
     data object WentToStandby : PowerEvent
 
     /** The receiver is on again after standby, a restart or being unreachable. */
@@ -58,6 +58,7 @@ internal class PowerStateTracker(
                 standby -> {
                     restarting = null
                     state = ReceiverPowerState.STANDBY
+                    return PowerEvent.WentToStandby
                 }
                 sawOffline || clock() - sentAt > graceMs -> {
                     restarting = null
@@ -74,7 +75,11 @@ internal class PowerStateTracker(
             false -> ReceiverPowerState.ON
         }
         val cameBack = previous == ReceiverPowerState.STANDBY || previous == ReceiverPowerState.UNREACHABLE
-        return if (state == ReceiverPowerState.ON && cameBack) PowerEvent.WokeUp else null
+        return when {
+            state == ReceiverPowerState.ON && cameBack -> PowerEvent.WokeUp
+            state == ReceiverPowerState.STANDBY && previous == ReceiverPowerState.ON -> PowerEvent.WentToStandby
+            else -> null
+        }
     }
 
     fun onCommandResult(action: PowerAction, outcome: ReceiverPowerFlow.Outcome): PowerEvent? {
