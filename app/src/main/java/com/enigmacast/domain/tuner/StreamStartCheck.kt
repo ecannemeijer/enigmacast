@@ -30,7 +30,8 @@ enum class StreamFailure { NONE, HTTP_401, HTTP_OTHER, CONNECT, ENDED, PARSE, OT
 object StreamStartCheck {
     /** Less than this many bytes before the stream ended means Enigma2 sent no TS at all (a few PAT/PMT packets at most). */
     const val NO_DATA_BYTES = 64L * 1024
-    const val NO_DATA_TIMEOUT_MS = 8_000L
+    /** Long enough for a dish motor or a unicable tuner to lock; Enigma2 sends TS right after locking. */
+    const val NO_DATA_TIMEOUT_MS = 10_000L
     const val NO_PICTURE_TIMEOUT_MS = 12_000L
 
     fun evaluate(

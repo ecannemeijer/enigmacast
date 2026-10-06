@@ -43,6 +43,8 @@ data class TunerState(
     val used: Int = 0,
     val total: Int = 0,
     val users: List<TunerUser> = emptyList(),
+    /** The receiver was unreachable; try again by itself once it may be back. Never set for full tuners. */
+    val autoRetry: Boolean = false,
 )
 
 data class OwnTunerState(
@@ -188,7 +190,7 @@ class OwnTunerSession @Inject constructor(
         startJob?.cancel()
         playback.stopForZap()
         streaming = false
-        _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, message)) }
+        _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, message, autoRetry = true)) }
     }
 
     /** The receiver is back (or the mode changed): pick up where the stream stopped. */
@@ -207,6 +209,11 @@ class OwnTunerSession @Inject constructor(
         if (streaming) playback.stopForZap()
         streaming = false
         _state.update { it.copy(tuner = TunerState()) }
+    }
+
+    /** Called periodically: restarts a stream that stopped because the receiver was away. */
+    fun retryIfReceiverWasAway() {
+        if (active && _state.value.tuner.autoRetry && startJob?.isActive != true) retry()
     }
 
     /** Reloads now/next when the shown programme has ended. */
@@ -296,6 +303,7 @@ class OwnTunerSession @Inject constructor(
             StreamHealth.UNREACHABLE -> TunerState(
                 TunerStatus.PROBLEM,
                 "Streampoort niet bereikbaar. Staat de ontvanger uit of in diepe stand-by, of klopt de streampoort niet?",
+                autoRetry = true,
             )
             StreamHealth.NO_PICTURE -> TunerState(
                 TunerStatus.NO_PICTURE,

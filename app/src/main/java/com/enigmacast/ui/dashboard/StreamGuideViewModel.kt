@@ -144,6 +144,7 @@ class StreamGuideViewModel @Inject constructor(
     /** Own tuner: never wake or zap the receiver; it may stay in standby. */
     private suspend fun refreshOwnTuner() {
         session.ensureStarted()
+        session.retryIfReceiverWasAway()
         session.refreshGuideIfStale()
         if (bouquets.isEmpty()) {
             val receiver = settingsRepository.current().activeReceiver() ?: return
