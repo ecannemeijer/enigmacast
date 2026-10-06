@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.BuildConfig
+import com.enigmacast.R
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.playback.LivePlaybackController
@@ -13,6 +14,8 @@ import com.enigmacast.update.AppUpdateClient
 import com.enigmacast.update.RemoteRelease
 import com.enigmacast.update.isNewerRelease
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
+import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +27,7 @@ import javax.inject.Inject
 data class UpdatePrompt(
     val release: RemoteRelease,
     val progress: Int? = null,
-    val message: String? = null,
+    val message: UiText? = null,
 )
 
 @HiltViewModel
@@ -83,7 +86,7 @@ class AppViewModel @Inject constructor(
     fun installUpdate() {
         val prompt = updatePrompt ?: return
         if (!updates.canRequestInstall()) {
-            updatePrompt = prompt.copy(message = "Allow this app to install updates, then press Update again.")
+            updatePrompt = prompt.copy(message = UiText.res(R.string.update_allow_install))
             runCatching { updates.openInstallPermission() }
             return
         }
@@ -102,13 +105,16 @@ class AppViewModel @Inject constructor(
                 if (error is CancellationException) throw error
                 updatePrompt = prompt.copy(
                     progress = null,
-                    message = (error.message ?: "Download failed").trimEnd('.') + ". Press Update to try again, or Cancel to resume the stream.",
+                    message = UiText.res(
+                        R.string.update_download_failed_retry,
+                        error.uiMessage(UiText.res(R.string.update_download_failed)),
+                    ),
                 )
                 return@launch
             }
             updatePrompt = prompt.copy(progress = null, message = null)
             runCatching { updates.install(apk) }.onFailure { error ->
-                updatePrompt = prompt.copy(message = error.message ?: "Could not open the installer")
+                updatePrompt = prompt.copy(message = error.uiMessage(UiText.res(R.string.update_installer_failed)))
             }
         }
     }

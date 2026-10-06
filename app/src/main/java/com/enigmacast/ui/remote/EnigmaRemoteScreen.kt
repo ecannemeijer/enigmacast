@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -29,6 +30,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.Text
+import com.enigmacast.R
 import com.enigmacast.domain.model.ConnectionState
 import com.enigmacast.domain.osd.OsdScale
 import com.enigmacast.domain.osd.OsdScaleMode
@@ -227,9 +229,14 @@ private class CueOverlayView(context: android.content.Context) : View(context) {
 @Composable
 private fun ConnectionProblemOverlay(state: ConnectionState) {
     val message = when (state) {
-        is ConnectionState.Failed -> state.reason
-        is ConnectionState.Reconnecting -> state.reason
-        ConnectionState.Connecting -> "Connecting"
+        is ConnectionState.Failed -> if (state.reason.isBlank()) {
+            stringResource(R.string.conn_receiver_offline_plain)
+        } else {
+            stringResource(R.string.conn_receiver_offline, state.reason)
+        }
+        is ConnectionState.Reconnecting -> stringResource(R.string.conn_reconnecting)
+        ConnectionState.NotConfigured -> stringResource(R.string.conn_no_receiver_configured)
+        ConnectionState.Connecting -> stringResource(R.string.conn_connecting)
         else -> ""
     }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {

@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.text.Cue
+import com.enigmacast.R
 import com.enigmacast.connection.ConnectionCoordinator
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
@@ -51,6 +52,7 @@ import com.enigmacast.remote.RemoteInputBus
 import com.enigmacast.remote.RemoteKeyDispatcher
 import com.enigmacast.util.DebugFlags
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -96,7 +98,7 @@ data class RemoteDisplayUiState(
     /** Bumped whenever the channel list should take the focus (open, bouquet chosen, bouquet column closed). */
     val listFocusToken: Int = 0,
     val numberEntry: String = "",
-    val notice: String = "",
+    val notice: UiText = UiText.Empty,
 )
 
 @HiltViewModel
@@ -194,7 +196,7 @@ class RemoteDisplayViewModel @Inject constructor(
         session?.cancel()
         val receiver = settings.activeReceiver()
         if (receiver == null) {
-            _ui.update { it.copy(connectionState = ConnectionState.Failed("No receiver configured")) }
+            _ui.update { it.copy(connectionState = ConnectionState.NotConfigured) }
             return
         }
         if (!StreamModePolicy.mirrorsReceiverOsd(settings.streamMode)) {
@@ -402,7 +404,7 @@ class RemoteDisplayViewModel @Inject constructor(
         bouquetJob?.cancel()
         bouquetJob = viewModelScope.launch {
             if (!ownSession.selectBouquet(bouquet)) {
-                showNotice("Bouquet ${bouquet.name} laden mislukt")
+                showNotice(UiText.res(R.string.notice_bouquet_failed, bouquet.name))
                 return@launch
             }
             _ui.update { it.copy(nowEvents = emptyMap(), listFocusToken = it.listFocusToken + 1) }
@@ -450,12 +452,12 @@ class RemoteDisplayViewModel @Inject constructor(
         _ui.update { it.copy(banner = false, details = false) }
     }
 
-    private fun showNotice(text: String) {
+    private fun showNotice(text: UiText) {
         _ui.update { it.copy(notice = text) }
         noticeJob?.cancel()
         noticeJob = viewModelScope.launch {
             delay(2_500)
-            _ui.update { it.copy(notice = "") }
+            _ui.update { it.copy(notice = UiText.Empty) }
         }
     }
 
@@ -535,7 +537,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun applyNumber() {
         val number = numberEntry.take() ?: return
         _ui.update { it.copy(numberEntry = "") }
-        if (!ownSession.zapNumber(number)) showNotice("Zender $number staat niet in deze lijst")
+        if (!ownSession.zapNumber(number)) showNotice(UiText.res(R.string.notice_number_not_in_list, number))
     }
 
     private fun handleKey(event: KeyEvent): Boolean {
@@ -681,6 +683,7 @@ class RemoteDisplayViewModel @Inject constructor(
                         is ConnectionState.Failed -> state.reason
                         ConnectionState.Connecting -> "connecting"
                         ConnectionState.Idle -> "idle"
+                        ConnectionState.NotConfigured -> "not configured"
                     },
                 ),
             )

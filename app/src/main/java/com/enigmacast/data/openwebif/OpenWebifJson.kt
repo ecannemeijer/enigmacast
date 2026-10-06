@@ -1,5 +1,6 @@
 package com.enigmacast.data.openwebif
 
+import com.enigmacast.R
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EnigmaService
@@ -14,6 +15,7 @@ import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.StreamClient
 import com.enigmacast.domain.tuner.TunerSlot
 import com.enigmacast.domain.tuner.TunerSnapshot
+import com.enigmacast.util.UiText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -173,13 +175,18 @@ internal object OpenWebifJson {
      */
     fun parseSleepTimer(body: String): SleepTimerStatus {
         val root = runCatching { openWebifJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
-            ?: throw OpenWebifException("Slaaptimer niet ondersteund")
+            ?: throw OpenWebifException("Sleep timer not supported", uiText = UiText.res(R.string.error_sleep_unsupported))
         val message = root.primitive("message").orEmpty()
         val failed = (root["result"] as? JsonPrimitive)?.let { result ->
             result.booleanOrNull == false || result.contentOrNull.equals("false", ignoreCase = true)
         } == true
         if (failed || message.startsWith("ERROR", ignoreCase = true)) {
-            throw OpenWebifException(message.removePrefix("ERROR:").trim().ifBlank { "Slaaptimer mislukt" })
+            val reason = message.removePrefix("ERROR:").trim()
+            throw if (reason.isBlank()) {
+                OpenWebifException("Sleep timer failed", uiText = UiText.res(R.string.error_sleep_failed))
+            } else {
+                OpenWebifException(reason)
+            }
         }
         val enabledRaw = root.primitive("enabled")
         val action = if (root.primitive("action").equals("shutdown", ignoreCase = true)) {

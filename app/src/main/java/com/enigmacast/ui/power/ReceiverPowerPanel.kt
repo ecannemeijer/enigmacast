@@ -23,10 +23,12 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
+import com.enigmacast.R
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.power.ReceiverPowerState
@@ -40,6 +42,8 @@ import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.util.asString
+import com.enigmacast.util.isNotEmpty
 
 private class PrimaryPower(
     val icon: ImageVector,
@@ -69,7 +73,8 @@ fun ReceiverPowerPanel(
 ) {
     val state = viewModel.powerState
     val busy = viewModel.busyAction
-    fun hint(action: PowerAction, idle: String) = if (busy == action) "Bezig…" else idle
+    val busyText = stringResource(R.string.busy)
+    fun hint(action: PowerAction, idle: String) = if (busy == action) busyText else idle
     val subtitle = listOf(viewModel.receiverName, viewModel.receiverHost)
         .filter { it.isNotBlank() }
         .joinToString("  ·  ")
@@ -77,7 +82,7 @@ fun ReceiverPowerPanel(
         viewModel.loadDetails()
     }
     Column(modifier) {
-        PanelHeader("Ontvanger", subtitle)
+        PanelHeader(stringResource(R.string.receiver_title), subtitle)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -87,9 +92,9 @@ fun ReceiverPowerPanel(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 SettingsCard(
-                    title = "Aan / uit",
+                    title = stringResource(R.string.power_card_title),
                     trailing = {
-                        StatusPill(viewModel.stateLabel, powerStateColor(state, viewModel.restarting))
+                        StatusPill(viewModel.stateLabel.asString(), powerStateColor(state, viewModel.restarting))
                     },
                 ) {
                     Row(
@@ -104,20 +109,20 @@ fun ReceiverPowerPanel(
                         val primary = when (state) {
                             ReceiverPowerState.STANDBY -> PrimaryPower(
                                 icon = EnigmaIcons.Power,
-                                label = "Aanzetten",
-                                description = hint(PowerAction.WAKE_UP, "Uit stand-by halen"),
+                                label = stringResource(R.string.power_action_wake),
+                                description = hint(PowerAction.WAKE_UP, stringResource(R.string.power_wake_hint)),
                                 onClick = { viewModel.request(PowerAction.WAKE_UP) },
                             )
                             ReceiverPowerState.UNREACHABLE -> PrimaryPower(
                                 icon = Icons.Filled.Refresh,
-                                label = "Opnieuw proberen",
-                                description = "Status opnieuw opvragen",
+                                label = stringResource(R.string.power_retry),
+                                description = stringResource(R.string.power_retry_hint),
                                 onClick = viewModel::refreshNow,
                             )
                             ReceiverPowerState.ON, ReceiverPowerState.UNKNOWN -> PrimaryPower(
                                 icon = EnigmaIcons.Bedtime,
-                                label = "Stand-by",
-                                description = hint(PowerAction.STANDBY, "Beeld en tuner uit"),
+                                label = stringResource(R.string.power_action_standby),
+                                description = hint(PowerAction.STANDBY, stringResource(R.string.power_standby_hint)),
                                 onClick = { viewModel.request(PowerAction.STANDBY) },
                             )
                         }
@@ -131,8 +136,8 @@ fun ReceiverPowerPanel(
                         )
                         ActionTile(
                             icon = Icons.Filled.Refresh,
-                            label = "GUI herstarten",
-                            description = hint(PowerAction.RESTART_GUI, "Alleen Enigma2"),
+                            label = stringResource(R.string.power_action_restart_gui),
+                            description = hint(PowerAction.RESTART_GUI, stringResource(R.string.power_gui_hint)),
                             onClick = { viewModel.request(PowerAction.RESTART_GUI) },
                             modifier = Modifier.weight(1f),
                         )
@@ -143,8 +148,8 @@ fun ReceiverPowerPanel(
                     ) {
                         ActionTile(
                             icon = EnigmaIcons.Restart,
-                            label = "Herstarten",
-                            description = hint(PowerAction.REBOOT, "Volledige herstart"),
+                            label = stringResource(R.string.power_action_reboot),
+                            description = hint(PowerAction.REBOOT, stringResource(R.string.power_reboot_hint)),
                             onClick = { viewModel.request(PowerAction.REBOOT) },
                             modifier = Modifier
                                 .weight(1f)
@@ -152,8 +157,8 @@ fun ReceiverPowerPanel(
                         )
                         ActionTile(
                             icon = EnigmaIcons.Power,
-                            label = "Diep slapen",
-                            description = hint(PowerAction.DEEP_STANDBY, "Helemaal uit"),
+                            label = stringResource(R.string.power_action_deep_standby),
+                            description = hint(PowerAction.DEEP_STANDBY, stringResource(R.string.power_deep_hint)),
                             tone = TileTone.Danger,
                             onClick = { viewModel.request(PowerAction.DEEP_STANDBY) },
                             modifier = Modifier.weight(1f),
@@ -167,10 +172,10 @@ fun ReceiverPowerPanel(
     }
     viewModel.pendingConfirmation?.let { action ->
         TvConfirmDialog(
-            title = PowerCopy.confirmTitle(action),
-            message = PowerCopy.confirmMessage(action),
-            confirmLabel = PowerCopy.confirmLabel(action),
-            dismissLabel = "Annuleren",
+            title = PowerCopy.confirmTitle(action).asString(),
+            message = PowerCopy.confirmMessage(action).asString(),
+            confirmLabel = PowerCopy.confirmLabel(action).asString(),
+            dismissLabel = stringResource(R.string.cancel),
             onConfirm = viewModel::confirmPending,
             onDismiss = viewModel::cancelPending,
             destructive = true,
@@ -182,9 +187,9 @@ fun ReceiverPowerPanel(
 private fun SleepTimerCard(viewModel: ReceiverPowerViewModel, menuFocus: FocusRequester) {
     val status = viewModel.sleepTimer
     SettingsCard(
-        title = "Slaaptimer",
+        title = stringResource(R.string.sleep_title),
         trailing = {
-            if (status?.enabled == true) StatusPill("Actief", EnigmaColors.Accent)
+            if (status?.enabled == true) StatusPill(stringResource(R.string.active), EnigmaColors.Accent)
         },
     ) {
         Row(
@@ -199,21 +204,21 @@ private fun SleepTimerCard(viewModel: ReceiverPowerViewModel, menuFocus: FocusRe
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                if (viewModel.sleepBusy) "Bezig…" else PowerCopy.sleepSummary(status, viewModel.sleepTimerError),
+                if (viewModel.sleepBusy) stringResource(R.string.busy) else PowerCopy.sleepSummary(status, viewModel.sleepTimerError).asString(),
                 color = EnigmaColors.Muted,
                 fontSize = 13.sp,
             )
         }
         ChoiceRow(
-            title = "Minuten",
-            options = PowerCopy.sleepPresets.map(PowerCopy::sleepPresetLabel),
+            title = stringResource(R.string.sleep_minutes),
+            options = PowerCopy.sleepPresets.map { PowerCopy.sleepPresetLabel(it).asString() },
             selectedIndex = PowerCopy.sleepPresetIndex(status),
             onSelect = { index -> viewModel.setSleepTimer(PowerCopy.sleepPresets[index]) },
             firstOptionModifier = Modifier.focusProperties { left = menuFocus },
         )
         ChoiceRow(
-            title = "Daarna",
-            options = SleepTimerAction.entries.map { PowerCopy.sleepActionLabel(it).replaceFirstChar(Char::uppercase) },
+            title = stringResource(R.string.sleep_then),
+            options = SleepTimerAction.entries.map { PowerCopy.sleepActionTitle(it).asString() },
             selectedIndex = SleepTimerAction.entries.indexOf(viewModel.sleepAction),
             onSelect = { index -> viewModel.chooseSleepAction(SleepTimerAction.entries[index]) },
             firstOptionModifier = Modifier.focusProperties { left = menuFocus },
@@ -224,19 +229,19 @@ private fun SleepTimerCard(viewModel: ReceiverPowerViewModel, menuFocus: FocusRe
 @Composable
 private fun ReceiverDetailsCard(viewModel: ReceiverPowerViewModel, modifier: Modifier = Modifier) {
     val details = viewModel.details
-    SettingsCard(title = "Info", modifier = modifier) {
+    SettingsCard(title = stringResource(R.string.info), modifier = modifier) {
         when {
             details != null -> PowerCopy.detailRows(details).forEach { (label, value) ->
-                InfoRow(label, value)
+                InfoRow(label, value.asString())
             }
-            viewModel.detailsError.isNotBlank() -> Text(
-                viewModel.detailsError,
+            viewModel.detailsError.isNotEmpty() -> Text(
+                viewModel.detailsError.asString(),
                 color = EnigmaColors.Muted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 6.dp),
             )
             else -> Text(
-                "Info laden…",
+                stringResource(R.string.info_loading),
                 color = EnigmaColors.Muted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 6.dp),

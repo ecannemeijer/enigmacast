@@ -5,6 +5,8 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
+import com.enigmacast.R
+import com.enigmacast.util.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,10 +51,10 @@ internal object AudioSync {
         else -> "$ms ms"
     }
 
-    fun describe(ms: Int): String = when {
-        ms > 0 -> "Beeld wacht $ms ms op het geluid."
-        ms < 0 -> "Beeld loopt ${-ms} ms voor op het geluid."
-        else -> "Geen correctie."
+    fun describe(ms: Int): UiText = when {
+        ms > 0 -> UiText.res(R.string.audio_sync_wait, ms)
+        ms < 0 -> UiText.res(R.string.audio_sync_ahead, -ms)
+        else -> UiText.res(R.string.audio_sync_none)
     }
 }
 

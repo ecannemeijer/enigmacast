@@ -33,6 +33,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,9 +43,13 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import com.enigmacast.BuildConfig
+import com.enigmacast.R
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.update.RemoteRelease
+import com.enigmacast.util.UiText
+import com.enigmacast.util.asString
+import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.launch
 
 /**
@@ -57,7 +62,7 @@ import kotlinx.coroutines.launch
 fun AppUpdateDialog(
     release: RemoteRelease,
     progress: Int?,
-    message: String?,
+    message: UiText?,
     onUpdate: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -83,9 +88,13 @@ fun AppUpdateDialog(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Update available", color = EnigmaColors.Text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.update_available), color = EnigmaColors.Text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Installed ${BuildConfig.VERSION_NAME}  →  ${release.versionName.ifBlank { release.versionCode.toString() }}",
+                stringResource(
+                    R.string.update_versions,
+                    BuildConfig.VERSION_NAME,
+                    release.versionName.ifBlank { release.versionCode.toString() },
+                ),
                 color = EnigmaColors.Accent,
                 fontSize = 14.sp,
             )
@@ -95,19 +104,19 @@ fun AppUpdateDialog(
             if (progress != null) {
                 DownloadProgress(progress)
             }
-            if (!message.isNullOrBlank()) {
-                Text(message, color = Color(0xFFFFB4A8), fontSize = 13.sp, lineHeight = 18.sp)
+            if (message != null && message.isNotEmpty()) {
+                Text(message.asString(), color = Color(0xFFFFB4A8), fontSize = 13.sp, lineHeight = 18.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
                 DialogButton(
-                    label = "Update",
+                    label = stringResource(R.string.update_action),
                     onClick = onUpdate,
                     enabled = !downloading,
                     primary = true,
                     modifier = Modifier.focusRequester(updateFocus),
                 )
                 DialogButton(
-                    label = "Cancel",
+                    label = stringResource(R.string.cancel),
                     onClick = onCancel,
                     enabled = true,
                     primary = false,
@@ -164,7 +173,7 @@ private fun ReleaseNotes(notes: String) {
 @Composable
 private fun DownloadProgress(percent: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Downloading… $percent%", color = EnigmaColors.Text, fontSize = 13.sp)
+        Text(stringResource(R.string.update_downloading, percent), color = EnigmaColors.Text, fontSize = 13.sp)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -179,7 +188,7 @@ private fun DownloadProgress(percent: Int) {
             )
         }
         Text(
-            "The stream is stopped while the update downloads.",
+            stringResource(R.string.update_stream_stopped),
             color = EnigmaColors.Subtle,
             fontSize = 12.sp,
         )

@@ -1,5 +1,6 @@
 package com.enigmacast.domain.model
 
+import com.enigmacast.R
 import com.enigmacast.data.openwebif.openWebifJson
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -15,6 +16,6 @@ class OsdSkinTest {
     fun theSkinChoiceIsSavedByName() {
         val saved = openWebifJson.encodeToString(AppSettings.serializer(), AppSettings(osdSkin = OsdSkin.STANDARD))
         assertEquals(OsdSkin.STANDARD, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
-        assertEquals("Standaard", OsdSkin.STANDARD.label)
+        assertEquals(R.string.skin_standard, OsdSkin.STANDARD.label)
     }
 }

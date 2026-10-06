@@ -8,7 +8,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
+import com.enigmacast.R
 import com.enigmacast.domain.tuner.StreamFailure
+import com.enigmacast.util.UiText
+import com.enigmacast.util.isNotEmpty
 import java.io.EOFException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
@@ -48,11 +51,11 @@ internal object StreamFailures {
     }
 }
 
-/** Short Dutch descriptions of the playing audio and subtitle tracks for the channel banner. */
+/** Short descriptions of the playing audio and subtitle tracks for the channel banner. */
 @OptIn(UnstableApi::class)
 internal object TrackLabels {
-    fun audio(format: Format?): String {
-        format ?: return ""
+    fun audio(format: Format?): UiText {
+        format ?: return UiText.Empty
         val codec = when (format.sampleMimeType) {
             "audio/ac3" -> "Dolby Digital"
             "audio/eac3" -> "Dolby Digital+"
@@ -61,35 +64,38 @@ internal object TrackLabels {
             else -> format.sampleMimeType?.substringAfter('/')?.uppercase(Locale.ROOT).orEmpty()
         }
         val channels = when (format.channelCount) {
-            1 -> "mono"
-            2 -> "stereo"
-            6 -> "5.1"
-            8 -> "7.1"
-            Format.NO_VALUE -> ""
-            else -> "${format.channelCount} kan."
+            1 -> UiText.res(R.string.audio_mono)
+            2 -> UiText.res(R.string.audio_stereo)
+            6 -> UiText.Raw("5.1")
+            8 -> UiText.Raw("7.1")
+            Format.NO_VALUE -> UiText.Empty
+            else -> UiText.res(R.string.audio_channels, format.channelCount)
         }
-        return listOf(language(format.language ?: format.label), codec, channels)
-            .filter { it.isNotBlank() }
-            .joinToString(" · ")
+        val parts = listOf(language(format.language ?: format.label), UiText.Raw(codec), channels).filter { it.isNotEmpty() }
+        return if (parts.isEmpty()) UiText.Empty else UiText.Joined(parts, " · ")
     }
 
-    fun subtitle(tracks: Tracks, enabled: Boolean): String {
-        if (!enabled) return ""
-        val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSelected } ?: return ""
+    fun subtitle(tracks: Tracks, enabled: Boolean): UiText {
+        if (!enabled) return UiText.Empty
+        val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSelected } ?: return UiText.Empty
         val index = (0 until group.length).firstOrNull { group.isTrackSelected(it) } ?: 0
         val format = group.getTrackFormat(index)
-        return language(format.language ?: format.label).ifBlank { "Aan" }
+        return language(format.language ?: format.label).takeIf { it.isNotEmpty() } ?: UiText.res(R.string.subtitle_on)
     }
 
-    fun language(code: String?): String {
-        if (code.isNullOrBlank() || code == "und") return ""
-        val known = mapOf(
-            "dut" to "Nederlands", "nld" to "Nederlands", "nl" to "Nederlands",
-            "eng" to "Engels", "en" to "Engels",
-            "ger" to "Duits", "deu" to "Duits", "de" to "Duits",
-            "fre" to "Frans", "fra" to "Frans", "fr" to "Frans",
-            "qaa" to "Origineel", "mul" to "Meertalig", "nar" to "Audiodescriptie",
-        )
-        return known[code.lowercase(Locale.ROOT)] ?: code.uppercase(Locale.ROOT)
+    /** Language name for a DVB/ISO code; unknown codes are shown as they are (upper case). */
+    fun language(code: String?): UiText {
+        if (code.isNullOrBlank() || code == "und") return UiText.Empty
+        val known = when (code.lowercase(Locale.ROOT)) {
+            "dut", "nld", "nl" -> R.string.lang_dutch
+            "eng", "en" -> R.string.lang_english
+            "ger", "deu", "de" -> R.string.lang_german
+            "fre", "fra", "fr" -> R.string.lang_french
+            "qaa" -> R.string.lang_original
+            "mul" -> R.string.lang_multi
+            "nar" -> R.string.lang_audio_description
+            else -> null
+        }
+        return known?.let { UiText.res(it) } ?: UiText.Raw(code.uppercase(Locale.ROOT))
     }
 }

@@ -49,7 +49,7 @@ class TunerAvailabilityTest {
         assertEquals(2, verdict.total)
         assertEquals(2, verdict.users.size)
         assertTrue(verdict.users.all { it.kind == TunerUserKind.STREAM })
-        assertTrue(verdict.users.first().label.contains("192.168.1.21"))
+        assertTrue(verdict.users.first().address == "192.168.1.21")
     }
 
     @Test
@@ -121,7 +121,7 @@ class TunerAvailabilityTest {
             recordingReferences = listOf(rtl4),
         )
         val verdict = TunerAvailability.evaluate(snapshot, npo1, me) as TunerVerdict.Full
-        assertTrue(verdict.users.any { it.kind == TunerUserKind.RECORDING && it.label.contains("RTL 4") })
+        assertTrue(verdict.users.any { it.kind == TunerUserKind.RECORDING && it.name.contains("RTL 4") })
         assertTrue(TunerAvailability.evaluate(snapshot, "1:0:19:7D6:3F0:1:C00000:0:0:0:", me) is TunerVerdict.Free)
     }
 

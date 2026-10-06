@@ -15,9 +15,11 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.enigmacast.R
 import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
@@ -44,39 +46,39 @@ fun SettingsScreen(
             .padding(horizontal = 72.dp, vertical = 48.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        PanelHeader("Settings", receiver?.let { "${it.name}  ·  ${it.host}" } ?: "No receiver")
+        PanelHeader(stringResource(R.string.settings), receiver?.let { "${it.name}  ·  ${it.host}" } ?: stringResource(R.string.no_receiver))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionTile(EnigmaIcons.Tv, "Edit receiver", onEditReceiver, tone = TileTone.Primary)
-            ActionTile(Icons.Filled.Search, "OSD diagnostics", onDiagnostics)
-            ActionTile(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
+            ActionTile(EnigmaIcons.Tv, stringResource(R.string.edit_receiver), onEditReceiver, tone = TileTone.Primary)
+            ActionTile(Icons.Filled.Search, stringResource(R.string.osd_diagnostics), onDiagnostics)
+            ActionTile(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), onBack)
         }
         Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SettingsCard("Playback") {
-                ToggleRow("Fast playback", settings.playback.lowLatency, viewModel::setLowLatency)
-                ToggleRow("HDMI audio passthrough", settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
-                ToggleRow("DVB subtitles", settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
-                ToggleRow("Auto reconnect", settings.playback.autoReconnect, viewModel::setAutoReconnect)
+            SettingsCard(stringResource(R.string.playback)) {
+                ToggleRow(stringResource(R.string.fast_playback), settings.playback.lowLatency, viewModel::setLowLatency)
+                ToggleRow(stringResource(R.string.hdmi_audio_passthrough), settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
+                ToggleRow(stringResource(R.string.dvb_subtitles), settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
+                ToggleRow(stringResource(R.string.auto_reconnect), settings.playback.autoReconnect, viewModel::setAutoReconnect)
             }
-            SettingsCard("OSD") {
+            SettingsCard(stringResource(R.string.osd)) {
                 ChoiceRow(
-                    title = "OSD format",
+                    title = stringResource(R.string.osd_format_long),
                     options = listOf("PNG", "JPG"),
                     selectedIndex = if (settings.osd.format == "jpg") 1 else 0,
                     onSelect = { viewModel.setOsdFormat(if (it == 1) "jpg" else "png") },
                 )
-                ToggleRow("Fast OSD polling", settings.osd.fastPolling, viewModel::setFastPolling)
-                ToggleRow("OSD debug border", settings.osd.debugBorders, viewModel::setDebugBorders)
+                ToggleRow(stringResource(R.string.fast_osd_polling), settings.osd.fastPolling, viewModel::setFastPolling)
+                ToggleRow(stringResource(R.string.osd_debug_border), settings.osd.debugBorders, viewModel::setDebugBorders)
             }
-            SettingsCard("Connection") {
+            SettingsCard(stringResource(R.string.connection)) {
                 ToggleRow(
-                    title = "Allow self-signed certificate",
+                    title = stringResource(R.string.allow_self_signed),
                     checked = receiver?.allowInsecureCertificates == true,
                     onCheckedChange = viewModel::setInsecureCertificates,
                 )
             }
-            SettingsCard("Diagnostics") {
-                ToggleRow("Debug overlay", settings.debug.overlay, viewModel::setDebugOverlay)
-                ToggleRow("Verbose logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
+            SettingsCard(stringResource(R.string.diagnostics)) {
+                ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay)
+                ToggleRow(stringResource(R.string.verbose_logging), settings.debug.verboseLogging, viewModel::setVerboseLogging)
             }
         }
     }

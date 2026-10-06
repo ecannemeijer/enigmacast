@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.enigmacast.R
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverDetails
@@ -15,6 +16,8 @@ import com.enigmacast.domain.power.PowerStateTracker
 import com.enigmacast.domain.power.ReceiverPowerFlow
 import com.enigmacast.domain.power.ReceiverPowerState
 import com.enigmacast.domain.source.ReceiverInfoSource
+import com.enigmacast.util.UiText
+import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,11 +55,11 @@ class ReceiverPowerViewModel @Inject constructor(
         private set
     var details by mutableStateOf<ReceiverDetails?>(null)
         private set
-    var detailsError by mutableStateOf("")
+    var detailsError by mutableStateOf(UiText.Empty)
         private set
     var sleepTimer by mutableStateOf<SleepTimerStatus?>(null)
         private set
-    var sleepTimerError by mutableStateOf("")
+    var sleepTimerError by mutableStateOf(UiText.Empty)
         private set
     var sleepAction by mutableStateOf(SleepTimerAction.STANDBY)
         private set
@@ -67,7 +70,7 @@ class ReceiverPowerViewModel @Inject constructor(
     /** Faster while a restart is under way, so the dashboard notices the receiver coming back. */
     val pollIntervalMs: Long get() = if (restarting != null) 5_000L else 10_000L
 
-    val stateLabel: String get() = PowerCopy.stateLabel(powerState, restarting)
+    val stateLabel: UiText get() = PowerCopy.stateLabel(powerState, restarting)
 
     /** One light `/api/powerstate` request. Never throws except for cancellation. */
     suspend fun poll() {
@@ -102,11 +105,11 @@ class ReceiverPowerViewModel @Inject constructor(
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
             try {
                 details = infoSource.details(receiver)
-                detailsError = ""
+                detailsError = UiText.Empty
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                detailsError = error.message ?: "Info niet beschikbaar"
+                detailsError = error.uiMessage(UiText.res(R.string.power_info_unavailable))
             }
             loadSleepTimer()
         }
@@ -121,12 +124,12 @@ class ReceiverPowerViewModel @Inject constructor(
                 val action = sleepAction
                 val updated = infoSource.setSleepTimer(receiver, minutes, action, enabled = minutes > 0)
                 sleepTimer = updated
-                sleepTimerError = ""
+                sleepTimerError = UiText.Empty
                 showFeedback(PowerCopy.sleepResult(minutes, action))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                showFeedback(PowerFeedback("Slaaptimer mislukt: ${error.message ?: "geen verbinding"}", isError = true))
+                showFeedback(PowerFeedback(UiText.res(R.string.sleep_failed, error.uiMessage(UiText.res(R.string.power_no_connection))), isError = true))
             } finally {
                 sleepBusy = false
             }
@@ -147,12 +150,12 @@ class ReceiverPowerViewModel @Inject constructor(
             val status = infoSource.sleepTimer(receiver)
             sleepTimer = status
             sleepAction = status.action
-            sleepTimerError = ""
+            sleepTimerError = UiText.Empty
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
             sleepTimer = null
-            sleepTimerError = error.message ?: "Slaaptimer niet beschikbaar"
+            sleepTimerError = error.uiMessage(UiText.res(R.string.sleep_unavailable))
         }
     }
 
@@ -186,7 +189,7 @@ class ReceiverPowerViewModel @Inject constructor(
             try {
                 val receiver = settingsRepository.current().activeReceiver()
                 if (receiver == null) {
-                    showFeedback(PowerFeedback("Geen ontvanger ingesteld", isError = true))
+                    showFeedback(PowerFeedback(UiText.res(R.string.power_no_receiver), isError = true))
                     return@launch
                 }
                 val outcome = ReceiverPowerFlow.run(
@@ -213,9 +216,9 @@ class ReceiverPowerViewModel @Inject constructor(
         // A command reports its own result; a short network blip is not worth a message.
         if (busyAction == null) {
             if (event == PowerEvent.WokeUp && (wasRestarting || wasStandby)) {
-                showFeedback(PowerFeedback("Ontvanger staat weer aan", isError = false))
+                showFeedback(PowerFeedback(UiText.res(R.string.power_back_on), isError = false))
             } else if (event == PowerEvent.WentToStandby) {
-                showFeedback(PowerFeedback("Ontvanger is in stand-by gegaan; de stream is gestopt", isError = false))
+                showFeedback(PowerFeedback(UiText.res(R.string.power_went_standby), isError = false))
             }
         }
         _events.tryEmit(event)
