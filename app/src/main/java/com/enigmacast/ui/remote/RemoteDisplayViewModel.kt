@@ -143,6 +143,9 @@ class RemoteDisplayViewModel @Inject constructor(
 
     fun player() = playback.exoPlayer()
 
+    /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
+    val audioPassthroughActive get() = playback.audioPassthroughActive
+
     fun dismissExitDialog() {
         _ui.update { it.copy(showExitDialog = false) }
     }

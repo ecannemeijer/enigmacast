@@ -260,6 +260,64 @@ fun ChoiceChip(
     }
 }
 
+/**
+ * A value that moves in steps with two buttons, e.g. an audio delay. The value sits
+ * between the buttons so left/right on the D-pad walks naturally through the row.
+ * The buttons stay enabled at the ends of the range: a button that disables itself
+ * while focused would throw D-pad focus out of the page. [onDecrease] and
+ * [onIncrease] clamp instead.
+ */
+@Composable
+fun StepperRow(
+    title: String,
+    value: String,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+    decreaseLabel: String = "−",
+    increaseLabel: String = "+",
+    onReset: (() -> Unit)? = null,
+    badge: String? = null,
+) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = EnigmaColors.Text, fontSize = 15.sp)
+            if (!badge.isNullOrBlank()) {
+                Spacer(Modifier.width(8.dp))
+                StatusPill(badge, EnigmaColors.Success)
+            }
+        }
+        if (!description.isNullOrBlank()) {
+            Text(
+                description,
+                color = EnigmaColors.Muted,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            ChoiceChip(label = decreaseLabel, selected = false, onClick = onDecrease)
+            Text(
+                value,
+                color = EnigmaColors.Accent,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.widthIn(min = 72.dp),
+            )
+            ChoiceChip(label = increaseLabel, selected = false, onClick = onIncrease)
+            if (onReset != null) {
+                ChoiceChip(label = "0", selected = false, onClick = onReset)
+            }
+        }
+    }
+}
+
 enum class TileTone {
     Normal,
     Primary,

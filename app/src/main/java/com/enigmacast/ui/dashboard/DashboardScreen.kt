@@ -77,6 +77,7 @@ import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.EpgEvent
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.playback.AudioSync
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
@@ -97,6 +98,7 @@ import com.enigmacast.ui.theme.NavItem
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TileTone
+import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvConfirmDialog
 
@@ -825,6 +827,8 @@ private fun SettingsHub(
                         settings.playback.autoReconnect,
                         settings.playback.hdmiPassthrough,
                         settings.playback.subtitlesEnabled,
+                        settings.playback.audioDelayPcmMs,
+                        settings.playback.audioDelayPassthroughMs,
                         viewModel,
                     )
                     SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
@@ -862,10 +866,13 @@ private fun PlaybackSettingsPanel(
     autoReconnect: Boolean,
     hdmiPassthrough: Boolean,
     subtitlesEnabled: Boolean,
+    audioDelayPcmMs: Int,
+    audioDelayPassthroughMs: Int,
     viewModel: SettingsViewModel,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
+    val passthroughActive by remote.audioPassthroughActive.collectAsStateWithLifecycle()
     SettingsCard("Beeld") {
         ChoiceRow(
             title = "Buffer",
@@ -888,6 +895,14 @@ private fun PlaybackSettingsPanel(
             onSelect = { viewModel.setHdmiPassthrough(it == 1) },
         )
     }
+    AudioSyncCard(
+        pcmMs = audioDelayPcmMs,
+        passthroughMs = audioDelayPassthroughMs,
+        passthroughActive = passthroughActive,
+        streamVisible = playback.playerState.playbackState == "READY" && playback.playerState.videoWidth > 0,
+        player = { remote.player() },
+        viewModel = viewModel,
+    )
     SettingsCard("Ondertiteling") {
         ChoiceRow(
             title = "DVB-ondertiteling",
@@ -909,6 +924,68 @@ private fun PlaybackSettingsPanel(
             onCheckedChange = viewModel::setAutoReconnect,
         )
     }
+}
+
+/**
+ * Audio delay per output. While a stream plays, a small preview sits next to the
+ * controls so the user can watch lips while stepping; each step applies at once.
+ */
+@Composable
+private fun AudioSyncCard(
+    pcmMs: Int,
+    passthroughMs: Int,
+    passthroughActive: Boolean?,
+    streamVisible: Boolean,
+    player: () -> androidx.media3.common.Player,
+    viewModel: SettingsViewModel,
+) {
+    SettingsCard("Geluid synchroniseren") {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Loopt het geluid achter op het beeld? Zet de waarde hoger tot lippen en stem gelijk lopen.",
+                    color = EnigmaColors.Muted,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+                AudioDelayRow("Stereo", pcmMs, passthroughActive == false, passthrough = false, viewModel)
+                AudioDelayRow("HDMI-passthrough", passthroughMs, passthroughActive == true, passthrough = true, viewModel)
+            }
+            if (streamVisible) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 6.dp, end = 6.dp)
+                        .width(240.dp)
+                        .aspectRatio(16f / 9f)
+                        .background(Color.Black, RoundedCornerShape(8.dp)),
+                ) {
+                    EnigmaVideoTexture(player(), emptyList(), Modifier.fillMaxSize())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AudioDelayRow(
+    title: String,
+    valueMs: Int,
+    active: Boolean,
+    passthrough: Boolean,
+    viewModel: SettingsViewModel,
+) {
+    StepperRow(
+        title = title,
+        value = AudioSync.label(valueMs),
+        description = AudioSync.describe(valueMs),
+        decreaseLabel = "−${AudioSync.STEP_MS}",
+        increaseLabel = "+${AudioSync.STEP_MS}",
+        onDecrease = { viewModel.stepAudioDelay(passthrough, -1) },
+        onIncrease = { viewModel.stepAudioDelay(passthrough, 1) },
+        onReset = { viewModel.resetAudioDelay(passthrough) },
+        badge = if (active) "nu actief" else null,
+    )
 }
 
 @Composable
