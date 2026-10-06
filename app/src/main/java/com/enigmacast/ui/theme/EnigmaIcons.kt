@@ -30,6 +30,13 @@ object EnigmaIcons {
     internal const val TV_PATH =
         "M21,3L3,3c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5" +
             "c0,-1.1 -0.9,-2 -2,-2zM21,17L3,17L3,5h18v12z"
+    internal const val PALETTE_PATH =
+        "M12,3c-4.97,0 -9,4.03 -9,9s4.03,9 9,9c0.83,0 1.5,-0.67 1.5,-1.5c0,-0.39 -0.15,-0.74 -0.39,-1.01" +
+            "c-0.23,-0.26 -0.38,-0.61 -0.38,-0.99c0,-0.83 0.67,-1.5 1.5,-1.5L16,16c2.76,0 5,-2.24 5,-5" +
+            "c0,-4.42 -4.03,-8 -9,-8zM6.5,12c-0.83,0 -1.5,-0.67 -1.5,-1.5S5.67,9 6.5,9 8,9.67 8,10.5 7.33,12 6.5,12z" +
+            "M9.5,8C8.67,8 8,7.33 8,6.5S8.67,5 9.5,5s1.5,0.67 1.5,1.5S10.33,8 9.5,8zM14.5,8c-0.83,0 -1.5,-0.67 -1.5,-1.5" +
+            "S13.67,5 14.5,5s1.5,0.67 1.5,1.5S15.33,8 14.5,8zM17.5,12c-0.83,0 -1.5,-0.67 -1.5,-1.5S16.67,9 17.5,9" +
+            "s1.5,0.67 1.5,1.5 -0.67,1.5 -1.5,1.5z"
     internal const val LAYERS_PATH =
         "M11.99,18.54l-7.37,-5.73L3,14.07l9,7 9,-7 -1.63,-1.27 -7.38,5.74zM12,16l7.36,-5.73L21,9l-9,-7 -9,7 1.63,1.27L12,16z"
 
@@ -39,6 +46,7 @@ object EnigmaIcons {
     val Timer: ImageVector by lazy { icon("Timer", TIMER_PATH) }
     val Tv: ImageVector by lazy { icon("Tv", TV_PATH) }
     val Layers: ImageVector by lazy { icon("Layers", LAYERS_PATH) }
+    val Palette: ImageVector by lazy { icon("Palette", PALETTE_PATH) }
 
     private fun icon(name: String, path: String): ImageVector {
         return ImageVector.Builder(

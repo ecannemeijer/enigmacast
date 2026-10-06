@@ -71,6 +71,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.BuildConfig
 import com.enigmacast.R
@@ -112,6 +113,7 @@ private enum class DashSection {
     Stream,
     Receiver,
     RcInfo,
+    Skins,
     Settings,
 }
 
@@ -144,6 +146,7 @@ fun DashboardScreen(
     val receiverMenuFocus = remember { FocusRequester() }
     val receiverPageFocus = remember { FocusRequester() }
     val rcMenuFocus = remember { FocusRequester() }
+    val skinsMenuFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
     val bouquetFocus = remember { FocusRequester() }
@@ -158,6 +161,7 @@ fun DashboardScreen(
                         DashSection.Stream -> streamFocus.requestFocus()
                         DashSection.Receiver -> receiverMenuFocus.requestFocus()
                         DashSection.RcInfo -> rcMenuFocus.requestFocus()
+                        DashSection.Skins -> skinsMenuFocus.requestFocus()
                         DashSection.Settings -> settingsMenuFocus.requestFocus()
                     }
                 }
@@ -242,6 +246,14 @@ fun DashboardScreen(
                     onClick = { section = DashSection.RcInfo },
                 )
                 NavItem(
+                    icon = EnigmaIcons.Palette,
+                    label = "OSD skins",
+                    selected = section == DashSection.Skins,
+                    modifier = Modifier.focusRequester(skinsMenuFocus),
+                    onFocus = { section = DashSection.Skins },
+                    onClick = { section = DashSection.Skins },
+                )
+                NavItem(
                     icon = Icons.Filled.Settings,
                     label = "Settings",
                     selected = section == DashSection.Settings,
@@ -299,6 +311,7 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
                         DashSection.RcInfo -> RcInfoPanel(Modifier.fillMaxSize())
+                        DashSection.Skins -> OsdSkinsPanel(Modifier.fillMaxSize())
                         DashSection.Settings -> SettingsHub(settingsPageFocus, settingsMenuFocus, Modifier.fillMaxSize())
                     }
                 }
@@ -775,6 +788,35 @@ private fun EpgRow(
             modifier = Modifier.width(108.dp),
         )
         Text(title, color = color, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * Placeholder for choosing the look of the app-drawn OSD. A future skin list goes in
+ * here (one entry per [com.enigmacast.domain.model.OsdSkin], saved in AppSettings.osdSkin).
+ */
+@Composable
+private fun OsdSkinsPanel(modifier: Modifier = Modifier) {
+    Column(modifier) {
+        PanelHeader("OSD skins", "Hier kun je straks een skin voor het OSD kiezen.")
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(EnigmaIcons.Palette, contentDescription = null, tint = EnigmaColors.Accent, modifier = Modifier.size(32.dp))
+                Text("Coming soon", color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Een skin verandert straks de zenderbalk, de zenderlijst en de meldingen die EnigmaCast zelf tekent.",
+                    color = EnigmaColors.Muted,
+                    fontSize = 13.sp,
+                )
+            }
+        }
     }
 }
 
