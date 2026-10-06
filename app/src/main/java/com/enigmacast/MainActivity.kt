@@ -104,6 +104,8 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
                 onMiniPlayer = appViewModel::showMiniPlayer,
                 onExit = appViewModel::exit,
                 onBindBack = { appViewModel.onDashboardBack = it },
+                focusPlayingChannel = appViewModel.focusPlayingChannel,
+                onPlayingChannelFocused = appViewModel::playingChannelFocused,
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,

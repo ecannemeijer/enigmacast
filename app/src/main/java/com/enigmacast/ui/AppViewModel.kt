@@ -107,6 +107,7 @@ class AppViewModel @Inject constructor(
 
     fun openStream() {
         decided = true
+        focusPlayingChannel = false
         streamRunning = true
         screen = AppScreen.Remote
     }
@@ -115,9 +116,21 @@ class AppViewModel @Inject constructor(
         streamRunning = true
     }
 
+    /**
+     * Set when Back leaves the full-screen player: the dashboard then puts focus on the
+     * channel that was playing instead of on the "Stream" menu item.
+     */
+    var focusPlayingChannel by mutableStateOf(false)
+        private set
+
     fun showDashboard() {
         decided = true
+        focusPlayingChannel = true
         screen = AppScreen.Dashboard
+    }
+
+    fun playingChannelFocused() {
+        focusPlayingChannel = false
     }
 
     fun openConnection() {

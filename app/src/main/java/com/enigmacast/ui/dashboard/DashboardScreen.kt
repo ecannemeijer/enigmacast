@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,6 +91,7 @@ import com.enigmacast.ui.power.powerStateColor
 import com.enigmacast.ui.settings.SettingsViewModel
 import com.enigmacast.ui.theme.FeedbackSnackbar
 import com.enigmacast.ui.theme.StatusPill
+import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
@@ -127,12 +129,15 @@ fun DashboardScreen(
     onMiniPlayer: () -> Unit,
     onExit: () -> Unit,
     onBindBack: ((() -> Boolean)?) -> Unit,
+    focusPlayingChannel: Boolean = false,
+    onPlayingChannelFocused: () -> Unit = {},
     guideModel: StreamGuideViewModel = hiltViewModel(),
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
 ) {
     var section by remember { mutableStateOf(DashSection.Stream) }
     var contentFocused by remember { mutableStateOf(false) }
     val streamFocus = remember { FocusRequester() }
+    var streamItemFocused by remember { mutableStateOf(false) }
     val channelFocus = remember { FocusRequester() }
     val epgFocus = remember { FocusRequester() }
     val receiverMenuFocus = remember { FocusRequester() }
@@ -212,6 +217,7 @@ fun DashboardScreen(
                     selected = section == DashSection.Stream,
                     modifier = Modifier
                         .focusRequester(streamFocus)
+                        .onFocusChanged { streamItemFocused = it.isFocused }
                         .focusProperties { right = channelFocus },
                     onFocus = { section = DashSection.Stream },
                     onClick = onStream,
@@ -278,6 +284,9 @@ fun DashboardScreen(
                             epgFocus,
                             bouquetFocus,
                             streamFocus,
+                            { streamItemFocused },
+                            focusPlayingChannel,
+                            onPlayingChannelFocused,
                             settingsMenuFocus,
                             onMiniPlayer,
                             onStream,
@@ -328,6 +337,9 @@ private fun StreamPanel(
     epgFocus: FocusRequester,
     bouquetFocus: FocusRequester,
     menuFocus: FocusRequester,
+    menuFocused: () -> Boolean,
+    focusPlayingChannel: Boolean,
+    onPlayingChannelFocused: () -> Unit,
     settingsFocus: FocusRequester,
     onMiniPlayer: () -> Unit,
     onFullscreen: () -> Unit,
@@ -359,6 +371,16 @@ private fun StreamPanel(
     var bouquetsOpen by remember { mutableStateOf(false) }
     var bouquetOpenToken by remember { mutableIntStateOf(0) }
     var channelFocusToken by remember { mutableIntStateOf(0) }
+    // The dashboard always starts with focus on the "Stream" menu item, so Back from the
+    // full-screen player used to land there (and OK reopened the player). After Back, put
+    // focus on the channel that was playing as soon as the channel list is there, unless
+    // the user already moved away from "Stream" in the meantime.
+    LaunchedEffect(focusPlayingChannel, channels.isNotEmpty()) {
+        if (!focusPlayingChannel || channels.isEmpty()) return@LaunchedEffect
+        withFrameNanos { } // let the initial "Stream" focus request land first
+        if (menuFocused()) channelFocusToken += 1
+        onPlayingChannelFocused()
+    }
     val shown = focusedEvent?.takeIf { selected -> events.any { it.beginEpochSec == selected.beginEpochSec && it.title == selected.title } }
         ?: guide?.currentEvent
     Column(modifier = Modifier.fillMaxSize()) {
@@ -605,7 +627,7 @@ private fun ChannelColumn(
     LaunchedEffect(channelFocusToken) {
         if (channelFocusToken == 0) return@LaunchedEffect
         if (channels.isNotEmpty()) listState.scrollToItem(anchor)
-        runCatching { channelFocus.requestFocus() }
+        channelFocus.requestWhenReady()
     }
     Column(modifier.fillMaxHeight()) {
         Text(
