@@ -25,6 +25,7 @@ import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.TunerSnapshot
 import com.enigmacast.util.EnigmaLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -190,6 +191,30 @@ class OpenWebifApi @Inject constructor(
 
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
         return OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference)))
+    }
+
+    /**
+     * `/api/about` carries the tuner list and stream clients and is rebuilt on every call.
+     * `/api/statusinfo` adds standby and the service on screen. The timer list is only
+     * read when a tuner shows a recording, to learn which transponder it holds.
+     */
+    suspend fun tunerSnapshot(config: ReceiverConfig): TunerSnapshot {
+        val about = get(config, endpoints.about(config))
+        val status = runCatching { get(config, endpoints.statusInfo(config)) }.getOrNull()
+        val first = OpenWebifJson.parseTunerSnapshot(about, status, null)
+        if (first.tuners.none { it.recording.isNotBlank() }) return first
+        val timers = runCatching { get(config, endpoints.timerList(config)) }.getOrNull()
+        return OpenWebifJson.parseTunerSnapshot(about, status, timers)
+    }
+
+    suspend fun bouquetStartPositions(config: ReceiverConfig): Map<String, Int> {
+        return OpenWebifJson.parseBouquetStartPositions(get(config, endpoints.bouquetStartPositions(config)))
+    }
+
+    suspend fun picon(config: ReceiverConfig, path: String): ByteArray? {
+        val response = execute(config, endpoints.picon(config, path), accept = "image/*")
+        if (response.code !in 200..299 || response.bytes.isEmpty()) return null
+        return response.bytes
     }
 
     suspend fun testConnection(config: ReceiverConfig): ConnectionTestResult {

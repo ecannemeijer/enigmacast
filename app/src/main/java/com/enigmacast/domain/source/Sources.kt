@@ -17,6 +17,7 @@ import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.domain.tuner.TunerSnapshot
 
 interface OsdSource {
     suspend fun grab(config: ReceiverConfig, format: GrabFormat, mode: GrabMode): GrabbedImage
@@ -52,4 +53,15 @@ interface ReceiverInfoSource {
     suspend fun volume(config: ReceiverConfig): VolumeStatus
     suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry>
     suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry>
+}
+
+interface TunerStatusSource {
+    /** What the receiver's tuners are doing now: own picture, recordings and stream clients. */
+    suspend fun snapshot(config: ReceiverConfig): TunerSnapshot
+
+    /** Bouquet reference → Enigma2 number before its first channel, for channel numbers. */
+    suspend fun bouquetStartPositions(config: ReceiverConfig): Map<String, Int>
+
+    /** Raw picon bytes from the receiver, or null when it has none. */
+    suspend fun picon(config: ReceiverConfig, path: String): ByteArray?
 }

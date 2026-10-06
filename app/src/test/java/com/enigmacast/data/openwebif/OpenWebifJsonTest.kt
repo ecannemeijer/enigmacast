@@ -170,4 +170,58 @@ class OpenWebifJsonTest {
             OpenWebifJson.parseSleepTimer("null")
         }
     }
+
+    @Test
+    fun parsesTunersStreamsStandbyAndRunningRecordings() {
+        val about = """
+            {"info":{
+              "tuners":[
+                {"name":"Tuner A","type":"BCM45208 (DVB-S2)","rec":"19.2°E / RTL 4","live":""},
+                {"name":"Tuner B","type":"BCM45208 (DVB-S2)","rec":"","live":"","stream":"SBS6"}
+              ],
+              "streams":[
+                {"ref":"1:0:19:1B1D:3F6:1:C00000:0:0:0:","name":"SBS6","eventname":"Nieuws","ip":"::ffff:192.168.1.22","type":"S","tuner_number":1}
+              ]
+            }}
+        """.trimIndent()
+        val status = """{"inStandby":"true","currservice_serviceref":"1:0:19:4651:3FC:1:C00000:0:0:0:"}"""
+        val timers = """
+            {"timers":[
+              {"serviceref":"1:0:19:7D5:3F0:1:C00000:0:0:0:","state":2,"justplay":0},
+              {"serviceref":"1:0:19:1:1:1:C00000:0:0:0:","state":0,"justplay":0},
+              {"serviceref":"1:0:19:2:2:2:C00000:0:0:0:","state":2,"justplay":1}
+            ]}
+        """.trimIndent()
+        val snapshot = OpenWebifJson.parseTunerSnapshot(about, status, timers)
+        assertEquals(2, snapshot.tuners.size)
+        assertEquals("19.2°E / RTL 4", snapshot.tuners[0].recording)
+        assertEquals("SBS6", snapshot.tuners[1].stream)
+        assertEquals(1, snapshot.streams.single().tunerNumber)
+        assertEquals("::ffff:192.168.1.22", snapshot.streams.single().address)
+        assertEquals(true, snapshot.inStandby)
+        assertEquals("", snapshot.liveReference)
+        assertEquals(listOf("1:0:19:7D5:3F0:1:C00000:0:0:0:"), snapshot.recordingReferences)
+    }
+
+    @Test
+    fun parsesChannelPositionsPiconsAndBouquetStarts() {
+        val services = """
+            {"services":[
+              {"pos":0,"servicename":"Nieuws","servicereference":"1:64:0:0:0:0:0:0:0:0::Nieuws","picon":"/images/default_picon.png"},
+              {"pos":1,"servicename":"NPO 1","servicereference":"1:0:19:4651:3FC:1:C00000:0:0:0:","picon":"/picon/1_0_19_4651_3FC_1_C00000_0_0_0.png"}
+            ]}
+        """.trimIndent()
+        val parsed = OpenWebifJson.parseServices(services)
+        assertEquals("", parsed[0].picon)
+        assertEquals(1, parsed[1].number)
+        assertEquals("/picon/1_0_19_4651_3FC_1_C00000_0_0_0.png", parsed[1].picon)
+        val root = """
+            {"services":[
+              {"servicename":"Favourites (TV)","servicereference":"1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.favourites.tv\" ORDER BY bouquet","startpos":0},
+              {"servicename":"Sport","servicereference":"1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.sport.tv\" ORDER BY bouquet","startpos":120}
+            ]}
+        """.trimIndent()
+        val starts = OpenWebifJson.parseBouquetStartPositions(root)
+        assertEquals(120, starts["1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"userbouquet.sport.tv\" ORDER BY bouquet"])
+    }
 }

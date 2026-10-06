@@ -97,4 +97,29 @@ class OpenWebifEndpointsTest {
             endpoints.stream(secure, "1:0:1:0:0:0:0:0:0:0:"),
         )
     }
+
+    @Test
+    fun streamUrlUsesTheStreamPortAndNeverTheWebPort() {
+        val custom = config.copy(httpPort = 8080, useHttps = true, streamingPort = 17999)
+        assertEquals(
+            "http://192.168.1.100:17999/1%3A0%3A19%3A4651%3A3FC%3A1%3AC00000%3A0%3A0%3A0%3A",
+            endpoints.stream(custom, "1:0:19:4651:3FC:1:C00000:0:0:0:"),
+        )
+    }
+
+    @Test
+    fun streamAuthorizationIsSentOnlyWithAUserName() {
+        assertEquals(null, endpoints.streamAuthorization(config))
+        assertEquals("Basic cm9vdDpnZWhlaW0=", endpoints.streamAuthorization(config.copy(username = "root", password = "geheim")))
+    }
+
+    @Test
+    fun servicesAskForPiconsAndRootListGivesStartPositions() {
+        assertEquals(
+            "http://192.168.1.100/api/getservices?sRef=1%3A7%3A1&picon=1",
+            endpoints.services(config, "1:7:1"),
+        )
+        assertEquals("http://192.168.1.100/api/getservices", endpoints.bouquetStartPositions(config))
+        assertEquals("http://192.168.1.100/picon/1_0_1.png", endpoints.picon(config, "/picon/1_0_1.png"))
+    }
 }

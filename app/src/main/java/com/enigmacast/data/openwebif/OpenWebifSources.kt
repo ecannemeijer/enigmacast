@@ -21,6 +21,8 @@ import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.source.TunerStatusSource
+import com.enigmacast.domain.tuner.TunerSnapshot
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -100,4 +102,13 @@ class OpenWebifReceiverInfoSource @Inject constructor(
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
         return api.services(config, bouquetReference)
     }
+}
+
+@Singleton
+class OpenWebifTunerStatusSource @Inject constructor(
+    private val api: OpenWebifApi,
+) : TunerStatusSource {
+    override suspend fun snapshot(config: ReceiverConfig): TunerSnapshot = api.tunerSnapshot(config)
+    override suspend fun bouquetStartPositions(config: ReceiverConfig): Map<String, Int> = api.bouquetStartPositions(config)
+    override suspend fun picon(config: ReceiverConfig, path: String): ByteArray? = api.picon(config, path)
 }

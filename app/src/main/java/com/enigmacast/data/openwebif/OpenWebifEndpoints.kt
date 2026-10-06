@@ -62,10 +62,19 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
 
     fun bouquets(config: ReceiverConfig): String = api(config, "/api/bouquets")
 
+    /** `picon=1` makes OpenWebif add each channel's picon path (or its default picon). */
     fun services(config: ReceiverConfig, bouquetReference: String): String {
         val encoded = encode(bouquetReference)
-        return api(config, "/api/getservices?sRef=$encoded")
+        return api(config, "/api/getservices?sRef=$encoded&picon=1")
     }
+
+    /** Without `sRef` OpenWebif lists the TV bouquets with `startpos`, the number before each bouquet's first channel. */
+    fun bouquetStartPositions(config: ReceiverConfig): String = api(config, "/api/getservices")
+
+    fun timerList(config: ReceiverConfig): String = api(config, "/api/timerlist")
+
+    /** A path from OpenWebif such as `/picon/1_0_19_….png`, on the web interface host. */
+    fun picon(config: ReceiverConfig, path: String): String = api(config, path)
 
     fun zap(config: ReceiverConfig, serviceReference: String): String {
         return api(config, "/api/zap?sRef=${encode(serviceReference)}")
@@ -82,6 +91,16 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
 
     fun stream(config: ReceiverConfig, serviceReference: String): String {
         return "http://${config.host}:${config.streamingPort}/${encode(serviceReference)}"
+    }
+
+    /**
+     * Enigma2's stream server checks `Authorization: Basic` against the receiver's system
+     * account when "stream authentication" is on, and ignores the header otherwise. The
+     * same user and password as for OpenWebif are sent whenever a user name is set.
+     */
+    fun streamAuthorization(config: ReceiverConfig): String? {
+        if (config.username.isEmpty()) return null
+        return okhttp3.Credentials.basic(config.username, config.password)
     }
 
     fun encode(value: String): String {

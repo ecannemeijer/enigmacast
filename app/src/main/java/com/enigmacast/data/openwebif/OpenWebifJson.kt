@@ -10,6 +10,9 @@ import com.enigmacast.domain.model.ReceiverDetails
 import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
+import com.enigmacast.domain.tuner.StreamClient
+import com.enigmacast.domain.tuner.TunerSlot
+import com.enigmacast.domain.tuner.TunerSnapshot
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -207,6 +210,68 @@ internal object OpenWebifJson {
 
     fun parseServices(body: String): List<BouquetEntry> = parseServiceList(body, "services")
 
+    /** Root `/api/getservices`: bouquet reference → number of channels before that bouquet. */
+    fun parseBouquetStartPositions(body: String): Map<String, Int> {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyMap()
+        val array = findArray(root, "services") ?: return emptyMap()
+        return array.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val reference = item.primitive("servicereference") ?: return@mapNotNull null
+            val start = item.primitive("startpos")?.toIntOrNull() ?: return@mapNotNull null
+            reference to start
+        }.toMap()
+    }
+
+    /**
+     * Tuner use from `/api/about` (tuners with `live`/`rec`/`stream` texts and the stream
+     * clients), `/api/statusinfo` (standby and the service on screen) and, when given,
+     * `/api/timerlist` (running recordings, state 2, not zap-only).
+     */
+    fun parseTunerSnapshot(aboutBody: String, statusBody: String?, timerBody: String?): TunerSnapshot {
+        val root = openWebifJson.parseToJsonElement(aboutBody).jsonObject
+        val info = root["info"] as? JsonObject ?: root
+        val tuners = (info["tuners"] as? JsonArray).orEmpty().mapIndexedNotNull { index, element ->
+            val tuner = element as? JsonObject ?: return@mapIndexedNotNull null
+            TunerSlot(
+                index = index,
+                name = tuner.primitive("name").orEmpty(),
+                type = tuner.primitive("type").orEmpty(),
+                live = tuner.primitive("live").orEmpty(),
+                recording = tuner.primitive("rec").orEmpty(),
+                stream = tuner.primitive("stream").orEmpty(),
+            )
+        }
+        val streams = (info["streams"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val stream = element as? JsonObject ?: return@mapNotNull null
+            StreamClient(
+                reference = stream.primitive("ref").orEmpty(),
+                name = unescape(stream.primitive("name").orEmpty()),
+                address = stream.primitive("ip").orEmpty(),
+                tunerNumber = stream.primitive("tuner_number")?.toIntOrNull()?.takeIf { it >= 0 },
+                transcoding = stream.primitive("type").equals("T", ignoreCase = true),
+            )
+        }
+        val status = statusBody?.let { runCatching { openWebifJson.parseToJsonElement(it).jsonObject }.getOrNull() }
+        val standby = status?.primitive("inStandby")?.let { it.equals("true", ignoreCase = true) }
+        val live = status?.primitive("currservice_serviceref").orEmpty()
+        val recordings = timerBody?.let { body ->
+            val timers = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull()
+            (timers?.get("timers") as? JsonArray).orEmpty().mapNotNull { element ->
+                val timer = element as? JsonObject ?: return@mapNotNull null
+                val running = timer.primitive("state")?.toIntOrNull() == 2
+                val zapOnly = timer.primitive("justplay")?.let { it == "1" || it.equals("true", true) } == true
+                if (running && !zapOnly) timer.primitive("serviceref") else null
+            }
+        }.orEmpty()
+        return TunerSnapshot(
+            tuners = tuners,
+            streams = streams,
+            inStandby = standby,
+            liveReference = if (standby == true) "" else live,
+            recordingReferences = recordings,
+        )
+    }
+
     fun isSuccess(body: String): Boolean {
         val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return false
         val result = root["result"] ?: return true
@@ -233,7 +298,9 @@ internal object OpenWebifJson {
                 is JsonObject -> {
                     val name = text(element, "servicename", "name").orEmpty()
                     val reference = text(element, "servicereference", "reference", "ref").orEmpty()
-                    if (reference.isBlank()) null else BouquetEntry(name, reference)
+                    val position = element.primitive("pos")?.toIntOrNull() ?: 0
+                    val picon = element.primitive("picon").orEmpty().takeUnless { it.contains("default_picon") }.orEmpty()
+                    if (reference.isBlank()) null else BouquetEntry(name, reference, position, picon)
                 }
                 else -> null
             }
