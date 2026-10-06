@@ -26,18 +26,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -70,7 +67,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -85,9 +81,18 @@ import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.ui.settings.SettingsViewModel
-import com.enigmacast.ui.theme.TvButton
+import com.enigmacast.ui.theme.ActionTile
+import com.enigmacast.ui.theme.ChoiceRow
+import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.EnigmaIcons
+import com.enigmacast.ui.theme.InfoRow
+import com.enigmacast.ui.theme.NavItem
+import com.enigmacast.ui.theme.PanelHeader
+import com.enigmacast.ui.theme.SettingsCard
+import com.enigmacast.ui.theme.TileTone
+import com.enigmacast.ui.theme.ToggleRow
+import com.enigmacast.ui.theme.TvConfirmDialog
 
-private val SubmenuSurface = Color.Black
 private val FocusedButton = Color(0xFF8A5610)
 private val FocusedButtonText = Color.White
 
@@ -122,11 +127,6 @@ fun DashboardScreen(
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
     val bouquetFocus = remember { FocusRequester() }
-    val density = LocalDensity.current
-    var contentTop by remember { mutableIntStateOf(0) }
-    var rcTop by remember { mutableIntStateOf(0) }
-    var settingsTop by remember { mutableIntStateOf(0) }
-    fun alignedHeight(itemTop: Int) = with(density) { (itemTop - contentTop).coerceAtLeast(0).toDp() }
     DisposableEffect(contentFocused, section, guideModel.askWake) {
         onBindBack {
             if (guideModel.askWake) {
@@ -150,79 +150,79 @@ fun DashboardScreen(
     LaunchedEffect(Unit) {
         streamFocus.requestFocus()
     }
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         Row(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
-                    .width(188.dp)
+                    .width(200.dp)
                     .fillMaxHeight()
-                    .background(Color.Black)
-                    .padding(horizontal = 10.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                    .background(EnigmaColors.Canvas)
+                    .padding(horizontal = 12.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Image(
                     painter = painterResource(R.drawable.enigmacast_logo),
                     contentDescription = "EnigmaCast",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                        .padding(horizontal = 4.dp)
+                        .padding(bottom = 14.dp),
                     contentScale = ContentScale.FillWidth,
                 )
-                MenuEntry(
+                NavItem(
                     icon = Icons.Filled.PlayArrow,
                     label = "Stream",
+                    selected = section == DashSection.Stream,
                     modifier = Modifier
                         .focusRequester(streamFocus)
                         .focusProperties { right = channelFocus },
                     onFocus = { section = DashSection.Stream },
                     onClick = onStream,
                 )
-                MenuEntry(
+                NavItem(
                     icon = Icons.Filled.Info,
                     label = "RC Info",
-                    modifier = Modifier
-                        .focusRequester(rcMenuFocus)
-                        .onGloballyPositioned { rcTop = it.positionInRoot().y.roundToInt() },
+                    selected = section == DashSection.RcInfo,
+                    modifier = Modifier.focusRequester(rcMenuFocus),
                     onFocus = { section = DashSection.RcInfo },
                     onClick = { section = DashSection.RcInfo },
                 )
-                MenuEntry(
+                NavItem(
                     icon = Icons.Filled.Settings,
                     label = "Settings",
+                    selected = section == DashSection.Settings,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
-                        .focusProperties { right = settingsPageFocus }
-                        .onGloballyPositioned { settingsTop = it.positionInRoot().y.roundToInt() },
+                        .focusProperties { right = settingsPageFocus },
                     onFocus = { section = DashSection.Settings },
                     onClick = { section = DashSection.Settings },
                 )
-                MenuEntry(
+                Spacer(Modifier.height(8.dp))
+                NavItem(
                     icon = Icons.Filled.Close,
                     label = "Exit",
-                    onFocus = {},
+                    selected = false,
                     onClick = onExit,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    "${BuildConfig.VERSION_NAME}\nbuild ${BuildConfig.VERSION_CODE}",
-                    color = Color(0xFFB7C0D0),
+                    "${BuildConfig.VERSION_NAME}  ·  build ${BuildConfig.VERSION_CODE}",
+                    color = EnigmaColors.Subtle,
                     fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = 12.dp, bottom = 4.dp),
                 )
             }
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .background(Color.Black)
-                    .padding(start = 8.dp, top = 28.dp, end = 24.dp, bottom = 24.dp),
+                    .background(EnigmaColors.Canvas)
+                    .padding(start = 12.dp, top = 28.dp, end = 28.dp, bottom = 24.dp),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .onFocusChanged { contentFocused = it.hasFocus }
-                        .onGloballyPositioned { contentTop = it.positionInRoot().y.roundToInt() },
+                        .onFocusChanged { contentFocused = it.hasFocus },
                 ) {
                     when (section) {
                         DashSection.Stream -> StreamPanel(
@@ -235,88 +235,22 @@ fun DashboardScreen(
                             onMiniPlayer,
                             onStream,
                         )
-                        DashSection.RcInfo -> Column(Modifier.fillMaxSize()) {
-                            Spacer(Modifier.height(alignedHeight(rcTop)))
-                            RcInfoPanel(Modifier.weight(1f))
-                        }
-                        DashSection.Settings -> Column(Modifier.fillMaxSize()) {
-                            Spacer(Modifier.height(alignedHeight(settingsTop)))
-                            SettingsHub(settingsPageFocus, settingsMenuFocus, Modifier.weight(1f))
-                        }
+                        DashSection.RcInfo -> RcInfoPanel(Modifier.fillMaxSize())
+                        DashSection.Settings -> SettingsHub(settingsPageFocus, settingsMenuFocus, Modifier.fillMaxSize())
                     }
                 }
             }
         }
         if (guideModel.askWake) {
-            WakePrompt(
-                waking = guideModel.waking,
-                onYes = guideModel::confirmWake,
-                onNo = guideModel::declineWake,
+            TvConfirmDialog(
+                title = "De ontvanger staat uit",
+                message = if (guideModel.waking) "Bezig met aanzetten…" else "Zal ik de Enigma2 aanzetten?",
+                confirmLabel = "Ja, aanzetten",
+                dismissLabel = "Nee",
+                onConfirm = guideModel::confirmWake,
+                onDismiss = guideModel::declineWake,
+                busy = guideModel.waking,
             )
-        }
-    }
-}
-
-@Composable
-private fun WakePrompt(
-    waking: Boolean,
-    onYes: () -> Unit,
-    onNo: () -> Unit,
-) {
-    val yesFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        runCatching { yesFocus.requestFocus() }
-    }
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xE0101010)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 640.dp)
-                .background(Color(0xFF161616))
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text("De ontvanger staat uit.", color = Color.White, fontSize = 22.sp)
-            Text(
-                if (waking) "Bezig met aanzetten…" else "Zal ik de Enigma2 aanzetten?",
-                color = Color(0xFFB7C0D0),
-                fontSize = 18.sp,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Ja", onYes, modifier = Modifier.focusRequester(yesFocus), enabled = !waking)
-                TvButton("Nee", onNo, enabled = !waking)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MenuEntry(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    onFocus: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .onFocusChanged { if (it.isFocused) onFocus() },
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        colors = ButtonDefaults.colors(
-            containerColor = Color.Black,
-            contentColor = Color.White,
-            focusedContainerColor = FocusedButton,
-            focusedContentColor = FocusedButtonText,
-        ),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(label, fontSize = 13.sp)
         }
     }
 }
@@ -756,33 +690,38 @@ private fun EpgRow(
 
 @Composable
 private fun RcInfoPanel(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("Afstandsbediening", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        RcRow("Pijltjes", "Omhoog, omlaag, links, rechts")
-        RcRow("OK kort", "Bevestigen")
-        RcRow("OK vasthouden", "Enigma-menu")
-        RcRow("Back kort", "Exit op de tuner")
-        RcRow("Back vasthouden", "Terug naar EnigmaCast")
-        RcRow("Back in het menu", "App sluiten en stream stoppen")
-        RcRow("Info", "Infobalk")
-        RcRow("Guide", "EPG")
-        RcRow("P+ / P-", "Zender omhoog of omlaag")
-        RcRow("Kleurknoppen", "Rood, groen, geel, blauw")
-        RcRow("Blauw vasthouden", "Teletekst")
-        RcRow("0–9", "Cijfers")
-        RcRow("Play / Pause / Stop", "Afspelen, pauze, stop")
+    Column(modifier) {
+        PanelHeader("Afstandsbediening", "Zo werken de knoppen van je tv-afstandsbediening in EnigmaCast")
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+            SettingsCard("Navigatie", Modifier.weight(1f)) {
+                RcRow("Pijltjes", "Omhoog, omlaag, links, rechts")
+                RcRow("OK kort", "Bevestigen")
+                RcRow("OK vasthouden", "Enigma-menu")
+                RcRow("Back kort", "Exit op de tuner")
+                RcRow("Back vasthouden", "Terug naar EnigmaCast")
+                RcRow("Back in het menu", "App sluiten en stream stoppen")
+            }
+            SettingsCard("Tv-knoppen", Modifier.weight(1f)) {
+                RcRow("Info", "Infobalk")
+                RcRow("Guide", "EPG")
+                RcRow("P+ / P-", "Zender omhoog of omlaag")
+                RcRow("Kleurknoppen", "Rood, groen, geel, blauw")
+                RcRow("Blauw vasthouden", "Teletekst")
+                RcRow("0–9", "Cijfers")
+                RcRow("Play / Pause / Stop", "Afspelen, pauze, stop")
+            }
+        }
     }
 }
 
 @Composable
 private fun RcRow(button: String, action: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(button, color = Color.White, fontSize = 15.sp, modifier = Modifier.width(180.dp))
-        Text(action, color = Color(0xFFB7C0D0), fontSize = 15.sp)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(button, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(140.dp))
+        Text(action, color = EnigmaColors.Muted, fontSize = 14.sp)
     }
 }
 
@@ -795,32 +734,39 @@ private fun SettingsHub(
 ) {
     var page by remember { mutableStateOf(SettingPage.Receiver) }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    Row(modifier = modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(
-            modifier = Modifier
-                .width(160.dp)
-                .fillMaxHeight()
-                .background(SubmenuSurface)
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            SettingNav("Ontvanger", page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
-            SettingNav("Weergave", page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
-            SettingNav("OSD", page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
-            SettingNav("Info", page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
-        }
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            when (page) {
-                SettingPage.Receiver -> ReceiverSettingsPanel()
-                SettingPage.Playback -> PlaybackSettingsPanel(
-                    settings.playback.lowLatency,
-                    settings.playback.autoReconnect,
-                    settings.playback.hdmiPassthrough,
-                    settings.playback.subtitlesEnabled,
-                    viewModel,
-                )
-                SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
-                SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
+    Column(modifier) {
+        PanelHeader("Instellingen", settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
+        Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column(
+                modifier = Modifier
+                    .width(190.dp)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                SettingNav(EnigmaIcons.Tv, "Ontvanger", page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
+                SettingNav(Icons.Filled.PlayArrow, "Weergave", page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
+                SettingNav(EnigmaIcons.Layers, "OSD", page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+                SettingNav(Icons.Filled.Info, "Info", page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (page) {
+                    SettingPage.Receiver -> ReceiverSettingsPanel()
+                    SettingPage.Playback -> PlaybackSettingsPanel(
+                        settings.playback.lowLatency,
+                        settings.playback.autoReconnect,
+                        settings.playback.hdmiPassthrough,
+                        settings.playback.subtitlesEnabled,
+                        viewModel,
+                    )
+                    SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
+                    SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
+                }
             }
         }
     }
@@ -828,29 +774,23 @@ private fun SettingsHub(
 
 @Composable
 private fun SettingNav(
+    icon: ImageVector,
     label: String,
     selected: Boolean,
     pageFocus: FocusRequester?,
     menuFocus: FocusRequester,
     onSelect: () -> Unit,
 ) {
-    Button(
+    NavItem(
+        icon = icon,
+        label = label,
+        selected = selected,
         onClick = onSelect,
+        onFocus = onSelect,
         modifier = Modifier
-            .fillMaxWidth()
             .then(if (pageFocus != null) Modifier.focusRequester(pageFocus) else Modifier)
-            .focusProperties { left = menuFocus }
-            .onFocusChanged { if (it.isFocused) onSelect() },
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        colors = ButtonDefaults.colors(
-            containerColor = if (selected) Color(0xFF161616) else Color.Black,
-            contentColor = if (selected) Color(0xFFE8B84A) else Color.White,
-            focusedContainerColor = FocusedButton,
-            focusedContentColor = FocusedButtonText,
-        ),
-    ) {
-        Text(label, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
-    }
+            .focusProperties { left = menuFocus },
+    )
 }
 
 @Composable
@@ -863,63 +803,48 @@ private fun PlaybackSettingsPanel(
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 460.dp)) {
-        Text("Weergave", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(
-            if (fast) "Snel: minder vertraging, meer kans op haperen." else "Stabiel: grotere buffer, rustiger beeld.",
-            color = Color(0xFFB7C0D0),
-            fontSize = 13.sp,
+    SettingsCard("Beeld") {
+        ChoiceRow(
+            title = "Buffer",
+            description = if (fast) "Snel: minder vertraging, meer kans op haperen." else "Stabiel: grotere buffer, rustiger beeld.",
+            options = listOf("Stabiel", "Snel"),
+            selectedIndex = if (fast) 1 else 0,
+            onSelect = { viewModel.setLowLatency(it == 1) },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProfileButton("Stabiel", !fast) { viewModel.setLowLatency(false) }
-            ProfileButton("Snel", fast) { viewModel.setLowLatency(true) }
-        }
-        Text(
-            if (hdmiPassthrough) {
+    }
+    SettingsCard("Geluid") {
+        ChoiceRow(
+            title = "Audio-uitvoer",
+            description = if (hdmiPassthrough) {
                 "HDMI stuurt AC3 en E-AC3 ongewijzigd door als de tv dat ondersteunt."
             } else {
                 "Stereo mixt het geluid, ook als de zender AC3 of E-AC3 stuurt."
             },
-            color = Color(0xFFB7C0D0),
-            fontSize = 13.sp,
+            options = listOf("Stereo", "HDMI"),
+            selectedIndex = if (hdmiPassthrough) 1 else 0,
+            onSelect = { viewModel.setHdmiPassthrough(it == 1) },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProfileButton("Stereo", !hdmiPassthrough) { viewModel.setHdmiPassthrough(false) }
-            ProfileButton("HDMI", hdmiPassthrough) { viewModel.setHdmiPassthrough(true) }
-        }
-        Text(
-            if (playback.subtitlesAvailable) {
+    }
+    SettingsCard("Ondertiteling") {
+        ChoiceRow(
+            title = "DVB-ondertiteling",
+            description = if (playback.subtitlesAvailable) {
                 "Deze stream heeft ondertiteling."
             } else {
                 "Geen ondertiteling in deze stream."
             },
-            color = Color(0xFFB7C0D0),
-            fontSize = 13.sp,
+            options = listOf("Uit", "Aan"),
+            selectedIndex = if (subtitlesEnabled) 1 else 0,
+            onSelect = { viewModel.setSubtitlesEnabled(it == 1) },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProfileButton("Uit", !subtitlesEnabled) { viewModel.setSubtitlesEnabled(false) }
-            ProfileButton("Aan", subtitlesEnabled) { viewModel.setSubtitlesEnabled(true) }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Automatisch hervatten", color = Color.White, fontSize = 13.sp)
-            Switch(checked = autoReconnect, onCheckedChange = viewModel::setAutoReconnect)
-        }
     }
-}
-
-@Composable
-private fun ProfileButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-        colors = ButtonDefaults.colors(
-            containerColor = if (selected) Color(0xFF161616) else Color.Black,
-            contentColor = if (selected) Color(0xFFE8B84A) else Color.White,
-            focusedContainerColor = FocusedButton,
-            focusedContentColor = FocusedButtonText,
-        ),
-    ) {
-        Text(label, fontSize = 14.sp)
+    SettingsCard("Verbinding") {
+        ToggleRow(
+            title = "Automatisch hervatten",
+            description = "Start de stream opnieuw als de verbinding wegvalt.",
+            checked = autoReconnect,
+            onCheckedChange = viewModel::setAutoReconnect,
+        )
     }
 }
 
@@ -929,15 +854,20 @@ private fun OsdSettingsPanel(
     fastPolling: Boolean,
     viewModel: SettingsViewModel,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 420.dp)) {
-        Text("OSD", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        ProfileButton(if (format == "jpg") "Formaat: JPG" else "Formaat: PNG", selected = true) {
-            viewModel.setOsdFormat(if (format == "jpg") "png" else "jpg")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Snel verversen", color = Color.White, fontSize = 13.sp)
-            Switch(checked = fastPolling, onCheckedChange = viewModel::setFastPolling)
-        }
+    SettingsCard("OSD van de ontvanger") {
+        ChoiceRow(
+            title = "Formaat",
+            description = "PNG is scherper, JPG is sneller op een trage verbinding.",
+            options = listOf("PNG", "JPG"),
+            selectedIndex = if (format == "jpg") 1 else 0,
+            onSelect = { viewModel.setOsdFormat(if (it == 1) "jpg" else "png") },
+        )
+        ToggleRow(
+            title = "Snel verversen",
+            description = "Haalt het menu vaker op terwijl je bedient.",
+            checked = fastPolling,
+            onCheckedChange = viewModel::setFastPolling,
+        )
     }
 }
 
@@ -946,24 +876,14 @@ private fun InfoSettingsPanel(
     settings: AppSettings,
     viewModel: SettingsViewModel,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 460.dp)) {
-        Text("Info", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text(
-            "${BuildConfig.VERSION_NAME}  ·  build ${BuildConfig.VERSION_CODE}",
-            color = Color(0xFFB7C0D0),
-            fontSize = 13.sp,
-        )
-        DebugSwitch("Debug-overlay", settings.debug.overlay, viewModel::setDebugOverlay)
-        DebugSwitch("Uitgebreide logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
-        DebugSwitch("OSD-rand", settings.osd.debugBorders, viewModel::setDebugBorders)
+    SettingsCard("App") {
+        InfoRow("Versie", BuildConfig.VERSION_NAME)
+        InfoRow("Build", BuildConfig.VERSION_CODE.toString())
     }
-}
-
-@Composable
-private fun DebugSwitch(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, color = Color.White, fontSize = 13.sp)
-        Switch(checked = checked, onCheckedChange = onChecked)
+    SettingsCard("Diagnose") {
+        ToggleRow("Debug-overlay", settings.debug.overlay, viewModel::setDebugOverlay)
+        ToggleRow("Uitgebreide logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
+        ToggleRow("OSD-rand", settings.osd.debugBorders, viewModel::setDebugBorders)
     }
 }
 
@@ -971,45 +891,38 @@ private fun DebugSwitch(label: String, checked: Boolean, onChecked: (Boolean) ->
 private fun ReceiverSettingsPanel(
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
-    Column(
-        modifier = Modifier
-            .widthIn(max = 460.dp)
-            .heightIn(max = 420.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("Ontvanger", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    SettingsCard("Verbinding") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
             CompactField("Naam", viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
             CompactField("IP-adres", viewModel.host, { viewModel.host = it }, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
             CompactField("Webif-poort", viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f))
             CompactField("Stream-poort", viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    }
+    SettingsCard("Inloggen") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
             CompactField("Gebruiker", viewModel.username, { viewModel.username = it }, Modifier.weight(1f))
             CompactField("Wachtwoord", viewModel.password, { viewModel.password = it }, Modifier.weight(1f), password = true)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("HTTPS", color = Color.White, fontSize = 13.sp)
-            Switch(checked = viewModel.useHttps, onCheckedChange = { viewModel.useHttps = it })
-        }
-        Button(
+        ToggleRow(
+            title = "HTTPS",
+            description = "Versleutelde verbinding met OpenWebif.",
+            checked = viewModel.useHttps,
+            onCheckedChange = { viewModel.useHttps = it },
+        )
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        ActionTile(
+            icon = Icons.Filled.Check,
+            label = "Opslaan",
             onClick = { viewModel.save() },
             enabled = !viewModel.busy,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            colors = ButtonDefaults.colors(
-                containerColor = Color(0xFF161616),
-                contentColor = Color.White,
-                focusedContainerColor = FocusedButton,
-                focusedContentColor = FocusedButtonText,
-            ),
-        ) {
-            Text("Opslaan", fontSize = 15.sp)
-        }
+            tone = TileTone.Primary,
+        )
         if (viewModel.status.isNotBlank()) {
-            Text(viewModel.status, color = Color(0xFFB7C0D0), fontSize = 14.sp)
+            Text(viewModel.status, color = EnigmaColors.Muted, fontSize = 14.sp)
         }
     }
 }
@@ -1022,20 +935,28 @@ private fun CompactField(
     modifier: Modifier = Modifier,
     password: Boolean = false,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
     Column(modifier) {
-        Text(label, color = Color(0xFFB7C0D0), fontSize = 11.sp)
+        Text(label, color = if (focused) EnigmaColors.Accent else EnigmaColors.Muted, fontSize = 11.sp)
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-            cursorBrush = SolidColor(Color(0xFFE8B84A)),
+            interactionSource = interaction,
+            textStyle = TextStyle(color = EnigmaColors.Text, fontSize = 14.sp),
+            cursorBrush = SolidColor(EnigmaColors.Accent),
             visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp)
-                .border(1.dp, Color(0xFF3A4458))
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(top = 3.dp)
+                .background(EnigmaColors.Raised, RoundedCornerShape(8.dp))
+                .border(
+                    if (focused) 2.dp else 1.dp,
+                    if (focused) EnigmaColors.Accent else Color(0xFF3A4458),
+                    RoundedCornerShape(8.dp),
+                )
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         )
     }
 }

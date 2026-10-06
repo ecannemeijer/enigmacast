@@ -1,24 +1,31 @@
 package com.enigmacast.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.tv.material3.Text
-import com.enigmacast.ui.theme.TvButton
+import com.enigmacast.ui.theme.ActionTile
+import com.enigmacast.ui.theme.ChoiceRow
+import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.EnigmaIcons
+import com.enigmacast.ui.theme.PanelHeader
+import com.enigmacast.ui.theme.SettingsCard
+import com.enigmacast.ui.theme.TileTone
+import com.enigmacast.ui.theme.ToggleRow
 
 @Composable
 fun SettingsScreen(
@@ -32,50 +39,45 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(EnigmaColors.Canvas)
             .verticalScroll(rememberScrollState())
-            .padding(72.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .padding(horizontal = 72.dp, vertical = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Settings", color = Color.White, fontSize = 36.sp)
-        Text(
-            receiver?.let { "${it.name}  ${it.host}" } ?: "No receiver",
-            color = Color(0xFFB7C0D0),
-            fontSize = 20.sp,
-        )
-        TvButton("Edit receiver", onEditReceiver)
-        Toggle("Fast playback", settings.playback.lowLatency, viewModel::setLowLatency)
-        Toggle("HDMI audio passthrough", settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
-        Toggle("DVB subtitles", settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
-        Toggle("Auto reconnect", settings.playback.autoReconnect, viewModel::setAutoReconnect)
-        Toggle("Fast OSD polling", settings.osd.fastPolling, viewModel::setFastPolling)
-        Toggle("OSD debug border", settings.osd.debugBorders, viewModel::setDebugBorders)
-        Toggle("Debug overlay", settings.debug.overlay, viewModel::setDebugOverlay)
-        Toggle("Verbose logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
-        Toggle(
-            "Allow self-signed certificate",
-            receiver?.allowInsecureCertificates == true,
-            viewModel::setInsecureCertificates,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TvButton(
-                text = if (settings.osd.format == "jpg") "OSD format: JPG" else "OSD format: PNG",
-                onClick = {
-                    viewModel.setOsdFormat(if (settings.osd.format == "jpg") "png" else "jpg")
-                },
-            )
-            TvButton("OSD diagnostics", onDiagnostics)
-            TvButton("Back", onBack)
+        PanelHeader("Settings", receiver?.let { "${it.name}  ·  ${it.host}" } ?: "No receiver")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionTile(EnigmaIcons.Tv, "Edit receiver", onEditReceiver, tone = TileTone.Primary)
+            ActionTile(Icons.Filled.Search, "OSD diagnostics", onDiagnostics)
+            ActionTile(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
         }
-    }
-}
-
-@Composable
-private fun Toggle(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        Text(label, color = Color.White, fontSize = 22.sp, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChecked)
+        Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SettingsCard("Playback") {
+                ToggleRow("Fast playback", settings.playback.lowLatency, viewModel::setLowLatency)
+                ToggleRow("HDMI audio passthrough", settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
+                ToggleRow("DVB subtitles", settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
+                ToggleRow("Auto reconnect", settings.playback.autoReconnect, viewModel::setAutoReconnect)
+            }
+            SettingsCard("OSD") {
+                ChoiceRow(
+                    title = "OSD format",
+                    options = listOf("PNG", "JPG"),
+                    selectedIndex = if (settings.osd.format == "jpg") 1 else 0,
+                    onSelect = { viewModel.setOsdFormat(if (it == 1) "jpg" else "png") },
+                )
+                ToggleRow("Fast OSD polling", settings.osd.fastPolling, viewModel::setFastPolling)
+                ToggleRow("OSD debug border", settings.osd.debugBorders, viewModel::setDebugBorders)
+            }
+            SettingsCard("Connection") {
+                ToggleRow(
+                    title = "Allow self-signed certificate",
+                    checked = receiver?.allowInsecureCertificates == true,
+                    onCheckedChange = viewModel::setInsecureCertificates,
+                )
+            }
+            SettingsCard("Diagnostics") {
+                ToggleRow("Debug overlay", settings.debug.overlay, viewModel::setDebugOverlay)
+                ToggleRow("Verbose logging", settings.debug.verboseLogging, viewModel::setVerboseLogging)
+            }
+        }
     }
 }
