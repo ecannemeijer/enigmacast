@@ -14,6 +14,8 @@ Enigma2 receiver
 
 The full-screen player still shows the receiver's own OSD. The dashboard adds a local channel list and EPG so you can browse and zap without opening that player.
 
+That is the "Ontvanger volgen" mode. The default mode is "Eigen tuner": each Android TV streams its own channel straight from the receiver without zapping it, so several TVs can watch different channels at once, one per free tuner. See [Viewing modes](#viewing-modes).
+
 ## Requirements
 
 - Android Studio Quail 4 (2026.1.4) or newer, with AGP 9.4 support
@@ -83,7 +85,36 @@ Right from Receiver enters the power controls:
 
 Reboot, GUI restart, and deep standby ask for confirmation, with Cancel focused. Every command ends with a short message at the bottom of the screen. After standby or wake the app polls `/api/powerstate` until Enigma2 reports the new state, because the reply to `newstate` still carries the state from before the command. The power state is polled every 10 s while the dashboard is open (5 s during a restart).
 
-When the receiver goes to standby, from the app, the remote, or its sleep timer, the live stream stops so the tuner can sleep. When it is on again the guide and mini player come back. Deep standby cannot be undone from the app; use the remote or the power button on the receiver.
+In "Ontvanger volgen" mode, when the receiver goes to standby (from the app, the remote, or its sleep timer), the live stream stops so the tuner can sleep. When it is on again the guide and mini player come back. In "Eigen tuner" mode standby changes nothing: the stream keeps playing, because the receiver's stream server works in standby. Deep standby stops the stream server in both modes, and cannot be undone from the app; use the remote or the power button on the receiver.
+
+## Viewing modes
+
+Settings → Weergave → Kijkmodus chooses how this device watches. Each device has its own choice.
+
+**Eigen tuner (meerdere kijkers)** is the default for new installs, and installs that saved settings before this option existed switch to it too (the setting was missing there, so the default applies). Choose "Ontvanger volgen" once to keep the old behaviour; that choice is saved.
+
+- The device asks the stream server for `http://HOST:8001/<service reference>` itself. The receiver is not zapped, not woken, and may stay in standby. Its own screen, if it is on, is left alone.
+- With two tuners, two devices can each watch a different channel. A third device is told that all tuners are busy, unless its channel is on a transponder that is already tuned (Enigma2 then serves it from the same tuner).
+- The app draws its own OSD, because the receiver's OSD exists only on its own HDMI output. OK shows the channel banner (number, name, picon, now and next with times and progress, audio and subtitle tracks). OK again opens the channel list. Info or Guide shows the programme text. Up/Down and CH+/CH− zap this device, digits pick a channel number from the current bouquet, and Back closes the banner or list and then returns to the dashboard. Colour and menu keys go nowhere; nothing is sent to the receiver.
+- The dashboard's channel list zaps this device's stream the same way. Its last channel is remembered and starts again the next time.
+
+**Ontvanger volgen (huidige modus)** is the original behaviour: zapping changes the receiver's channel, the stream shows what the receiver shows, the receiver's OSD is drawn on top, and the remote controls the receiver. Use it when one TV is the only viewer and you want the receiver's menus.
+
+Audio sync, subtitles, and HDMI passthrough work the same in both modes; they belong to the player, not to the mode.
+
+### How the free tuner is found
+
+Before a stream starts, the app reads:
+
+- `/api/about`: the tuner list (`live`, `rec`, and on oe-alliance images `stream` per tuner) and the stream clients (`streams`: service, client IP, and on oe-alliance images `tuner_number`)
+- `/api/statusinfo`: whether the receiver is in standby and which service it shows
+- `/api/timerlist`, only when a tuner shows a recording, to learn which transponder the recording holds
+
+A tuner is busy when it shows the receiver's own picture (only while the receiver is on), a recording, or another device's stream. Streams from this device are not counted, because the app stops its old stream before it starts the new one. Tuners that cannot receive the channel (a DVB-C tuner for a satellite channel) are left out. Every distinct transponder in use needs a tuner, so the estimate is the larger of the busy tuners and the transponders in use. A channel on a transponder that is already in use is always allowed.
+
+The check can be wrong, so the stream start is watched as well. Enigma2 answers "200 OK" first and only then looks for a tuner; when none is free it closes the connection without sending video. A stream that ends with almost no data, or sends nothing for 10 seconds, is reported the same way as a full receiver: "Alle tuners zijn bezet (2/2). Probeer het later opnieuw of kies een zender op dezelfde transponder.", with the recordings and stream clients that hold the tuners. OK tries again. A refused stream is not retried by itself.
+
+Other start problems get their own message: a 401 means stream authentication is on and the credentials are missing or wrong; a refused connection means the receiver is off, in deep standby, or the stream port is wrong; data without a picture after 12 seconds usually means a scrambled channel that the CI module or card cannot descramble for this stream.
 
 ## Settings
 
@@ -125,7 +156,8 @@ All paths are built in `OpenWebifEndpoints`.
 
 - JSON API: `/api/about`, `/api/statusinfo`, `/api/getcurrent`, `/api/powerstate` (`newstate`: 0 toggle standby, 1 deep standby, 2 reboot, 3 restart GUI, 4 wake, 5 standby), `/api/sleeptimer`, `/api/vol`, `/api/bouquets`, `/api/getservices`, `/api/epgservice`, `/api/zap`, `/api/remotecontrol`
 - OSD: `/grab?format=png|jpg&mode=osd|all|video`
-- Stream: `http://HOST:8001/<percent-encoded service reference>`
+- Stream: `http://HOST:8001/<percent-encoded service reference>`, with `Authorization: Basic` from the receiver's username and password when a username is set
+- Own-tuner mode also reads `/api/timerlist`, `/api/getservices` without `sRef` (bouquet start numbers), `/api/getservices?…&picon=1`, and picons from `/picon/`
 
 `/api/` is JSON. The older `/web/` routes return XML and are not used. `/grab` is on the web root, not under `/api`. The stream port stays HTTP even when OpenWebif itself is HTTPS.
 
@@ -163,6 +195,10 @@ Settings can enable:
 - DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
 - mDNS discovery is best-effort.
 - Passwords are not encrypted at rest.
+- Own-tuner mode estimates free tuners from what OpenWebif reports. OpenPLi-based images (E2OpenPlugins OpenWebif) do not say which tuner a stream uses and may list a stream as a recording; FBC tuners, unicable, and tuners shared through a loop-through count as separate tuners there even when the dish cabling allows fewer. When the estimate is wrong, the stream start check still catches a refused stream.
+- A CI module or smartcard usually descrambles a limited number of channels at once, often one or two. Enigma2 still hands out the tuner, so a scrambled channel can start without a picture. The app says so after 12 seconds; it cannot see the CAM's limit in advance.
+- A recording that starts while every tuner streams can end a stream; whether Enigma2 takes the tuner from a stream depends on the image. The device whose stream ends sees the "tuners busy" message.
+- Channel numbers come from the bouquet start positions in `/api/getservices`; images without `startpos` number each bouquet from 1. Number entry looks only in the bouquet that is open.
 - A future receiver-side plugin can replace the OpenWebif sources (`OsdSource`, `RemoteControlSource`, `ServiceStateSource`) with a push transport without rewriting the player screen.
 
 ## Troubleshooting
@@ -170,6 +206,9 @@ Settings can enable:
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN on the TV will hide the receiver.
 - HTTP 401: fill in the OpenWebif username and password.
 - HTTPS fails with a certificate error: enable the self-signed option only for that receiver, or install a certificate the TV already trusts.
+- "Alle tuners zijn bezet" while you expect a free tuner: put the receiver in standby (not deep standby) so its own picture frees a tuner, and check for running recordings or other devices streaming (OpenWebif's About page lists them). Choosing a channel on the same transponder as a running stream always works.
+- "De ontvanger vraagt een wachtwoord voor streams": Enigma2's "Require authentication for http streams" is on (OpenATV: Menu → Setup → Usage & GUI → Customize System Settings). The stream server checks the receiver's Linux account (usually `root` and its password), not a separate OpenWebif password. Enter that user and password under Ontvangers, or turn the setting off. OpenWebif's "Enable authentication for streaming" only affects its playlists, not this check.
+- Own-tuner mode shows no picture on a scrambled channel: the CI module or card is busy with another channel or stream. Pick a free-to-air channel or stop the other stream.
 - Picture without OSD: open OSD diagnostics and try PNG OSD, then JPG OSD. Confirm `grab` works in a browser on the same URL.
 - OSD without picture: confirm port 8001 is open and the receiver is not in standby. The player reconnects on its own when auto-reconnect is on.
 - Zapping on the receiver updates the TV a moment later: that delay is the service poll plus tuner and decoder startup. Sending the zap from the Android remote triggers the fast poll.
