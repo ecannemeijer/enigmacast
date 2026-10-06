@@ -58,11 +58,13 @@ gradlew.bat assembleDebug
 gradlew.bat testDebugUnitTest
 ```
 
+On Linux or macOS use `./gradlew assembleDebug testDebugUnitTest`, with `sdk.dir` in `local.properties`.
+
 The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Dashboard
 
-The left menu is Stream, RC Info, and Settings. With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
+The left menu is Stream, Receiver, RC Info, Settings, and Exit. The open section stays marked while focus is in its panel, and a pill under the logo shows the receiver power state (Aan, Stand-by, Niet bereikbaar, Herstart…). With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
 
 Right from Stream enters the channel list of the current TV bouquet. Moving the focus previews that channel's EPG on the right and in the header. OK zaps and starts the mini player. OK again on the same channel opens the full-screen player. Right from a channel opens the EPG rows.
 
@@ -70,9 +72,22 @@ Left from the channel list opens the bouquet list and focuses it. Resting on a b
 
 Bouquet rows from OpenWebif are accepted as `[reference, name]` or `[name, reference]`. The current bouquet is `info.bqref` / `info.bqname`. TV bouquets are service type 7, and playable channels are type 0. Empty bouquets stay in the list.
 
+## Receiver
+
+Right from Receiver enters the power controls:
+
+- Stand-by or Aanzetten (wake), depending on the current state
+- GUI herstarten (restart Enigma2 only), Herstarten (reboot), and Diep slapen (deep standby)
+- Slaaptimer: off or 15 to 120 minutes, followed by standby or shutdown
+- An info card with model, image, Enigma2 and OpenWebif versions, kernel, chipset, uptime, and tuners
+
+Reboot, GUI restart, and deep standby ask for confirmation, with Cancel focused. Every command ends with a short message at the bottom of the screen. After standby or wake the app polls `/api/powerstate` until Enigma2 reports the new state, because the reply to `newstate` still carries the state from before the command. The power state is polled every 10 s while the dashboard is open (5 s during a restart).
+
+When the receiver goes to standby, from the app, the remote, or its sleep timer, the live stream stops so the tuner can sleep. When it is on again the guide and mini player come back. Deep standby cannot be undone from the app; use the remote or the power button on the receiver.
+
 ## Settings
 
-Right from Settings opens a black submenu lined up with the Settings item: Receiver, Playback, OSD, and Info. RC Info lines up with its menu item the same way.
+Right from Settings opens a submenu with Receiver, Playback, OSD, and Info. Each page groups its options on cards, and every switch row toggles with OK.
 
 - Receiver: host, ports, credentials, and connection test
 - Playback: Stable or Fast, Stereo or HDMI, DVB subtitles on or off, auto-reconnect
@@ -106,7 +121,7 @@ Network discovery is a Search button. It browses mDNS `_http._tcp` and fills in 
 
 All paths are built in `OpenWebifEndpoints`.
 
-- JSON API: `/api/about`, `/api/statusinfo`, `/api/getcurrent`, `/api/powerstate`, `/api/vol`, `/api/bouquets`, `/api/getservices`, `/api/epgservice`, `/api/zap`, `/api/remotecontrol`
+- JSON API: `/api/about`, `/api/statusinfo`, `/api/getcurrent`, `/api/powerstate` (`newstate`: 0 toggle standby, 1 deep standby, 2 reboot, 3 restart GUI, 4 wake, 5 standby), `/api/sleeptimer`, `/api/vol`, `/api/bouquets`, `/api/getservices`, `/api/epgservice`, `/api/zap`, `/api/remotecontrol`
 - OSD: `/grab?format=png|jpg&mode=osd|all|video`
 - Stream: `http://HOST:8001/<percent-encoded service reference>`
 
