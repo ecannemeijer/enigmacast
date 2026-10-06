@@ -87,19 +87,30 @@ fun OwnTunerOverlay(
     onZap: (BouquetEntry) -> Unit,
     onChooseBouquet: (BouquetEntry) -> Unit,
     quickBarActions: QuickBarActions,
+    guideActions: GuideActions,
 ) {
     val own = ui.own
     val tuner = own.tuner
     Box(modifier = Modifier.fillMaxSize()) {
         val channel = own.channel
-        if (tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING) {
+        if (ui.guide) {
+            GuideGrid(
+                ui = ui,
+                numberOf = numberOf,
+                picon = picon,
+                cachedPicon = cachedPicon,
+                actions = guideActions,
+            )
+        }
+        if (!ui.guide && (tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING)) {
             StatusPill(
                 text = tuner.message.asString().ifBlank { stringResource(R.string.loading) },
                 color = EnigmaColors.Accent,
                 modifier = Modifier.align(Alignment.TopEnd).padding(32.dp),
             )
         }
-        if (tuner.status == TunerStatus.FULL || tuner.status == TunerStatus.PROBLEM || tuner.status == TunerStatus.NO_PICTURE) {
+        val tunerProblem = tuner.status == TunerStatus.FULL || tuner.status == TunerStatus.PROBLEM || tuner.status == TunerStatus.NO_PICTURE
+        if (tunerProblem && !ui.guide) {
             TunerNotice(
                 tuner = tuner,
                 channelName = channel?.name.orEmpty(),
@@ -131,7 +142,7 @@ fun OwnTunerOverlay(
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
-        if (ui.banner && channel != null && !ui.channelList) {
+        if (ui.banner && channel != null && !ui.channelList && !ui.guide) {
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                 ChannelBanner(
                     channel = channel,
@@ -161,9 +172,11 @@ fun OwnTunerOverlay(
                 cachedPicon = cachedPicon,
                 onZap = onZap,
                 onChooseBouquet = onChooseBouquet,
+                guideActions = guideActions,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
+        ui.recordPrompt?.let { prompt -> RecordDialog(prompt, ui.recordBusy, guideActions) }
     }
 }
 
@@ -341,7 +354,7 @@ private fun videoLabel(player: PlayerState): String {
 }
 
 @Composable
-private fun Picon(
+internal fun Picon(
     entry: BouquetEntry,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
@@ -423,6 +436,7 @@ private fun ChannelListOverlay(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     onZap: (BouquetEntry) -> Unit,
     onChooseBouquet: (BouquetEntry) -> Unit,
+    guideActions: GuideActions,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -444,13 +458,18 @@ private fun ChannelListOverlay(
             picon = picon,
             cachedPicon = cachedPicon,
             onZap = onZap,
+            onOpenEpg = guideActions.onOpenChannelEpg,
         )
+        if (ui.epgChannel != null) {
+            Box(Modifier.fillMaxHeight().width(1.dp).background(EnigmaColors.Raised))
+            ChannelEpgPanel(ui = ui, actions = guideActions)
+        }
     }
 }
 
 /** The bouquets, shown left of the channel list by Left; OK or Right shows that bouquet's channels. */
 @Composable
-private fun BouquetPanel(
+internal fun BouquetPanel(
     bouquets: List<BouquetEntry>,
     activeReference: String,
     onChoose: (BouquetEntry) -> Unit,
@@ -507,13 +526,16 @@ private fun ChannelPanel(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     onZap: (BouquetEntry) -> Unit,
+    onOpenEpg: (BouquetEntry) -> Unit,
 ) {
     val own = ui.own
     val channels = own.channels
     val current = own.channel?.reference.orEmpty()
     val listState = rememberLazyListState()
     val focus = remember { FocusRequester() }
-    val anchor = ChannelListNavigation.channelFocusIndex(channels, current)
+    val epgOpen = ui.epgChannel != null
+    // The playing channel, or the one whose programme panel was just closed.
+    val anchor = ChannelListNavigation.channelFocusIndex(channels, ui.listFocusReference.ifBlank { current })
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -522,16 +544,19 @@ private fun ChannelPanel(
         }
     }
     // Focus the playing channel when the list opens, after a bouquet was chosen and when
-    // the bouquet column closes (the token), and once the new bouquet's channels arrive.
+    // the bouquet column or programme panel closes (the token), and once the new bouquet's
+    // channels arrive. The list only scrolls when that channel is off screen.
     LaunchedEffect(ui.listFocusToken, own.bouquetReference, channels.size) {
-        if (channels.isEmpty() || ui.bouquetPanel) return@LaunchedEffect
-        listState.scrollToItem((anchor - 5).coerceAtLeast(0))
+        if (channels.isEmpty() || ui.bouquetPanel || epgOpen) return@LaunchedEffect
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val onScreen = visible.size > 2 && anchor > visible.first().index && anchor < visible.last().index
+        if (!onScreen) listState.scrollToItem((anchor - 5).coerceAtLeast(0))
         focus.requestWhenReady()
     }
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(600.dp)
+            .width(if (epgOpen) 460.dp else 600.dp)
             .padding(horizontal = 12.dp, vertical = 20.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 8.dp)) {
@@ -544,7 +569,7 @@ private fun ChannelPanel(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 10.dp, bottom = 2.dp),
             )
-            if (!ui.bouquetPanel) {
+            if (!ui.bouquetPanel && !epgOpen) {
                 Text(stringResource(R.string.osd_bouquets_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
             }
         }
@@ -556,7 +581,13 @@ private fun ChannelPanel(
                 CompactListRow(
                     onClick = { onZap(entry) },
                     selected = BouquetChannels.sameService(entry.reference, current),
-                    modifier = if (index == anchor) Modifier.focusRequester(focus) else Modifier,
+                    modifier = Modifier
+                        .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
+                        .onPreviewKeyEvent { event ->
+                            if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) onOpenEpg(entry)
+                            true
+                        },
                 ) { focused ->
                     ChannelRowContent(
                         entry = entry,

@@ -16,19 +16,25 @@ import com.enigmacast.R
 import com.enigmacast.connection.ConnectionCoordinator
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.domain.epg.GuideCursor
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.epg.GuideTimeline
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ConnectionState
 import com.enigmacast.domain.model.DebugInfo
 import com.enigmacast.domain.model.EnigmaService
+import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.OsdConfig
 import com.enigmacast.domain.osd.OsdController
 import com.enigmacast.domain.osd.OsdPollState
+import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.EnigmaKeyMapper
+import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.ServiceMonitor
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
@@ -37,25 +43,24 @@ import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.tuner.ChannelListNavigation
 import com.enigmacast.domain.tuner.ListPane
 import com.enigmacast.domain.tuner.NowEvent
+import com.enigmacast.domain.tuner.NowEvents
 import com.enigmacast.domain.tuner.NumberEntry
 import com.enigmacast.domain.tuner.OwnKeyAction
 import com.enigmacast.domain.tuner.OwnTunerKeys
 import com.enigmacast.domain.tuner.StreamModePolicy
+import com.enigmacast.live.GuideRepository
 import com.enigmacast.live.NowEpgRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
 import com.enigmacast.live.TunerStatus
-import com.enigmacast.domain.model.LastChannel
-import com.enigmacast.domain.player.PictureMode
-import com.enigmacast.domain.tuner.NowEvents
+import com.enigmacast.osd.AndroidOsdAnalyzer
 import com.enigmacast.playback.AppSleepTimer
 import com.enigmacast.playback.AudioSync
+import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.playback.SleepEvent
 import com.enigmacast.playback.StreamStats
 import com.enigmacast.playback.TrackMenu
-import com.enigmacast.osd.AndroidOsdAnalyzer
-import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.remote.RemoteInputBus
 import com.enigmacast.remote.RemoteKeyDispatcher
 import com.enigmacast.util.DebugFlags
@@ -63,6 +68,7 @@ import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,7 +129,28 @@ data class RemoteDisplayUiState(
     val sleepEndsAtMs: Long = 0L,
     val recent: List<LastChannel> = emptyList(),
     val receiverAddress: String = "",
+    /** Channel list: the channel whose programme guide is open right of the list (Right on a channel). */
+    val epgChannel: BouquetEntry? = null,
+    val epgEvents: List<GuideEvent> = emptyList(),
+    val epgLoading: Boolean = false,
+    /** The channel the list focuses; blank means the channel that plays. */
+    val listFocusReference: String = "",
+    /** The full-screen programme guide that Back opens in the player. */
+    val guide: Boolean = false,
+    val guideCursor: GuideCursor = GuideCursor(),
+    /** Programmes per channel (key [NowEvents.key]) of the guide's bouquet, loaded in blocks. */
+    val guideEvents: Map<String, List<GuideEvent>> = emptyMap(),
+    val guideBouquets: Boolean = false,
+    val guideLoading: Boolean = false,
+    val guideFailed: Boolean = false,
+    val recordPrompt: RecordPrompt? = null,
+    val recordBusy: Boolean = false,
+    /** Programmes set to record from this app in this session ([GuideEvent.recordKey]). */
+    val recordedKeys: Set<String> = emptySet(),
 )
+
+/** "Record this programme?" for a programme that has not started yet. */
+data class RecordPrompt(val event: GuideEvent, val channelName: String)
 
 @HiltViewModel
 class RemoteDisplayViewModel @Inject constructor(
@@ -140,6 +167,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val picons: PiconRepository,
     private val nowEpg: NowEpgRepository,
     private val sleepTimer: AppSleepTimer,
+    private val guideRepository: GuideRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -169,6 +197,11 @@ class RemoteDisplayViewModel @Inject constructor(
     private var noticeJob: Job? = null
     private var nowEpgJob: Job? = null
     private var bouquetJob: Job? = null
+    private var epgJob: Job? = null
+    private var guideBouquetJob: Job? = null
+    private var guideBouquet = ""
+    private val guideLoaded = mutableSetOf<Long>()
+    private val guidePending = mutableSetOf<Long>()
     private val numberEntry = NumberEntry()
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -310,10 +343,10 @@ class RemoteDisplayViewModel @Inject constructor(
         ownSession.start(BouquetEntry(channel.name, channel.reference))
     }
 
-    /** The Guide tile: the channel list for now (the programme guide grid replaces it). */
+    /** The Guide tile: the full-screen programme guide, like Back. */
     fun openGuideFromBar() {
         _ui.update { it.copy(quickBar = false) }
-        openChannelList()
+        openGuide()
     }
 
     fun restartStream() {
@@ -344,7 +377,17 @@ class RemoteDisplayViewModel @Inject constructor(
         }
         nowEpgJob?.cancel()
         _ui.update {
-            it.copy(ownTuner = false, banner = false, details = false, channelList = false, bouquetPanel = false, bouquets = emptyList())
+            it.copy(
+                ownTuner = false,
+                banner = false,
+                details = false,
+                channelList = false,
+                bouquetPanel = false,
+                bouquets = emptyList(),
+                epgChannel = null,
+                guide = false,
+                guideBouquets = false,
+            )
         }
         val osd = OsdController(
             source = osdSource,
@@ -511,6 +554,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun listPane(ui: RemoteDisplayUiState = _ui.value): ListPane = when {
         !ui.channelList -> ListPane.CLOSED
         ui.bouquetPanel -> ListPane.BOUQUETS
+        ui.epgChannel != null -> ListPane.EPG
         else -> ListPane.CHANNELS
     }
 
@@ -519,14 +563,17 @@ class RemoteDisplayViewModel @Inject constructor(
             it.copy(
                 channelList = pane != ListPane.CLOSED,
                 bouquetPanel = pane == ListPane.BOUQUETS,
+                epgChannel = if (pane == ListPane.EPG) it.epgChannel else null,
                 listFocusToken = if (focusList) it.listFocusToken + 1 else it.listFocusToken,
             )
         }
         if (pane == ListPane.CLOSED) nowEpgJob?.cancel()
+        if (pane != ListPane.EPG) epgJob?.cancel()
     }
 
     private fun openChannelList() {
         hideBanner()
+        _ui.update { it.copy(listFocusReference = "") }
         applyPane(ChannelListNavigation.open(), focusList = true)
         watchNowEpg()
         loadBouquets()
@@ -541,6 +588,7 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /** OK or Right on a bouquet: show its channels with what is on now, back in the channel list. */
     fun chooseBouquet(bouquet: BouquetEntry) {
+        _ui.update { it.copy(listFocusReference = "") }
         applyPane(ChannelListNavigation.bouquetChosen(), focusList = true)
         bouquetJob?.cancel()
         bouquetJob = viewModelScope.launch {
@@ -552,6 +600,241 @@ class RemoteDisplayViewModel @Inject constructor(
             watchNowEpg()
         }
     }
+
+    /** Right on a channel in the list: that channel's programmes in a panel right of the list. */
+    fun openChannelEpg(entry: BouquetEntry) {
+        if (listPane() != ListPane.CHANNELS) return
+        val receiver = settingsSnapshot.activeReceiver() ?: return
+        _ui.update { it.copy(epgChannel = entry, epgEvents = emptyList(), epgLoading = true, listFocusReference = entry.reference) }
+        applyPane(ChannelListNavigation.right(ListPane.CHANNELS))
+        epgJob?.cancel()
+        epgJob = viewModelScope.launch {
+            val now = nowSec()
+            val events = guideRepository.serviceEvents(receiver, entry.reference).filter { it.endEpochSec > now }
+            _ui.update {
+                if (BouquetChannels.sameService(it.epgChannel?.reference.orEmpty(), entry.reference)) {
+                    it.copy(epgEvents = events, epgLoading = false)
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    /** Left or Back in the programme panel: back to the list, on the same channel. */
+    private fun closeChannelEpg() = applyPane(ChannelListNavigation.left(ListPane.EPG), focusList = true)
+
+    /** OK on a programme: watch the channel when it is on now, else offer to record it. */
+    fun chooseProgramme(channel: BouquetEntry, event: GuideEvent) {
+        if (event.beginEpochSec <= nowSec()) {
+            watchFromGuide(channel)
+            return
+        }
+        if (event.eventId < 0) {
+            showNotice(UiText.res(R.string.epg_record_unavailable))
+            return
+        }
+        _ui.update { it.copy(recordPrompt = RecordPrompt(event, channel.name)) }
+    }
+
+    private fun watchFromGuide(channel: BouquetEntry) {
+        if (_ui.value.guide) closeGuide(toDashboard = false)
+        zapTo(channel)
+    }
+
+    /** Asks the receiver to record the programme in [RemoteDisplayUiState.recordPrompt]. */
+    fun confirmRecording() {
+        val prompt = _ui.value.recordPrompt ?: return
+        val receiver = settingsSnapshot.activeReceiver() ?: return
+        if (_ui.value.recordBusy) return
+        _ui.update { it.copy(recordBusy = true) }
+        viewModelScope.launch {
+            val result = try {
+                guideRepository.record(receiver, prompt.event)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                EnigmaLog.service("record failed: ${error.javaClass.simpleName}")
+                null
+            }
+            val success = result?.success == true
+            _ui.update {
+                it.copy(
+                    recordPrompt = null,
+                    recordBusy = false,
+                    recordedKeys = if (success) it.recordedKeys + prompt.event.recordKey else it.recordedKeys,
+                )
+            }
+            showNotice(
+                when {
+                    success -> UiText.res(R.string.epg_record_set, prompt.event.title)
+                    result != null && result.message.isNotBlank() -> UiText.res(R.string.epg_record_refused, result.message)
+                    else -> UiText.res(R.string.epg_record_failed)
+                },
+                NOTICE_LONG_MS,
+            )
+        }
+    }
+
+    fun dismissRecording() {
+        if (!_ui.value.recordBusy) _ui.update { it.copy(recordPrompt = null) }
+    }
+
+    /**
+     * Back in the player: the full-screen guide for the bouquet in use, on the channel that
+     * plays and the current half hour.
+     */
+    private fun openGuide() {
+        if (!_ui.value.ownTuner) return
+        hideBanner()
+        if (_ui.value.channelList) applyPane(ListPane.CLOSED)
+        numberJob?.cancel()
+        numberEntry.clear()
+        val now = nowSec()
+        val own = ownSession.state.value
+        val row = ChannelListNavigation.channelFocusIndex(own.channels, own.channel?.reference.orEmpty())
+        _ui.update {
+            it.copy(
+                guide = true,
+                guideBouquets = false,
+                numberEntry = "",
+                guideCursor = GuideCursor(row, now, GuideTimeline.slotFloor(now)),
+            )
+        }
+        // Blocks are asked again (the repository answers from its cache while fresh).
+        guideLoaded.clear()
+        loadBouquets()
+        ensureGuideData()
+    }
+
+    private fun closeGuide(toDashboard: Boolean) {
+        guideBouquetJob?.cancel()
+        _ui.update { it.copy(guide = false, guideBouquets = false) }
+        if (toDashboard) onLeaveToDashboard?.invoke()
+    }
+
+    /** Loads the 3-hour blocks of the guide's bouquet around the visible time window. */
+    private fun ensureGuideData() {
+        val receiver = settingsSnapshot.activeReceiver() ?: return
+        val bouquet = ownSession.state.value.bouquetReference
+        if (bouquet.isBlank()) return
+        if (bouquet != guideBouquet) {
+            guideBouquet = bouquet
+            guideLoaded.clear()
+            guidePending.clear()
+            _ui.update { it.copy(guideEvents = emptyMap(), guideFailed = false) }
+        }
+        GuideTimeline.chunksFor(_ui.value.guideCursor.windowStartSec).forEach { chunk ->
+            if (chunk in guideLoaded || chunk in guidePending) return@forEach
+            guidePending += chunk
+            viewModelScope.launch {
+                val events = guideRepository.bouquetChunk(receiver, bouquet, chunk)
+                if (bouquet != guideBouquet) return@launch
+                guidePending -= chunk
+                if (events == null) {
+                    _ui.update { it.copy(guideFailed = true, guideLoading = guidePending.isNotEmpty()) }
+                    return@launch
+                }
+                guideLoaded += chunk
+                _ui.update {
+                    it.copy(
+                        guideEvents = GuideTimeline.merge(it.guideEvents, events),
+                        guideFailed = false,
+                        guideLoading = guidePending.isNotEmpty(),
+                    )
+                }
+            }
+        }
+        _ui.update { it.copy(guideLoading = guidePending.isNotEmpty()) }
+    }
+
+    /**
+     * The guide's keys: Up/Down through channels (CH+/CH- and page keys by a page), Left/Right
+     * through programmes, OK to watch or record. Left on the programme on air opens the bouquet
+     * column. The bouquet column and the record dialog use plain Compose focus.
+     */
+    private fun handleGuideKey(event: KeyEvent): Boolean {
+        val ui = _ui.value
+        if (ui.guideBouquets || ui.recordPrompt != null) return false
+        val down = event.action == KeyEvent.ACTION_DOWN
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> if (down) moveGuideRows(-1)
+            KeyEvent.KEYCODE_DPAD_DOWN -> if (down) moveGuideRows(1)
+            KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_CHANNEL_DOWN -> if (down) moveGuideRows(-GUIDE_PAGE_ROWS)
+            KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_CHANNEL_UP -> if (down) moveGuideRows(GUIDE_PAGE_ROWS)
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (down) moveGuideTime(-1, edgeAllowed = event.repeatCount == 0)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) moveGuideTime(1, edgeAllowed = false)
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
+                if (!down) chooseGuideCell()
+            else -> return OwnTunerKeys.action(event.keyCode) != OwnKeyAction.PASS
+        }
+        return true
+    }
+
+    private fun moveGuideRows(delta: Int) {
+        val ui = _ui.value
+        val rows = ui.own.channels.size
+        val cursor = GuideTimeline.clamp(GuideTimeline.moveVertical(ui.guideCursor, delta, rows), nowSec(), rows)
+        _ui.update { it.copy(guideCursor = cursor) }
+        if (cursor.windowStartSec != ui.guideCursor.windowStartSec) ensureGuideData()
+    }
+
+    private fun moveGuideTime(direction: Int, edgeAllowed: Boolean) {
+        val ui = _ui.value
+        val channels = ui.own.channels
+        val entry = channels.getOrNull(ui.guideCursor.row)
+        if (entry == null) {
+            if (direction < 0 && edgeAllowed) openGuideBouquets()
+            return
+        }
+        val now = nowSec()
+        val cursor = GuideTimeline.clamp(ui.guideCursor, now, channels.size)
+        val move = GuideTimeline.moveHorizontal(ui.guideEvents[NowEvents.key(entry.reference)].orEmpty(), cursor, direction, now)
+        if (move.atLeftEdge) {
+            if (edgeAllowed) openGuideBouquets()
+            return
+        }
+        _ui.update { it.copy(guideCursor = move.cursor) }
+        if (move.cursor.windowStartSec != ui.guideCursor.windowStartSec) ensureGuideData()
+    }
+
+    private fun chooseGuideCell() {
+        val ui = _ui.value
+        val entry = ui.own.channels.getOrNull(ui.guideCursor.row) ?: return
+        val now = nowSec()
+        val cell = GuideTimeline.focusedCell(ui.guideEvents[NowEvents.key(entry.reference)].orEmpty(), ui.guideCursor, now) ?: return
+        val event = cell.event
+        when {
+            event != null -> chooseProgramme(entry, event)
+            cell.startSec <= now -> watchFromGuide(entry)
+        }
+    }
+
+    private fun openGuideBouquets() {
+        loadBouquets()
+        _ui.update { it.copy(guideBouquets = true) }
+    }
+
+    /** OK or Right on a bouquet in the guide: that bouquet's channels and programmes. */
+    fun chooseGuideBouquet(bouquet: BouquetEntry) {
+        _ui.update { it.copy(guideBouquets = false) }
+        guideBouquetJob?.cancel()
+        guideBouquetJob = viewModelScope.launch {
+            if (!ownSession.selectBouquet(bouquet)) {
+                showNotice(UiText.res(R.string.notice_bouquet_failed, bouquet.name))
+                return@launch
+            }
+            val own = ownSession.state.value
+            val now = nowSec()
+            val row = ChannelListNavigation.channelFocusIndex(own.channels, own.channel?.reference.orEmpty())
+            _ui.update {
+                it.copy(own = own, nowEvents = emptyMap(), guideCursor = GuideCursor(row, now, GuideTimeline.slotFloor(now)))
+            }
+            ensureGuideData()
+        }
+    }
+
+    private fun nowSec(): Long = System.currentTimeMillis() / 1000
 
     private fun loadBouquets() {
         if (_ui.value.bouquets.isNotEmpty()) return
@@ -612,6 +895,7 @@ class RemoteDisplayViewModel @Inject constructor(
             if (event.action == KeyEvent.ACTION_UP) ownBack()
             return true
         }
+        if (ui.guide) return handleGuideKey(event)
         // The quick bar is plain Compose focus (Left/Right between tiles, OK opens a picker).
         if (ui.quickBar) return false
         // Down on a banner that OK, Info or Left/Right brought up opens the quick bar;
@@ -621,10 +905,13 @@ class RemoteDisplayViewModel @Inject constructor(
             return true
         }
         if (ui.channelList) {
-            // Left in the channel list reveals the bouquets; everything else is plain Compose
-            // focus and clicks in the list (Right/OK on a bouquet is handled there).
+            // Left in the channel list reveals the bouquets, Left in a channel's programme panel
+            // goes back to that channel; everything else is plain Compose focus and clicks in the
+            // list (Right on a channel or bouquet is handled there).
             if (!ui.bouquetPanel && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) openBouquets()
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    if (ui.epgChannel != null) closeChannelEpg() else openBouquets()
+                }
                 return true
             }
             return false
@@ -657,7 +944,9 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun ownBack() {
         val ui = _ui.value
         when {
+            ui.recordPrompt != null -> dismissRecording()
             ui.quickBar -> closeQuickBar()
+            ui.guide -> if (ui.guideBouquets) _ui.update { it.copy(guideBouquets = false) } else closeGuide(toDashboard = true)
             ui.channelList -> {
                 val pane = ChannelListNavigation.back(listPane(ui))
                 applyPane(pane, focusList = pane == ListPane.CHANNELS)
@@ -668,7 +957,8 @@ class RemoteDisplayViewModel @Inject constructor(
                 _ui.update { it.copy(numberEntry = "") }
             }
             ui.banner -> hideBanner()
-            else -> onLeaveToDashboard?.invoke()
+            // Back on the bare picture opens the programme guide; Back there leaves to the menu.
+            else -> openGuide()
         }
     }
 
@@ -914,6 +1204,7 @@ private const val NUMBER_ENTRY_MS = 1_500L
 private const val NOW_EPG_CHECK_MS = 30_000L
 private const val NOTICE_MS = 2_500L
 private const val NOTICE_LONG_MS = 8_000L
+private const val GUIDE_PAGE_ROWS = 8
 
 private fun com.enigmacast.domain.model.OsdSettings.toOsdConfig(): OsdConfig {
     return OsdConfig(

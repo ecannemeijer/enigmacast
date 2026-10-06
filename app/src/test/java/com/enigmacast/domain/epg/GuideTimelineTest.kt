@@ -1,5 +1,6 @@
 package com.enigmacast.domain.epg
 
+import com.enigmacast.domain.tuner.NowEvents
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -120,5 +121,26 @@ class GuideTimelineTest {
         assertTrue(e.isAiring(base + 10))
         assertFalse(e.isAiring(base + 3600))
         assertEquals(0.5f, e.progress(base + 1800), 0.001f)
+    }
+
+    @Test
+    fun mergeAddsBlocksPerChannelWithoutDuplicates() {
+        val other = event(9, 0, 30).copy(reference = "1:0:1:B:0:0:0:0:0:0:")
+        val first = GuideTimeline.merge(emptyMap(), listOf(event(1, 0, 30), event(2, 30, 30), other))
+        val renamed = event(2, 30, 30).copy(title = "Renamed")
+        val merged = GuideTimeline.merge(first, listOf(renamed, event(3, 60, 30)))
+        val channel = merged.getValue(NowEvents.key("1:0:1:A:0:0:0:0:0:0:"))
+        assertEquals(listOf(1, 2, 3), channel.map { it.eventId })
+        assertEquals("Renamed", channel[1].title)
+        assertEquals(1, merged.getValue(NowEvents.key("1:0:1:B:0:0:0:0:0:0:")).size)
+        assertTrue(GuideTimeline.merge(first, emptyList()) === first)
+    }
+
+    @Test
+    fun focusedCellFollowsTheCursorAndNeverThePast() {
+        val now = base + 40 * 60
+        val row = listOf(event(1, 0, 60), event(2, 60, 60))
+        assertEquals(1, GuideTimeline.focusedCell(row, GuideCursor(0, base, base), now)?.event?.eventId)
+        assertEquals(2, GuideTimeline.focusedCell(row, GuideCursor(0, base + 90 * 60, base), now)?.event?.eventId)
     }
 }

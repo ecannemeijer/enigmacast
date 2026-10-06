@@ -57,6 +57,15 @@ class ChannelListNavigationTest {
     }
 
     @Test
+    fun rightOpensTheChannelGuideAndLeftOrBackReturns() {
+        assertEquals(ListPane.EPG, ChannelListNavigation.right(ListPane.CHANNELS))
+        assertEquals(ListPane.BOUQUETS, ChannelListNavigation.right(ListPane.BOUQUETS))
+        assertEquals(ListPane.CHANNELS, ChannelListNavigation.left(ListPane.EPG))
+        assertEquals(ListPane.CHANNELS, ChannelListNavigation.back(ListPane.EPG))
+        assertEquals(ListPane.EPG, ChannelListNavigation.left(ChannelListNavigation.right(ListPane.EPG)).let { ChannelListNavigation.right(it) })
+    }
+
+    @Test
     fun bouquetColumnFocusesTheActiveBouquet() {
         val bouquets = listOf(favourites, sport)
         val encoded = "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET %22userbouquet.sport.tv%22 ORDER BY bouquet"

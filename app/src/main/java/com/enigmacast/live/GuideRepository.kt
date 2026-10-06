@@ -48,33 +48,21 @@ class GuideRepository @Inject constructor(
     suspend fun cachedChunk(receiver: ReceiverConfig, bouquetReference: String, chunkStartSec: Long): List<GuideEvent>? =
         cachedFresh(chunks, chunkKey(receiver, bouquetReference, chunkStartSec), System.currentTimeMillis(), CHUNK_TTL_MS)
 
-    suspend fun bouquetChunk(receiver: ReceiverConfig, bouquetReference: String, chunkStartSec: Long): List<GuideEvent> {
+    /** One block of a bouquet's guide; on failure the older cached copy, or null so the caller can try again. */
+    suspend fun bouquetChunk(receiver: ReceiverConfig, bouquetReference: String, chunkStartSec: Long): List<GuideEvent>? {
         if (bouquetReference.isBlank()) return emptyList()
         val key = chunkKey(receiver, bouquetReference, chunkStartSec)
         val nowMs = System.currentTimeMillis()
         cachedFresh(chunks, key, nowMs, CHUNK_TTL_MS)?.let { return it }
         val minutes = (GuideTimeline.CHUNK_SEC / 60).toInt()
         val events = fetch("epgmulti") { source.bouquetEvents(receiver, bouquetReference, chunkStartSec, minutes) }
-            ?: return mutex.withLock { chunks[key]?.events.orEmpty() }
+            ?: return mutex.withLock { chunks[key]?.events }
         store(chunks, key, Entry(nowMs, events), MAX_CHUNKS)
         return events
     }
 
-    suspend fun record(receiver: ReceiverConfig, event: GuideEvent): TimerResult {
-        val result = source.record(receiver, event.reference, event.eventId)
-        if (result.success) {
-            mutex.withLock { recorded += recordKey(receiver, event) }
-        }
-        return result
-    }
-
-    private val recorded = mutableSetOf<String>()
-
-    /** Programmes set to record from this app in this session, for the red dot. */
-    fun isMarkedForRecording(receiver: ReceiverConfig, event: GuideEvent): Boolean = recordKey(receiver, event) in recorded
-
-    private fun recordKey(receiver: ReceiverConfig, event: GuideEvent) =
-        "${receiverKey(receiver)}|${NowEvents.key(event.reference)}|${event.eventId}|${event.beginEpochSec}"
+    suspend fun record(receiver: ReceiverConfig, event: GuideEvent): TimerResult =
+        source.record(receiver, event.reference, event.eventId)
 
     private suspend fun cachedFresh(map: Map<String, Entry>, key: String, nowMs: Long, ttlMs: Long): List<GuideEvent>? =
         mutex.withLock { map[key]?.takeIf { nowMs - it.fetchedAtMs < ttlMs }?.events }

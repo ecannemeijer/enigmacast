@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.foundation.shape.RoundedCornerShape
-import com.enigmacast.domain.player.PictureMode
-import com.enigmacast.domain.player.VideoScaling
-import com.enigmacast.ui.theme.EnigmaColors
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +38,9 @@ import com.enigmacast.R
 import com.enigmacast.domain.model.ConnectionState
 import com.enigmacast.domain.osd.OsdScale
 import com.enigmacast.domain.osd.OsdScaleMode
+import com.enigmacast.domain.player.PictureMode
+import com.enigmacast.domain.player.VideoScaling
+import com.enigmacast.ui.theme.EnigmaColors
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -66,6 +67,15 @@ fun EnigmaRemoteScreen(
             onRestart = viewModel::restartStream,
         )
     }
+    val guideActions = remember(viewModel) {
+        GuideActions(
+            onOpenChannelEpg = viewModel::openChannelEpg,
+            onChooseProgramme = viewModel::chooseProgramme,
+            onChooseGuideBouquet = viewModel::chooseGuideBouquet,
+            onConfirmRecording = viewModel::confirmRecording,
+            onDismissRecording = viewModel::dismissRecording,
+        )
+    }
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         EnigmaVideoPlayer(
             player = player,
@@ -73,6 +83,15 @@ fun EnigmaRemoteScreen(
             debugBorders = ui.osdDebugBorders,
             cues = ui.cues,
             picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
+            // The programme guide shows the live picture small, top right above the grid.
+            modifier = if (ui.ownTuner && ui.guide) {
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = GuidePreview.Top, end = GuidePreview.End)
+                    .size(GuidePreview.Width, GuidePreview.Height)
+            } else {
+                Modifier.fillMaxSize()
+            },
         )
         if (ui.ownTuner) {
             OwnTunerOverlay(
@@ -83,6 +102,7 @@ fun EnigmaRemoteScreen(
                 onZap = viewModel::zapTo,
                 onChooseBouquet = viewModel::chooseBouquet,
                 quickBarActions = quickBarActions,
+                guideActions = guideActions,
             )
         } else if (ui.quickBar) {
             QuickOptionsBar(

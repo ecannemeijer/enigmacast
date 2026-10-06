@@ -52,20 +52,27 @@ object NowEvents {
 }
 
 /** Which part of the full-screen channel list has the D-pad. */
-enum class ListPane { CLOSED, CHANNELS, BOUQUETS }
+enum class ListPane { CLOSED, CHANNELS, BOUQUETS, EPG }
 
 /**
  * The full-screen channel list: OK opens it on the current channel, Left reveals the
  * bouquets on the current bouquet, OK or Right on a bouquet shows its channels and goes
- * back to the channel list, Back steps back one level.
+ * back to the channel list, Right on a channel opens that channel's programme guide next
+ * to it (Left or Back returns to the channel), Back steps back one level.
  */
 object ChannelListNavigation {
     fun open(): ListPane = ListPane.CHANNELS
 
-    fun left(pane: ListPane): ListPane = if (pane == ListPane.CHANNELS) ListPane.BOUQUETS else pane
+    fun left(pane: ListPane): ListPane = when (pane) {
+        ListPane.CHANNELS -> ListPane.BOUQUETS
+        ListPane.EPG -> ListPane.CHANNELS
+        else -> pane
+    }
+
+    fun right(pane: ListPane): ListPane = if (pane == ListPane.CHANNELS) ListPane.EPG else pane
 
     fun back(pane: ListPane): ListPane = when (pane) {
-        ListPane.BOUQUETS -> ListPane.CHANNELS
+        ListPane.BOUQUETS, ListPane.EPG -> ListPane.CHANNELS
         ListPane.CHANNELS, ListPane.CLOSED -> ListPane.CLOSED
     }
 

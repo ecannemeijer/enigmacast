@@ -1,5 +1,7 @@
 package com.enigmacast.domain.epg
 
+import com.enigmacast.domain.tuner.NowEvents
+
 /** One programme from OpenWebif's EPG (`/api/epgservice`, `/api/epgmulti`). */
 data class GuideEvent(
     val eventId: Int,
@@ -18,6 +20,9 @@ data class GuideEvent(
         if (durationSec <= 0) return 0f
         return ((nowSec - beginEpochSec).toFloat() / durationSec).coerceIn(0f, 1f)
     }
+
+    /** Identifies the programme across guide reloads (event ids are only unique per channel). */
+    val recordKey: String get() = "${NowEvents.key(reference)}|$beginEpochSec"
 
     /** The long description when there is one, else the short one. */
     val description: String get() = plot.ifBlank { shortDescription }

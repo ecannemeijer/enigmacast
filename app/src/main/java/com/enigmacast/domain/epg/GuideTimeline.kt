@@ -1,5 +1,7 @@
 package com.enigmacast.domain.epg
 
+import com.enigmacast.domain.tuner.NowEvents
+
 /**
  * One block in a channel's row of the programme guide: a programme, or a stretch
  * without EPG data ([event] null) so the row stays navigable.
@@ -98,6 +100,23 @@ object GuideTimeline {
     fun moveVertical(cursor: GuideCursor, delta: Int, rowCount: Int): GuideCursor {
         if (rowCount <= 0) return cursor
         return cursor.copy(row = (cursor.row + delta).coerceIn(0, rowCount - 1))
+    }
+
+    /** The cell the guide highlights in one channel's row. */
+    fun focusedCell(row: List<GuideEvent>, cursor: GuideCursor, nowSec: Long): GuideCell? {
+        val earliest = slotFloor(nowSec)
+        val focus = maxOf(cursor.focusSec, nowSec)
+        return cellAt(cells(row, earliest, maxOf(focus, cursor.windowStartSec + WINDOW_SEC) + SLOT_SEC), focus)
+    }
+
+    /** Adds freshly loaded programmes to the per-channel lists; newer data wins for the same start time. */
+    fun merge(current: Map<String, List<GuideEvent>>, events: List<GuideEvent>): Map<String, List<GuideEvent>> {
+        if (events.isEmpty()) return current
+        val result = current.toMutableMap()
+        events.groupBy { NowEvents.key(it.reference) }.forEach { (key, fresh) ->
+            result[key] = (fresh + current[key].orEmpty()).distinctBy { it.beginEpochSec }.sortedBy { it.beginEpochSec }
+        }
+        return result
     }
 
     /** The 3-hour blocks ([CHUNK_SEC]) needed to show the window plus a block of look-ahead. */
