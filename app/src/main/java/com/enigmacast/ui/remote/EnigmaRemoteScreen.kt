@@ -1,6 +1,7 @@
 package com.enigmacast.ui.remote
 
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
 import android.view.TextureView
@@ -17,6 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.enigmacast.domain.player.PictureMode
+import com.enigmacast.domain.player.VideoScaling
+import com.enigmacast.ui.theme.EnigmaColors
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,8 +53,27 @@ fun EnigmaRemoteScreen(
     }
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val player = viewModel.player()
+    val quickBarActions = remember(viewModel) {
+        QuickBarActions(
+            onSubtitles = viewModel::chooseSubtitles,
+            onAudio = viewModel::chooseAudio,
+            onPassthrough = viewModel::setPassthrough,
+            onPictureMode = viewModel::choosePictureMode,
+            onAudioDelay = viewModel::setAudioDelay,
+            onGuide = viewModel::openGuideFromBar,
+            onRecent = viewModel::zapRecent,
+            onSleep = viewModel::setSleepTimer,
+            onRestart = viewModel::restartStream,
+        )
+    }
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        EnigmaVideoPlayer(player, ui.osdFrame, ui.osdDebugBorders, ui.cues)
+        EnigmaVideoPlayer(
+            player = player,
+            frame = ui.osdFrame,
+            debugBorders = ui.osdDebugBorders,
+            cues = ui.cues,
+            picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
+        )
         if (ui.ownTuner) {
             OwnTunerOverlay(
                 ui = ui,
@@ -57,6 +82,17 @@ fun EnigmaRemoteScreen(
                 numberOf = viewModel::numberOf,
                 onZap = viewModel::zapTo,
                 onChooseBouquet = viewModel::chooseBouquet,
+                quickBarActions = quickBarActions,
+            )
+        } else if (ui.quickBar) {
+            QuickOptionsBar(
+                ui = ui,
+                actions = quickBarActions,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 44.dp, vertical = 32.dp)
+                    .background(EnigmaColors.Scrim, RoundedCornerShape(14.dp))
+                    .padding(8.dp),
             )
         }
         if (ui.connectionState !is ConnectionState.Connected && ui.connectionState !is ConnectionState.Idle) {
@@ -101,12 +137,19 @@ fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Mod
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Boolean, cues: List<Cue>) {
+private fun EnigmaVideoPlayer(
+    player: Player,
+    frame: OsdFrame?,
+    debugBorders: Boolean,
+    cues: List<Cue>,
+    picture: VideoShape,
+    modifier: Modifier = Modifier.fillMaxSize(),
+) {
     // Compose draws into the parent canvas. An Android child such as TextureView is
     // composited above that canvas, so an OSD Image in Compose stays hidden behind the video.
     // Subtitles sit above the video and under the tuner OSD.
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         factory = { context ->
             val texture = TextureView(context)
             val subtitles = CueOverlayView(context)
@@ -119,7 +162,9 @@ private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Bo
                 addView(texture, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 addView(subtitles, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 addView(osd, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                tag = VideoLayer(texture, subtitles, osd, boundPlayer = null)
+                val layer = VideoLayer(texture, subtitles, osd, boundPlayer = null)
+                tag = layer
+                texture.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layer.applyPicture() }
             }
         },
         update = { layout ->
@@ -130,6 +175,10 @@ private fun EnigmaVideoPlayer(player: Player, frame: OsdFrame?, debugBorders: Bo
                 layer.boundPlayer = player
             }
             layer.subtitles.cues = cues
+            if (layer.picture != picture) {
+                layer.picture = picture
+                layer.applyPicture()
+            }
             val scale = OsdScale.choose(
                 frame?.width ?: 0,
                 frame?.height ?: 0,
@@ -162,7 +211,24 @@ private class VideoLayer(
     val osd: ImageView,
     var boundPlayer: Player?,
     var shownHash: Long? = null,
-)
+    var picture: VideoShape? = null,
+) {
+    /** Scales the frame around the centre of the view for the chosen picture mode. */
+    fun applyPicture() {
+        val shape = picture ?: return
+        val width = texture.width
+        val height = texture.height
+        if (width <= 0 || height <= 0) return
+        val scale = VideoScaling.scale(shape.mode, shape.videoWidth, shape.videoHeight, shape.pixelRatio, width, height)
+        val matrix = Matrix()
+        matrix.setScale(scale.x, scale.y, width / 2f, height / 2f)
+        texture.setTransform(matrix)
+        texture.invalidate()
+    }
+}
+
+/** What the picture mode needs to know about the video. */
+data class VideoShape(val mode: PictureMode, val videoWidth: Int, val videoHeight: Int, val pixelRatio: Float)
 
 private class MiniVideoLayer(
     val texture: TextureView,

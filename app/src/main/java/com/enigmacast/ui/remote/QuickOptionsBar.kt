@@ -1,0 +1,428 @@
+package com.enigmacast.ui.remote
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Text
+import com.enigmacast.R
+import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.player.AudioDelayChoices
+import com.enigmacast.domain.player.PictureMode
+import com.enigmacast.domain.player.QuickOption
+import com.enigmacast.domain.player.QuickOptions
+import com.enigmacast.domain.player.SleepTimerChoices
+import com.enigmacast.domain.tuner.NowEvents
+import com.enigmacast.playback.AudioSync
+import com.enigmacast.ui.theme.CompactListRow
+import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.EnigmaIcons
+import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.util.asString
+import com.enigmacast.util.isNotEmpty
+import kotlinx.coroutines.delay
+import java.util.Locale
+
+/** What the quick options bar can change; wired to [RemoteDisplayViewModel]. */
+data class QuickBarActions(
+    val onSubtitles: (String?) -> Unit,
+    val onAudio: (String) -> Unit,
+    val onPassthrough: (Boolean) -> Unit,
+    val onPictureMode: (PictureMode) -> Unit,
+    val onAudioDelay: (Int) -> Unit,
+    val onGuide: () -> Unit,
+    val onRecent: (LastChannel) -> Unit,
+    val onSleep: (Int) -> Unit,
+    val onRestart: () -> Unit,
+)
+
+private val TileShape = RoundedCornerShape(10.dp)
+
+/**
+ * TiviMate-style options under the channel banner: a row of tiles (icon, name, current
+ * value), Left/Right to move, OK to open a small picker above the tile, Back to close.
+ */
+@Composable
+fun QuickOptionsBar(ui: RemoteDisplayUiState, actions: QuickBarActions, modifier: Modifier = Modifier) {
+    val tiles = QuickOptions.tiles(ui.ownTuner)
+    val firstFocus = remember { FocusRequester() }
+    var open by remember { mutableStateOf<QuickOption?>(null) }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(15_000)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    LaunchedEffect(ui.quickBarToken) {
+        open = null
+        firstFocus.requestWhenReady()
+    }
+    LazyRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+    ) {
+        itemsIndexed(tiles, key = { _, option -> option.name }) { index, option ->
+            Box {
+                QuickTile(
+                    icon = option.icon(),
+                    label = option.label(),
+                    value = tileValue(option, ui, nowMs),
+                    onClick = {
+                        when (option) {
+                            QuickOption.GUIDE -> actions.onGuide()
+                            QuickOption.RESTART -> actions.onRestart()
+                            else -> open = option
+                        }
+                    },
+                    modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                )
+                if (open == option) {
+                    QuickPicker(option, ui, actions, onClose = { open = null })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickTile(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Column(
+        modifier = modifier
+            .width(122.dp)
+            .background(if (focused) EnigmaColors.Focus else EnigmaColors.Raised, TileShape)
+            .border(1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, TileShape)
+            .onKeyEvent { event ->
+                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (confirm && event.type == KeyEventType.KeyUp) onClick()
+                confirm
+            }
+            .focusable(interactionSource = interaction)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, modifier = Modifier.size(18.dp))
+        Text(label, color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value.ifBlank { " " }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private class PickerItem(val label: String, val selected: Boolean, val onSelect: () -> Unit)
+
+@Composable
+private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: QuickBarActions, onClose: () -> Unit) {
+    val density = LocalDensity.current
+    val provider = remember(density) {
+        with(density) { AboveAnchor(gapPx = 8.dp.roundToPx(), marginPx = 16.dp.roundToPx()) }
+    }
+    Popup(
+        popupPositionProvider = provider,
+        onDismissRequest = onClose,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(min = 220.dp, max = 340.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(12.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(option.label(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            when (option) {
+                QuickOption.STREAM_INFO -> StreamInfo(ui, onClose)
+                QuickOption.AUDIO_DELAY -> {
+                    Text(
+                        stringResource(if (ui.audioDelayPassthrough) R.string.quick_delay_for_hdmi else R.string.quick_delay_for_stereo),
+                        color = EnigmaColors.Subtle,
+                        fontSize = 11.sp,
+                    )
+                    PickerList(pickerItems(option, ui, actions, onClose), onClose)
+                }
+                else -> {
+                    val items = pickerItems(option, ui, actions, onClose)
+                    if (items.isEmpty()) {
+                        Text(emptyText(option), color = EnigmaColors.Muted, fontSize = 13.sp)
+                        CloseOnOk(onClose)
+                    } else {
+                        PickerList(items, onClose)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: QuickBarActions, onClose: () -> Unit): List<PickerItem> {
+    fun pick(action: () -> Unit): () -> Unit = {
+        action()
+        onClose()
+    }
+    return when (option) {
+        QuickOption.SUBTITLES -> {
+            if (ui.tracks.subtitles.isEmpty()) {
+                emptyList()
+            } else {
+                listOf(PickerItem(stringResource(R.string.off), !ui.tracks.subtitlesOn, pick { actions.onSubtitles(null) })) +
+                    ui.tracks.subtitles.map { track -> PickerItem(track.label.asString(), track.selected, pick { actions.onSubtitles(track.id) }) }
+            }
+        }
+        QuickOption.AUDIO -> {
+            val tracks = ui.tracks.audio.map { track -> PickerItem(track.label.asString(), track.selected && ui.tracks.audio.size > 1, pick { actions.onAudio(track.id) }) }
+            tracks + listOf(
+                PickerItem(stringResource(R.string.quick_output_stereo), !ui.hdmiPassthrough, pick { actions.onPassthrough(false) }),
+                PickerItem(stringResource(R.string.quick_output_hdmi), ui.hdmiPassthrough, pick { actions.onPassthrough(true) }),
+            )
+        }
+        QuickOption.PICTURE -> PictureMode.entries.map { mode ->
+            PickerItem(pictureLabel(mode), mode == ui.pictureMode, pick { actions.onPictureMode(mode) })
+        }
+        QuickOption.AUDIO_DELAY -> AudioDelayChoices.values(AudioSync.MIN_MS, AudioSync.MAX_MS, AudioSync.STEP_MS).map { ms ->
+            PickerItem(AudioSync.label(ms), ms == ui.audioDelayMs, pick { actions.onAudioDelay(ms) })
+        }
+        QuickOption.RECENT -> {
+            val current = ui.own.channel?.reference?.let(NowEvents::key)
+            ui.recent.filter { NowEvents.key(it.reference) != current }.map { channel ->
+                PickerItem(channel.name.ifBlank { channel.reference }, false, pick { actions.onRecent(channel) })
+            }
+        }
+        QuickOption.SLEEP -> {
+            val left = SleepTimerChoices.minutesLeft(ui.sleepEndsAtMs, System.currentTimeMillis())
+            SleepTimerChoices.minutes.map { minutes ->
+                val label = if (minutes == 0) stringResource(R.string.off) else stringResource(R.string.quick_minutes, minutes)
+                PickerItem(label, (minutes == 0 && left == 0), pick { actions.onSleep(minutes) })
+            }
+        }
+        QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO -> emptyList()
+    }
+}
+
+@Composable
+private fun PickerList(items: List<PickerItem>, onClose: () -> Unit) {
+    val listState = rememberLazyListState()
+    val focus = remember { FocusRequester() }
+    val start = items.indexOfFirst { it.selected }.coerceAtLeast(0)
+    LaunchedEffect(Unit) {
+        listState.scrollToItem((start - 3).coerceAtLeast(0))
+        focus.requestWhenReady()
+    }
+    LazyColumn(state = listState, modifier = Modifier.heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        itemsIndexed(items) { index, item ->
+            CompactListRow(
+                onClick = item.onSelect,
+                selected = item.selected,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                modifier = if (index == start) Modifier.focusRequester(focus) else Modifier,
+            ) { focused ->
+                Box(Modifier.width(20.dp)) {
+                    if (item.selected) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Text(item.label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** A focus target so OK (and Back) closes a picker that has nothing to choose. */
+@Composable
+private fun CloseOnOk(onClose: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestWhenReady() }
+    Spacer(
+        Modifier
+            .size(1.dp)
+            .focusRequester(focus)
+            .onKeyEvent { event ->
+                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter
+                if (confirm && event.type == KeyEventType.KeyUp) onClose()
+                confirm
+            }
+            .focusable(),
+    )
+}
+
+@Composable
+private fun StreamInfo(ui: RemoteDisplayUiState, onClose: () -> Unit) {
+    val player = ui.playerState
+    val video = listOf(
+        if (player.videoWidth > 0) "${player.videoWidth}×${player.videoHeight}" else "",
+        videoCodecName(player.videoCodec),
+        if (player.frameRate > 0f) "${player.frameRate.toInt()} fps" else "",
+    ).filter { it.isNotBlank() }.joinToString(" · ")
+    val lines = buildList {
+        if (video.isNotBlank()) add(stringResource(R.string.quick_info_video, video))
+        if (player.audioLabel.isNotEmpty()) add(stringResource(R.string.quick_info_audio, player.audioLabel.asString()))
+        add(stringResource(R.string.quick_info_bitrate, bitrateLabel(ui.stats.bitrateKbps)))
+        add(stringResource(R.string.quick_info_buffer, ui.stats.bufferMs / 1000f))
+        add(stringResource(R.string.quick_info_dropped, ui.stats.droppedFrames))
+        add(stringResource(R.string.quick_info_stalls, ui.stats.stalls))
+        val mode = stringResource(if (ui.ownTuner) R.string.viewing_mode_own else R.string.viewing_mode_follow)
+        add(stringResource(R.string.quick_info_source, "${ui.receiverAddress} · $mode"))
+    }
+    lines.forEach { line ->
+        Text(line, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+    CloseOnOk(onClose)
+}
+
+@Composable
+fun bitrateLabel(kbps: Int): String = when {
+    kbps <= 0 -> "–"
+    kbps >= 1000 -> stringResource(R.string.bitrate_mbps, kbps / 1000f)
+    else -> stringResource(R.string.bitrate_kbps, kbps)
+}
+
+private fun videoCodecName(mime: String): String = when (mime) {
+    "" -> ""
+    "video/avc" -> "H.264"
+    "video/hevc" -> "HEVC"
+    "video/mpeg2" -> "MPEG-2"
+    "video/av01" -> "AV1"
+    else -> mime.substringAfter('/').uppercase(Locale.ROOT)
+}
+
+@Composable
+private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long): String = when (option) {
+    QuickOption.SUBTITLES -> when {
+        ui.tracks.subtitles.isEmpty() -> stringResource(R.string.quick_none)
+        !ui.tracks.subtitlesOn -> stringResource(R.string.off)
+        else -> ui.tracks.subtitles.firstOrNull { it.selected }?.label?.asString() ?: stringResource(R.string.on)
+    }
+    QuickOption.AUDIO -> ui.playerState.audioLabel.asString().ifBlank { "–" }
+    QuickOption.PICTURE -> pictureLabel(ui.pictureMode)
+    QuickOption.AUDIO_DELAY -> AudioSync.label(ui.audioDelayMs)
+    QuickOption.GUIDE -> ui.own.guide?.currentEvent?.title.orEmpty()
+    QuickOption.RECENT -> ui.recent.firstOrNull { NowEvents.key(it.reference) != ui.own.channel?.reference?.let(NowEvents::key) }?.name.orEmpty()
+    QuickOption.SLEEP -> {
+        val left = SleepTimerChoices.minutesLeft(ui.sleepEndsAtMs, nowMs)
+        if (left == 0) stringResource(R.string.off) else stringResource(R.string.quick_minutes, left)
+    }
+    QuickOption.STREAM_INFO -> bitrateLabel(ui.stats.bitrateKbps)
+    QuickOption.RESTART -> ""
+}
+
+@Composable
+private fun QuickOption.label(): String = stringResource(
+    when (this) {
+        QuickOption.SUBTITLES -> R.string.subtitles
+        QuickOption.AUDIO -> R.string.quick_audio
+        QuickOption.PICTURE -> R.string.quick_picture
+        QuickOption.AUDIO_DELAY -> R.string.quick_audio_delay
+        QuickOption.GUIDE -> R.string.quick_guide
+        QuickOption.RECENT -> R.string.quick_recent
+        QuickOption.SLEEP -> R.string.sleep_title
+        QuickOption.STREAM_INFO -> R.string.quick_stream_info
+        QuickOption.RESTART -> R.string.quick_restart
+    },
+)
+
+private fun QuickOption.icon(): ImageVector = when (this) {
+    QuickOption.SUBTITLES -> EnigmaIcons.Subtitles
+    QuickOption.AUDIO -> EnigmaIcons.Audiotrack
+    QuickOption.PICTURE -> EnigmaIcons.AspectRatio
+    QuickOption.AUDIO_DELAY -> EnigmaIcons.Sync
+    QuickOption.GUIDE -> EnigmaIcons.Guide
+    QuickOption.RECENT -> EnigmaIcons.History
+    QuickOption.SLEEP -> EnigmaIcons.Bedtime
+    QuickOption.STREAM_INFO -> Icons.Filled.Info
+    QuickOption.RESTART -> Icons.Filled.Refresh
+}
+
+@Composable
+private fun pictureLabel(mode: PictureMode): String = stringResource(
+    when (mode) {
+        PictureMode.AUTO -> R.string.picture_auto
+        PictureMode.WIDE -> R.string.picture_wide
+        PictureMode.NORMAL -> R.string.picture_normal
+        PictureMode.ZOOM -> R.string.picture_zoom
+        PictureMode.STRETCH -> R.string.picture_stretch
+    },
+)
+
+@Composable
+private fun emptyText(option: QuickOption): String = stringResource(
+    when (option) {
+        QuickOption.SUBTITLES -> R.string.quick_no_subtitles
+        QuickOption.RECENT -> R.string.quick_no_recent
+        else -> R.string.quick_none
+    },
+)
+
+/** Places a picker centred above its tile, kept inside the screen. */
+private class AboveAnchor(private val gapPx: Int, private val marginPx: Int) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val maxX = (windowSize.width - popupContentSize.width - marginPx).coerceAtLeast(marginPx)
+        val x = (anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2).coerceIn(marginPx, maxX)
+        val y = (anchorBounds.top - popupContentSize.height - gapPx).coerceAtLeast(marginPx)
+        return IntOffset(x, y)
+    }
+}

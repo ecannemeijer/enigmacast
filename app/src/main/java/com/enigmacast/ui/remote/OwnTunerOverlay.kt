@@ -86,6 +86,7 @@ fun OwnTunerOverlay(
     numberOf: (BouquetEntry) -> Int,
     onZap: (BouquetEntry) -> Unit,
     onChooseBouquet: (BouquetEntry) -> Unit,
+    quickBarActions: QuickBarActions,
 ) {
     val own = ui.own
     val tuner = own.tuner
@@ -131,17 +132,26 @@ fun OwnTunerOverlay(
             )
         }
         if (ui.banner && channel != null && !ui.channelList) {
-            ChannelBanner(
-                channel = channel,
-                number = numberOf(channel),
-                guide = own.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) },
-                player = ui.playerState,
-                tuner = tuner,
-                details = ui.details,
-                picon = picon,
-                cachedPicon = cachedPicon,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                ChannelBanner(
+                    channel = channel,
+                    number = numberOf(channel),
+                    guide = own.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) },
+                    player = ui.playerState,
+                    tuner = tuner,
+                    details = ui.details,
+                    optionsHint = !ui.bannerFromZap && !ui.quickBar,
+                    picon = picon,
+                    cachedPicon = cachedPicon,
+                )
+                if (ui.quickBar) {
+                    QuickOptionsBar(
+                        ui = ui,
+                        actions = quickBarActions,
+                        modifier = Modifier.padding(start = 44.dp, end = 44.dp, bottom = 24.dp),
+                    )
+                }
+            }
         }
         if (ui.channelList) {
             ChannelListOverlay(
@@ -165,6 +175,7 @@ private fun ChannelBanner(
     player: PlayerState,
     tuner: TunerState,
     details: Boolean,
+    optionsHint: Boolean,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
@@ -255,7 +266,11 @@ private fun ChannelBanner(
                 player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()))
                 player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available))
             }
-            Text(stringResource(R.string.osd_banner_hint), color = EnigmaColors.Subtle, fontSize = 12.sp)
+            Text(
+                stringResource(if (optionsHint) R.string.osd_banner_hint_options else R.string.osd_banner_hint),
+                color = EnigmaColors.Subtle,
+                fontSize = 12.sp,
+            )
         }
     }
 }

@@ -46,6 +46,14 @@ import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
 import com.enigmacast.live.TunerStatus
+import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.player.PictureMode
+import com.enigmacast.domain.tuner.NowEvents
+import com.enigmacast.playback.AppSleepTimer
+import com.enigmacast.playback.AudioSync
+import com.enigmacast.playback.SleepEvent
+import com.enigmacast.playback.StreamStats
+import com.enigmacast.playback.TrackMenu
 import com.enigmacast.osd.AndroidOsdAnalyzer
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.remote.RemoteInputBus
@@ -99,6 +107,22 @@ data class RemoteDisplayUiState(
     val listFocusToken: Int = 0,
     val numberEntry: String = "",
     val notice: UiText = UiText.Empty,
+    /** The banner came up because of a zap; Down then zaps on instead of opening the quick bar. */
+    val bannerFromZap: Boolean = false,
+    /** The quick options bar under the banner (Down on the banner, or hold Info when following the receiver). */
+    val quickBar: Boolean = false,
+    /** Bumped when the quick bar opens, so its first tile takes the focus. */
+    val quickBarToken: Int = 0,
+    val tracks: TrackMenu = TrackMenu(),
+    val stats: StreamStats = StreamStats(),
+    val pictureMode: PictureMode = PictureMode.AUTO,
+    val hdmiPassthrough: Boolean = false,
+    /** The audio delay of the output in use (HDMI passthrough or stereo). */
+    val audioDelayMs: Int = 0,
+    val audioDelayPassthrough: Boolean = false,
+    val sleepEndsAtMs: Long = 0L,
+    val recent: List<LastChannel> = emptyList(),
+    val receiverAddress: String = "",
 )
 
 @HiltViewModel
@@ -115,6 +139,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val ownSession: OwnTunerSession,
     private val picons: PiconRepository,
     private val nowEpg: NowEpgRepository,
+    private val sleepTimer: AppSleepTimer,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -136,6 +161,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private var okJob: Job? = null
     private var blueTextSent = false
     private var blueJob: Job? = null
+    private var infoQuickBar = false
+    private var infoJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
     private var bannerJob: Job? = null
     private var numberJob: Job? = null
@@ -157,8 +184,12 @@ class RemoteDisplayViewModel @Inject constructor(
                     it.copy(
                         debugOverlayEnabled = settings.debug.overlay,
                         osdDebugBorders = settings.osd.debugBorders,
+                        hdmiPassthrough = settings.playback.hdmiPassthrough,
+                        recent = settings.recentChannels,
+                        receiverAddress = settings.activeReceiver()?.let { receiver -> "${receiver.host}:${receiver.streamingPort}" }.orEmpty(),
                     )
                 }
+                refreshPlaybackOptions()
                 val signature = listOf(
                     settings.activeReceiver(),
                     settings.osd.copy(debugBorders = false),
@@ -181,6 +212,114 @@ class RemoteDisplayViewModel @Inject constructor(
                 _ui.update { it.copy(subtitlesAvailable = available) }
             }
         }
+        viewModelScope.launch {
+            playback.tracks.collect { tracks -> _ui.update { it.copy(tracks = tracks) } }
+        }
+        viewModelScope.launch {
+            playback.stats.collect { stats -> _ui.update { it.copy(stats = stats) } }
+        }
+        viewModelScope.launch {
+            playback.audioPassthroughActive.collect { refreshPlaybackOptions() }
+        }
+        viewModelScope.launch {
+            sleepTimer.endsAtMs.collect { endsAt -> _ui.update { it.copy(sleepEndsAtMs = endsAt) } }
+        }
+        viewModelScope.launch {
+            sleepTimer.events.collect { event ->
+                if (event == SleepEvent.WARNING) showNotice(UiText.res(R.string.sleep_app_warning), NOTICE_LONG_MS)
+            }
+        }
+    }
+
+    /** Picture mode of the channel that plays and the audio delay of the output in use. */
+    private fun refreshPlaybackOptions() {
+        val reference = _ui.value.currentService?.reference.orEmpty()
+        val mode = if (reference.isBlank()) PictureMode.AUTO else settingsSnapshot.pictureModes[NowEvents.key(reference)] ?: PictureMode.AUTO
+        val passthrough = playback.audioPassthroughActive.value ?: settingsSnapshot.playback.hdmiPassthrough
+        val delay = if (passthrough) settingsSnapshot.playback.audioDelayPassthroughMs else settingsSnapshot.playback.audioDelayPcmMs
+        _ui.update { it.copy(pictureMode = mode, audioDelayMs = delay, audioDelayPassthrough = passthrough) }
+    }
+
+    fun openQuickBar() {
+        bannerJob?.cancel()
+        _ui.update { it.copy(quickBar = true, quickBarToken = it.quickBarToken + 1) }
+    }
+
+    /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
+    fun closeQuickBar() {
+        if (!_ui.value.quickBar) return
+        _ui.update { it.copy(quickBar = false) }
+        if (_ui.value.ownTuner && _ui.value.banner) showBanner()
+    }
+
+    fun chooseSubtitles(id: String?) {
+        playback.chooseSubtitles(id)
+        viewModelScope.launch {
+            settingsRepository.update { it.copy(playback = it.playback.copy(subtitlesEnabled = id != null)) }
+        }
+    }
+
+    fun chooseAudio(id: String) = playback.selectAudio(id)
+
+    /** Switching between stereo and passthrough builds a new player, so the picture restarts briefly. */
+    fun setPassthrough(enabled: Boolean) {
+        if (enabled == settingsSnapshot.playback.hdmiPassthrough) return
+        viewModelScope.launch {
+            settingsRepository.update { it.copy(playback = it.playback.copy(hdmiPassthrough = enabled)) }
+        }
+    }
+
+    fun choosePictureMode(mode: PictureMode) {
+        val reference = _ui.value.currentService?.reference.orEmpty()
+        if (reference.isBlank()) return
+        val key = NowEvents.key(reference)
+        _ui.update { it.copy(pictureMode = mode) }
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                val modes = if (mode == PictureMode.AUTO) settings.pictureModes - key else settings.pictureModes + (key to mode)
+                settings.copy(pictureModes = modes)
+            }
+        }
+    }
+
+    fun setAudioDelay(ms: Int) {
+        val passthrough = _ui.value.audioDelayPassthrough
+        val value = AudioSync.clamp(ms)
+        _ui.update { it.copy(audioDelayMs = value) }
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                val playbackSettings = if (passthrough) {
+                    settings.playback.copy(audioDelayPassthroughMs = value)
+                } else {
+                    settings.playback.copy(audioDelayPcmMs = value)
+                }
+                settings.copy(playback = playbackSettings)
+            }
+        }
+    }
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimer.set(minutes)
+        showNotice(
+            if (minutes > 0) UiText.res(R.string.sleep_app_set, minutes) else UiText.res(R.string.sleep_app_off),
+        )
+    }
+
+    fun zapRecent(channel: LastChannel) {
+        _ui.update { it.copy(quickBar = false) }
+        ownSession.start(BouquetEntry(channel.name, channel.reference))
+    }
+
+    /** The Guide tile: the channel list for now (the programme guide grid replaces it). */
+    fun openGuideFromBar() {
+        _ui.update { it.copy(quickBar = false) }
+        openChannelList()
+    }
+
+    fun restartStream() {
+        _ui.update { it.copy(quickBar = false) }
+        showNotice(UiText.res(R.string.quick_restarting))
+        if (_ui.value.ownTuner) ownSession.retry() else playback.restart()
     }
 
     fun player() = playback.exoPlayer()
@@ -248,6 +387,7 @@ class RemoteDisplayViewModel @Inject constructor(
             launch {
                 monitor.service.collect { service ->
                     _ui.update { it.copy(currentService = service) }
+                    refreshPlaybackOptions()
                     refreshDebug()
                 }
             }
@@ -344,7 +484,8 @@ class RemoteDisplayViewModel @Inject constructor(
                             currentService = own.channel?.let { channel -> EnigmaService(channel.name, channel.reference) },
                         )
                     }
-                    if (zapped && own.channel != null) showBanner()
+                    if (zapped && own.channel != null) showBanner(fromZap = true)
+                    if (zapped) refreshPlaybackOptions()
                     refreshDebug()
                 }
             }
@@ -437,10 +578,12 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
-    private fun showBanner(details: Boolean = _ui.value.details) {
+    private fun showBanner(details: Boolean = _ui.value.details, fromZap: Boolean = false) {
         ownSession.refreshGuideIfStale()
-        _ui.update { it.copy(banner = true, details = details) }
+        _ui.update { it.copy(banner = true, details = details, bannerFromZap = fromZap) }
         bannerJob?.cancel()
+        // The quick bar keeps the banner up while it has the focus.
+        if (_ui.value.quickBar) return
         bannerJob = viewModelScope.launch {
             delay(if (details) DETAILS_VISIBLE_MS else BANNER_VISIBLE_MS)
             _ui.update { it.copy(banner = false, details = false) }
@@ -449,14 +592,14 @@ class RemoteDisplayViewModel @Inject constructor(
 
     private fun hideBanner() {
         bannerJob?.cancel()
-        _ui.update { it.copy(banner = false, details = false) }
+        _ui.update { it.copy(banner = false, details = false, quickBar = false) }
     }
 
-    private fun showNotice(text: UiText) {
+    private fun showNotice(text: UiText, durationMs: Long = NOTICE_MS) {
         _ui.update { it.copy(notice = text) }
         noticeJob?.cancel()
         noticeJob = viewModelScope.launch {
-            delay(2_500)
+            delay(durationMs)
             _ui.update { it.copy(notice = UiText.Empty) }
         }
     }
@@ -467,6 +610,14 @@ class RemoteDisplayViewModel @Inject constructor(
         lastKey = KeyEvent.keyCodeToString(event.keyCode)
         if (action == OwnKeyAction.BACK) {
             if (event.action == KeyEvent.ACTION_UP) ownBack()
+            return true
+        }
+        // The quick bar is plain Compose focus (Left/Right between tiles, OK opens a picker).
+        if (ui.quickBar) return false
+        // Down on a banner that OK, Info or Left/Right brought up opens the quick bar;
+        // after a zap Down keeps zapping.
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && ui.banner && !ui.bannerFromZap && !ui.channelList) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) openQuickBar()
             return true
         }
         if (ui.channelList) {
@@ -506,6 +657,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun ownBack() {
         val ui = _ui.value
         when {
+            ui.quickBar -> closeQuickBar()
             ui.channelList -> {
                 val pane = ChannelListNavigation.back(listPane(ui))
                 applyPane(pane, focusList = pane == ListPane.CHANNELS)
@@ -542,6 +694,14 @@ class RemoteDisplayViewModel @Inject constructor(
 
     private fun handleKey(event: KeyEvent): Boolean {
         if (_ui.value.ownTuner) return handleOwnKey(event)
+        if (_ui.value.quickBar) {
+            // Following the receiver: the bar keeps the keys while it is open; Back closes it.
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) closeQuickBar()
+                return true
+            }
+            return false
+        }
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
             releaseBack()
             return true
@@ -557,6 +717,7 @@ class RemoteDisplayViewModel @Inject constructor(
         if (mapped == EnigmaKey.EXIT) return handleBack(event)
         if (mapped == EnigmaKey.OK) return handleOk(event)
         if (mapped == EnigmaKey.BLUE) return handleBlue(event)
+        if (mapped == EnigmaKey.INFO) return handleInfo(event)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) keys?.onDown(mapped)
             KeyEvent.ACTION_UP -> keys?.onUp(mapped)
@@ -651,6 +812,32 @@ class RemoteDisplayViewModel @Inject constructor(
         return true
     }
 
+    /** Following the receiver: Info goes to the receiver, holding Info opens the app's quick bar. */
+    private fun handleInfo(event: KeyEvent): Boolean {
+        val threshold = settingsSnapshot.remote.longPressMs
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount != 0) return true
+                infoQuickBar = false
+                infoJob?.cancel()
+                infoJob = viewModelScope.launch {
+                    delay(threshold)
+                    infoQuickBar = true
+                    openQuickBar()
+                }
+            }
+            KeyEvent.ACTION_UP -> {
+                infoJob?.cancel()
+                if (!infoQuickBar) {
+                    keys?.onDown(EnigmaKey.INFO)
+                    keys?.onUp(EnigmaKey.INFO)
+                }
+                infoQuickBar = false
+            }
+        }
+        return true
+    }
+
     private fun refreshDebug() {
         val ui = _ui.value
         val player = ui.playerState
@@ -725,6 +912,8 @@ private const val BANNER_VISIBLE_MS = 5_000L
 private const val DETAILS_VISIBLE_MS = 12_000L
 private const val NUMBER_ENTRY_MS = 1_500L
 private const val NOW_EPG_CHECK_MS = 30_000L
+private const val NOTICE_MS = 2_500L
+private const val NOTICE_LONG_MS = 8_000L
 
 private fun com.enigmacast.domain.model.OsdSettings.toOsdConfig(): OsdConfig {
     return OsdConfig(
