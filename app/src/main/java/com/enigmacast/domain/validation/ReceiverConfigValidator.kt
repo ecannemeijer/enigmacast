@@ -2,6 +2,7 @@ package com.enigmacast.domain.validation
 
 import com.enigmacast.R
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.network.WireGuardText
 import com.enigmacast.util.UiText
 
 data class ValidationResult(
@@ -28,6 +29,9 @@ object ReceiverConfigValidator {
         val remotePorts = listOf(config.remoteHttpPort, config.remoteStreamingPort, config.remoteTranscodingPort)
         if (remotePorts.any { it !in 0..65535 }) errors += UiText.res(R.string.valid_remote_port)
         if (config.transcodingPort !in 1..65535) errors += UiText.res(R.string.valid_transcoding_port)
+        if (config.wireGuard && !WireGuardText.summarize(config.wireGuardConfig).valid) {
+            errors += UiText.res(R.string.valid_wireguard)
+        }
         return ValidationResult(errors)
     }
 }

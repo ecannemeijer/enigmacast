@@ -1,5 +1,9 @@
 package com.enigmacast.ui.connection
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,17 +22,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.MaterialTheme
 import com.enigmacast.R
+import com.enigmacast.data.network.TunnelState
 import com.enigmacast.domain.network.AccessMode
 import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.network.StreamProfile
 import com.enigmacast.domain.network.TranscodePreset
+import com.enigmacast.domain.network.WireGuardIssue
+import com.enigmacast.domain.network.WireGuardText
 import com.enigmacast.ui.theme.ChoiceChip
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.util.asString
@@ -90,6 +102,8 @@ fun ConnectionScreen(
         }
         QualitySection(viewModel, fieldColors)
         RemoteSection(viewModel, fieldColors)
+        WireGuardSection(viewModel, fieldColors)
+        AccessModeSection(viewModel)
         if (viewModel.discoveredHosts.isNotEmpty()) {
             Text(stringResource(R.string.discovered_hosts), color = Color.White, fontSize = 18.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -200,6 +214,12 @@ private fun RemoteSection(viewModel: ConnectionViewModel, fieldColors: androidx.
         Text(stringResource(R.string.conn_remote_http_warning), color = Color(0xFFFF7A70), fontSize = 16.sp)
     }
     Text(stringResource(R.string.conn_remote_stream_note), color = Color(0xFFE8B84A), fontSize = 15.sp)
+}
+
+/** When to use the remote profile or tunnel; only shown when there is one. */
+@Composable
+private fun AccessModeSection(viewModel: ConnectionViewModel) {
+    if (viewModel.remoteHost.isBlank() && !viewModel.wireGuard) return
     Text(stringResource(R.string.conn_access_mode), color = Color.White, fontSize = 18.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         listOf(
@@ -211,6 +231,112 @@ private fun RemoteSection(viewModel: ConnectionViewModel, fieldColors: androidx.
         }
     }
     Text(stringResource(R.string.conn_access_hint), color = Color(0xFFB7C0D0), fontSize = 15.sp)
+}
+
+/** The experimental in-app WireGuard tunnel: config import, VPN permission and a test. */
+@Composable
+private fun WireGuardSection(viewModel: ConnectionViewModel, fieldColors: androidx.compose.material3.TextFieldColors) {
+    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        viewModel.onVpnConsent(result.resultCode == Activity.RESULT_OK)
+    }
+    val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.importWireGuard(uri)
+    }
+    Text(stringResource(R.string.conn_wg_title), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+    Text(stringResource(R.string.conn_wg_intro), color = Color(0xFFB7C0D0), fontSize = 16.sp)
+    ToggleRow(stringResource(R.string.wg_toggle), viewModel.wireGuard) { viewModel.wireGuard = it }
+    if (!viewModel.wireGuard) return
+    if (viewModel.wireGuardSaved && viewModel.wireGuardText.isBlank()) {
+        Text(stringResource(R.string.conn_wg_saved), color = Color(0xFF8FD18F), fontSize = 15.sp)
+    }
+    OutlinedTextField(
+        value = viewModel.wireGuardText,
+        onValueChange = { viewModel.wireGuardText = it },
+        label = { Text(stringResource(R.string.field_wg_config)) },
+        singleLine = false,
+        minLines = 3,
+        maxLines = 8,
+        modifier = Modifier.fillMaxWidth(),
+        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontFamily = FontFamily.Monospace),
+        visualTransformation = HideWireGuardKeys,
+        colors = fieldColors,
+    )
+    val summary = viewModel.wireGuardSummary
+    if (summary.valid) {
+        Text(
+            stringResource(R.string.wg_summary, summary.endpoint, summary.allowedIps.joinToString(", ")),
+            color = Color(0xFFB7C0D0),
+            fontSize = 15.sp,
+        )
+        if (summary.fullTunnel) Text(stringResource(R.string.wg_full_tunnel), color = Color(0xFFE8B84A), fontSize = 15.sp)
+        if (WireGuardText.covers(summary.allowedIps, viewModel.host) == false) {
+            Text(stringResource(R.string.wg_home_not_covered, viewModel.host.trim()), color = Color(0xFFFF7A70), fontSize = 15.sp)
+        }
+    } else {
+        summary.issues.forEach { issue ->
+            Text(stringResource(issue.label()), color = Color(0xFFE8B84A), fontSize = 15.sp)
+        }
+    }
+    Text(stringResource(viewModel.tunnelStatus.state.label()), color = Color.White, fontSize = 16.sp)
+    if (viewModel.tunnelStatus.detail.isNotEmpty()) {
+        Text(viewModel.tunnelStatus.detail.asString(), color = Color(0xFFB7C0D0), fontSize = 15.sp)
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        TvButton(stringResource(R.string.action_wg_import), {
+            try {
+                fileLauncher.launch(arrayOf("*/*"))
+            } catch (_: ActivityNotFoundException) {
+                viewModel.onNoFilePicker()
+            }
+        })
+        if (!viewModel.vpnAllowed) {
+            TvButton(stringResource(R.string.action_wg_allow), {
+                val intent = viewModel.consentIntent()
+                if (intent == null) {
+                    viewModel.refreshVpnConsent()
+                } else {
+                    try {
+                        consentLauncher.launch(intent)
+                    } catch (_: ActivityNotFoundException) {
+                        viewModel.onNoConsentDialog()
+                    }
+                }
+            })
+        }
+        TvButton(stringResource(R.string.action_wg_test), viewModel::testTunnel, enabled = !viewModel.busy)
+        if (viewModel.wireGuardSaved || viewModel.wireGuardText.isNotBlank()) {
+            TvButton(stringResource(R.string.action_wg_remove), viewModel::removeWireGuard)
+        }
+    }
+}
+
+private fun WireGuardIssue.label(): Int = when (this) {
+    WireGuardIssue.EMPTY -> R.string.wg_issue_empty
+    WireGuardIssue.NO_INTERFACE -> R.string.wg_issue_no_interface
+    WireGuardIssue.NO_PRIVATE_KEY -> R.string.wg_issue_no_private_key
+    WireGuardIssue.NO_ADDRESS -> R.string.wg_issue_no_address
+    WireGuardIssue.NO_PEER -> R.string.wg_issue_no_peer
+    WireGuardIssue.NO_PUBLIC_KEY -> R.string.wg_issue_no_public_key
+    WireGuardIssue.NO_ENDPOINT -> R.string.wg_issue_no_endpoint
+    WireGuardIssue.NO_ALLOWED_IPS -> R.string.wg_issue_no_allowed_ips
+}
+
+private fun TunnelState.label(): Int = when (this) {
+    TunnelState.OFF -> R.string.wg_status_off
+    TunnelState.CONNECTING -> R.string.wg_status_connecting
+    TunnelState.UP -> R.string.wg_status_up
+    TunnelState.NEEDS_CONSENT -> R.string.wg_status_consent
+    TunnelState.FAILED -> R.string.wg_status_failed
+}
+
+/** Shows private and preshared keys as dots; same length, so cursor positions stay the same. */
+private object HideWireGuardKeys : VisualTransformation {
+    private val keyLine = Regex("(?im)^(\\s*(?:PrivateKey|PresharedKey)\\s*=\\s*)(\\S+)")
+
+    override fun filter(text: AnnotatedString): TransformedText {
+        val masked = keyLine.replace(text.text) { match -> match.groupValues[1] + "•".repeat(match.groupValues[2].length) }
+        return TransformedText(AnnotatedString(masked), OffsetMapping.Identity)
+    }
 }
 
 @Composable
@@ -231,7 +357,7 @@ private fun LabeledField(
             .fillMaxWidth()
             .focusProperties { },
         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 20.sp),
-        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         colors = colors,
     )
 }
@@ -243,6 +369,6 @@ private fun ToggleRow(label: String, checked: Boolean, onChecked: (Boolean) -> U
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(label, color = Color.White, fontSize = 20.sp, modifier = Modifier.weight(1f, fill = false))
-        Switch(checked = checked, onCheckedChange = onChecked        )
+        Switch(checked = checked, onCheckedChange = onChecked)
     }
 }

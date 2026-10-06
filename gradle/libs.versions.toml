@@ -21,6 +21,7 @@ lifecycle = "2.11.0"
 core = "1.19.1"
 tvMaterial = "1.1.0"
 junit = "4.13.2"
+wireguard = "1.0.20260102"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core" }
@@ -52,6 +53,7 @@ media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", versi
 media3-ui-compose = { group = "androidx.media3", name = "media3-ui-compose", version.ref = "media3" }
 media3-datasource-okhttp = { group = "androidx.media3", name = "media3-datasource-okhttp", version.ref = "media3" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+wireguard-tunnel = { group = "com.wireguard.android", name = "tunnel", version.ref = "wireguard" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

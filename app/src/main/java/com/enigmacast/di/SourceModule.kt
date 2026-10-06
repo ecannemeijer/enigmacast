@@ -1,5 +1,7 @@
 package com.enigmacast.di
 
+import com.enigmacast.data.network.TunnelControl
+import com.enigmacast.data.network.WireGuardTunnel
 import com.enigmacast.data.openwebif.OpenWebifEpgSource
 import com.enigmacast.data.openwebif.OpenWebifOsdSource
 import com.enigmacast.data.openwebif.OpenWebifReceiverInfoSource
@@ -50,4 +52,8 @@ abstract class SourceModule {
     @Binds
     @Singleton
     abstract fun secretStore(impl: KeystoreSecretStore): SecretStore
+
+    @Binds
+    @Singleton
+    abstract fun tunnelControl(impl: WireGuardTunnel): TunnelControl
 }

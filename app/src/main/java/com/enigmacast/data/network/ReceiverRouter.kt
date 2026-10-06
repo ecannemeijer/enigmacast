@@ -3,6 +3,7 @@ package com.enigmacast.data.network
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.SystemClock
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.domain.model.ReceiverConfig
@@ -20,8 +21,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 /** Brings the app's VPN tunnel up for the tunnel route (implemented by the WireGuard support). */
@@ -41,6 +44,7 @@ data class RouteStatus(
     val homeReachable: Boolean? = null,
     val checkedAtMs: Long = 0L,
     val generation: Int = -1,
+    val network: Int = -1,
 )
 
 /**
@@ -50,27 +54,39 @@ data class RouteStatus(
  * The home address is checked with a short TCP connect only when there is an alternative.
  * The answer is kept for five minutes, until the network changes, or until a request at
  * home fails. Host names are not logged.
+ *
+ * While the tunnel is up the home address answers through it, so the router keeps the tunnel
+ * until the network changes instead of probing (which would flip back and forth); on a network
+ * change the tunnel goes down first so the check sees the real network. The app's own VPN
+ * network appearing or going away is not a network change.
  */
 @Singleton
 class ReceiverRouter @Inject constructor(
     @ApplicationContext context: Context,
     private val endpoints: OpenWebifEndpoints,
+    private val tunnelControl: Provider<TunnelControl>,
 ) {
     private val _status = MutableStateFlow(RouteStatus())
     val status: StateFlow<RouteStatus> = _status.asStateFlow()
     private val mutex = Mutex()
     private val generation = AtomicInteger(0)
-
-    /** Set by the WireGuard support once it is available. */
-    @Volatile
-    var tunnel: TunnelControl? = null
+    private val networkGeneration = AtomicInteger(0)
+    private val vpnNetworks = ConcurrentHashMap.newKeySet<Network>()
 
     init {
         runCatching {
             val connectivity = context.getSystemService(ConnectivityManager::class.java)
             connectivity?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = invalidate()
-                override fun onLost(network: Network) = invalidate()
+                override fun onAvailable(network: Network) {
+                    val vpn = runCatching {
+                        connectivity.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+                    }.getOrDefault(false)
+                    if (vpn) vpnNetworks += network else networkChanged()
+                }
+
+                override fun onLost(network: Network) {
+                    if (!vpnNetworks.remove(network)) networkChanged()
+                }
             })
         }
     }
@@ -80,11 +96,20 @@ class ReceiverRouter @Inject constructor(
         val now = SystemClock.elapsedRealtime()
         val current = _status.value
         val gen = generation.get()
+        val network = networkGeneration.get()
         if (current.receiverKey == key && current.generation == gen && now - current.checkedAtMs < TTL_MS) {
             return@withLock current.route
         }
-        val control = tunnel
-        val tunnelEnabled = control?.enabledFor(config) == true
+        val control = tunnelControl.get()
+        val tunnelEnabled = control.enabledFor(config)
+        val sameNetwork = current.receiverKey == key && current.network == network
+        if (current.route == ReceiverRoute.TUNNEL && sameNetwork && tunnelEnabled && config.accessMode != AccessMode.HOME) {
+            if (control.up(config)) {
+                _status.value = current.copy(checkedAtMs = now, generation = gen)
+                return@withLock ReceiverRoute.TUNNEL
+            }
+        }
+        if (current.route == ReceiverRoute.TUNNEL) control.down()
         val homeReachable = if (ReceiverRouting.needsProbe(config, tunnelEnabled)) probe(config.host, config.httpPort) else null
         var route = ReceiverRouting.choose(
             mode = config.accessMode,
@@ -92,12 +117,11 @@ class ReceiverRouter @Inject constructor(
             remoteConfigured = ReceiverRouting.remoteConfigured(config),
             tunnelEnabled = tunnelEnabled,
         )
-        if (route == ReceiverRoute.TUNNEL && control?.up(config) != true) {
+        if (route == ReceiverRoute.TUNNEL && !control.up(config)) {
             route = if (ReceiverRouting.remoteConfigured(config)) ReceiverRoute.REMOTE else ReceiverRoute.HOME
         }
-        if (route != ReceiverRoute.TUNNEL && current.route == ReceiverRoute.TUNNEL) control?.down()
         if (route != current.route || key != current.receiverKey) EnigmaLog.connection("route ${route.name.lowercase()}")
-        _status.value = RouteStatus(key, route, homeReachable, now, gen)
+        _status.value = RouteStatus(key, route, homeReachable, now, gen, network)
         route
     }
 
@@ -120,6 +144,11 @@ class ReceiverRouter @Inject constructor(
         generation.incrementAndGet()
     }
 
+    private fun networkChanged() {
+        networkGeneration.incrementAndGet()
+        invalidate()
+    }
+
     private suspend fun probe(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             Socket().use { socket -> socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS) }
@@ -128,7 +157,7 @@ class ReceiverRouter @Inject constructor(
     }
 
     private fun key(config: ReceiverConfig) =
-        listOf(config.id, config.host, config.httpPort, config.remoteHost, config.accessMode).joinToString("|")
+        listOf(config.id, config.host, config.httpPort, config.remoteHost, config.accessMode, config.wireGuard).joinToString("|")
 
     private companion object {
         const val TTL_MS = 5 * 60 * 1000L

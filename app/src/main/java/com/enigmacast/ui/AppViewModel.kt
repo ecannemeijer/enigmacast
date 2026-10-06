@@ -7,14 +7,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.BuildConfig
 import com.enigmacast.R
+import com.enigmacast.data.network.WireGuardTunnel
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.live.OwnTunerSession
+import com.enigmacast.playback.AppSleepTimer
 import com.enigmacast.playback.LivePlaybackController
+import com.enigmacast.playback.SleepEvent
 import com.enigmacast.update.AppUpdateClient
 import com.enigmacast.update.RemoteRelease
 import com.enigmacast.update.isNewerRelease
-import com.enigmacast.playback.AppSleepTimer
-import com.enigmacast.playback.SleepEvent
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
@@ -39,6 +40,7 @@ class AppViewModel @Inject constructor(
     private val playback: LivePlaybackController,
     private val ownTuner: OwnTunerSession,
     private val sleepTimer: AppSleepTimer,
+    private val tunnel: WireGuardTunnel,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -207,6 +209,7 @@ class AppViewModel @Inject constructor(
         ownTuner.deactivate()
         playback.stop()
         streamRunning = false
+        tunnel.shutdown()
         requestFinish?.invoke()
     }
 }

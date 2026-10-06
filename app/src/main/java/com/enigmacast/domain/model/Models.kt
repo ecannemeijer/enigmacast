@@ -35,12 +35,17 @@ data class ReceiverConfig(
     val transcodingPort: Int = 8002,
     val streamProfile: StreamProfile = StreamProfile.AUTO,
     val transcodePreset: TranscodePreset = TranscodePreset.MEDIUM,
+    /** Experimental: reach the receiver through the app's own WireGuard tunnel when away. */
+    val wireGuard: Boolean = false,
+    /** The wg-quick text of the tunnel; kept in the Keystore-backed secret store, never in the settings file. */
+    val wireGuardConfig: String = "",
 ) {
-    /** Never prints the password, so a config that ends up in a log or crash report stays safe. */
+    /** Never prints the password or the tunnel keys, so a config that ends up in a log or crash report stays safe. */
     override fun toString(): String =
         "ReceiverConfig(id=$id, name=$name, host=$host, httpPort=$httpPort, useHttps=$useHttps, " +
             "user=${if (username.isEmpty()) "-" else "set"}, password=${if (password.isEmpty()) "-" else "***"}, " +
-            "streamingPort=$streamingPort, remote=${if (remoteHost.isBlank()) "-" else "set"}, accessMode=$accessMode)"
+            "streamingPort=$streamingPort, remote=${if (remoteHost.isBlank()) "-" else "set"}, accessMode=$accessMode, " +
+            "wireGuard=$wireGuard, wireGuardConfig=${if (wireGuardConfig.isEmpty()) "-" else "***"})"
 }
 
 @Serializable

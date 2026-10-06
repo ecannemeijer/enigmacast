@@ -73,6 +73,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui.compose)
     implementation(libs.media3.datasource.okhttp)
+    implementation(libs.wireguard.tunnel)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

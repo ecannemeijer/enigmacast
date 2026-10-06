@@ -43,4 +43,16 @@ class SecretFieldsTest {
         assertTrue(!text.contains("secret") && !text.contains("root"))
         assertTrue(text.contains("password=***"))
     }
+
+    @Test
+    fun tunnelConfigIsStoredAsASecretAndNeverPrinted() {
+        val tunnel = box.copy(wireGuard = true, wireGuardConfig = "[Interface]\nPrivateKey = topsecretkey")
+        val (stripped, secrets) = SecretFields.strip(AppSettings(), AppSettings(receivers = listOf(tunnel)))
+        assertEquals("", stripped.receivers.single().wireGuardConfig)
+        assertTrue(stripped.receivers.single().wireGuard)
+        assertEquals(tunnel.wireGuardConfig, secrets[SecretFields.wireGuardName("a")])
+        val filled = SecretFields.fill(stripped, secrets::get)
+        assertEquals(tunnel.wireGuardConfig, filled.receivers.single().wireGuardConfig)
+        assertTrue(!tunnel.toString().contains("topsecretkey"))
+    }
 }

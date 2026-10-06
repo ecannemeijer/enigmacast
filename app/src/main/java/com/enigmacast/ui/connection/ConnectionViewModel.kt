@@ -1,6 +1,8 @@
 package com.enigmacast.ui.connection
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,6 +10,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.R
 import com.enigmacast.data.discovery.NsdReceiverDiscovery
+import com.enigmacast.data.network.ReceiverRouter
+import com.enigmacast.data.network.TunnelState
+import com.enigmacast.data.network.TunnelStatus
+import com.enigmacast.data.network.WireGuardTunnel
 import com.enigmacast.data.openwebif.OpenWebifApi
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.ReceiverConfig
@@ -16,21 +22,29 @@ import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.network.StreamProfile
 import com.enigmacast.domain.network.TranscodePreset
+import com.enigmacast.domain.network.WireGuardSummary
+import com.enigmacast.domain.network.WireGuardText
 import com.enigmacast.domain.validation.ReceiverConfigValidator
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import javax.inject.Inject
 
 @HiltViewModel
 class ConnectionViewModel @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val api: OpenWebifApi,
     private val discovery: NsdReceiverDiscovery,
+    private val tunnel: WireGuardTunnel,
+    private val router: ReceiverRouter,
 ) : ViewModel() {
     var name by mutableStateOf(AppLanguageStore.wrap(context).getString(R.string.default_receiver_name))
     var host by mutableStateOf("")
@@ -49,6 +63,17 @@ class ConnectionViewModel @Inject constructor(
     var transcodePreset by mutableStateOf(TranscodePreset.MEDIUM)
     var transcodingPort by mutableStateOf("8002")
     var remoteTranscodingPort by mutableStateOf("")
+    var wireGuard by mutableStateOf(false)
+
+    /** Newly pasted or imported config; empty keeps the saved one, which is never shown again. */
+    var wireGuardText by mutableStateOf("")
+    var wireGuardSaved by mutableStateOf(false)
+        private set
+    private var wireGuardRemoved = false
+    var vpnAllowed by mutableStateOf(true)
+        private set
+    var tunnelStatus by mutableStateOf(TunnelStatus())
+        private set
     private var saved = ReceiverConfig()
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
@@ -76,7 +101,83 @@ class ConnectionViewModel @Inject constructor(
                 transcodePreset = saved.transcodePreset
                 transcodingPort = saved.transcodingPort.toString()
                 remoteTranscodingPort = saved.remoteTranscodingPort.portText()
+                wireGuard = saved.wireGuard
+                wireGuardSaved = saved.wireGuardConfig.isNotBlank()
                 this@ConnectionViewModel.saved = saved
+            }
+        }
+        viewModelScope.launch { tunnel.status.collect { tunnelStatus = it } }
+        refreshVpnConsent()
+    }
+
+    /** What the config in use (new, else saved) contains, for hints and warnings. */
+    val wireGuardSummary: WireGuardSummary
+        get() = WireGuardText.summarize(wireGuardConfigInUse())
+
+    fun consentIntent(): Intent? = tunnel.consentIntent()
+
+    fun refreshVpnConsent() {
+        vpnAllowed = tunnel.consentIntent() == null
+    }
+
+    fun onVpnConsent(granted: Boolean) {
+        refreshVpnConsent()
+        status = UiText.res(if (granted && vpnAllowed) R.string.wg_consent_ok else R.string.wg_consent_denied)
+    }
+
+    fun onNoConsentDialog() {
+        status = UiText.res(R.string.wg_no_consent_dialog)
+    }
+
+    fun onNoFilePicker() {
+        status = UiText.res(R.string.wg_no_picker)
+    }
+
+    fun importWireGuard(uri: Uri?) {
+        uri ?: return
+        viewModelScope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { stream -> readSmallText(stream) }
+                }.getOrNull()
+            }
+            if (text.isNullOrBlank()) {
+                status = UiText.res(R.string.wg_import_failed)
+            } else {
+                wireGuardText = text.trim()
+                wireGuardRemoved = false
+                status = UiText.res(R.string.wg_imported)
+            }
+        }
+    }
+
+    fun removeWireGuard() {
+        wireGuardText = ""
+        wireGuardSaved = false
+        wireGuardRemoved = true
+        wireGuard = false
+        status = UiText.res(R.string.wg_removed)
+    }
+
+    /** Brings the tunnel up the way the player would (tunnel route) and asks the receiver through it. */
+    fun testTunnel() {
+        if (!tunnel.enabledFor(currentConfig().copy(wireGuard = true))) {
+            status = UiText.res(R.string.wg_issue_empty)
+            return
+        }
+        refreshVpnConsent()
+        if (!vpnAllowed) {
+            status = UiText.res(R.string.wg_needs_consent)
+            return
+        }
+        launchAction { config ->
+            val viaTunnel = config.copy(wireGuard = true, accessMode = AccessMode.REMOTE)
+            router.invalidate()
+            val result = api.testConnection(viaTunnel)
+            status = if (tunnel.status.value.state == TunnelState.UP) {
+                UiText.Joined(listOf(UiText.res(R.string.wg_test_ok), result.message))
+            } else {
+                UiText.Joined(listOf(UiText.res(R.string.wg_test_not_up), tunnel.status.value.detail))
             }
         }
     }
@@ -173,11 +274,36 @@ class ConnectionViewModel @Inject constructor(
             transcodePreset = transcodePreset,
             transcodingPort = transcodingPort.trim().toIntOrNull() ?: 0,
             remoteTranscodingPort = remoteTranscodingPort.portValue(),
+            wireGuard = wireGuard,
+            wireGuardConfig = wireGuardConfigInUse(),
         )
+    }
+
+    private fun wireGuardConfigInUse(): String = when {
+        wireGuardText.isNotBlank() -> wireGuardText.trim()
+        wireGuardRemoved -> ""
+        else -> saved.wireGuardConfig
     }
 
     private fun Int.portText(): String = if (this > 0) toString() else ""
 
     /** Empty means "same as at home" (0); anything unreadable fails validation (-1). */
     private fun String.portValue(): Int = if (isBlank()) 0 else trim().toIntOrNull() ?: -1
+
+    /** The text of [stream], or null when it is larger than a WireGuard config can reasonably be. */
+    private fun readSmallText(stream: InputStream): String? {
+        val out = ByteArrayOutputStream()
+        val chunk = ByteArray(4096)
+        while (true) {
+            val read = stream.read(chunk)
+            if (read < 0) break
+            if (out.size() + read > MAX_CONFIG_BYTES) return null
+            out.write(chunk, 0, read)
+        }
+        return out.toString(Charsets.UTF_8.name())
+    }
+
+    private companion object {
+        const val MAX_CONFIG_BYTES = 64 * 1024
+    }
 }
