@@ -1,0 +1,59 @@
+package com.enigmacast.domain.player
+
+import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.tuner.NowEvents
+
+/** The tiles of the quick options bar, left to right. */
+enum class QuickOption {
+    SUBTITLES,
+    AUDIO,
+    PICTURE,
+    AUDIO_DELAY,
+    GUIDE,
+    RECENT,
+    SLEEP,
+    STREAM_INFO,
+    RESTART,
+}
+
+object QuickOptions {
+    /**
+     * Own tuner gets every tile. Following the receiver, zapping belongs to the receiver,
+     * so the guide and recent channels are left out.
+     */
+    fun tiles(ownTuner: Boolean): List<QuickOption> = if (ownTuner) {
+        QuickOption.entries
+    } else {
+        QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT)
+    }
+}
+
+/** Sleep timer of the app itself: it closes EnigmaCast (and so the stream) when it runs out. */
+object SleepTimerChoices {
+    val minutes = listOf(0, 15, 30, 45, 60, 90, 120)
+
+    /** Shown one minute before the end, so it can still be switched off. */
+    const val WARNING_MS = 60_000L
+
+    /** Whole minutes left, rounded up; 0 when the timer is off or over. */
+    fun minutesLeft(endsAtMs: Long, nowMs: Long): Int {
+        if (endsAtMs <= 0L || endsAtMs <= nowMs) return 0
+        return ((endsAtMs - nowMs + 59_999L) / 60_000L).toInt()
+    }
+}
+
+/** The last channels watched with an own tuner, newest first. */
+object RecentChannels {
+    const val MAX = 10
+
+    fun push(list: List<LastChannel>, channel: LastChannel): List<LastChannel> {
+        if (channel.reference.isBlank()) return list
+        val key = NowEvents.key(channel.reference)
+        return (listOf(channel) + list.filterNot { NowEvents.key(it.reference) == key }).take(MAX)
+    }
+}
+
+/** Audio delay values offered in the quick bar picker. */
+object AudioDelayChoices {
+    fun values(min: Int, max: Int, step: Int): List<Int> = (min..max step step).toList()
+}

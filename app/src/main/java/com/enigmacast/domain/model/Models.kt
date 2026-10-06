@@ -2,6 +2,7 @@ package com.enigmacast.domain.model
 
 import androidx.annotation.StringRes
 import com.enigmacast.R
+import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.util.UiText
 import kotlinx.serialization.Serializable
 
@@ -101,6 +102,10 @@ data class AppSettings(
     val streamMode: StreamMode = StreamMode.OWN_TUNER,
     val lastChannel: LastChannel = LastChannel(),
     val osdSkin: OsdSkin = OsdSkin.STANDARD,
+    /** Picture mode per channel (key: `NowEvents.key` of the service); channels without one use AUTO. */
+    val pictureModes: Map<String, PictureMode> = emptyMap(),
+    /** Channels last watched with an own tuner, newest first (see `RecentChannels`). */
+    val recentChannels: List<LastChannel> = emptyList(),
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
@@ -243,6 +248,8 @@ data class PlayerState(
     /** Language of the subtitles being shown, or empty when none are on. */
     val subtitleLabel: UiText = UiText.Empty,
     val subtitleTrackCount: Int = 0,
+    /** Width of one video pixel relative to its height (anamorphic SD is about 1.42). */
+    val pixelRatio: Float = 1f,
 )
 
 data class DebugInfo(

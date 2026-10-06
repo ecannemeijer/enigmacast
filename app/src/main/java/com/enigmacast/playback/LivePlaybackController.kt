@@ -117,6 +117,19 @@ class LivePlaybackController @Inject constructor(
     val cues: StateFlow<List<Cue>> = _cues.asStateFlow()
     private val _subtitlesAvailable = MutableStateFlow(false)
     val subtitlesAvailable: StateFlow<Boolean> = _subtitlesAvailable.asStateFlow()
+    private val _tracks = MutableStateFlow(TrackMenu())
+
+    /** Audio and subtitle tracks of the stream that plays, for the quick options bar. */
+    val tracks: StateFlow<TrackMenu> = _tracks.asStateFlow()
+    private val _stats = MutableStateFlow(StreamStats())
+
+    /** Measured bitrate, dropped frames and stalls of the stream that plays. */
+    val stats: StateFlow<StreamStats> = _stats.asStateFlow()
+    private val meter = ThroughputMeter()
+    private val totalBytes = AtomicLong()
+    private var droppedFrames = 0
+    private var stalls = 0
+    private var wasReady = false
     private val audioSync = AudioSyncOffsets()
 
     /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
@@ -132,11 +145,16 @@ class LivePlaybackController @Inject constructor(
     fun updateSettings(settings: PlaybackSettings) {
         audioSync.set(settings.audioDelayPcmMs, settings.audioDelayPassthroughMs)
         if (this.settings == settings) return
-        val onlyAudioDelay = this.settings.withoutAudioDelay() == settings.withoutAudioDelay()
+        val inPlace = this.settings.withoutInPlaceOptions() == settings.withoutInPlaceOptions()
         this.settings = settings
-        if (onlyAudioDelay) {
-            // The sink reads the new delay on its next position update; no rebuild needed.
-            EnigmaLog.player("audio delay pcm=${settings.audioDelayPcmMs}ms hdmi=${settings.audioDelayPassthroughMs}ms")
+        if (inPlace) {
+            // The sink reads a new delay on its next position update, and subtitles switch
+            // through the track selection; neither needs a new player.
+            EnigmaLog.player("audio delay pcm=${settings.audioDelayPcmMs}ms hdmi=${settings.audioDelayPassthroughMs}ms subtitles=${settings.subtitlesEnabled}")
+            player?.let { exo ->
+                selectSubtitles(exo)
+                publish()
+            }
             return
         }
         val url = currentUrl
@@ -229,6 +247,12 @@ class LivePlaybackController @Inject constructor(
         streamAuthorization = authorization
         this.checkStart = checkStart
         startWatchdog()
+        resetStats()
+        // Track overrides belong to the previous stream; the preferred language stays.
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .build()
         val item = MediaItem.Builder()
             .setUri(url)
             .setMimeType(MimeTypes.VIDEO_MP2T)
@@ -238,6 +262,46 @@ class LivePlaybackController @Inject constructor(
         exo.prepare()
         exo.playWhenReady = true
         EnigmaLog.player("switching live stream")
+    }
+
+    /** Plays audio track [id] (from [tracks]) and prefers its language on the next channels too. */
+    fun selectAudio(id: String) {
+        val exo = player ?: return
+        val (group, track) = TrackMenus.find(exo.currentTracks, id, C.TRACK_TYPE_AUDIO) ?: return
+        val language = group.getTrackFormat(track).language
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track))
+            .setPreferredAudioLanguage(language)
+            .build()
+        EnigmaLog.player("audio track $id ${language.orEmpty()}")
+    }
+
+    /**
+     * Shows subtitle track [id] (from [tracks]), or none for null. The caller saves the
+     * on/off choice in the settings; it is applied here at once so nothing restarts.
+     */
+    fun chooseSubtitles(id: String?) {
+        settings = settings.copy(subtitlesEnabled = id != null)
+        val exo = player ?: return
+        if (id == null) {
+            selectSubtitles(exo)
+            publish()
+            return
+        }
+        val (group, track) = TrackMenus.find(exo.currentTracks, id, C.TRACK_TYPE_TEXT) ?: return
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track))
+            .build()
+        EnigmaLog.player("subtitle track $id")
+    }
+
+    /** Starts the current stream again from scratch (quick options "Restart stream"). */
+    fun restart(): Boolean {
+        val url = currentUrl ?: return false
+        failures = 0
+        play(url, force = true, authorization = streamAuthorization, checkStart = checkStart)
+        return true
     }
 
     fun reconnect() {
@@ -422,7 +486,45 @@ class LivePlaybackController @Inject constructor(
             audioTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_AUDIO },
             subtitleLabel = TrackLabels.subtitle(exo.currentTracks, settings.subtitlesEnabled),
             subtitleTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_TEXT },
+            pixelRatio = exo.videoSize.pixelWidthHeightRatio,
         )
+        _tracks.value = TrackMenus.build(exo.currentTracks, settings.subtitlesEnabled)
+    }
+
+    private fun resetStats() {
+        meter.reset()
+        droppedFrames = 0
+        stalls = 0
+        wasReady = false
+        _stats.value = StreamStats()
+    }
+
+    /** Once a second: bitrate from the bytes that came in, plus the frame and stall counters. */
+    private fun startStatsSampler() {
+        ownScope.launch {
+            var lastBytes = totalBytes.get()
+            var lastAt = System.currentTimeMillis()
+            while (true) {
+                delay(STATS_INTERVAL_MS)
+                val now = System.currentTimeMillis()
+                val bytes = totalBytes.get()
+                if (currentUrl != null && player?.playWhenReady == true) {
+                    meter.add(bytes - lastBytes, now - lastAt)
+                    _stats.value = StreamStats(
+                        bitrateKbps = meter.kbps,
+                        droppedFrames = droppedFrames,
+                        stalls = stalls,
+                        bufferMs = player?.totalBufferedDuration ?: 0L,
+                    )
+                }
+                lastBytes = bytes
+                lastAt = now
+            }
+        }
+    }
+
+    init {
+        startStatsSampler()
     }
 
     private val byteCounter = object : TransferListener {
@@ -431,6 +533,7 @@ class LivePlaybackController @Inject constructor(
         override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
         override fun onBytesTransferred(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
             bytesLoaded.addAndGet(bytesTransferred.toLong())
+            totalBytes.addAndGet(bytesTransferred.toLong())
         }
     }
 
@@ -447,6 +550,10 @@ class LivePlaybackController @Inject constructor(
             lastFailure = StreamFailures.classify(error)
             EnigmaLog.player("load error ${error.javaClass.simpleName} → $lastFailure")
             if (checkStart && watchdog != null) checkHealth()
+        }
+
+        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+            this@LivePlaybackController.droppedFrames += droppedFrames
         }
     }
 
@@ -512,7 +619,12 @@ class LivePlaybackController @Inject constructor(
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) failures = 0
+            if (playbackState == Player.STATE_READY) {
+                failures = 0
+                wasReady = true
+            }
+            // Running out of data after the picture had started is a stall.
+            if (playbackState == Player.STATE_BUFFERING && wasReady && player?.playWhenReady == true) stalls += 1
             if (playbackState == Player.STATE_ENDED && checkStart && watchdog != null) {
                 lastFailure = StreamFailure.ENDED
                 checkHealth()
@@ -580,4 +692,7 @@ private class PcmAudioOutputProvider(
     }
 }
 
-private fun PlaybackSettings.withoutAudioDelay() = copy(audioDelayPcmMs = 0, audioDelayPassthroughMs = 0)
+/** Settings that can change while a stream plays, without building a new player. */
+private fun PlaybackSettings.withoutInPlaceOptions() = copy(audioDelayPcmMs = 0, audioDelayPassthroughMs = 0, subtitlesEnabled = true)
+
+private const val STATS_INTERVAL_MS = 1_000L

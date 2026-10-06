@@ -13,6 +13,8 @@ import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.update.AppUpdateClient
 import com.enigmacast.update.RemoteRelease
 import com.enigmacast.update.isNewerRelease
+import com.enigmacast.playback.AppSleepTimer
+import com.enigmacast.playback.SleepEvent
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
@@ -36,6 +38,7 @@ class AppViewModel @Inject constructor(
     private val updates: AppUpdateClient,
     private val playback: LivePlaybackController,
     private val ownTuner: OwnTunerSession,
+    private val sleepTimer: AppSleepTimer,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -52,6 +55,7 @@ class AppViewModel @Inject constructor(
 
     init {
         playback.allowPlayback()
+        watchSleepTimer()
         viewModelScope.launch {
             val settings = settingsRepository.current()
             if (!decided) {
@@ -182,6 +186,17 @@ class AppViewModel @Inject constructor(
 
     fun back() {
         screen = returnScreen
+    }
+
+    private fun watchSleepTimer() {
+        viewModelScope.launch {
+            sleepTimer.events.collect { event ->
+                if (event == SleepEvent.EXPIRED) {
+                    EnigmaLog.player("sleep timer ran out, closing")
+                    exit()
+                }
+            }
+        }
     }
 
     fun exit() {

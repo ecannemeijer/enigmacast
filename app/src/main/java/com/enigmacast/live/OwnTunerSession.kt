@@ -6,6 +6,7 @@ import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.player.RecentChannels
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.source.ServiceStateSource
@@ -344,7 +345,8 @@ class OwnTunerSession @Inject constructor(
         val bouquet = _state.value.bouquetReference
         scope.launch {
             settingsRepository.update { settings ->
-                settings.copy(lastChannel = LastChannel(channel.reference, channel.name, bouquet))
+                val last = LastChannel(channel.reference, channel.name, bouquet)
+                settings.copy(lastChannel = last, recentChannels = RecentChannels.push(settings.recentChannels, last))
             }
         }
     }

@@ -17,6 +17,15 @@ class EnigmaIconsTest {
             EnigmaIcons.LAYERS_PATH,
             EnigmaIcons.PALETTE_PATH,
             EnigmaIcons.LANGUAGE_PATH,
+            EnigmaIcons.SUBTITLES_PATH,
+            EnigmaIcons.AUDIOTRACK_PATH,
+            EnigmaIcons.ASPECT_RATIO_PATH,
+            EnigmaIcons.SYNC_PATH,
+            EnigmaIcons.GUIDE_PATH,
+            EnigmaIcons.HISTORY_PATH,
+            EnigmaIcons.RECORD_PATH,
+            EnigmaIcons.SPEED_PATH,
+            EnigmaIcons.LOCK_PATH,
         ).forEach { path ->
             val nodes = addPathNodes(path)
             assertTrue(path, nodes.size > 3)
