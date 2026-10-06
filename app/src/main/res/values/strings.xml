@@ -229,6 +229,10 @@
     <string name="settings_playback">Playback</string>
     <string name="settings_osd">OSD</string>
     <string name="settings_info">Info</string>
+    <string name="settings_language">Language</string>
+    <string name="language_card">App language</string>
+    <string name="language_choice">Language</string>
+    <string name="language_desc">The texts of EnigmaCast. Receiver data such as channel and programme names stay as the receiver sends them.</string>
     <string name="viewing_mode">Viewing mode</string>
     <string name="viewing_mode_title">How this device watches</string>
     <string name="viewing_mode_own_desc">Own tuner: this device picks its own channel, independent of the receiver. Several devices can watch at the same time, one per free tuner. The receiver may stay in standby; the app draws the channel banner and channel list itself.</string>

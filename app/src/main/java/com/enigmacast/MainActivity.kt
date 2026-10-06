@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.enigmacast.locale.AppLanguage
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.remote.RemoteInputBus
 import com.enigmacast.ui.AppScreen
@@ -68,11 +69,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
-        setContent { EnigmaCastAppContent(appViewModel) }
+        setContent { EnigmaCastAppContent(appViewModel, ::chooseLanguage) }
     }
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguageStore.wrap(newBase))
+    }
+
+    /** Applies a new app language at once; the recreated screen returns to Settings › Language. */
+    private fun chooseLanguage(language: AppLanguage) {
+        if (language == AppLanguageStore.current(this)) return
+        appViewModel.requestLanguageFocus()
+        if (!AppLanguageStore.choose(this, language)) recreate()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -87,7 +95,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
+private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (AppLanguage) -> Unit) {
     val view = LocalView.current
     LaunchedEffect(appViewModel.screen) {
         val activity = view.context.findActivity()
@@ -112,6 +120,9 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
                 focusPlayingChannel = appViewModel.focusPlayingChannel,
                 onPlayingChannelFocused = appViewModel::playingChannelFocused,
                 updatePromptShown = appViewModel.updatePrompt != null,
+                focusLanguageSetting = appViewModel.focusLanguageSetting,
+                onLanguageSettingFocused = appViewModel::languageSettingFocused,
+                onChooseLanguage = onChooseLanguage,
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,

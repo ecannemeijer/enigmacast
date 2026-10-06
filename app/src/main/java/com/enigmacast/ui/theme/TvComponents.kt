@@ -202,6 +202,7 @@ fun ChoiceRow(
     modifier: Modifier = Modifier,
     description: String? = null,
     firstOptionModifier: Modifier = Modifier,
+    selectedOptionModifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
         Text(title, color = EnigmaColors.Text, fontSize = 15.sp)
@@ -223,7 +224,8 @@ fun ChoiceRow(
                     label = label,
                     selected = index == selectedIndex,
                     onClick = { onSelect(index) },
-                    modifier = if (index == 0) firstOptionModifier else Modifier,
+                    modifier = (if (index == 0) firstOptionModifier else Modifier)
+                        .then(if (index == selectedIndex) selectedOptionModifier else Modifier),
                 )
             }
         }
