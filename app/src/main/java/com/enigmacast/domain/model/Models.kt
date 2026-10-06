@@ -60,6 +60,16 @@ data class DebugSettings(
  * How the app gets its picture. [OWN_TUNER] is the default, also for installs that saved
  * settings before this option existed (the field is missing there, so the default applies).
  */
+/**
+ * Look of the OSD the app draws itself (channel banner, channel list, notices in
+ * own-tuner mode). Only the current look exists for now; the "OSD skins" menu will list
+ * these entries and store the choice in [AppSettings.osdSkin].
+ */
+@Serializable
+enum class OsdSkin(val label: String) {
+    STANDARD("Standaard"),
+}
+
 @Serializable
 enum class StreamMode {
     /** Each device streams its own channel from the stream port; the receiver can stay in standby. */
@@ -87,6 +97,7 @@ data class AppSettings(
     val debug: DebugSettings = DebugSettings(),
     val streamMode: StreamMode = StreamMode.OWN_TUNER,
     val lastChannel: LastChannel = LastChannel(),
+    val osdSkin: OsdSkin = OsdSkin.STANDARD,
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
