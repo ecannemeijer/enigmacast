@@ -133,6 +133,33 @@ class StreamGuideViewModel @Inject constructor(
         status = "Ontvanger staat uit"
     }
 
+    /**
+     * The receiver went to standby, or is restarting or shutting down, after a command from
+     * the Receiver section. Free the stream so the tuner can sleep and stop loading the guide.
+     */
+    fun onReceiverOff(message: String) {
+        if (askWake || waking) return
+        tuneJob?.cancel()
+        previewJob?.cancel()
+        guideToken += 1
+        playback.stopForZap()
+        leaveOff = true
+        powerKnown = true
+        status = message
+    }
+
+    /** The receiver is on again; resume only if the guide had stopped because it was off. */
+    fun onReceiverOn() {
+        if (!leaveOff || askWake || waking) return
+        leaveOff = false
+        powerKnown = true
+        status = ""
+        viewModelScope.launch {
+            loadGuide()
+            if (!bouquetLoaded) loadBouquet()
+        }
+    }
+
     fun refreshIfServiceChanged() {
         if (!powerKnown || askWake || leaveOff || waking) return
         if (browsingAwayFromTuned() || previewJob?.isActive == true || tuneJob?.isActive == true || bouquetJob?.isActive == true) return

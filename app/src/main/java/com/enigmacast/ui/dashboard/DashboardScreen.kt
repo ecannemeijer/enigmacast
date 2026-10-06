@@ -80,7 +80,14 @@ import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
+import com.enigmacast.domain.model.PowerAction
+import com.enigmacast.domain.power.PowerEvent
+import com.enigmacast.ui.power.ReceiverPowerPanel
+import com.enigmacast.ui.power.ReceiverPowerViewModel
+import com.enigmacast.ui.power.powerStateColor
 import com.enigmacast.ui.settings.SettingsViewModel
+import com.enigmacast.ui.theme.FeedbackSnackbar
+import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
@@ -98,6 +105,7 @@ private val FocusedButtonText = Color.White
 
 private enum class DashSection {
     Stream,
+    Receiver,
     RcInfo,
     Settings,
 }
@@ -117,12 +125,15 @@ fun DashboardScreen(
     onExit: () -> Unit,
     onBindBack: ((() -> Boolean)?) -> Unit,
     guideModel: StreamGuideViewModel = hiltViewModel(),
+    powerModel: ReceiverPowerViewModel = hiltViewModel(),
 ) {
     var section by remember { mutableStateOf(DashSection.Stream) }
     var contentFocused by remember { mutableStateOf(false) }
     val streamFocus = remember { FocusRequester() }
     val channelFocus = remember { FocusRequester() }
     val epgFocus = remember { FocusRequester() }
+    val receiverMenuFocus = remember { FocusRequester() }
+    val receiverPageFocus = remember { FocusRequester() }
     val rcMenuFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
@@ -136,6 +147,7 @@ fun DashboardScreen(
                 runCatching {
                     when (section) {
                         DashSection.Stream -> streamFocus.requestFocus()
+                        DashSection.Receiver -> receiverMenuFocus.requestFocus()
                         DashSection.RcInfo -> rcMenuFocus.requestFocus()
                         DashSection.Settings -> settingsMenuFocus.requestFocus()
                     }
@@ -149,6 +161,23 @@ fun DashboardScreen(
     }
     LaunchedEffect(Unit) {
         streamFocus.requestFocus()
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            powerModel.poll()
+            delay(powerModel.pollIntervalMs)
+        }
+    }
+    LaunchedEffect(Unit) {
+        powerModel.events.collect { event ->
+            when (event) {
+                PowerEvent.WentToStandby -> guideModel.onReceiverOff("Ontvanger staat in stand-by")
+                is PowerEvent.GoingOffline -> guideModel.onReceiverOff(
+                    if (event.action == PowerAction.DEEP_STANDBY) "Ontvanger is uitgeschakeld" else "Ontvanger herstart…",
+                )
+                PowerEvent.WokeUp -> guideModel.onReceiverOn()
+            }
+        }
     }
     Box(modifier = Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -169,6 +198,11 @@ fun DashboardScreen(
                         .padding(bottom = 14.dp),
                     contentScale = ContentScale.FillWidth,
                 )
+                StatusPill(
+                    text = powerModel.stateLabel,
+                    color = powerStateColor(powerModel.powerState, powerModel.restarting),
+                    modifier = Modifier.padding(start = 8.dp, bottom = 10.dp),
+                )
                 NavItem(
                     icon = Icons.Filled.PlayArrow,
                     label = "Stream",
@@ -178,6 +212,16 @@ fun DashboardScreen(
                         .focusProperties { right = channelFocus },
                     onFocus = { section = DashSection.Stream },
                     onClick = onStream,
+                )
+                NavItem(
+                    icon = EnigmaIcons.Power,
+                    label = "Receiver",
+                    selected = section == DashSection.Receiver,
+                    modifier = Modifier
+                        .focusRequester(receiverMenuFocus)
+                        .focusProperties { right = receiverPageFocus },
+                    onFocus = { section = DashSection.Receiver },
+                    onClick = { section = DashSection.Receiver },
                 )
                 NavItem(
                     icon = Icons.Filled.Info,
@@ -235,6 +279,12 @@ fun DashboardScreen(
                             onMiniPlayer,
                             onStream,
                         )
+                        DashSection.Receiver -> ReceiverPowerPanel(
+                            pageFocus = receiverPageFocus,
+                            menuFocus = receiverMenuFocus,
+                            viewModel = powerModel,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                         DashSection.RcInfo -> RcInfoPanel(Modifier.fillMaxSize())
                         DashSection.Settings -> SettingsHub(settingsPageFocus, settingsMenuFocus, Modifier.fillMaxSize())
                     }
@@ -250,6 +300,19 @@ fun DashboardScreen(
                 onConfirm = guideModel::confirmWake,
                 onDismiss = guideModel::declineWake,
                 busy = guideModel.waking,
+            )
+        }
+        powerModel.feedback?.let { feedback ->
+            LaunchedEffect(feedback.id) {
+                delay(4_000)
+                powerModel.dismissFeedback(feedback.id)
+            }
+            FeedbackSnackbar(
+                message = feedback.message,
+                isError = feedback.isError,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 28.dp),
             )
         }
     }
