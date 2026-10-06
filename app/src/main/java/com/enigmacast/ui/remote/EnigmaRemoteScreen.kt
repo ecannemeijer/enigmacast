@@ -54,6 +54,7 @@ fun EnigmaRemoteScreen(
                 cachedPicon = viewModel::cachedPicon,
                 numberOf = viewModel::numberOf,
                 onZap = viewModel::zapTo,
+                onChooseBouquet = viewModel::chooseBouquet,
             )
         }
         if (ui.connectionState !is ConnectionState.Connected && ui.connectionState !is ConnectionState.Idle) {

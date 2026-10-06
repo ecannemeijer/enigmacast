@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,11 +28,17 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -39,20 +46,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Text
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EpgEvent
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.tuner.ChannelListNavigation
+import com.enigmacast.domain.tuner.NowEvent
+import com.enigmacast.domain.tuner.NowEvents
 import com.enigmacast.domain.tuner.TunerUserKind
 import com.enigmacast.live.TunerState
 import com.enigmacast.live.TunerStatus
+import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.StatusPill
+import com.enigmacast.ui.theme.requestWhenReady
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * The app's own on-screen display for own-tuner mode. Enigma2 draws its OSD on the
@@ -66,6 +79,7 @@ fun OwnTunerOverlay(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     numberOf: (BouquetEntry) -> Int,
     onZap: (BouquetEntry) -> Unit,
+    onChooseBouquet: (BouquetEntry) -> Unit,
 ) {
     val own = ui.own
     val tuner = own.tuner
@@ -125,13 +139,12 @@ fun OwnTunerOverlay(
         }
         if (ui.channelList) {
             ChannelListOverlay(
-                bouquetName = own.bouquetName,
-                channels = own.channels,
-                current = channel?.reference.orEmpty(),
+                ui = ui,
                 numberOf = numberOf,
                 picon = picon,
                 cachedPicon = cachedPicon,
                 onZap = onZap,
+                onChooseBouquet = onChooseBouquet,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
@@ -308,6 +321,7 @@ private fun Picon(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
+    fallbackSize: TextUnit = 14.sp,
 ) {
     var bitmap by remember(entry.reference) { mutableStateOf(cachedPicon(entry)) }
     LaunchedEffect(entry.reference) {
@@ -321,7 +335,7 @@ private fun Picon(
             Text(
                 entry.name.take(10),
                 color = EnigmaColors.Muted,
-                fontSize = 14.sp,
+                fontSize = fallbackSize,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -378,67 +392,227 @@ private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifi
 
 @Composable
 private fun ChannelListOverlay(
-    bouquetName: String,
-    channels: List<BouquetEntry>,
-    current: String,
+    ui: RemoteDisplayUiState,
     numberOf: (BouquetEntry) -> Int,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     onZap: (BouquetEntry) -> Unit,
+    onChooseBouquet: (BouquetEntry) -> Unit,
     modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxHeight()
+            .background(EnigmaColors.Scrim),
+    ) {
+        if (ui.bouquetPanel) {
+            BouquetPanel(
+                bouquets = ui.bouquets,
+                activeReference = ui.own.bouquetReference,
+                onChoose = onChooseBouquet,
+            )
+            Box(Modifier.fillMaxHeight().width(1.dp).background(EnigmaColors.Raised))
+        }
+        ChannelPanel(
+            ui = ui,
+            numberOf = numberOf,
+            picon = picon,
+            cachedPicon = cachedPicon,
+            onZap = onZap,
+        )
+    }
+}
+
+/** The bouquets, shown left of the channel list by Left; OK or Right shows that bouquet's channels. */
+@Composable
+private fun BouquetPanel(
+    bouquets: List<BouquetEntry>,
+    activeReference: String,
+    onChoose: (BouquetEntry) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val focus = remember { FocusRequester() }
-    val anchor = channels.indexOfFirst { BouquetChannels.sameService(it.reference, current) }.coerceAtLeast(0)
-    LaunchedEffect(Unit) {
-        if (channels.isEmpty()) return@LaunchedEffect
-        listState.scrollToItem((anchor - 3).coerceAtLeast(0))
-        withFrameNanos { }
-        runCatching { focus.requestFocus() }
+    val anchor = ChannelListNavigation.bouquetFocusIndex(bouquets, activeReference)
+    LaunchedEffect(bouquets.size) {
+        if (bouquets.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem((anchor - 4).coerceAtLeast(0))
+        focus.requestWhenReady()
     }
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxHeight()
-            .width(460.dp)
-            .background(EnigmaColors.Scrim)
-            .padding(horizontal = 16.dp, vertical = 24.dp),
+            .width(210.dp)
+            .padding(horizontal = 10.dp, vertical = 20.dp),
     ) {
-        Text("Zenders", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        if (bouquetName.isNotBlank()) {
-            Text(bouquetName, color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(bottom = 10.dp))
+        Text("Bouquets", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("OK of ▶ kiest", color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
+        if (bouquets.isEmpty()) {
+            Text("Bouquets laden…", color = EnigmaColors.Muted, fontSize = 13.sp)
         }
-        if (channels.isEmpty()) {
-            Text("Geen zenders geladen", color = EnigmaColors.Muted, fontSize = 16.sp)
-        }
-        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
-                val tuned = BouquetChannels.sameService(entry.reference, current)
-                Button(
-                    onClick = { onZap(entry) },
+        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            itemsIndexed(bouquets, key = { index, entry -> "$index:${entry.reference}" }) { index, bouquet ->
+                CompactListRow(
+                    onClick = { onChoose(bouquet) },
+                    selected = index == anchor && activeReference.isNotBlank(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    colors = ButtonDefaults.colors(
-                        containerColor = if (tuned) EnigmaColors.Selected else Color.Transparent,
-                        contentColor = if (tuned) EnigmaColors.Accent else Color.White,
-                        focusedContainerColor = EnigmaColors.Focus,
-                        focusedContentColor = EnigmaColors.OnFocus,
-                    ),
+                        .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
+                        .focusProperties { left = FocusRequester.Cancel }
+                        .onPreviewKeyEvent { event ->
+                            if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            if (event.type == KeyEventType.KeyDown) onChoose(bouquet)
+                            true
+                        },
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val number = numberOf(entry)
-                        Text(
-                            if (number > 0) "$number" else "",
-                            fontSize = 15.sp,
-                            modifier = Modifier.width(52.dp),
-                        )
-                        Picon(entry, picon, cachedPicon, Modifier.width(56.dp).height(34.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Text(entry.name, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+                    Text(bouquet.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
     }
 }
+
+/**
+ * Channel list: number, picon, name and what is on now (start time, title, thin progress
+ * bar) on one dense row, so about 15 channels fit on a 1080p screen.
+ */
+@Composable
+private fun ChannelPanel(
+    ui: RemoteDisplayUiState,
+    numberOf: (BouquetEntry) -> Int,
+    picon: suspend (BouquetEntry) -> ImageBitmap?,
+    cachedPicon: (BouquetEntry) -> ImageBitmap?,
+    onZap: (BouquetEntry) -> Unit,
+) {
+    val own = ui.own
+    val channels = own.channels
+    val current = own.channel?.reference.orEmpty()
+    val listState = rememberLazyListState()
+    val focus = remember { FocusRequester() }
+    val anchor = ChannelListNavigation.channelFocusIndex(channels, current)
+    var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            nowSec = System.currentTimeMillis() / 1000
+        }
+    }
+    // Focus the playing channel when the list opens, after a bouquet was chosen and when
+    // the bouquet column closes (the token), and once the new bouquet's channels arrive.
+    LaunchedEffect(ui.listFocusToken, own.bouquetReference, channels.size) {
+        if (channels.isEmpty() || ui.bouquetPanel) return@LaunchedEffect
+        listState.scrollToItem((anchor - 5).coerceAtLeast(0))
+        focus.requestWhenReady()
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(600.dp)
+            .padding(horizontal = 12.dp, vertical = 20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 8.dp)) {
+            Text("Zenders", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                own.bouquetName,
+                color = EnigmaColors.Muted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 10.dp, bottom = 2.dp),
+            )
+            if (!ui.bouquetPanel) {
+                Text("◀ Bouquets", color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
+            }
+        }
+        if (channels.isEmpty()) {
+            Text("Geen zenders geladen", color = EnigmaColors.Muted, fontSize = 13.sp)
+        }
+        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
+                CompactListRow(
+                    onClick = { onZap(entry) },
+                    selected = BouquetChannels.sameService(entry.reference, current),
+                    modifier = if (index == anchor) Modifier.focusRequester(focus) else Modifier,
+                ) { focused ->
+                    ChannelRowContent(
+                        entry = entry,
+                        number = numberOf(entry),
+                        event = NowEvents.lookup(ui.nowEvents, entry.reference, nowSec),
+                        nowSec = nowSec,
+                        focused = focused,
+                        picon = picon,
+                        cachedPicon = cachedPicon,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.ChannelRowContent(
+    entry: BouquetEntry,
+    number: Int,
+    event: NowEvent?,
+    nowSec: Long,
+    focused: Boolean,
+    picon: suspend (BouquetEntry) -> ImageBitmap?,
+    cachedPicon: (BouquetEntry) -> ImageBitmap?,
+) {
+    val secondary = if (focused) EnigmaColors.OnFocus.copy(alpha = 0.8f) else EnigmaColors.Muted
+    Text(
+        if (number > 0) "$number" else "",
+        fontSize = 12.sp,
+        maxLines = 1,
+        modifier = Modifier.width(34.dp),
+    )
+    Picon(entry, picon, cachedPicon, Modifier.width(36.dp).height(22.dp), fallbackSize = 8.sp)
+    Spacer(Modifier.width(8.dp))
+    Text(
+        entry.name,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(0.38f),
+    )
+    Spacer(Modifier.width(8.dp))
+    Column(modifier = Modifier.weight(0.62f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                event?.let { timeLabel(it.beginEpochSec) }.orEmpty(),
+                color = secondary,
+                fontSize = 11.sp,
+                maxLines = 1,
+                modifier = Modifier.width(36.dp),
+            )
+            Text(
+                event?.title.orEmpty(),
+                color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (event != null) {
+            Box(
+                modifier = Modifier
+                    .padding(start = 36.dp, top = 2.dp)
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(EnigmaColors.Raised, RoundedCornerShape(1.dp)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(event.progress(nowSec))
+                        .height(2.dp)
+                        .background(if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, RoundedCornerShape(1.dp)),
+                )
+            }
+        }
+    }
+}
+
+private val ClockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+private fun timeLabel(epochSec: Long): String =
+    Instant.ofEpochSecond(epochSec).atZone(ZoneId.systemDefault()).format(ClockFormat)

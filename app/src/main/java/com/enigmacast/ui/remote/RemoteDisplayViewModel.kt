@@ -33,10 +33,14 @@ import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.ChannelListNavigation
+import com.enigmacast.domain.tuner.ListPane
+import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.NumberEntry
 import com.enigmacast.domain.tuner.OwnKeyAction
 import com.enigmacast.domain.tuner.OwnTunerKeys
 import com.enigmacast.domain.tuner.StreamModePolicy
+import com.enigmacast.live.NowEpgRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
@@ -84,6 +88,13 @@ data class RemoteDisplayUiState(
     val banner: Boolean = false,
     val details: Boolean = false,
     val channelList: Boolean = false,
+    /** The bouquet column left of the channel list (Left in the list). */
+    val bouquetPanel: Boolean = false,
+    val bouquets: List<BouquetEntry> = emptyList(),
+    /** Now on air for the list's bouquet, keyed by `NowEvents.key`. */
+    val nowEvents: Map<String, NowEvent> = emptyMap(),
+    /** Bumped whenever the channel list should take the focus (open, bouquet chosen, bouquet column closed). */
+    val listFocusToken: Int = 0,
     val numberEntry: String = "",
     val notice: String = "",
 )
@@ -101,6 +112,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val inputBus: RemoteInputBus,
     private val ownSession: OwnTunerSession,
     private val picons: PiconRepository,
+    private val nowEpg: NowEpgRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -126,6 +138,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private var bannerJob: Job? = null
     private var numberJob: Job? = null
     private var noticeJob: Job? = null
+    private var nowEpgJob: Job? = null
+    private var bouquetJob: Job? = null
     private val numberEntry = NumberEntry()
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -187,7 +201,10 @@ class RemoteDisplayViewModel @Inject constructor(
             startOwnTuner(receiver)
             return
         }
-        _ui.update { it.copy(ownTuner = false, banner = false, details = false, channelList = false) }
+        nowEpgJob?.cancel()
+        _ui.update {
+            it.copy(ownTuner = false, banner = false, details = false, channelList = false, bouquetPanel = false, bouquets = emptyList())
+        }
         val osd = OsdController(
             source = osdSource,
             analyzer = analyzer,
@@ -344,8 +361,78 @@ class RemoteDisplayViewModel @Inject constructor(
     fun numberOf(entry: BouquetEntry): Int = ownSession.numberOf(entry)
 
     fun zapTo(entry: BouquetEntry) {
-        _ui.update { it.copy(channelList = false) }
+        closeChannelList()
         ownSession.start(entry)
+    }
+
+    private fun listPane(ui: RemoteDisplayUiState = _ui.value): ListPane = when {
+        !ui.channelList -> ListPane.CLOSED
+        ui.bouquetPanel -> ListPane.BOUQUETS
+        else -> ListPane.CHANNELS
+    }
+
+    private fun applyPane(pane: ListPane, focusList: Boolean = false) {
+        _ui.update {
+            it.copy(
+                channelList = pane != ListPane.CLOSED,
+                bouquetPanel = pane == ListPane.BOUQUETS,
+                listFocusToken = if (focusList) it.listFocusToken + 1 else it.listFocusToken,
+            )
+        }
+        if (pane == ListPane.CLOSED) nowEpgJob?.cancel()
+    }
+
+    private fun openChannelList() {
+        hideBanner()
+        applyPane(ChannelListNavigation.open(), focusList = true)
+        watchNowEpg()
+        loadBouquets()
+    }
+
+    private fun closeChannelList() = applyPane(ListPane.CLOSED)
+
+    private fun openBouquets() {
+        loadBouquets()
+        applyPane(ChannelListNavigation.left(listPane()))
+    }
+
+    /** OK or Right on a bouquet: show its channels with what is on now, back in the channel list. */
+    fun chooseBouquet(bouquet: BouquetEntry) {
+        applyPane(ChannelListNavigation.bouquetChosen(), focusList = true)
+        bouquetJob?.cancel()
+        bouquetJob = viewModelScope.launch {
+            if (!ownSession.selectBouquet(bouquet)) {
+                showNotice("Bouquet ${bouquet.name} laden mislukt")
+                return@launch
+            }
+            _ui.update { it.copy(nowEvents = emptyMap(), listFocusToken = it.listFocusToken + 1) }
+            watchNowEpg()
+        }
+    }
+
+    private fun loadBouquets() {
+        if (_ui.value.bouquets.isNotEmpty()) return
+        viewModelScope.launch {
+            val receiver = settingsSnapshot.activeReceiver() ?: return@launch
+            runCatching { serviceSource.televisionBouquets(receiver) }
+                .onSuccess { list -> _ui.update { it.copy(bouquets = list) } }
+        }
+    }
+
+    /** Keeps "now on air" for the list's bouquet current while the list is open. */
+    private fun watchNowEpg() {
+        nowEpgJob?.cancel()
+        nowEpgJob = viewModelScope.launch {
+            while (true) {
+                val receiver = settingsSnapshot.activeReceiver() ?: return@launch
+                val bouquet = ownSession.state.value.bouquetReference
+                val cached = nowEpg.cached(receiver, bouquet)
+                if (cached.isNotEmpty()) _ui.update { it.copy(nowEvents = cached) }
+                val events = nowEpg.load(receiver, bouquet)
+                _ui.update { it.copy(nowEvents = events) }
+                delay(NOW_EPG_CHECK_MS)
+            }
+        }
     }
 
     private fun showBanner(details: Boolean = _ui.value.details) {
@@ -381,7 +468,12 @@ class RemoteDisplayViewModel @Inject constructor(
             return true
         }
         if (ui.channelList) {
-            // The list is a normal Compose list; let focus and clicks work there.
+            // Left in the channel list reveals the bouquets; everything else is plain Compose
+            // focus and clicks in the list (Right/OK on a bouquet is handled there).
+            if (!ui.bouquetPanel && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) openBouquets()
+                return true
+            }
             return false
         }
         if (action == OwnKeyAction.PASS) return false
@@ -394,17 +486,11 @@ class RemoteDisplayViewModel @Inject constructor(
                 val tuner = ui.own.tuner.status
                 when {
                     tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM -> ownSession.retry()
-                    ui.banner -> {
-                        hideBanner()
-                        _ui.update { it.copy(channelList = true) }
-                    }
+                    ui.banner -> openChannelList()
                     else -> showBanner()
                 }
             }
-            OwnKeyAction.LIST -> if (!down) {
-                hideBanner()
-                _ui.update { it.copy(channelList = true) }
-            }
+            OwnKeyAction.LIST -> if (!down) openChannelList()
             OwnKeyAction.DETAILS -> if (!down) {
                 if (ui.banner && ui.details) hideBanner() else showBanner(details = true)
             }
@@ -418,7 +504,10 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun ownBack() {
         val ui = _ui.value
         when {
-            ui.channelList -> _ui.update { it.copy(channelList = false) }
+            ui.channelList -> {
+                val pane = ChannelListNavigation.back(listPane(ui))
+                applyPane(pane, focusList = pane == ListPane.CHANNELS)
+            }
             ui.numberEntry.isNotEmpty() -> {
                 numberJob?.cancel()
                 numberEntry.clear()
@@ -632,6 +721,7 @@ class RemoteDisplayViewModel @Inject constructor(
 private const val BANNER_VISIBLE_MS = 5_000L
 private const val DETAILS_VISIBLE_MS = 12_000L
 private const val NUMBER_ENTRY_MS = 1_500L
+private const val NOW_EPG_CHECK_MS = 30_000L
 
 private fun com.enigmacast.domain.model.OsdSettings.toOsdConfig(): OsdConfig {
     return OsdConfig(
