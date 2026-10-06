@@ -270,4 +270,14 @@ class OpenWebifJsonTest {
         assertFalse(conflict.success)
         assertFalse(OpenWebifJson.parseTimerResult("oops").success)
     }
+
+    @Test
+    fun readsTheTranscodingFlagFromAbout() {
+        val grabs = GrabSupport(png = false, jpg = false, osd = false, all = false, authenticationRequired = false)
+        val yes = OpenWebifJson.parseAbout("""{"info":{"model":"solo4k","imagedistro":"openpli","transcoding":true}}""", false, false, grabs)
+        assertTrue(yes.transcoding)
+        assertEquals("openpli", yes.imageDistro)
+        assertFalse(OpenWebifJson.parseAbout("""{"info":{"model":"x","transcoding":false}}""", false, false, grabs).transcoding)
+        assertFalse(OpenWebifJson.parseAbout("""{"info":{"model":"x"}}""", false, false, grabs).transcoding)
+    }
 }

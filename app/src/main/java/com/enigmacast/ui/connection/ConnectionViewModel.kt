@@ -14,6 +14,8 @@ import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.network.AccessMode
 import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.ReceiverRouting
+import com.enigmacast.domain.network.StreamProfile
+import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.domain.validation.ReceiverConfigValidator
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.util.UiText
@@ -43,6 +45,10 @@ class ConnectionViewModel @Inject constructor(
     var remoteStreamPort by mutableStateOf("")
     var remoteUseHttps by mutableStateOf(true)
     var accessMode by mutableStateOf(AccessMode.AUTO)
+    var streamProfile by mutableStateOf(StreamProfile.AUTO)
+    var transcodePreset by mutableStateOf(TranscodePreset.MEDIUM)
+    var transcodingPort by mutableStateOf("8002")
+    var remoteTranscodingPort by mutableStateOf("")
     private var saved = ReceiverConfig()
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
@@ -66,6 +72,10 @@ class ConnectionViewModel @Inject constructor(
                 remoteStreamPort = saved.remoteStreamingPort.portText()
                 remoteUseHttps = saved.remoteUseHttps || saved.remoteHost.isBlank()
                 accessMode = saved.accessMode
+                streamProfile = saved.streamProfile
+                transcodePreset = saved.transcodePreset
+                transcodingPort = saved.transcodingPort.toString()
+                remoteTranscodingPort = saved.remoteTranscodingPort.portText()
                 this@ConnectionViewModel.saved = saved
             }
         }
@@ -159,6 +169,10 @@ class ConnectionViewModel @Inject constructor(
             remoteStreamingPort = remoteStreamPort.portValue(),
             remoteUseHttps = remoteUseHttps,
             accessMode = accessMode,
+            streamProfile = streamProfile,
+            transcodePreset = transcodePreset,
+            transcodingPort = transcodingPort.trim().toIntOrNull() ?: 0,
+            remoteTranscodingPort = remoteTranscodingPort.portValue(),
         )
     }
 

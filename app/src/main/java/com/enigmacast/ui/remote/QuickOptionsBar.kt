@@ -61,12 +61,14 @@ import com.enigmacast.R
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.network.PlainHttpRisk
 import com.enigmacast.domain.network.ReceiverRoute
+import com.enigmacast.domain.network.StreamLevel
 import com.enigmacast.domain.player.AudioDelayChoices
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.player.QuickOption
 import com.enigmacast.domain.player.QuickOptions
 import com.enigmacast.domain.player.SleepTimerChoices
 import com.enigmacast.domain.tuner.NowEvents
+import com.enigmacast.live.QualityReason
 import com.enigmacast.playback.AudioSync
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
@@ -88,6 +90,7 @@ data class QuickBarActions(
     val onRecent: (LastChannel) -> Unit,
     val onSleep: (Int) -> Unit,
     val onRestart: () -> Unit,
+    val onQuality: (StreamLevel?) -> Unit,
 )
 
 private val TileShape = RoundedCornerShape(10.dp)
@@ -257,9 +260,33 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
                 PickerItem(label, (minutes == 0 && left == 0), pick { actions.onSleep(minutes) })
             }
         }
+        QuickOption.QUALITY -> {
+            val manual = ui.quality.manual
+            val levels = if (ui.quality.transcodingSupported == true) StreamLevel.entries else listOf(StreamLevel.DIRECT)
+            listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
+                levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
+        }
         QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO -> emptyList()
     }
 }
+
+/** "Original" or "720p · 2.5 Mbit/s". */
+@Composable
+fun qualityLabel(level: StreamLevel): String {
+    val preset = level.preset ?: return stringResource(R.string.quality_direct)
+    return stringResource(R.string.quality_transcoded, preset.height, preset.bitrateKbps / 1000f)
+}
+
+@Composable
+private fun qualityReason(reason: QualityReason): String = stringResource(
+    when (reason) {
+        QualityReason.START -> R.string.quality_reason_setting
+        QualityReason.STALLS -> R.string.quality_reason_stalls
+        QualityReason.STABLE -> R.string.quality_reason_stable
+        QualityReason.MANUAL -> R.string.quality_reason_manual
+        QualityReason.FALLBACK -> R.string.quality_reason_fallback
+    },
+)
 
 @Composable
 private fun PickerList(items: List<PickerItem>, onClose: () -> Unit) {
@@ -331,6 +358,7 @@ private fun StreamInfo(ui: RemoteDisplayUiState, onClose: () -> Unit) {
         val mode = stringResource(if (ui.ownTuner) R.string.viewing_mode_own else R.string.viewing_mode_follow)
         add(stringResource(R.string.quick_info_source, "${ui.receiverAddress} · $mode"))
         add(stringResource(R.string.quick_info_route, stringResource(routeLabel(ui.route))))
+        add(stringResource(R.string.quick_info_quality, qualityLabel(ui.quality.level), qualityReason(ui.quality.reason)))
         when (ui.routeRisk) {
             PlainHttpRisk.WEB_AND_STREAM -> add(stringResource(R.string.route_risk_web_and_stream))
             PlainHttpRisk.STREAM -> add(stringResource(R.string.route_risk_stream))
@@ -376,6 +404,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
         if (left == 0) stringResource(R.string.off) else stringResource(R.string.quick_minutes, left)
     }
     QuickOption.STREAM_INFO -> bitrateLabel(ui.stats.bitrateKbps)
+    QuickOption.QUALITY -> qualityLabel(ui.quality.level)
     QuickOption.RESTART -> ""
 }
 
@@ -390,6 +419,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.RECENT -> R.string.quick_recent
         QuickOption.SLEEP -> R.string.sleep_title
         QuickOption.STREAM_INFO -> R.string.quick_stream_info
+        QuickOption.QUALITY -> R.string.quick_quality
         QuickOption.RESTART -> R.string.quick_restart
     },
 )
@@ -403,6 +433,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.RECENT -> EnigmaIcons.History
     QuickOption.SLEEP -> EnigmaIcons.Bedtime
     QuickOption.STREAM_INFO -> Icons.Filled.Info
+    QuickOption.QUALITY -> EnigmaIcons.Speed
     QuickOption.RESTART -> Icons.Filled.Refresh
 }
 

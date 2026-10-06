@@ -78,6 +78,7 @@ class OwnTunerSession @Inject constructor(
     private val playback: LivePlaybackController,
     private val endpoints: OpenWebifEndpoints,
     private val streamTargets: StreamTargets,
+    private val quality: StreamQualityController,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(OwnTunerState())
@@ -93,6 +94,10 @@ class OwnTunerSession @Inject constructor(
     init {
         scope.launch {
             playback.health.collect(::onHealth)
+        }
+        // A new quality (stalls, stable stretch, fallback, quick options) reopens the channel.
+        scope.launch {
+            quality.restarts.collect { if (active && _state.value.channel != null) retry() }
         }
     }
 

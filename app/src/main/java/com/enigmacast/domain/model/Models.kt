@@ -3,6 +3,8 @@ package com.enigmacast.domain.model
 import androidx.annotation.StringRes
 import com.enigmacast.R
 import com.enigmacast.domain.network.AccessMode
+import com.enigmacast.domain.network.StreamProfile
+import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.util.UiText
 import kotlinx.serialization.Serializable
@@ -29,8 +31,10 @@ data class ReceiverConfig(
     /** Forwarded transcoding port; 0 keeps [transcodingPort]. */
     val remoteTranscodingPort: Int = 0,
     val accessMode: AccessMode = AccessMode.AUTO,
-    /** Port of the receiver's transcoder (Broadcom boxes with TranscodingSetup: usually 8002). */
+    /** Port of the receiver's transcoder (Broadcom boxes with TranscodingSetup: usually 8002, others 8001). */
     val transcodingPort: Int = 8002,
+    val streamProfile: StreamProfile = StreamProfile.AUTO,
+    val transcodePreset: TranscodePreset = TranscodePreset.MEDIUM,
 ) {
     /** Never prints the password, so a config that ends up in a log or crash report stays safe. */
     override fun toString(): String =
@@ -145,6 +149,8 @@ data class ReceiverCapabilities(
     val authenticationRequired: Boolean = false,
     val https: Boolean = false,
     val streamingAvailable: Boolean = false,
+    /** OpenWebif `transcoding`: the receiver has an encoder and the TranscodingSetup plugin. */
+    val transcoding: Boolean = false,
 )
 
 data class EnigmaService(

@@ -31,6 +31,7 @@ import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.network.PlainHttpRisk
 import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.ReceiverRouting
+import com.enigmacast.domain.network.StreamLevel
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.OsdConfig
 import com.enigmacast.domain.osd.OsdController
@@ -57,6 +58,8 @@ import com.enigmacast.live.NowEpgRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
+import com.enigmacast.live.QualityState
+import com.enigmacast.live.StreamQualityController
 import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.osd.AndroidOsdAnalyzer
@@ -137,6 +140,7 @@ data class RemoteDisplayUiState(
     /** How the receiver is reached and what crosses the internet unencrypted on that route. */
     val route: ReceiverRoute = ReceiverRoute.HOME,
     val routeRisk: PlainHttpRisk = PlainHttpRisk.NONE,
+    val quality: QualityState = QualityState(),
     /** Channel list: the channel whose programme guide is open right of the list (Right on a channel). */
     val epgChannel: BouquetEntry? = null,
     val epgEvents: List<GuideEvent> = emptyList(),
@@ -178,6 +182,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val guideRepository: GuideRepository,
     private val streamTargets: StreamTargets,
     private val router: ReceiverRouter,
+    private val quality: StreamQualityController,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -263,6 +268,19 @@ class RemoteDisplayViewModel @Inject constructor(
         }
         viewModelScope.launch {
             playback.audioPassthroughActive.collect { refreshPlaybackOptions() }
+        }
+        viewModelScope.launch {
+            quality.state.collect { state -> _ui.update { it.copy(quality = state) } }
+        }
+        viewModelScope.launch {
+            // Following the receiver: reopen the receiver's channel with the new quality.
+            quality.restarts.collect {
+                if (_ui.value.ownTuner) return@collect
+                val active = settingsSnapshot.activeReceiver() ?: return@collect
+                val reference = _ui.value.currentService?.reference?.takeIf { it.isNotBlank() } ?: return@collect
+                val target = streamTargets.target(active, reference)
+                playback.play(target.url, force = true, authorization = target.authorization)
+            }
         }
         viewModelScope.launch {
             router.status.collect { status ->
@@ -369,6 +387,12 @@ class RemoteDisplayViewModel @Inject constructor(
     fun openGuideFromBar() {
         _ui.update { it.copy(quickBar = false) }
         openGuide()
+    }
+
+    /** Quality tile: a fixed quality for this session, or null for the receiver's setting. */
+    fun chooseQuality(level: StreamLevel?) {
+        _ui.update { it.copy(quickBar = false) }
+        quality.setManual(level)
     }
 
     fun restartStream() {

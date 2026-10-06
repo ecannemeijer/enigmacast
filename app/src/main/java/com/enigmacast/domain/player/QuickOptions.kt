@@ -9,6 +9,7 @@ enum class QuickOption {
     AUDIO,
     PICTURE,
     AUDIO_DELAY,
+    QUALITY,
     GUIDE,
     RECENT,
     SLEEP,

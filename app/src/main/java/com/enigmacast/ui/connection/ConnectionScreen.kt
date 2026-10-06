@@ -27,6 +27,8 @@ import androidx.tv.material3.MaterialTheme
 import com.enigmacast.R
 import com.enigmacast.domain.network.AccessMode
 import com.enigmacast.domain.network.ReceiverRouting
+import com.enigmacast.domain.network.StreamProfile
+import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.ui.theme.ChoiceChip
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.util.asString
@@ -86,6 +88,7 @@ fun ConnectionScreen(
         ToggleRow(stringResource(R.string.allow_self_signed), viewModel.allowInsecureCertificates) {
             viewModel.allowInsecureCertificates = it
         }
+        QualitySection(viewModel, fieldColors)
         RemoteSection(viewModel, fieldColors)
         if (viewModel.discoveredHosts.isNotEmpty()) {
             Text(stringResource(R.string.discovered_hosts), color = Color.White, fontSize = 18.sp)
@@ -108,6 +111,64 @@ fun ConnectionScreen(
         if (viewModel.status.isNotEmpty()) {
             Text(viewModel.status.asString(), color = Color.White, fontSize = 18.sp)
         }
+    }
+}
+
+/** Direct, transcoded or automatic streams, with the transcoder's preset and port. */
+@Composable
+private fun QualitySection(viewModel: ConnectionViewModel, fieldColors: androidx.compose.material3.TextFieldColors) {
+    Text(stringResource(R.string.conn_quality_title), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        listOf(
+            StreamProfile.AUTO to R.string.profile_auto,
+            StreamProfile.DIRECT to R.string.profile_direct,
+            StreamProfile.TRANSCODED to R.string.profile_transcoded,
+        ).forEach { (profile, label) ->
+            ChoiceChip(stringResource(label), selected = viewModel.streamProfile == profile, onClick = { viewModel.streamProfile = profile })
+        }
+    }
+    Text(
+        stringResource(
+            when (viewModel.streamProfile) {
+                StreamProfile.AUTO -> R.string.profile_auto_hint
+                StreamProfile.DIRECT -> R.string.profile_direct_hint
+                StreamProfile.TRANSCODED -> R.string.profile_transcoded_hint
+            },
+        ),
+        color = Color(0xFFB7C0D0),
+        fontSize = 15.sp,
+    )
+    if (viewModel.streamProfile == StreamProfile.TRANSCODED) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TranscodePreset.entries.forEach { preset ->
+                ChoiceChip(
+                    stringResource(R.string.quality_transcoded, preset.height, preset.bitrateKbps / 1000f),
+                    selected = viewModel.transcodePreset == preset,
+                    onClick = { viewModel.transcodePreset = preset },
+                )
+            }
+        }
+    }
+    if (viewModel.streamProfile != StreamProfile.DIRECT) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LabeledField(
+                stringResource(R.string.field_transcoding_port),
+                viewModel.transcodingPort,
+                { viewModel.transcodingPort = it },
+                fieldColors,
+                Modifier.weight(1f),
+            )
+            if (viewModel.remoteHost.isNotBlank()) {
+                LabeledField(
+                    stringResource(R.string.field_remote_transcoding_port),
+                    viewModel.remoteTranscodingPort,
+                    { viewModel.remoteTranscodingPort = it },
+                    fieldColors,
+                    Modifier.weight(1f),
+                )
+            }
+        }
+        Text(stringResource(R.string.conn_transcoding_hint), color = Color(0xFFB7C0D0), fontSize = 15.sp)
     }
 }
 

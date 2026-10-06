@@ -265,6 +265,14 @@ class OpenWebifApi @Inject constructor(
         return OpenWebifJson.parseNowEvents(get(config, endpoints.epgNow(config, bouquetReference)))
     }
 
+    /** `/api/about` alone (model, image, transcoding), without the grab and stream port probes. */
+    suspend fun about(config: ReceiverConfig): ReceiverCapabilities = OpenWebifJson.parseAbout(
+        get(config, endpoints.about(config)),
+        https = config.useHttps,
+        streamingAvailable = false,
+        grabs = GrabSupport(png = false, jpg = false, osd = false, all = false, authenticationRequired = false),
+    )
+
     suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> {
         return OpenWebifJson.parseGuideEvents(get(config, endpoints.epgService(config, serviceReference)), serviceReference)
     }

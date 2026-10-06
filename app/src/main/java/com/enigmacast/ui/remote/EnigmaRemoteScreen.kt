@@ -65,6 +65,7 @@ fun EnigmaRemoteScreen(
             onRecent = viewModel::zapRecent,
             onSleep = viewModel::setSleepTimer,
             onRestart = viewModel::restartStream,
+            onQuality = viewModel::chooseQuality,
         )
     }
     val guideActions = remember(viewModel) {

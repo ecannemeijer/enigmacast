@@ -52,6 +52,7 @@ internal object OpenWebifJson {
             authenticationRequired = grabs.authenticationRequired,
             https = https,
             streamingAvailable = streamingAvailable,
+            transcoding = text(root, "transcoding").equals("true", ignoreCase = true),
         )
     }
 
