@@ -7,6 +7,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.PowerAction
+import com.enigmacast.domain.model.ReceiverDetails
+import com.enigmacast.domain.model.SleepTimerAction
+import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.power.PowerEvent
 import com.enigmacast.domain.power.PowerStateTracker
 import com.enigmacast.domain.power.ReceiverPowerFlow
@@ -47,6 +50,18 @@ class ReceiverPowerViewModel @Inject constructor(
         private set
     var feedback by mutableStateOf<PowerFeedback?>(null)
         private set
+    var details by mutableStateOf<ReceiverDetails?>(null)
+        private set
+    var detailsError by mutableStateOf("")
+        private set
+    var sleepTimer by mutableStateOf<SleepTimerStatus?>(null)
+        private set
+    var sleepTimerError by mutableStateOf("")
+        private set
+    var sleepAction by mutableStateOf(SleepTimerAction.STANDBY)
+        private set
+    var sleepBusy by mutableStateOf(false)
+        private set
     private var feedbackId = 0L
 
     /** Faster while a restart is under way, so the dashboard notices the receiver coming back. */
@@ -72,6 +87,66 @@ class ReceiverPowerViewModel @Inject constructor(
 
     fun refreshNow() {
         viewModelScope.launch { poll() }
+    }
+
+    /** Receiver details and the sleep timer, loaded when the Receiver section opens. */
+    fun loadDetails() {
+        viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            try {
+                details = infoSource.details(receiver)
+                detailsError = ""
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                detailsError = error.message ?: "Info niet beschikbaar"
+            }
+            loadSleepTimer()
+        }
+    }
+
+    fun setSleepTimer(minutes: Int) {
+        if (sleepBusy) return
+        sleepBusy = true
+        viewModelScope.launch {
+            try {
+                val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+                val action = sleepAction
+                val updated = infoSource.setSleepTimer(receiver, minutes, action, enabled = minutes > 0)
+                sleepTimer = updated
+                sleepTimerError = ""
+                showFeedback(PowerCopy.sleepResult(minutes, action))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                showFeedback(PowerFeedback("Slaaptimer mislukt: ${error.message ?: "geen verbinding"}", isError = true))
+            } finally {
+                sleepBusy = false
+            }
+        }
+    }
+
+    /** Changing what happens afterwards re-applies a running timer so the choice takes effect. */
+    fun chooseSleepAction(action: SleepTimerAction) {
+        if (action == sleepAction) return
+        sleepAction = action
+        val running = sleepTimer?.takeIf { it.enabled && it.minutes > 0 } ?: return
+        setSleepTimer(running.minutes)
+    }
+
+    private suspend fun loadSleepTimer() {
+        val receiver = settingsRepository.current().activeReceiver() ?: return
+        try {
+            val status = infoSource.sleepTimer(receiver)
+            sleepTimer = status
+            sleepAction = status.action
+            sleepTimerError = ""
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            sleepTimer = null
+            sleepTimerError = error.message ?: "Slaaptimer niet beschikbaar"
+        }
     }
 
     fun request(action: PowerAction) {
