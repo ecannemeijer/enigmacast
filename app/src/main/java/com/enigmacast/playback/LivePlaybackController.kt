@@ -93,6 +93,11 @@ class LivePlaybackController @Inject constructor(
     private var lastFailure = StreamFailure.NONE
     private var watchdog: Job? = null
     private val bytesLoaded = AtomicLong()
+    private val hold = PlaybackHold()
+    private val _held = MutableStateFlow(false)
+
+    /** True while live playback is paused for an app update download (see [holdForUpdate]). */
+    val held: StateFlow<Boolean> = _held.asStateFlow()
     private val ownScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     /** Sent as `Authorization` on stream requests; read on the loader thread. */
@@ -175,12 +180,47 @@ class LivePlaybackController @Inject constructor(
     }
 
     /**
+     * Stops the live stream so an app update downloads at full speed, in either viewing
+     * mode and for every view of this player (full screen, mini player, audio-sync preview).
+     * Until [releaseHold], [play], reconnects and settings rebuilds do not start anything;
+     * the latest requested stream is remembered instead.
+     */
+    fun holdForUpdate() {
+        if (!hold.hold(currentUrl?.let { StreamRequest(it, streamAuthorization, checkStart) })) return
+        _held.value = true
+        reconnectJob?.cancel()
+        reconnectJob = null
+        currentUrl = null
+        failures = 0
+        stopWatchdog(StreamHealth.IDLE)
+        player?.let { exo ->
+            exo.playWhenReady = false
+            exo.stop()
+            exo.clearMediaItems()
+        }
+        _cues.value = emptyList()
+        EnigmaLog.player("live stream stopped for app update")
+    }
+
+    /** Ends [holdForUpdate]; with [resume] the stream that was playing (or last asked for) starts again. */
+    fun releaseHold(resume: Boolean) {
+        if (!hold.held) return
+        val request = hold.release(resume)
+        _held.value = false
+        EnigmaLog.player("app update hold released, resume=${request != null}")
+        if (request != null) {
+            play(request.url, force = true, authorization = request.authorization, checkStart = request.checkStart)
+        }
+    }
+
+    /**
      * Starts [url]. [authorization] goes along as the `Authorization` header (Enigma2
      * stream authentication). With [checkStart] the start is watched: a stream the
      * receiver refuses ends up in [health] and is not retried endlessly.
      */
     fun play(url: String, force: Boolean = false, authorization: String? = null, checkStart: Boolean = false) {
         if (!playbackEnabled) return
+        if (!hold.admit(StreamRequest(url, authorization, checkStart))) return
         val exo = ensurePlayer()
         if (!force && url == currentUrl && exo.playerError == null && exo.playbackState != Player.STATE_IDLE) {
             return
