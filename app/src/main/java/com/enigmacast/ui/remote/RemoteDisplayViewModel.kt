@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.SystemClock
 import android.view.KeyEvent
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.text.Cue
@@ -15,10 +16,12 @@ import com.enigmacast.connection.ConnectionCoordinator
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.AppSettings
+import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ConnectionState
 import com.enigmacast.domain.model.DebugInfo
 import com.enigmacast.domain.model.EnigmaService
 import com.enigmacast.domain.model.PlayerState
+import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.OsdConfig
 import com.enigmacast.domain.osd.OsdController
@@ -30,6 +33,14 @@ import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.NumberEntry
+import com.enigmacast.domain.tuner.OwnKeyAction
+import com.enigmacast.domain.tuner.OwnTunerKeys
+import com.enigmacast.domain.tuner.StreamModePolicy
+import com.enigmacast.live.OwnTunerSession
+import com.enigmacast.live.OwnTunerState
+import com.enigmacast.live.PiconRepository
+import com.enigmacast.live.TunerStatus
 import com.enigmacast.osd.AndroidOsdAnalyzer
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.remote.RemoteInputBus
@@ -67,6 +78,14 @@ data class RemoteDisplayUiState(
     val osdState: OsdPollState = OsdPollState.IDLE,
     val cues: List<Cue> = emptyList(),
     val subtitlesAvailable: Boolean = false,
+    /** Own-tuner mode: the app draws its own channel banner and list instead of the receiver's OSD. */
+    val ownTuner: Boolean = false,
+    val own: OwnTunerState = OwnTunerState(),
+    val banner: Boolean = false,
+    val details: Boolean = false,
+    val channelList: Boolean = false,
+    val numberEntry: String = "",
+    val notice: String = "",
 )
 
 @HiltViewModel
@@ -80,6 +99,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private val infoSource: ReceiverInfoSource,
     private val playback: LivePlaybackController,
     private val inputBus: RemoteInputBus,
+    private val ownSession: OwnTunerSession,
+    private val picons: PiconRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -102,6 +123,10 @@ class RemoteDisplayViewModel @Inject constructor(
     private var blueTextSent = false
     private var blueJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
+    private var bannerJob: Job? = null
+    private var numberJob: Job? = null
+    private var noticeJob: Job? = null
+    private val numberEntry = NumberEntry()
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     init {
@@ -122,6 +147,7 @@ class RemoteDisplayViewModel @Inject constructor(
                     settings.activeReceiver(),
                     settings.osd.copy(debugBorders = false),
                     settings.remote,
+                    settings.streamMode,
                 ).toString()
                 if (signature != sessionSignature) {
                     sessionSignature = signature
@@ -157,6 +183,11 @@ class RemoteDisplayViewModel @Inject constructor(
             _ui.update { it.copy(connectionState = ConnectionState.Failed("No receiver configured")) }
             return
         }
+        if (!StreamModePolicy.mirrorsReceiverOsd(settings.streamMode)) {
+            startOwnTuner(receiver)
+            return
+        }
+        _ui.update { it.copy(ownTuner = false, banner = false, details = false, channelList = false) }
         val osd = OsdController(
             source = osdSource,
             analyzer = analyzer,
@@ -204,7 +235,7 @@ class RemoteDisplayViewModel @Inject constructor(
             launch {
                 monitor.changes.collect { service ->
                     val active = settingsSnapshot.activeReceiver() ?: return@collect
-                    playback.play(endpoints.stream(active, service.reference))
+                    playback.play(endpoints.stream(active, service.reference), authorization = endpoints.streamAuthorization(active))
                 }
             }
             launch {
@@ -253,7 +284,173 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Own tuner: no receiver OSD, no key forwarding, no following the receiver's channel.
+     * Only the receiver's reachability is watched, with the same read-only heartbeat.
+     */
+    private fun startOwnTuner(receiver: com.enigmacast.domain.model.ReceiverConfig) {
+        osdController = null
+        serviceMonitor = null
+        keys = null
+        val previousFrame = _ui.value.osdFrame?.bitmap
+        _ui.update { it.copy(ownTuner = true, osdFrame = null, osdState = OsdPollState.IDLE) }
+        if (previousFrame != null && !previousFrame.isRecycled) previousFrame.recycle()
+        val coordinator = ConnectionCoordinator(
+            probe = { infoSource.capabilities(settingsSnapshot.activeReceiver() ?: receiver) },
+            heartbeat = { infoSource.powerState(settingsSnapshot.activeReceiver() ?: receiver) },
+        )
+        connection = coordinator
+        ownSession.ensureStarted()
+        session = viewModelScope.launch {
+            launch {
+                coordinator.state.collect { state ->
+                    _ui.update { it.copy(connectionState = state) }
+                    refreshDebug()
+                }
+            }
+            launch {
+                playback.state.collect { playerState ->
+                    _ui.update { it.copy(playerState = playerState) }
+                    refreshDebug()
+                }
+            }
+            launch {
+                var lastZap = -1
+                ownSession.state.collect { own ->
+                    val zapped = own.zapCount != lastZap
+                    lastZap = own.zapCount
+                    _ui.update {
+                        it.copy(
+                            own = own,
+                            currentService = own.channel?.let { channel -> EnigmaService(channel.name, channel.reference) },
+                        )
+                    }
+                    if (zapped && own.channel != null) showBanner()
+                    refreshDebug()
+                }
+            }
+            coordinator.start(this)
+        }
+    }
+
+    /** Channel logo for the banner and list; null when the receiver has none. */
+    suspend fun picon(entry: BouquetEntry): ImageBitmap? {
+        val receiver = settingsSnapshot.activeReceiver() ?: return null
+        return picons.load(receiver, entry)
+    }
+
+    fun cachedPicon(entry: BouquetEntry): ImageBitmap? = picons.cached(entry)
+
+    fun numberOf(entry: BouquetEntry): Int = ownSession.numberOf(entry)
+
+    fun zapTo(entry: BouquetEntry) {
+        _ui.update { it.copy(channelList = false) }
+        ownSession.start(entry)
+    }
+
+    private fun showBanner(details: Boolean = _ui.value.details) {
+        ownSession.refreshGuideIfStale()
+        _ui.update { it.copy(banner = true, details = details) }
+        bannerJob?.cancel()
+        bannerJob = viewModelScope.launch {
+            delay(if (details) DETAILS_VISIBLE_MS else BANNER_VISIBLE_MS)
+            _ui.update { it.copy(banner = false, details = false) }
+        }
+    }
+
+    private fun hideBanner() {
+        bannerJob?.cancel()
+        _ui.update { it.copy(banner = false, details = false) }
+    }
+
+    private fun showNotice(text: String) {
+        _ui.update { it.copy(notice = text) }
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch {
+            delay(2_500)
+            _ui.update { it.copy(notice = "") }
+        }
+    }
+
+    private fun handleOwnKey(event: KeyEvent): Boolean {
+        val action = OwnTunerKeys.action(event.keyCode)
+        val ui = _ui.value
+        lastKey = KeyEvent.keyCodeToString(event.keyCode)
+        if (action == OwnKeyAction.BACK) {
+            if (event.action == KeyEvent.ACTION_UP) ownBack()
+            return true
+        }
+        if (ui.channelList) {
+            // The list is a normal Compose list; let focus and clicks work there.
+            return false
+        }
+        if (action == OwnKeyAction.PASS) return false
+        val down = event.action == KeyEvent.ACTION_DOWN
+        when (action) {
+            OwnKeyAction.NEXT, OwnKeyAction.PREVIOUS -> if (down && event.repeatCount % 4 == 0) {
+                ownSession.zapRelative(if (action == OwnKeyAction.NEXT) 1 else -1)
+            }
+            OwnKeyAction.OK -> if (!down) {
+                val tuner = ui.own.tuner.status
+                when {
+                    tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM -> ownSession.retry()
+                    ui.banner -> {
+                        hideBanner()
+                        _ui.update { it.copy(channelList = true) }
+                    }
+                    else -> showBanner()
+                }
+            }
+            OwnKeyAction.LIST -> if (!down) {
+                hideBanner()
+                _ui.update { it.copy(channelList = true) }
+            }
+            OwnKeyAction.DETAILS -> if (!down) {
+                if (ui.banner && ui.details) hideBanner() else showBanner(details = true)
+            }
+            OwnKeyAction.BANNER -> if (down && event.repeatCount == 0) showBanner()
+            OwnKeyAction.DIGIT -> if (down && event.repeatCount == 0) pushDigit(OwnTunerKeys.digit(event.keyCode))
+            else -> Unit
+        }
+        return true
+    }
+
+    private fun ownBack() {
+        val ui = _ui.value
+        when {
+            ui.channelList -> _ui.update { it.copy(channelList = false) }
+            ui.numberEntry.isNotEmpty() -> {
+                numberJob?.cancel()
+                numberEntry.clear()
+                _ui.update { it.copy(numberEntry = "") }
+            }
+            ui.banner -> hideBanner()
+            else -> onLeaveToDashboard?.invoke()
+        }
+    }
+
+    private fun pushDigit(digit: Int) {
+        val complete = numberEntry.push(digit)
+        _ui.update { it.copy(numberEntry = numberEntry.digits) }
+        numberJob?.cancel()
+        if (complete) {
+            applyNumber()
+            return
+        }
+        numberJob = viewModelScope.launch {
+            delay(NUMBER_ENTRY_MS)
+            applyNumber()
+        }
+    }
+
+    private fun applyNumber() {
+        val number = numberEntry.take() ?: return
+        _ui.update { it.copy(numberEntry = "") }
+        if (!ownSession.zapNumber(number)) showNotice("Zender $number staat niet in deze lijst")
+    }
+
     private fun handleKey(event: KeyEvent): Boolean {
+        if (_ui.value.ownTuner) return handleOwnKey(event)
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
             releaseBack()
             return true
@@ -431,6 +628,10 @@ class RemoteDisplayViewModel @Inject constructor(
         super.onCleared()
     }
 }
+
+private const val BANNER_VISIBLE_MS = 5_000L
+private const val DETAILS_VISIBLE_MS = 12_000L
+private const val NUMBER_ENTRY_MS = 1_500L
 
 private fun com.enigmacast.domain.model.OsdSettings.toOsdConfig(): OsdConfig {
     return OsdConfig(

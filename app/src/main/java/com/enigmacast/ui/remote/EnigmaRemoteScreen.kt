@@ -47,6 +47,15 @@ fun EnigmaRemoteScreen(
     val player = viewModel.player()
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         EnigmaVideoPlayer(player, ui.osdFrame, ui.osdDebugBorders, ui.cues)
+        if (ui.ownTuner) {
+            OwnTunerOverlay(
+                ui = ui,
+                picon = viewModel::picon,
+                cachedPicon = viewModel::cachedPicon,
+                numberOf = viewModel::numberOf,
+                onZap = viewModel::zapTo,
+            )
+        }
         if (ui.connectionState !is ConnectionState.Connected && ui.connectionState !is ConnectionState.Idle) {
             ConnectionProblemOverlay(ui.connectionState)
         }
