@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
@@ -39,6 +40,13 @@ import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.TvConfirmDialog
+
+private class PrimaryPower(
+    val icon: ImageVector,
+    val label: String,
+    val description: String,
+    val onClick: () -> Unit,
+)
 
 fun powerStateColor(state: ReceiverPowerState, restarting: PowerAction?): Color = when {
     restarting != null -> EnigmaColors.Accent
@@ -71,87 +79,90 @@ fun ReceiverPowerPanel(
     Column(modifier) {
         PanelHeader("Ontvanger", subtitle)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SettingsCard(
-                title = "Aan / uit",
-                trailing = {
-                    StatusPill(viewModel.stateLabel, powerStateColor(state, viewModel.restarting))
-                },
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                SettingsCard(
+                    title = "Aan / uit",
+                    trailing = {
+                        StatusPill(viewModel.stateLabel, powerStateColor(state, viewModel.restarting))
+                    },
                 ) {
-                    val first = Modifier
-                        .weight(1f)
-                        .focusRequester(pageFocus)
-                        .focusProperties { left = menuFocus }
-                    when (state) {
-                        ReceiverPowerState.STANDBY -> ActionTile(
-                            icon = EnigmaIcons.Power,
-                            label = "Aanzetten",
-                            description = hint(PowerAction.WAKE_UP, "Uit stand-by halen"),
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                    ) {
+                        val first = Modifier
+                            .weight(1f)
+                            .focusRequester(pageFocus)
+                            .focusProperties { left = menuFocus }
+                        // One tile whose content follows the state, so focus stays on it when the state flips.
+                        val primary = when (state) {
+                            ReceiverPowerState.STANDBY -> PrimaryPower(
+                                icon = EnigmaIcons.Power,
+                                label = "Aanzetten",
+                                description = hint(PowerAction.WAKE_UP, "Uit stand-by halen"),
+                                onClick = { viewModel.request(PowerAction.WAKE_UP) },
+                            )
+                            ReceiverPowerState.UNREACHABLE -> PrimaryPower(
+                                icon = Icons.Filled.Refresh,
+                                label = "Opnieuw proberen",
+                                description = "Status opnieuw opvragen",
+                                onClick = viewModel::refreshNow,
+                            )
+                            ReceiverPowerState.ON, ReceiverPowerState.UNKNOWN -> PrimaryPower(
+                                icon = EnigmaIcons.Bedtime,
+                                label = "Stand-by",
+                                description = hint(PowerAction.STANDBY, "Beeld en tuner uit"),
+                                onClick = { viewModel.request(PowerAction.STANDBY) },
+                            )
+                        }
+                        ActionTile(
+                            icon = primary.icon,
+                            label = primary.label,
+                            description = primary.description,
                             tone = TileTone.Primary,
-                            onClick = { viewModel.request(PowerAction.WAKE_UP) },
+                            onClick = primary.onClick,
                             modifier = first,
                         )
-                        ReceiverPowerState.UNREACHABLE -> ActionTile(
+                        ActionTile(
                             icon = Icons.Filled.Refresh,
-                            label = "Opnieuw proberen",
-                            description = "Status opnieuw opvragen",
-                            tone = TileTone.Primary,
-                            onClick = viewModel::refreshNow,
-                            modifier = first,
-                        )
-                        ReceiverPowerState.ON, ReceiverPowerState.UNKNOWN -> ActionTile(
-                            icon = EnigmaIcons.Bedtime,
-                            label = "Stand-by",
-                            description = hint(PowerAction.STANDBY, "Beeld en tuner uit"),
-                            tone = TileTone.Primary,
-                            onClick = { viewModel.request(PowerAction.STANDBY) },
-                            modifier = first,
+                            label = "GUI herstarten",
+                            description = hint(PowerAction.RESTART_GUI, "Alleen Enigma2"),
+                            onClick = { viewModel.request(PowerAction.RESTART_GUI) },
+                            modifier = Modifier.weight(1f),
                         )
                     }
-                    ActionTile(
-                        icon = Icons.Filled.Refresh,
-                        label = "GUI herstarten",
-                        description = hint(PowerAction.RESTART_GUI, "Alleen Enigma2"),
-                        onClick = { viewModel.request(PowerAction.RESTART_GUI) },
-                        modifier = Modifier.weight(1f),
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                    ) {
+                        ActionTile(
+                            icon = EnigmaIcons.Restart,
+                            label = "Herstarten",
+                            description = hint(PowerAction.REBOOT, "Volledige herstart"),
+                            onClick = { viewModel.request(PowerAction.REBOOT) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusProperties { left = menuFocus },
+                        )
+                        ActionTile(
+                            icon = EnigmaIcons.Power,
+                            label = "Diep slapen",
+                            description = hint(PowerAction.DEEP_STANDBY, "Helemaal uit"),
+                            tone = TileTone.Danger,
+                            onClick = { viewModel.request(PowerAction.DEEP_STANDBY) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                ) {
-                    ActionTile(
-                        icon = EnigmaIcons.Restart,
-                        label = "Herstarten",
-                        description = hint(PowerAction.REBOOT, "Volledige herstart"),
-                        onClick = { viewModel.request(PowerAction.REBOOT) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusProperties { left = menuFocus },
-                    )
-                    ActionTile(
-                        icon = EnigmaIcons.Power,
-                        label = "Diep slapen",
-                        description = hint(PowerAction.DEEP_STANDBY, "Helemaal uit"),
-                        tone = TileTone.Danger,
-                        onClick = { viewModel.request(PowerAction.DEEP_STANDBY) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                SleepTimerCard(viewModel, menuFocus)
             }
-            SleepTimerCard(viewModel, menuFocus)
-        }
-        ReceiverDetailsCard(viewModel, Modifier.width(280.dp))
+            ReceiverDetailsCard(viewModel, Modifier.width(280.dp))
         }
     }
     viewModel.pendingConfirmation?.let { action ->
@@ -233,4 +244,3 @@ private fun ReceiverDetailsCard(viewModel: ReceiverPowerViewModel, modifier: Mod
         }
     }
 }
-
