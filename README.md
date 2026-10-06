@@ -14,7 +14,7 @@ Enigma2 receiver
 
 The full-screen player still shows the receiver's own OSD. The dashboard adds a local channel list and EPG so you can browse and zap without opening that player.
 
-That is the "Ontvanger volgen" mode. The default mode is "Eigen tuner": each Android TV streams its own channel straight from the receiver without zapping it, so several TVs can watch different channels at once, one per free tuner. See [Viewing modes](#viewing-modes).
+That is the "Follow receiver" mode. The default mode is "Own tuner": each Android TV streams its own channel straight from the receiver without zapping it, so several TVs can watch different channels at once, one per free tuner. See [Viewing modes](#viewing-modes).
 
 ## Requirements
 
@@ -66,7 +66,7 @@ The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Dashboard
 
-The left menu is Stream, Receiver, RC Info, OSD skins, Settings, and Exit. The open section stays marked while focus is in its panel, and a pill under the logo shows the receiver power state (Aan, Stand-by, Niet bereikbaar, Herstart…). With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
+The left menu is Stream, Receiver, RC Info, OSD skins, Settings, and Exit. The open section stays marked while focus is in its panel, and a pill under the logo shows the receiver power state (On, Standby, Not reachable, Restarting…). With a saved receiver, startup stays on the dashboard and the current service starts in the mini player.
 
 Right from Stream enters the channel list of the current TV bouquet. Moving the focus previews that channel's EPG on the right and in the header. OK zaps and starts the mini player. OK again on the same channel opens the full-screen player. Right from a channel opens the EPG rows.
 
@@ -82,20 +82,20 @@ Bouquet rows from OpenWebif are accepted as `[reference, name]` or `[name, refer
 
 Right from Receiver enters the power controls:
 
-- Stand-by or Aanzetten (wake), depending on the current state
-- GUI herstarten (restart Enigma2 only), Herstarten (reboot), and Diep slapen (deep standby)
-- Slaaptimer: off or 15 to 120 minutes, followed by standby or shutdown
+- Standby or Turn on (wake), depending on the current state
+- Restart GUI (restart Enigma2 only), Restart (reboot), and Deep standby
+- Sleep timer: off or 15 to 120 minutes, followed by standby or shutdown
 - An info card with model, image, Enigma2 and OpenWebif versions, kernel, chipset, uptime, and tuners
 
 Reboot, GUI restart, and deep standby ask for confirmation, with Cancel focused. Every command ends with a short message at the bottom of the screen. After standby or wake the app polls `/api/powerstate` until Enigma2 reports the new state, because the reply to `newstate` still carries the state from before the command. The power state is polled every 10 s while the dashboard is open (5 s during a restart).
 
-In "Ontvanger volgen" mode, when the receiver goes to standby (from the app, the remote, or its sleep timer), the live stream stops so the tuner can sleep. When it is on again the guide and mini player come back. In "Eigen tuner" mode standby changes nothing: the stream keeps playing, because the receiver's stream server works in standby. Deep standby stops the stream server in both modes, and cannot be undone from the app; use the remote or the power button on the receiver.
+In "Follow receiver" mode, when the receiver goes to standby (from the app, the remote, or its sleep timer), the live stream stops so the tuner can sleep. When it is on again the guide and mini player come back. In "Own tuner" mode standby changes nothing: the stream keeps playing, because the receiver's stream server works in standby. Deep standby stops the stream server in both modes, and cannot be undone from the app; use the remote or the power button on the receiver.
 
 ## Viewing modes
 
-Settings → Weergave → Kijkmodus chooses how this device watches. Each device has its own choice.
+Settings → Playback → Viewing mode chooses how this device watches. Each device has its own choice.
 
-**Eigen tuner (meerdere kijkers)** is the default for new installs, and installs that saved settings before this option existed switch to it too (the setting was missing there, so the default applies). Choose "Ontvanger volgen" once to keep the old behaviour; that choice is saved.
+**Own tuner (several viewers)** is the default for new installs, and installs that saved settings before this option existed switch to it too (the setting was missing there, so the default applies). Choose "Follow receiver" once to keep the old behaviour; that choice is saved.
 
 - The device asks the stream server for `http://HOST:8001/<service reference>` itself. The receiver is not zapped, not woken, and may stay in standby. Its own screen, if it is on, is left alone.
 - With two tuners, two devices can each watch a different channel. A third device is told that all tuners are busy, unless its channel is on a transponder that is already tuned (Enigma2 then serves it from the same tuner).
@@ -104,7 +104,7 @@ Settings → Weergave → Kijkmodus chooses how this device watches. Each device
 - Back from the full-screen player returns to the dashboard with the focus on the channel that was playing, not on Stream.
 - The dashboard's channel list zaps this device's stream the same way. Its last channel is remembered and starts again the next time.
 
-**Ontvanger volgen (huidige modus)** is the original behaviour: zapping changes the receiver's channel, the stream shows what the receiver shows, the receiver's OSD is drawn on top, and the remote controls the receiver. Use it when one TV is the only viewer and you want the receiver's menus.
+**Follow receiver** is the original behaviour: zapping changes the receiver's channel, the stream shows what the receiver shows, the receiver's OSD is drawn on top, and the remote controls the receiver. Use it when one TV is the only viewer and you want the receiver's menus.
 
 Audio sync, subtitles, and HDMI passthrough work the same in both modes; they belong to the player, not to the mode.
 
@@ -122,9 +122,15 @@ The check can be wrong, so the stream start is watched as well. Enigma2 answers 
 
 Other start problems get their own message: a 401 means stream authentication is on and the credentials are missing or wrong; a refused connection means the receiver is off, in deep standby, or the stream port is wrong; data without a picture after 12 seconds usually means a scrambled channel that the CI module or card cannot descramble for this stream.
 
+## Language
+
+EnigmaCast is in English by default, also on a TV set to Dutch and after updating from an older version. Settings → Language switches between English and Nederlands. The screen redraws in the new language right away and focus stays on the language choice. On Android 13 and later the choice also shows in Android's per-app language settings, and a language chosen there is picked up by the app. Channel names, programme titles and other receiver data are shown as the receiver sends them.
+
+All texts are Android string resources: English in `values/strings.xml`, Dutch in `values-nl/strings.xml`. Logs, the debug overlay, OSD diagnostics values and raw error texts from Android or the network stay in English.
+
 ## Settings
 
-Right from Settings opens a submenu with Receiver, Playback, OSD, and Info. Each page groups its options on cards, and every switch row toggles with OK.
+Right from Settings opens a submenu with Receiver, Playback, OSD, Info, and Language. Each page groups its options on cards, and every switch row toggles with OK.
 
 - Receiver: host, ports, credentials, and connection test
 - Playback: Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
@@ -135,7 +141,7 @@ Stable is the default. It uses a larger live buffer (about 2–15 s) and a 4 s l
 
 Stereo downmixes AC3 and E-AC3 to PCM. HDMI leaves passthrough to the device when the HDMI output reports those formats. DVB subtitles are drawn on the video when the transport stream has a text track. The Playback page says whether the current stream has subtitles.
 
-Audio sync (Geluid synchroniseren) corrects sound that runs behind or ahead of the picture, from -500 to +500 ms in 20 ms steps. Stereo and HDMI passthrough each keep their own value, because an amplifier or soundbar that decodes AC3/E-AC3 adds its own delay. The row the current track uses is marked "nu actief", and a small preview of the stream sits next to the rows. A positive value makes the picture and subtitles wait for the sound. The player's clock (the audio position) is reported that much earlier, and the audio data itself is untouched, so the correction also works for passthrough.
+Audio sync corrects sound that runs behind or ahead of the picture, from -500 to +500 ms in 20 ms steps. Stereo and HDMI passthrough each keep their own value, because an amplifier or soundbar that decodes AC3/E-AC3 adds its own delay. The row the current track uses is marked "nu actief", and a small preview of the stream sits next to the rows. A positive value makes the picture and subtitles wait for the sound. The player's clock (the audio position) is reported that much earlier, and the audio data itself is untouched, so the correction also works for passthrough.
 
 ## Receiver setup
 
@@ -212,11 +218,11 @@ Settings can enable:
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN on the TV will hide the receiver.
 - HTTP 401: fill in the OpenWebif username and password.
 - HTTPS fails with a certificate error: enable the self-signed option only for that receiver, or install a certificate the TV already trusts.
-- "Alle tuners zijn bezet" while you expect a free tuner: put the receiver in standby (not deep standby) so its own picture frees a tuner, and check for running recordings or other devices streaming (OpenWebif's About page lists them). Choosing a channel on the same transponder as a running stream always works.
-- "De ontvanger vraagt een wachtwoord voor streams": Enigma2's "Require authentication for http streams" is on (OpenATV: Menu → Setup → Usage & GUI → Customize System Settings). The stream server checks the receiver's Linux account (usually `root` and its password), not a separate OpenWebif password. Enter that user and password under Ontvangers, or turn the setting off. OpenWebif's "Enable authentication for streaming" only affects its playlists, not this check.
+- "All tuners are busy" while you expect a free tuner: put the receiver in standby (not deep standby) so its own picture frees a tuner, and check for running recordings or other devices streaming (OpenWebif's About page lists them). Choosing a channel on the same transponder as a running stream always works.
+- "The receiver asks for a password for streams": Enigma2's "Require authentication for http streams" is on (OpenATV: Menu → Setup → Usage & GUI → Customize System Settings). The stream server checks the receiver's Linux account (usually `root` and its password), not a separate OpenWebif password. Enter that user and password under Settings → Receiver, or turn the setting off. OpenWebif's "Enable authentication for streaming" only affects its playlists, not this check.
 - Own-tuner mode shows no picture on a scrambled channel: the CI module or card is busy with another channel or stream. Pick a free-to-air channel or stop the other stream.
 - Picture without OSD: open OSD diagnostics and try PNG OSD, then JPG OSD. Confirm `grab` works in a browser on the same URL.
 - OSD without picture: confirm port 8001 is open and the receiver is not in standby. The player reconnects on its own when auto-reconnect is on.
 - Zapping on the receiver updates the TV a moment later: that delay is the service poll plus tuner and decoder startup. Sending the zap from the Android remote triggers the fast poll.
-- Sound behind the picture: open Settings → Weergave → Geluid synchroniseren and raise the value of the row marked "nu actief" until lips and voice match. Usually 60–200 ms with passthrough to an amplifier or soundbar. Check the TV or amplifier for its own lip-sync or "AV sync" setting first, so the two do not add up.
+- Sound behind the picture: open Settings → Playback → Audio sync and raise the value of the row marked "active now" until lips and voice match. Usually 60–200 ms with passthrough to an amplifier or soundbar. Check the TV or amplifier for its own lip-sync or "AV sync" setting first, so the two do not add up.
 - Menus feel sluggish: turn on the debug overlay and read OSD latency and frame rate. The receiver's `grab` cost is usually the limit, not Compose.
