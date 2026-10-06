@@ -90,13 +90,15 @@ When the receiver goes to standby, from the app, the remote, or its sleep timer,
 Right from Settings opens a submenu with Receiver, Playback, OSD, and Info. Each page groups its options on cards, and every switch row toggles with OK.
 
 - Receiver: host, ports, credentials, and connection test
-- Playback: Stable or Fast, Stereo or HDMI, DVB subtitles on or off, auto-reconnect
+- Playback: Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
 - OSD: PNG or JPG, and the fast poll after a key
 - Info: version and build, debug overlay, verbose logging, OSD border
 
-Stable is the default. It uses a larger live buffer (about 2–15 s) and a 4 s live offset. Fast uses the short buffer (about 0.5–5 s) and a 1 s offset. Changing playback rebuilds the player.
+Stable is the default. It uses a larger live buffer (about 2–15 s) and a 4 s live offset. Fast uses the short buffer (about 0.5–5 s) and a 1 s offset. Changing playback rebuilds the player, except for the audio sync, which applies at once.
 
 Stereo downmixes AC3 and E-AC3 to PCM. HDMI leaves passthrough to the device when the HDMI output reports those formats. DVB subtitles are drawn on the video when the transport stream has a text track. The Playback page says whether the current stream has subtitles.
+
+Audio sync (Geluid synchroniseren) corrects sound that runs behind or ahead of the picture, from -500 to +500 ms in 20 ms steps. Stereo and HDMI passthrough each keep their own value, because an amplifier or soundbar that decodes AC3/E-AC3 adds its own delay. The row the current track uses is marked "nu actief", and a small preview of the stream sits next to the rows. A positive value makes the picture and subtitles wait for the sound. The player's clock (the audio position) is reported that much earlier, and the audio data itself is untouched, so the correction also works for passthrough.
 
 ## Receiver setup
 
@@ -143,6 +145,8 @@ After a remote command the service monitor polls at 50, 100, 200, 350, 500, and 
 
 OSD failure does not stop video. Video failure does not stop remote commands. If the receiver disappears, a connection overlay is shown and the app probes again. When the network returns, playback and the receiver probe are nudged.
 
+Video is drawn on a TextureView, which shows a frame as soon as the decoder hands it over. The renderer therefore releases frames at most 20 ms ahead of their display time instead of Media3's 50 ms default, so the picture does not run ahead of the sound.
+
 ## Debugging
 
 Settings can enable:
@@ -155,7 +159,7 @@ Settings can enable:
 
 - OpenWebif cannot send a bare key-up or a kernel auto-repeat. Repeat is a series of short commands.
 - PNG OSD alpha depends on the image and the `grab` binary. On some boxes `mode=osd` is opaque black outside the widgets. Use OSD diagnostics on the SF8008 to see which mode keeps transparency.
-- AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
+- AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. With passthrough, Android cannot measure how long the amplifier or soundbar takes to decode, so lip sync may need the HDMI audio sync value. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
 - DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
 - mDNS discovery is best-effort.
 - Passwords are not encrypted at rest.
@@ -169,4 +173,5 @@ Settings can enable:
 - Picture without OSD: open OSD diagnostics and try PNG OSD, then JPG OSD. Confirm `grab` works in a browser on the same URL.
 - OSD without picture: confirm port 8001 is open and the receiver is not in standby. The player reconnects on its own when auto-reconnect is on.
 - Zapping on the receiver updates the TV a moment later: that delay is the service poll plus tuner and decoder startup. Sending the zap from the Android remote triggers the fast poll.
+- Sound behind the picture: open Settings → Weergave → Geluid synchroniseren and raise the value of the row marked "nu actief" until lips and voice match. Usually 60–200 ms with passthrough to an amplifier or soundbar. Check the TV or amplifier for its own lip-sync or "AV sync" setting first, so the two do not add up.
 - Menus feel sluggish: turn on the debug overlay and read OSD latency and frame rate. The receiver's `grab` cost is usually the limit, not Compose.
