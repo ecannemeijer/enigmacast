@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.enigmacast.data.openwebif.openWebifJson
+import com.enigmacast.data.security.SecretFields
+import com.enigmacast.data.security.SecretStore
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.ReceiverConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,17 +23,15 @@ import javax.inject.Singleton
 @Singleton
 class SettingsRepository @Inject constructor(
     @ApplicationContext context: Context,
+    private val secrets: SecretStore,
 ) {
     private val dataStore = PreferenceDataStoreFactory.create(
         produceFile = { context.preferencesDataStoreFile("enigmacast_settings") },
     )
     private val key = stringPreferencesKey("settings_json")
 
-    val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
-        preferences[key]?.let { raw ->
-            runCatching { openWebifJson.decodeFromString<AppSettings>(raw) }.getOrDefault(AppSettings())
-        } ?: AppSettings()
-    }
+    /** Settings with the receiver passwords filled in from the Keystore-backed [SecretStore]. */
+    val settings: Flow<AppSettings> = dataStore.data.map { preferences -> decode(preferences[key]) }
 
     suspend fun current(): AppSettings = settings.first()
 
@@ -46,10 +46,22 @@ class SettingsRepository @Inject constructor(
 
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { preferences ->
-            val current = preferences[key]?.let { raw ->
-                runCatching { openWebifJson.decodeFromString<AppSettings>(raw) }.getOrDefault(AppSettings())
-            } ?: AppSettings()
-            preferences[key] = openWebifJson.encodeToString(transform(current))
+            val current = decode(preferences[key])
+            val (stripped, secretValues) = SecretFields.strip(current, transform(current))
+            secretValues.forEach { (name, value) -> secrets.write(name, value) }
+            preferences[key] = openWebifJson.encodeToString(stripped)
         }
+    }
+
+    /** Moves passwords that older versions kept in the settings JSON into the [SecretStore]. */
+    suspend fun migrateSecrets() {
+        val raw = dataStore.data.first()[key] ?: return
+        val stored = runCatching { openWebifJson.decodeFromString<AppSettings>(raw) }.getOrNull() ?: return
+        if (stored.receivers.any { it.password.isNotEmpty() }) update { it }
+    }
+
+    private fun decode(raw: String?): AppSettings {
+        val parsed = raw?.let { runCatching { openWebifJson.decodeFromString<AppSettings>(it) }.getOrDefault(AppSettings()) } ?: AppSettings()
+        return SecretFields.fill(parsed, secrets::read)
     }
 }

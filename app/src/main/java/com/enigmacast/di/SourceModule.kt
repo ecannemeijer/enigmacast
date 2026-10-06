@@ -6,6 +6,8 @@ import com.enigmacast.data.openwebif.OpenWebifReceiverInfoSource
 import com.enigmacast.data.openwebif.OpenWebifRemoteControlSource
 import com.enigmacast.data.openwebif.OpenWebifServiceStateSource
 import com.enigmacast.data.openwebif.OpenWebifTunerStatusSource
+import com.enigmacast.data.security.KeystoreSecretStore
+import com.enigmacast.data.security.SecretStore
 import com.enigmacast.domain.source.EpgSource
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
@@ -44,4 +46,8 @@ abstract class SourceModule {
     @Binds
     @Singleton
     abstract fun epgSource(impl: OpenWebifEpgSource): EpgSource
+
+    @Binds
+    @Singleton
+    abstract fun secretStore(impl: KeystoreSecretStore): SecretStore
 }

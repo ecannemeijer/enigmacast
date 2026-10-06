@@ -18,7 +18,13 @@ data class ReceiverConfig(
     val streamingPort: Int = 8001,
     val timeoutSeconds: Int = 8,
     val allowInsecureCertificates: Boolean = false,
-)
+) {
+    /** Never prints the password, so a config that ends up in a log or crash report stays safe. */
+    override fun toString(): String =
+        "ReceiverConfig(id=$id, name=$name, host=$host, httpPort=$httpPort, useHttps=$useHttps, " +
+            "user=${if (username.isEmpty()) "-" else "set"}, password=${if (password.isEmpty()) "-" else "***"}, " +
+            "streamingPort=$streamingPort)"
+}
 
 @Serializable
 data class PlaybackSettings(

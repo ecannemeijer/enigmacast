@@ -173,7 +173,7 @@ class RemoteDisplayViewModel @Inject constructor(
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
     private val analyzer = AndroidOsdAnalyzer()
     private var settingsSnapshot = AppSettings()
-    private var sessionSignature: String? = null
+    private var sessionSignature: List<Any?>? = null
     private var session: Job? = null
     private var osdController: OsdController? = null
     private var serviceMonitor: ServiceMonitor? = null
@@ -228,7 +228,7 @@ class RemoteDisplayViewModel @Inject constructor(
                     settings.osd.copy(debugBorders = false),
                     settings.remote,
                     settings.streamMode,
-                ).toString()
+                )
                 if (signature != sessionSignature) {
                     sessionSignature = signature
                     restart(settings)

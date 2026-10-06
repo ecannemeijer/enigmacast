@@ -57,6 +57,10 @@ class AppViewModel @Inject constructor(
         playback.allowPlayback()
         watchSleepTimer()
         viewModelScope.launch {
+            runCatching { settingsRepository.migrateSecrets() }
+                .onFailure { EnigmaLog.service("secret migration failed: ${it.javaClass.simpleName}") }
+        }
+        viewModelScope.launch {
             val settings = settingsRepository.current()
             if (!decided) {
                 decided = true
