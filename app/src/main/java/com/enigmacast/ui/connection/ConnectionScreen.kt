@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.MaterialTheme
 import com.enigmacast.R
+import com.enigmacast.domain.network.AccessMode
+import com.enigmacast.domain.network.ReceiverRouting
+import com.enigmacast.ui.theme.ChoiceChip
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
@@ -58,9 +61,10 @@ fun ConnectionScreen(
             fontSize = 18.sp,
         )
         if (!viewModel.useHttps) {
+            val internet = viewModel.host.isNotBlank() && !ReceiverRouting.isLocalAddress(viewModel.host)
             Text(
-                stringResource(R.string.conn_http_warning),
-                color = Color(0xFFE8B84A),
+                stringResource(if (internet) R.string.conn_http_internet_warning else R.string.conn_http_warning),
+                color = if (internet) Color(0xFFFF7A70) else Color(0xFFE8B84A),
                 fontSize = 16.sp,
             )
         }
@@ -82,6 +86,7 @@ fun ConnectionScreen(
         ToggleRow(stringResource(R.string.allow_self_signed), viewModel.allowInsecureCertificates) {
             viewModel.allowInsecureCertificates = it
         }
+        RemoteSection(viewModel, fieldColors)
         if (viewModel.discoveredHosts.isNotEmpty()) {
             Text(stringResource(R.string.discovered_hosts), color = Color.White, fontSize = 18.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -93,6 +98,9 @@ fun ConnectionScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             TvButton(stringResource(R.string.action_search), viewModel::discover, enabled = !viewModel.busy)
             TvButton(stringResource(R.string.action_test_connection), viewModel::test, enabled = !viewModel.busy)
+            if (viewModel.remoteHost.isNotBlank()) {
+                TvButton(stringResource(R.string.action_test_remote), viewModel::testRemote, enabled = !viewModel.busy)
+            }
             TvButton(stringResource(R.string.action_save), { viewModel.save() }, enabled = !viewModel.busy)
             TvButton(stringResource(R.string.action_connect), { viewModel.connect(onConnected) }, enabled = !viewModel.busy)
             TvButton(stringResource(R.string.settings), onSettings)
@@ -101,6 +109,47 @@ fun ConnectionScreen(
             Text(viewModel.status.asString(), color = Color.White, fontSize = 18.sp)
         }
     }
+}
+
+/** Remote profile: DynDNS name or public address, forwarded ports and when to use it. */
+@Composable
+private fun RemoteSection(viewModel: ConnectionViewModel, fieldColors: androidx.compose.material3.TextFieldColors) {
+    Text(stringResource(R.string.conn_remote_title), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+    Text(stringResource(R.string.conn_remote_intro), color = Color(0xFFB7C0D0), fontSize = 16.sp)
+    LabeledField(stringResource(R.string.field_remote_host), viewModel.remoteHost, { viewModel.remoteHost = it }, fieldColors)
+    if (viewModel.remoteHost.isBlank()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        LabeledField(
+            stringResource(R.string.field_remote_http_port),
+            viewModel.remoteHttpPort,
+            { viewModel.remoteHttpPort = it },
+            fieldColors,
+            Modifier.weight(1f),
+        )
+        LabeledField(
+            stringResource(R.string.field_remote_stream_port),
+            viewModel.remoteStreamPort,
+            { viewModel.remoteStreamPort = it },
+            fieldColors,
+            Modifier.weight(1f),
+        )
+    }
+    ToggleRow(stringResource(R.string.remote_https), viewModel.remoteUseHttps) { viewModel.remoteUseHttps = it }
+    if (!viewModel.remoteUseHttps) {
+        Text(stringResource(R.string.conn_remote_http_warning), color = Color(0xFFFF7A70), fontSize = 16.sp)
+    }
+    Text(stringResource(R.string.conn_remote_stream_note), color = Color(0xFFE8B84A), fontSize = 15.sp)
+    Text(stringResource(R.string.conn_access_mode), color = Color.White, fontSize = 18.sp)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        listOf(
+            AccessMode.AUTO to R.string.access_auto,
+            AccessMode.HOME to R.string.access_home,
+            AccessMode.REMOTE to R.string.access_remote,
+        ).forEach { (mode, label) ->
+            ChoiceChip(stringResource(label), selected = viewModel.accessMode == mode, onClick = { viewModel.accessMode = mode })
+        }
+    }
+    Text(stringResource(R.string.conn_access_hint), color = Color(0xFFB7C0D0), fontSize = 15.sp)
 }
 
 @Composable

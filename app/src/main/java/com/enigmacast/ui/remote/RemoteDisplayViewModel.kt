@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.text.Cue
 import com.enigmacast.R
 import com.enigmacast.connection.ConnectionCoordinator
+import com.enigmacast.data.network.ReceiverRouter
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.epg.GuideCursor
@@ -27,6 +28,9 @@ import com.enigmacast.domain.model.EnigmaService
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.model.StreamMode
+import com.enigmacast.domain.network.PlainHttpRisk
+import com.enigmacast.domain.network.ReceiverRoute
+import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.OsdConfig
 import com.enigmacast.domain.osd.OsdController
@@ -53,6 +57,7 @@ import com.enigmacast.live.NowEpgRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
+import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.osd.AndroidOsdAnalyzer
 import com.enigmacast.playback.AppSleepTimer
@@ -129,6 +134,9 @@ data class RemoteDisplayUiState(
     val sleepEndsAtMs: Long = 0L,
     val recent: List<LastChannel> = emptyList(),
     val receiverAddress: String = "",
+    /** How the receiver is reached and what crosses the internet unencrypted on that route. */
+    val route: ReceiverRoute = ReceiverRoute.HOME,
+    val routeRisk: PlainHttpRisk = PlainHttpRisk.NONE,
     /** Channel list: the channel whose programme guide is open right of the list (Right on a channel). */
     val epgChannel: BouquetEntry? = null,
     val epgEvents: List<GuideEvent> = emptyList(),
@@ -168,6 +176,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private val nowEpg: NowEpgRepository,
     private val sleepTimer: AppSleepTimer,
     private val guideRepository: GuideRepository,
+    private val streamTargets: StreamTargets,
+    private val router: ReceiverRouter,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -253,6 +263,18 @@ class RemoteDisplayViewModel @Inject constructor(
         }
         viewModelScope.launch {
             playback.audioPassthroughActive.collect { refreshPlaybackOptions() }
+        }
+        viewModelScope.launch {
+            router.status.collect { status ->
+                val receiver = settingsSnapshot.activeReceiver()
+                val risk = receiver?.let { ReceiverRouting.plainHttpRisk(it, status.route) } ?: PlainHttpRisk.NONE
+                val previous = _ui.value
+                _ui.update { it.copy(route = status.route, routeRisk = risk) }
+                // Say it once when the app switches to an unencrypted internet route.
+                if (risk != PlainHttpRisk.NONE && (previous.route != status.route || previous.routeRisk == PlainHttpRisk.NONE)) {
+                    showNotice(UiText.res(R.string.route_unencrypted_notice), NOTICE_LONG_MS)
+                }
+            }
         }
         viewModelScope.launch {
             sleepTimer.endsAtMs.collect { endsAt -> _ui.update { it.copy(sleepEndsAtMs = endsAt) } }
@@ -437,7 +459,8 @@ class RemoteDisplayViewModel @Inject constructor(
             launch {
                 monitor.changes.collect { service ->
                     val active = settingsSnapshot.activeReceiver() ?: return@collect
-                    playback.play(endpoints.stream(active, service.reference), authorization = endpoints.streamAuthorization(active))
+                    val target = streamTargets.target(active, service.reference)
+                    playback.play(target.url, authorization = target.authorization)
                 }
             }
             launch {

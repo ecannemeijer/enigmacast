@@ -11,6 +11,9 @@ import com.enigmacast.data.discovery.NsdReceiverDiscovery
 import com.enigmacast.data.openwebif.OpenWebifApi
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.network.AccessMode
+import com.enigmacast.domain.network.ReceiverRoute
+import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.validation.ReceiverConfigValidator
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.util.UiText
@@ -35,6 +38,12 @@ class ConnectionViewModel @Inject constructor(
     var username by mutableStateOf("")
     var password by mutableStateOf("")
     var allowInsecureCertificates by mutableStateOf(false)
+    var remoteHost by mutableStateOf("")
+    var remoteHttpPort by mutableStateOf("")
+    var remoteStreamPort by mutableStateOf("")
+    var remoteUseHttps by mutableStateOf(true)
+    var accessMode by mutableStateOf(AccessMode.AUTO)
+    private var saved = ReceiverConfig()
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
     var discoveredHosts by mutableStateOf<List<String>>(emptyList())
@@ -52,6 +61,12 @@ class ConnectionViewModel @Inject constructor(
                 username = saved.username
                 password = saved.password
                 allowInsecureCertificates = saved.allowInsecureCertificates
+                remoteHost = saved.remoteHost
+                remoteHttpPort = saved.remoteHttpPort.portText()
+                remoteStreamPort = saved.remoteStreamingPort.portText()
+                remoteUseHttps = saved.remoteUseHttps || saved.remoteHost.isBlank()
+                accessMode = saved.accessMode
+                this@ConnectionViewModel.saved = saved
             }
         }
     }
@@ -59,6 +74,17 @@ class ConnectionViewModel @Inject constructor(
     fun test() = launchAction { config ->
         val result = api.testConnection(config)
         status = result.message
+    }
+
+    /** Tests the remote profile directly, as if it were the home address. */
+    fun testRemote() = launchAction { config ->
+        if (!ReceiverRouting.remoteConfigured(config)) {
+            status = UiText.res(R.string.conn_remote_missing)
+            return@launchAction
+        }
+        val remote = ReceiverRouting.effective(config, ReceiverRoute.REMOTE).copy(remoteHost = "", accessMode = AccessMode.HOME)
+        val result = api.testConnection(remote)
+        status = UiText.Joined(listOf(UiText.res(R.string.conn_remote_result), result.message))
     }
 
     fun save(onSaved: () -> Unit = {}) = launchAction { config ->
@@ -117,7 +143,8 @@ class ConnectionViewModel @Inject constructor(
     }
 
     private fun currentConfig(): ReceiverConfig {
-        return ReceiverConfig(
+        // Settings without a field here (timeouts, transcoding, tunnel) keep their saved values.
+        return saved.copy(
             id = receiverId,
             name = name.trim(),
             host = host.trim(),
@@ -127,6 +154,16 @@ class ConnectionViewModel @Inject constructor(
             password = password,
             streamingPort = streamPort.toIntOrNull() ?: 0,
             allowInsecureCertificates = allowInsecureCertificates,
+            remoteHost = remoteHost.trim(),
+            remoteHttpPort = remoteHttpPort.portValue(),
+            remoteStreamingPort = remoteStreamPort.portValue(),
+            remoteUseHttps = remoteUseHttps,
+            accessMode = accessMode,
         )
     }
+
+    private fun Int.portText(): String = if (this > 0) toString() else ""
+
+    /** Empty means "same as at home" (0); anything unreadable fails validation (-1). */
+    private fun String.portValue(): Int = if (isBlank()) 0 else trim().toIntOrNull() ?: -1
 }

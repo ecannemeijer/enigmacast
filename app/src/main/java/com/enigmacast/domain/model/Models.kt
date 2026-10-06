@@ -2,6 +2,7 @@ package com.enigmacast.domain.model
 
 import androidx.annotation.StringRes
 import com.enigmacast.R
+import com.enigmacast.domain.network.AccessMode
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.util.UiText
 import kotlinx.serialization.Serializable
@@ -18,12 +19,24 @@ data class ReceiverConfig(
     val streamingPort: Int = 8001,
     val timeoutSeconds: Int = 8,
     val allowInsecureCertificates: Boolean = false,
+    /** Remote access from outside the home network: DynDNS name or public address; blank when not used. */
+    val remoteHost: String = "",
+    /** Forwarded web interface port; 0 keeps [httpPort]. */
+    val remoteHttpPort: Int = 0,
+    val remoteUseHttps: Boolean = false,
+    /** Forwarded stream port; 0 keeps [streamingPort]. */
+    val remoteStreamingPort: Int = 0,
+    /** Forwarded transcoding port; 0 keeps [transcodingPort]. */
+    val remoteTranscodingPort: Int = 0,
+    val accessMode: AccessMode = AccessMode.AUTO,
+    /** Port of the receiver's transcoder (Broadcom boxes with TranscodingSetup: usually 8002). */
+    val transcodingPort: Int = 8002,
 ) {
     /** Never prints the password, so a config that ends up in a log or crash report stays safe. */
     override fun toString(): String =
         "ReceiverConfig(id=$id, name=$name, host=$host, httpPort=$httpPort, useHttps=$useHttps, " +
             "user=${if (username.isEmpty()) "-" else "set"}, password=${if (password.isEmpty()) "-" else "***"}, " +
-            "streamingPort=$streamingPort)"
+            "streamingPort=$streamingPort, remote=${if (remoteHost.isBlank()) "-" else "set"}, accessMode=$accessMode)"
 }
 
 @Serializable

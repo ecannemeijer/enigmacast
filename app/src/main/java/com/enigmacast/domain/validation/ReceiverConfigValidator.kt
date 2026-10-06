@@ -22,6 +22,12 @@ object ReceiverConfigValidator {
         if (config.httpPort !in 1..65535) errors += UiText.res(R.string.valid_http_port)
         if (config.streamingPort !in 1..65535) errors += UiText.res(R.string.valid_stream_port)
         if (config.timeoutSeconds !in 1..60) errors += UiText.res(R.string.valid_timeout)
+        if (config.remoteHost.isNotBlank() && !hostPattern.matches(config.remoteHost.trim())) {
+            errors += UiText.res(R.string.valid_remote_host)
+        }
+        val remotePorts = listOf(config.remoteHttpPort, config.remoteStreamingPort, config.remoteTranscodingPort)
+        if (remotePorts.any { it !in 0..65535 }) errors += UiText.res(R.string.valid_remote_port)
+        if (config.transcodingPort !in 1..65535) errors += UiText.res(R.string.valid_transcoding_port)
         return ValidationResult(errors)
     }
 }

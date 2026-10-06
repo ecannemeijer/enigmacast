@@ -21,6 +21,7 @@ import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.tuner.StreamModePolicy
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
+import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
 import com.enigmacast.playback.LivePlaybackController
@@ -45,6 +46,7 @@ class StreamGuideViewModel @Inject constructor(
     private val playback: LivePlaybackController,
     private val endpoints: OpenWebifEndpoints,
     private val session: OwnTunerSession,
+    private val streamTargets: StreamTargets,
 ) : ViewModel() {
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
@@ -343,7 +345,8 @@ class StreamGuideViewModel @Inject constructor(
                 status = UiText.res(R.string.guide_no_receiver)
                 return@launch
             }
-            val streamUrl = endpoints.stream(receiver, channel.reference)
+            val target = streamTargets.target(receiver, channel.reference)
+            val streamUrl = target.url
             val outcome = LiveZapFlow.run(
                 token = token,
                 isCurrent = { it == guideToken },
@@ -353,7 +356,7 @@ class StreamGuideViewModel @Inject constructor(
                 zap = { serviceSource.zap(receiver, channel.reference) },
                 currentReference = { serviceSource.currentService(receiver).reference },
                 startStream = {
-                    playback.play(streamUrl, force = true, authorization = endpoints.streamAuthorization(receiver))
+                    playback.play(streamUrl, force = true, authorization = target.authorization)
                 },
             )
             if (token != guideToken || outcome is LiveZapFlow.Outcome.Stale) return@launch
@@ -389,8 +392,9 @@ class StreamGuideViewModel @Inject constructor(
         }
     }
 
-    private fun startPlayback(receiver: ReceiverConfig, reference: String) {
-        playback.play(endpoints.stream(receiver, reference), force = true, authorization = endpoints.streamAuthorization(receiver))
+    private suspend fun startPlayback(receiver: ReceiverConfig, reference: String) {
+        val target = streamTargets.target(receiver, reference)
+        playback.play(target.url, force = true, authorization = target.authorization)
     }
 
     private suspend fun loadGuide() {

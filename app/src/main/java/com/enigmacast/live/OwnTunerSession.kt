@@ -6,8 +6,8 @@ import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.LastChannel
-import com.enigmacast.domain.player.RecentChannels
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.player.RecentChannels
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
@@ -77,6 +77,7 @@ class OwnTunerSession @Inject constructor(
     private val tunerSource: TunerStatusSource,
     private val playback: LivePlaybackController,
     private val endpoints: OpenWebifEndpoints,
+    private val streamTargets: StreamTargets,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(OwnTunerState())
@@ -288,12 +289,9 @@ class OwnTunerSession @Inject constructor(
             return
         }
         _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
-        playback.play(
-            endpoints.stream(receiver, channel.reference),
-            force = true,
-            authorization = endpoints.streamAuthorization(receiver),
-            checkStart = true,
-        )
+        val target = streamTargets.target(receiver, channel.reference)
+        if (myToken != token) return
+        playback.play(target.url, force = true, authorization = target.authorization, checkStart = true)
         streaming = true
         saveLastChannel(channel)
     }

@@ -2,6 +2,7 @@ package com.enigmacast.data.openwebif
 
 import com.enigmacast.R
 import com.enigmacast.data.network.OkHttpClientFactory
+import com.enigmacast.data.network.ReceiverRouter
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetChannelList
@@ -61,6 +62,7 @@ class OpenWebifException(
 class OpenWebifApi @Inject constructor(
     private val clientFactory: OkHttpClientFactory,
     private val endpoints: OpenWebifEndpoints,
+    private val router: ReceiverRouter,
 ) : OsdSource, RemoteControlSource, ServiceStateSource, ReceiverInfoSource {
 
     override suspend fun grab(config: ReceiverConfig, format: GrabFormat, mode: GrabMode): GrabbedImage {
@@ -369,12 +371,19 @@ class OpenWebifApi @Inject constructor(
      */
     private suspend fun execute(config: ReceiverConfig, url: String, accept: String): HttpBytes {
         val client = clientFactory.webifClient(config.allowInsecureCertificates, config.timeoutSeconds)
-        val builder = Request.Builder().url(url).header("Accept", accept)
+        // URLs are built for the home address; away from home they go to the remote profile.
+        val target = router.rewrite(config, url)
+        val builder = Request.Builder().url(target).header("Accept", accept)
         if (config.username.isNotEmpty()) {
             builder.header("Authorization", Credentials.basic(config.username, config.password))
         }
-        EnigmaLog.connection("request ${EnigmaLog.sanitizeUrl(url)}")
-        return client.newCall(builder.build()).awaitBytes()
+        EnigmaLog.connection("request ${EnigmaLog.sanitizeUrl(url)}${if (target != url) " (remote)" else ""}")
+        return try {
+            client.newCall(builder.build()).awaitBytes()
+        } catch (error: IOException) {
+            if (error !is OpenWebifException) router.onRequestFailed(config)
+            throw error
+        }
     }
 
     private suspend fun Call.awaitBytes(): HttpBytes = suspendCancellableCoroutine { continuation ->

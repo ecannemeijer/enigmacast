@@ -59,6 +59,8 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.network.PlainHttpRisk
+import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.player.AudioDelayChoices
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.player.QuickOption
@@ -305,6 +307,12 @@ private fun CloseOnOk(onClose: () -> Unit) {
     )
 }
 
+private fun routeLabel(route: ReceiverRoute): Int = when (route) {
+    ReceiverRoute.HOME -> R.string.route_home
+    ReceiverRoute.REMOTE -> R.string.route_remote
+    ReceiverRoute.TUNNEL -> R.string.route_tunnel
+}
+
 @Composable
 private fun StreamInfo(ui: RemoteDisplayUiState, onClose: () -> Unit) {
     val player = ui.playerState
@@ -322,6 +330,12 @@ private fun StreamInfo(ui: RemoteDisplayUiState, onClose: () -> Unit) {
         add(stringResource(R.string.quick_info_stalls, ui.stats.stalls))
         val mode = stringResource(if (ui.ownTuner) R.string.viewing_mode_own else R.string.viewing_mode_follow)
         add(stringResource(R.string.quick_info_source, "${ui.receiverAddress} · $mode"))
+        add(stringResource(R.string.quick_info_route, stringResource(routeLabel(ui.route))))
+        when (ui.routeRisk) {
+            PlainHttpRisk.WEB_AND_STREAM -> add(stringResource(R.string.route_risk_web_and_stream))
+            PlainHttpRisk.STREAM -> add(stringResource(R.string.route_risk_stream))
+            PlainHttpRisk.NONE -> Unit
+        }
     }
     lines.forEach { line ->
         Text(line, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
