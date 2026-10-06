@@ -106,6 +106,7 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
                 onBindBack = { appViewModel.onDashboardBack = it },
                 focusPlayingChannel = appViewModel.focusPlayingChannel,
                 onPlayingChannelFocused = appViewModel::playingChannelFocused,
+                updatePromptShown = appViewModel.updatePrompt != null,
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,
@@ -118,15 +119,14 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel) {
             AppScreen.Diagnostics -> OsdDiagnosticsScreen(onBack = appViewModel::back)
         }
         appViewModel.updatePrompt?.let { prompt ->
-            Box(Modifier.fillMaxSize().background(Color(0xF0101820))) {
-                AppUpdateDialog(
-                    release = prompt.release,
-                    progress = prompt.progress,
-                    message = prompt.message,
-                    onUpdate = appViewModel::installUpdate,
-                    onCancel = appViewModel::dismissUpdate,
-                )
-            }
+            // Its own window: the screen behind keeps its focus requests to itself.
+            AppUpdateDialog(
+                release = prompt.release,
+                progress = prompt.progress,
+                message = prompt.message,
+                onUpdate = appViewModel::installUpdate,
+                onCancel = appViewModel::dismissUpdate,
+            )
         }
         }
     }

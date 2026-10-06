@@ -131,6 +131,7 @@ fun DashboardScreen(
     onBindBack: ((() -> Boolean)?) -> Unit,
     focusPlayingChannel: Boolean = false,
     onPlayingChannelFocused: () -> Unit = {},
+    updatePromptShown: Boolean = false,
     guideModel: StreamGuideViewModel = hiltViewModel(),
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
 ) {
@@ -303,7 +304,8 @@ fun DashboardScreen(
                 }
             }
         }
-        if (guideModel.askWake) {
+        // Wait until the update prompt is closed: a second dialog window would take its focus.
+        if (guideModel.askWake && !updatePromptShown) {
             TvConfirmDialog(
                 title = "De ontvanger staat uit",
                 message = if (guideModel.waking) "Bezig met aanzetten…" else "Zal ik de Enigma2 aanzetten?",
