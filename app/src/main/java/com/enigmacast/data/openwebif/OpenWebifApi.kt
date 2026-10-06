@@ -118,7 +118,7 @@ class OpenWebifApi @Inject constructor(
         val ordered = listOfNotNull(hintedBouquet) + bouquets.filter { it.reference != hintedBouquet?.reference }
         var fallback: BouquetChannelList? = null
         for (bouquet in ordered) {
-            val channels = services(config, bouquet.reference)
+            val channels = numbered(config, bouquet.reference, services(config, bouquet.reference))
                 .filter { BouquetChannels.isPlayableChannel(it.reference) }
             val list = BouquetChannelList(bouquet.name, bouquet.reference, channels)
             if (fallback == null && channels.isNotEmpty()) fallback = list
@@ -132,7 +132,37 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
-        return services(config, bouquetReference).filter { BouquetChannels.isPlayableChannel(it.reference) }
+        return numbered(config, bouquetReference, services(config, bouquetReference))
+            .filter { BouquetChannels.isPlayableChannel(it.reference) }
+    }
+
+    private var startPositions: Pair<String, Map<String, Int>>? = null
+    private var startPositionsAtMs = 0L
+
+    /**
+     * Turns positions within a bouquet into the numbers the receiver shows, by adding the
+     * number of channels in the bouquets before it. Images without `startpos` keep the
+     * position within the bouquet.
+     */
+    private suspend fun numbered(
+        config: ReceiverConfig,
+        bouquetReference: String,
+        channels: List<BouquetEntry>,
+    ): List<BouquetEntry> {
+        val key = "${config.host}:${config.httpPort}"
+        val cached = startPositions
+        val starts = if (cached != null && cached.first == key && System.currentTimeMillis() - startPositionsAtMs < 600_000) {
+            cached.second
+        } else {
+            val loaded = runCatching { bouquetStartPositions(config) }.getOrDefault(emptyMap())
+                .mapKeys { bouquetIdentity(it.key) }
+            startPositions = key to loaded
+            startPositionsAtMs = System.currentTimeMillis()
+            loaded
+        }
+        val start = starts[bouquetIdentity(bouquetReference)] ?: 0
+        if (start == 0) return channels
+        return channels.map { entry -> if (entry.number > 0) entry.copy(number = entry.number + start) else entry }
     }
 
     override suspend fun currentService(config: ReceiverConfig): EnigmaService {

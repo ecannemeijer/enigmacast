@@ -188,4 +188,18 @@ class TunerAvailabilityTest {
         assertEquals(TunerVerdict.NotNeeded, TunerAvailability.evaluate(full, "4097:0:1:0:0:0:0:0:0:0:http%3a//x:IPTV", me))
         assertEquals(TunerVerdict.Unknown, TunerAvailability.evaluate(TunerSnapshot(emptyList()), npo1, me))
     }
+
+    @Test
+    fun aRefusedStreamReportsAllMatchingTunersAsUsed() {
+        val snapshot = TunerSnapshot(
+            twoTuners(),
+            streams = listOf(StreamClient(rtl4, "RTL 4", "192.168.1.21")),
+            inStandby = true,
+        )
+        val refused = TunerAvailability.refused(snapshot, npo1, me)
+        assertEquals(2, refused.used)
+        assertEquals(2, refused.total)
+        assertEquals(1, refused.users.size)
+        assertEquals(0, TunerAvailability.refused(null, npo1, me).total)
+    }
 }

@@ -61,6 +61,39 @@ object TunerAvailability {
     fun evaluate(snapshot: TunerSnapshot, requestedReference: String, ownAddresses: Set<String>): TunerVerdict {
         if (!ServiceRef.needsTuner(requestedReference)) return TunerVerdict.NotNeeded
         if (snapshot.tuners.isEmpty()) return TunerVerdict.Unknown
+        val usage = usage(snapshot, requestedReference, ownAddresses)
+        val requestedTransponder = ServiceRef.transponderKey(requestedReference)
+        if (requestedTransponder != null && requestedTransponder in usage.transponders) {
+            return TunerVerdict.Free(free = usage.free, total = usage.total, sharedTransponder = true)
+        }
+        return if (usage.free > 0) {
+            TunerVerdict.Free(usage.free, usage.total)
+        } else {
+            TunerVerdict.Full(usage.used, usage.total, usage.users)
+        }
+    }
+
+    /**
+     * For when the receiver refused a stream that the check let through: all tuners that
+     * can receive [requestedReference] are taken, so report them all as used, with the
+     * users that can be identified.
+     */
+    fun refused(snapshot: TunerSnapshot?, requestedReference: String, ownAddresses: Set<String>): TunerVerdict.Full {
+        if (snapshot == null || snapshot.tuners.isEmpty()) return TunerVerdict.Full(0, 0, emptyList())
+        val usage = usage(snapshot, requestedReference, ownAddresses)
+        return TunerVerdict.Full(usage.total, usage.total, usage.users)
+    }
+
+    private class Usage(
+        val total: Int,
+        val used: Int,
+        val users: List<TunerUser>,
+        val transponders: Set<String>,
+    ) {
+        val free get() = total - used
+    }
+
+    private fun usage(snapshot: TunerSnapshot, requestedReference: String, ownAddresses: Set<String>): Usage {
 
         val delivery = ServiceRef.delivery(requestedReference)
         val eligible = snapshot.tuners.filter { ServiceRef.tunerSupports(it.type, delivery) }
@@ -109,12 +142,7 @@ object TunerAvailability {
         }.toSet()
 
         val used = maxOf(busy.size, transponders.size).coerceAtMost(total)
-        val free = total - used
-        val requestedTransponder = ServiceRef.transponderKey(requestedReference)
-        if (requestedTransponder != null && requestedTransponder in transponders) {
-            return TunerVerdict.Free(free = free, total = total, sharedTransponder = true)
-        }
-        return if (free > 0) TunerVerdict.Free(free, total) else TunerVerdict.Full(used, total, users.distinct())
+        return Usage(total, used, users.distinct(), transponders)
     }
 
     /**
