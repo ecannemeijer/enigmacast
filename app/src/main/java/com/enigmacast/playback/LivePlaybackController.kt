@@ -403,7 +403,7 @@ class LivePlaybackController @Inject constructor(
             error: IOException,
             wasCanceled: Boolean,
         ) {
-            if (wasCanceled) return
+            // Media3 marks errors it will not retry as "canceled"; they still say why the start failed.
             lastFailure = StreamFailures.classify(error)
             EnigmaLog.player("load error ${error.javaClass.simpleName} → $lastFailure")
             if (checkStart && watchdog != null) checkHealth()
