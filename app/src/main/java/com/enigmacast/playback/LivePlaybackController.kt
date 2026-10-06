@@ -12,6 +12,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
+import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -188,9 +189,11 @@ class LivePlaybackController @Inject constructor(
             .build()
     }
 
+    @OptIn(ExperimentalApi::class)
     private fun buildPlayer(): ExoPlayer {
         val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough)
             .setEnableDecoderFallback(true)
+            .setVideoRendererEarlySchedulingThresholdUs(TEXTURE_VIEW_EARLY_SCHEDULING_US)
         val trackSelector = DefaultTrackSelector(context)
         val preferredAudio = if (settings.hdmiPassthrough) {
             arrayOf(MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_AC3, MimeTypes.AUDIO_AAC, MimeTypes.AUDIO_MPEG)
@@ -319,6 +322,14 @@ class LivePlaybackController @Inject constructor(
         }
     }
 }
+
+/**
+ * Video is drawn on a TextureView. A TextureView shows a frame as soon as the decoder
+ * hands it over and ignores the release time Media3 asks for. Media3 hands frames over
+ * up to 50 ms early by default, so the picture ran ahead of the sound by a few tens of
+ * milliseconds. 20 ms is about one refresh at 50 Hz, the rate DVB channels use.
+ */
+private const val TEXTURE_VIEW_EARLY_SCHEDULING_US = 20_000L
 
 @OptIn(UnstableApi::class)
 private class LiveRenderersFactory(
