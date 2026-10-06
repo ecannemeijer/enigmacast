@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.remote.RemoteInputBus
 import com.enigmacast.ui.AppScreen
 import com.enigmacast.ui.AppViewModel
@@ -68,6 +69,10 @@ class MainActivity : ComponentActivity() {
             }
         })
         setContent { EnigmaCastAppContent(appViewModel) }
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguageStore.wrap(newBase))
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
