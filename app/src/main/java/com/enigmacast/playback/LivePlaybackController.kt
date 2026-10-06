@@ -14,16 +14,24 @@ import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioOutputProvider
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -32,21 +40,31 @@ import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.domain.model.PlaybackSettings
 import com.enigmacast.domain.model.PlayerState
+import com.enigmacast.domain.tuner.StreamFailure
+import com.enigmacast.domain.tuner.StreamHealth
+import com.enigmacast.domain.tuner.StreamStartCheck
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @OptIn(UnstableApi::class)
 class LiveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(8) {
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+        // A refused login or an unknown service does not get better by asking again.
+        val code = (loadErrorInfo.exception as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+        if (code == 401 || code == 403 || code == 404) return C.TIME_UNSET
         return (500L * loadErrorInfo.errorCount).coerceAtMost(5_000L)
     }
 }
@@ -69,6 +87,25 @@ class LivePlaybackController @Inject constructor(
     private var scope: CoroutineScope? = null
     private var reconnectJob: Job? = null
     private var failures = 0
+    private var checkStart = false
+    private var startedAtMs = 0L
+    private var firstFrame = false
+    private var lastFailure = StreamFailure.NONE
+    private var watchdog: Job? = null
+    private val bytesLoaded = AtomicLong()
+    private val ownScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Sent as `Authorization` on stream requests; read on the loader thread. */
+    @Volatile
+    private var streamAuthorization: String? = null
+    private val _health = MutableStateFlow(StreamHealth.IDLE)
+
+    /**
+     * How a stream started with `checkStart = true` is doing. Enigma2 accepts the
+     * connection and only then looks for a tuner, so "no tuner" shows up as a stream
+     * that ends, or stays silent, before any picture.
+     */
+    val health: StateFlow<StreamHealth> = _health.asStateFlow()
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
     private val _cues = MutableStateFlow<List<Cue>>(emptyList())
@@ -101,7 +138,7 @@ class LivePlaybackController @Inject constructor(
         if (player != null) {
             releasePlayer()
             ensurePlayer()
-            if (url != null) play(url, force = true)
+            if (url != null) play(url, force = true, authorization = streamAuthorization, checkStart = checkStart)
         }
     }
 
@@ -109,6 +146,7 @@ class LivePlaybackController @Inject constructor(
         playbackEnabled = false
         currentUrl = null
         reconnectJob?.cancel()
+        stopWatchdog(StreamHealth.IDLE)
         releasePlayer()
         _cues.value = emptyList()
         _subtitlesAvailable.value = false
@@ -124,6 +162,7 @@ class LivePlaybackController @Inject constructor(
         reconnectJob = null
         currentUrl = null
         failures = 0
+        stopWatchdog(StreamHealth.IDLE)
         val exo = player ?: return
         exo.playWhenReady = false
         exo.stop()
@@ -135,13 +174,21 @@ class LivePlaybackController @Inject constructor(
         playbackEnabled = true
     }
 
-    fun play(url: String, force: Boolean = false) {
+    /**
+     * Starts [url]. [authorization] goes along as the `Authorization` header (Enigma2
+     * stream authentication). With [checkStart] the start is watched: a stream the
+     * receiver refuses ends up in [health] and is not retried endlessly.
+     */
+    fun play(url: String, force: Boolean = false, authorization: String? = null, checkStart: Boolean = false) {
         if (!playbackEnabled) return
         val exo = ensurePlayer()
         if (!force && url == currentUrl && exo.playerError == null && exo.playbackState != Player.STATE_IDLE) {
             return
         }
         currentUrl = url
+        streamAuthorization = authorization
+        this.checkStart = checkStart
+        startWatchdog()
         val item = MediaItem.Builder()
             .setUri(url)
             .setMimeType(MimeTypes.VIDEO_MP2T)
@@ -156,12 +203,77 @@ class LivePlaybackController @Inject constructor(
     fun reconnect() {
         val url = currentUrl ?: return
         if (!settings.autoReconnect && failures > 0) return
-        play(url, force = true)
+        play(url, force = true, authorization = streamAuthorization, checkStart = checkStart)
     }
 
     fun release() {
         reconnectJob?.cancel()
+        stopWatchdog(StreamHealth.IDLE)
         releasePlayer()
+    }
+
+    private fun startWatchdog() {
+        watchdog?.cancel()
+        bytesLoaded.set(0)
+        firstFrame = false
+        lastFailure = StreamFailure.NONE
+        startedAtMs = System.currentTimeMillis()
+        if (!checkStart) {
+            _health.value = StreamHealth.IDLE
+            return
+        }
+        _health.value = StreamHealth.STARTING
+        watchdog = ownScope.launch {
+            while (true) {
+                if (checkHealth()) break
+                delay(500)
+            }
+        }
+    }
+
+    private fun stopWatchdog(health: StreamHealth) {
+        watchdog?.cancel()
+        watchdog = null
+        _health.value = health
+    }
+
+    /** Returns true when the start has a final answer. */
+    private fun checkHealth(): Boolean {
+        val exo = player ?: return true
+        val tracks = exo.currentTracks
+        val hasVideo = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO }
+        val health = StreamStartCheck.evaluate(
+            elapsedMs = System.currentTimeMillis() - startedAtMs,
+            bytes = bytesLoaded.get(),
+            firstFrame = firstFrame,
+            hasVideoTrack = hasVideo,
+            audioPlaying = exo.isPlaying,
+            failure = lastFailure,
+        )
+        if (health != _health.value) EnigmaLog.player("stream check $health (${bytesLoaded.get()} bytes)")
+        _health.value = health
+        return when (health) {
+            StreamHealth.PLAYING -> {
+                watchdog = null
+                true
+            }
+            StreamHealth.NO_TUNER, StreamHealth.AUTH_REQUIRED, StreamHealth.UNREACHABLE -> {
+                // Hang up so the receiver frees whatever it had set up, and do not retry.
+                reconnectJob?.cancel()
+                reconnectJob = null
+                currentUrl = null
+                exo.playWhenReady = false
+                exo.stop()
+                exo.clearMediaItems()
+                watchdog = null
+                true
+            }
+            StreamHealth.FAILED -> {
+                watchdog = null
+                true
+            }
+            else -> false
+        }
     }
 
     private fun ensurePlayer(): ExoPlayer {
@@ -218,10 +330,14 @@ class LivePlaybackController @Inject constructor(
             .build()
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
-        val mediaSourceFactory = DefaultMediaSourceFactory(
-            OkHttpDataSource.Factory(clientFactory.streamClient()),
-            extractors,
-        ).setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy())
+        val http = OkHttpDataSource.Factory(clientFactory.streamClient())
+            .setTransferListener(byteCounter)
+        val withAuthorization: DataSource.Factory = ResolvingDataSource.Factory(http) { spec: DataSpec ->
+            val header = streamAuthorization
+            if (header == null) spec else spec.withAdditionalHeaders(mapOf("Authorization" to header))
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(withAuthorization, extractors)
+            .setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy())
         val exo = ExoPlayer.Builder(context)
             .setLoadControl(loadControl())
             .setRenderersFactory(renderers)
@@ -237,6 +353,7 @@ class LivePlaybackController @Inject constructor(
         )
         exo.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
         exo.addListener(listener)
+        exo.addAnalyticsListener(loadErrors)
         EnigmaLog.player(if (settings.hdmiPassthrough) "audio HDMI passthrough" else "audio stereo downmix")
         return exo
     }
@@ -261,11 +378,42 @@ class LivePlaybackController @Inject constructor(
             bufferMs = exo.totalBufferedDuration,
             liveOffsetMs = if (liveOffset == C.TIME_UNSET) -1 else liveOffset,
             error = exo.playerError?.errorCodeName,
+            audioLabel = TrackLabels.audio(audio),
+            audioTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_AUDIO },
+            subtitleLabel = TrackLabels.subtitle(exo.currentTracks, settings.subtitlesEnabled),
+            subtitleTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_TEXT },
         )
+    }
+
+    private val byteCounter = object : TransferListener {
+        override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+        override fun onTransferStart(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+        override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+        override fun onBytesTransferred(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
+            bytesLoaded.addAndGet(bytesTransferred.toLong())
+        }
+    }
+
+    /** Load errors that the player retries quietly still tell the start check what went wrong. */
+    private val loadErrors = object : AnalyticsListener {
+        override fun onLoadError(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData,
+            error: IOException,
+            wasCanceled: Boolean,
+        ) {
+            if (wasCanceled) return
+            lastFailure = StreamFailures.classify(error)
+            EnigmaLog.player("load error ${error.javaClass.simpleName} → $lastFailure")
+            if (checkStart && watchdog != null) checkHealth()
+        }
     }
 
     private fun scheduleReconnect() {
         if (!settings.autoReconnect) return
+        // A refused start is final; the screen offers to try again.
+        if (checkStart && _health.value in FINAL_REFUSALS) return
         val owner = scope ?: return
         failures += 1
         reconnectJob?.cancel()
@@ -308,15 +456,28 @@ class LivePlaybackController @Inject constructor(
     }
 
     private val listener = object : Player.Listener {
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) failures = 0
-            publish()
-        }
-
         override fun onPlayerError(error: PlaybackException) {
             EnigmaLog.player("error ${error.errorCodeName}")
+            if (checkStart) {
+                lastFailure = StreamFailures.classify(error)
+                if (watchdog != null) checkHealth()
+            }
             publish()
             scheduleReconnect()
+        }
+
+        override fun onRenderedFirstFrame() {
+            firstFrame = true
+            if (checkStart && watchdog != null) checkHealth()
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) failures = 0
+            if (playbackState == Player.STATE_ENDED && checkStart && watchdog != null) {
+                lastFailure = StreamFailure.ENDED
+                checkHealth()
+            }
+            publish()
         }
 
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -341,6 +502,8 @@ class LivePlaybackController @Inject constructor(
  * milliseconds. 20 ms is about one refresh at 50 Hz, the rate DVB channels use.
  */
 private const val TEXTURE_VIEW_EARLY_SCHEDULING_US = 20_000L
+
+private val FINAL_REFUSALS = setOf(StreamHealth.NO_TUNER, StreamHealth.AUTH_REQUIRED, StreamHealth.UNREACHABLE)
 
 @OptIn(UnstableApi::class)
 private class LiveRenderersFactory(
