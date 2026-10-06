@@ -75,6 +75,10 @@ class LivePlaybackController @Inject constructor(
     val cues: StateFlow<List<Cue>> = _cues.asStateFlow()
     private val _subtitlesAvailable = MutableStateFlow(false)
     val subtitlesAvailable: StateFlow<Boolean> = _subtitlesAvailable.asStateFlow()
+    private val audioSync = AudioSyncOffsets()
+
+    /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
+    val audioPassthroughActive: StateFlow<Boolean?> = audioSync.passthroughActive
 
     fun attach(scope: CoroutineScope) {
         this.scope = scope
@@ -84,8 +88,15 @@ class LivePlaybackController @Inject constructor(
     fun exoPlayer(): ExoPlayer = ensurePlayer()
 
     fun updateSettings(settings: PlaybackSettings) {
+        audioSync.set(settings.audioDelayPcmMs, settings.audioDelayPassthroughMs)
         if (this.settings == settings) return
+        val onlyAudioDelay = this.settings.withoutAudioDelay() == settings.withoutAudioDelay()
         this.settings = settings
+        if (onlyAudioDelay) {
+            // The sink reads the new delay on its next position update; no rebuild needed.
+            EnigmaLog.player("audio delay pcm=${settings.audioDelayPcmMs}ms hdmi=${settings.audioDelayPassthroughMs}ms")
+            return
+        }
         val url = currentUrl
         if (player != null) {
             releasePlayer()
@@ -191,7 +202,7 @@ class LivePlaybackController @Inject constructor(
 
     @OptIn(ExperimentalApi::class)
     private fun buildPlayer(): ExoPlayer {
-        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough)
+        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync)
             .setEnableDecoderFallback(true)
             .setVideoRendererEarlySchedulingThresholdUs(TEXTURE_VIEW_EARLY_SCHEDULING_US)
         val trackSelector = DefaultTrackSelector(context)
@@ -335,6 +346,7 @@ private const val TEXTURE_VIEW_EARLY_SCHEDULING_US = 20_000L
 private class LiveRenderersFactory(
     context: Context,
     private val passthrough: Boolean,
+    private val audioSync: AudioSyncOffsets,
 ) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(
         context: Context,
@@ -343,11 +355,12 @@ private class LiveRenderersFactory(
     ): AudioSink {
         val detected = AudioTrackAudioOutputProvider.Builder(context).build()
         val output = if (passthrough) detected else PcmAudioOutputProvider(detected)
-        return DefaultAudioSink.Builder(context)
+        val sink = DefaultAudioSink.Builder(context)
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
             .setAudioOutputProvider(output)
             .build()
+        return AudioSyncSink(sink, audioSync)
     }
 }
 
@@ -363,3 +376,5 @@ private class PcmAudioOutputProvider(
         return super.getFormatSupport(formatConfig)
     }
 }
+
+private fun PlaybackSettings.withoutAudioDelay() = copy(audioDelayPcmMs = 0, audioDelayPassthroughMs = 0)

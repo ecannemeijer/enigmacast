@@ -27,6 +27,10 @@ data class PlaybackSettings(
     val autoReconnect: Boolean = true,
     val hdmiPassthrough: Boolean = false,
     val subtitlesEnabled: Boolean = true,
+    /** Audio delay correction for decoded (stereo/PCM) sound, -500..500 ms. */
+    val audioDelayPcmMs: Int = 0,
+    /** Audio delay correction for AC3/E-AC3 sent undecoded over HDMI, -500..500 ms. */
+    val audioDelayPassthroughMs: Int = 0,
 )
 
 @Serializable
