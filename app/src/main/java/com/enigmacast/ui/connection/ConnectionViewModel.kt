@@ -103,11 +103,12 @@ class ConnectionViewModel @Inject constructor(
                 remoteTranscodingPort = saved.remoteTranscodingPort.portText()
                 wireGuard = saved.wireGuard
                 wireGuardSaved = saved.wireGuardConfig.isNotBlank()
+                // The VPN permission is only looked at when the tunnel is switched on.
+                if (saved.wireGuard) refreshVpnConsent()
                 this@ConnectionViewModel.saved = saved
             }
         }
         viewModelScope.launch { tunnel.status.collect { tunnelStatus = it } }
-        refreshVpnConsent()
     }
 
     /** What the config in use (new, else saved) contains, for hints and warnings. */

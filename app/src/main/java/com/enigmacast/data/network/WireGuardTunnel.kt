@@ -85,6 +85,7 @@ class WireGuardTunnel @Inject constructor(
 
     /** Takes the tunnel down without waiting, for when the app exits. */
     fun shutdown() {
+        if (activeConfig == null && _status.value.state == TunnelState.OFF) return
         scope.launch { down() }
     }
 

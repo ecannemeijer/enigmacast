@@ -100,16 +100,17 @@ class ReceiverRouter @Inject constructor(
         if (current.receiverKey == key && current.generation == gen && now - current.checkedAtMs < TTL_MS) {
             return@withLock current.route
         }
-        val control = tunnelControl.get()
-        val tunnelEnabled = control.enabledFor(config)
+        // With the WireGuard toggle off the tunnel code is not touched at all (no VpnService, no backend).
+        val control = if (config.wireGuard || current.route == ReceiverRoute.TUNNEL) tunnelControl.get() else null
+        val tunnelEnabled = control?.enabledFor(config) == true
         val sameNetwork = current.receiverKey == key && current.network == network
-        if (current.route == ReceiverRoute.TUNNEL && sameNetwork && tunnelEnabled && config.accessMode != AccessMode.HOME) {
+        if (control != null && current.route == ReceiverRoute.TUNNEL && sameNetwork && tunnelEnabled && config.accessMode != AccessMode.HOME) {
             if (control.up(config)) {
                 _status.value = current.copy(checkedAtMs = now, generation = gen)
                 return@withLock ReceiverRoute.TUNNEL
             }
         }
-        if (current.route == ReceiverRoute.TUNNEL) control.down()
+        if (current.route == ReceiverRoute.TUNNEL) control?.down()
         val homeReachable = if (ReceiverRouting.needsProbe(config, tunnelEnabled)) probe(config.host, config.httpPort) else null
         var route = ReceiverRouting.choose(
             mode = config.accessMode,
@@ -117,7 +118,7 @@ class ReceiverRouter @Inject constructor(
             remoteConfigured = ReceiverRouting.remoteConfigured(config),
             tunnelEnabled = tunnelEnabled,
         )
-        if (route == ReceiverRoute.TUNNEL && !control.up(config)) {
+        if (route == ReceiverRoute.TUNNEL && control?.up(config) != true) {
             route = if (ReceiverRouting.remoteConfigured(config)) ReceiverRoute.REMOTE else ReceiverRoute.HOME
         }
         if (route != current.route || key != current.receiverKey) EnigmaLog.connection("route ${route.name.lowercase()}")
