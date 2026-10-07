@@ -506,4 +506,8 @@
         <item quantity="one">"  (%d taal)"</item>
         <item quantity="other">"  (%d talen)"</item>
     </plurals>
+    <string name="tvfield_hint_edit">Druk op OK om te bewerken</string>
+    <string name="tvfield_hint_done">Gereed of Terug om af te ronden</string>
+    <string name="tvfield_hint_edit_short">OK: bewerken</string>
+    <string name="tvfield_hint_done_short">Terug: klaar</string>
 </resources>

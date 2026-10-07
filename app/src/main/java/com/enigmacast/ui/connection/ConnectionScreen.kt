@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,20 +20,18 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusProperties
+import com.enigmacast.ui.theme.TvFieldKind
+import com.enigmacast.ui.theme.TvTextField
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.tv.material3.MaterialTheme
 import com.enigmacast.R
 import com.enigmacast.data.network.TunnelState
 import com.enigmacast.domain.network.AccessMode
@@ -55,15 +51,6 @@ fun ConnectionScreen(
     onSettings: () -> Unit,
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        focusedBorderColor = MaterialTheme.colorScheme.primary,
-        unfocusedBorderColor = Color(0xFF3A4458),
-        cursorColor = MaterialTheme.colorScheme.primary,
-        focusedLabelColor = MaterialTheme.colorScheme.primary,
-        unfocusedLabelColor = Color(0xFFB7C0D0),
-    )
     val autodetectFocus = remember { FocusRequester() }
     AutodetectDialogHost(viewModel, autodetectFocus)
     Column(
@@ -87,30 +74,29 @@ fun ConnectionScreen(
                 fontSize = 16.sp,
             )
         }
-        LabeledField(stringResource(R.string.field_receiver_name), viewModel.name, { viewModel.name = it }, fieldColors)
+        LabeledField(stringResource(R.string.field_receiver_name), viewModel.name, { viewModel.name = it })
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            LabeledField(stringResource(R.string.field_host), viewModel.host, { viewModel.host = it }, fieldColors, Modifier.weight(1f))
+            LabeledField(stringResource(R.string.field_host), viewModel.host, { viewModel.host = it }, Modifier.weight(1f), TvFieldKind.HOST)
             TvButton(stringResource(R.string.action_autodetect), viewModel::startAutodetect, Modifier.focusRequester(autodetectFocus))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            LabeledField(stringResource(R.string.field_http_port), viewModel.httpPort, { viewModel.httpPort = it }, fieldColors, Modifier.weight(1f))
-            LabeledField(stringResource(R.string.field_stream_port), viewModel.streamPort, { viewModel.streamPort = it }, fieldColors, Modifier.weight(1f))
+            LabeledField(stringResource(R.string.field_http_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
+            LabeledField(stringResource(R.string.field_stream_port), viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
         }
-        LabeledField(stringResource(R.string.field_username), viewModel.username, { viewModel.username = it }, fieldColors)
+        LabeledField(stringResource(R.string.field_username), viewModel.username, { viewModel.username = it })
         LabeledField(
             label = stringResource(R.string.field_password),
             value = viewModel.password,
             onValueChange = { viewModel.password = it },
-            colors = fieldColors,
-            password = true,
+            kind = TvFieldKind.PASSWORD,
         )
         ToggleRow("HTTPS", viewModel.useHttps) { viewModel.useHttps = it }
         ToggleRow(stringResource(R.string.allow_self_signed), viewModel.allowInsecureCertificates) {
             viewModel.allowInsecureCertificates = it
         }
-        QualitySection(viewModel, fieldColors)
-        RemoteSection(viewModel, fieldColors)
-        WireGuardSection(viewModel, fieldColors)
+        QualitySection(viewModel)
+        RemoteSection(viewModel)
+        WireGuardSection(viewModel)
         AccessModeSection(viewModel)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             TvButton(stringResource(R.string.action_test_connection), viewModel::test, enabled = !viewModel.busy)
@@ -129,7 +115,7 @@ fun ConnectionScreen(
 
 /** Direct, transcoded or automatic streams, with the transcoder's preset and port. */
 @Composable
-private fun QualitySection(viewModel: ConnectionViewModel, fieldColors: androidx.compose.material3.TextFieldColors) {
+private fun QualitySection(viewModel: ConnectionViewModel) {
     Text(stringResource(R.string.conn_quality_title), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         listOf(
@@ -168,16 +154,16 @@ private fun QualitySection(viewModel: ConnectionViewModel, fieldColors: androidx
                 stringResource(R.string.field_transcoding_port),
                 viewModel.transcodingPort,
                 { viewModel.transcodingPort = it },
-                fieldColors,
                 Modifier.weight(1f),
+                TvFieldKind.NUMBER,
             )
             if (viewModel.remoteHost.isNotBlank()) {
                 LabeledField(
                     stringResource(R.string.field_remote_transcoding_port),
                     viewModel.remoteTranscodingPort,
                     { viewModel.remoteTranscodingPort = it },
-                    fieldColors,
                     Modifier.weight(1f),
+                    TvFieldKind.NUMBER,
                 )
             }
         }
@@ -187,25 +173,25 @@ private fun QualitySection(viewModel: ConnectionViewModel, fieldColors: androidx
 
 /** Remote profile: DynDNS name or public address, forwarded ports and when to use it. */
 @Composable
-private fun RemoteSection(viewModel: ConnectionViewModel, fieldColors: androidx.compose.material3.TextFieldColors) {
+private fun RemoteSection(viewModel: ConnectionViewModel) {
     Text(stringResource(R.string.conn_remote_title), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
     Text(stringResource(R.string.conn_remote_intro), color = Color(0xFFB7C0D0), fontSize = 16.sp)
-    LabeledField(stringResource(R.string.field_remote_host), viewModel.remoteHost, { viewModel.remoteHost = it }, fieldColors)
+    LabeledField(stringResource(R.string.field_remote_host), viewModel.remoteHost, { viewModel.remoteHost = it }, kind = TvFieldKind.HOST)
     if (viewModel.remoteHost.isBlank()) return
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         LabeledField(
             stringResource(R.string.field_remote_http_port),
             viewModel.remoteHttpPort,
             { viewModel.remoteHttpPort = it },
-            fieldColors,
             Modifier.weight(1f),
+            TvFieldKind.NUMBER,
         )
         LabeledField(
             stringResource(R.string.field_remote_stream_port),
             viewModel.remoteStreamPort,
             { viewModel.remoteStreamPort = it },
-            fieldColors,
             Modifier.weight(1f),
+            TvFieldKind.NUMBER,
         )
     }
     ToggleRow(stringResource(R.string.remote_https), viewModel.remoteUseHttps) { viewModel.remoteUseHttps = it }
@@ -234,7 +220,7 @@ private fun AccessModeSection(viewModel: ConnectionViewModel) {
 
 /** The experimental in-app WireGuard tunnel: config import, VPN permission and a test. */
 @Composable
-private fun WireGuardSection(viewModel: ConnectionViewModel, fieldColors: androidx.compose.material3.TextFieldColors) {
+private fun WireGuardSection(viewModel: ConnectionViewModel) {
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         viewModel.onVpnConsent(result.resultCode == Activity.RESULT_OK)
     }
@@ -248,17 +234,15 @@ private fun WireGuardSection(viewModel: ConnectionViewModel, fieldColors: androi
     if (viewModel.wireGuardSaved && viewModel.wireGuardText.isBlank()) {
         Text(stringResource(R.string.conn_wg_saved), color = Color(0xFF8FD18F), fontSize = 15.sp)
     }
-    OutlinedTextField(
+    TvTextField(
+        label = stringResource(R.string.field_wg_config),
         value = viewModel.wireGuardText,
         onValueChange = { viewModel.wireGuardText = it },
-        label = { Text(stringResource(R.string.field_wg_config)) },
-        singleLine = false,
-        minLines = 3,
-        maxLines = 8,
         modifier = Modifier.fillMaxWidth(),
-        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontFamily = FontFamily.Monospace),
+        kind = TvFieldKind.MULTILINE,
+        large = true,
         visualTransformation = HideWireGuardKeys,
-        colors = fieldColors,
+        monospace = true,
     )
     val summary = viewModel.wireGuardSummary
     if (summary.valid) {
@@ -343,22 +327,10 @@ private fun LabeledField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    colors: androidx.compose.material3.TextFieldColors,
     modifier: Modifier = Modifier,
-    password: Boolean = false,
+    kind: TvFieldKind = TvFieldKind.TEXT,
 ) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
-        modifier = modifier
-            .fillMaxWidth()
-            .focusProperties { },
-        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 20.sp),
-        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-        colors = colors,
-    )
+    TvTextField(label, value, onValueChange, modifier.fillMaxWidth(), kind = kind, large = true)
 }
 
 @Composable

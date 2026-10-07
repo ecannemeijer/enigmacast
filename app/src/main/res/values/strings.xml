@@ -509,4 +509,8 @@
         <item quantity="one">"  (%d language)"</item>
         <item quantity="other">"  (%d languages)"</item>
     </plurals>
+    <string name="tvfield_hint_edit">Press OK to edit</string>
+    <string name="tvfield_hint_done">Done or Back to finish</string>
+    <string name="tvfield_hint_edit_short">OK: edit</string>
+    <string name="tvfield_hint_done_short">Back: done</string>
 </resources>

@@ -17,6 +17,7 @@ import com.enigmacast.domain.network.StreamProfile
 import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.theme.ChoiceRow
+import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvButton
@@ -71,6 +72,7 @@ internal fun StreamTypeCard(viewModel: ConnectionViewModel = hiltViewModel()) {
                     value = viewModel.transcodingPort,
                     onValueChange = viewModel::editTranscodingPort,
                     modifier = Modifier.width(140.dp),
+                    kind = TvFieldKind.NUMBER,
                 )
                 TvButton(stringResource(R.string.stream_type_detect), viewModel::detectTranscodingPort, enabled = !viewModel.detecting)
             }

@@ -4,29 +4,16 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -41,6 +28,8 @@ import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.ChoiceChip
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.SettingsCard
+import com.enigmacast.ui.theme.TvFieldKind
+import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
@@ -81,9 +70,9 @@ internal fun RemoteAccessSettingsPanel(viewModel: ConnectionViewModel = hiltView
     SettingsCard(stringResource(R.string.remote_profile_title)) {
         Hint(stringResource(R.string.conn_remote_intro))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField(stringResource(R.string.field_remote_host), viewModel.remoteHost, { viewModel.remoteHost = it }, Modifier.weight(2f))
-            CompactField(stringResource(R.string.field_remote_http_port), viewModel.remoteHttpPort, { viewModel.remoteHttpPort = it }, Modifier.weight(1f))
-            CompactField(stringResource(R.string.field_remote_stream_port), viewModel.remoteStreamPort, { viewModel.remoteStreamPort = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_remote_host), viewModel.remoteHost, { viewModel.remoteHost = it }, kind = TvFieldKind.HOST, modifier = Modifier.weight(2f))
+            CompactField(stringResource(R.string.field_remote_http_port), viewModel.remoteHttpPort, { viewModel.remoteHttpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
+            CompactField(stringResource(R.string.field_remote_stream_port), viewModel.remoteStreamPort, { viewModel.remoteStreamPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
         }
         if (viewModel.remoteHost.isNotBlank()) {
             ToggleRow(
@@ -176,30 +165,13 @@ private fun Hint(text: String, color: Color = EnigmaColors.Muted) {
 /** The pasted WireGuard config; private and preshared keys are shown as dots. */
 @Composable
 private fun WireGuardConfigField(value: String, onValueChange: (String) -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    Column(Modifier.padding(horizontal = 6.dp)) {
-        Text(stringResource(R.string.field_wg_config), color = if (focused) EnigmaColors.Accent else EnigmaColors.Muted, fontSize = 11.sp)
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = false,
-            minLines = 3,
-            maxLines = 8,
-            interactionSource = interaction,
-            textStyle = TextStyle(color = EnigmaColors.Text, fontSize = 13.sp, fontFamily = FontFamily.Monospace),
-            cursorBrush = SolidColor(EnigmaColors.Accent),
-            visualTransformation = HideWireGuardKeys,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 3.dp)
-                .background(EnigmaColors.Raised, RoundedCornerShape(8.dp))
-                .border(
-                    if (focused) 2.dp else 1.dp,
-                    if (focused) EnigmaColors.Accent else Color(0xFF3A4458),
-                    RoundedCornerShape(8.dp),
-                )
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-        )
-    }
+    TvTextField(
+        label = stringResource(R.string.field_wg_config),
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.padding(horizontal = 6.dp),
+        kind = TvFieldKind.MULTILINE,
+        visualTransformation = HideWireGuardKeys,
+        monospace = true,
+    )
 }

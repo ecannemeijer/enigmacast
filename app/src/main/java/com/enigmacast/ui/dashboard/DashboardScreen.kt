@@ -6,8 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +25,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -53,7 +50,6 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -65,9 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -113,6 +107,8 @@ import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.ui.theme.TvFieldKind
+import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.util.UiText
 import com.enigmacast.util.asString
@@ -1070,7 +1066,7 @@ private fun ReceiverSettingsPanel(
             modifier = Modifier.padding(horizontal = 6.dp),
         ) {
             CompactField(stringResource(R.string.field_name), viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
-            CompactField(stringResource(R.string.field_ip), viewModel.host, { viewModel.host = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_ip), viewModel.host, { viewModel.host = it }, Modifier.weight(1f), TvFieldKind.HOST)
             CompactButton(
                 label = stringResource(R.string.action_autodetect),
                 onClick = viewModel::startAutodetect,
@@ -1079,14 +1075,14 @@ private fun ReceiverSettingsPanel(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField(stringResource(R.string.field_webif_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f))
-            CompactField(stringResource(R.string.field_stream_port_short), viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f))
+            CompactField(stringResource(R.string.field_webif_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
+            CompactField(stringResource(R.string.field_stream_port_short), viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
         }
     }
     SettingsCard(stringResource(R.string.login)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
             CompactField(stringResource(R.string.field_user), viewModel.username, { viewModel.username = it }, Modifier.weight(1f))
-            CompactField(stringResource(R.string.field_password), viewModel.password, { viewModel.password = it }, Modifier.weight(1f), password = true)
+            CompactField(stringResource(R.string.field_password), viewModel.password, { viewModel.password = it }, Modifier.weight(1f), TvFieldKind.PASSWORD)
         }
         ToggleRow(
             title = "HTTPS",
@@ -1115,32 +1111,9 @@ internal fun CompactField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    password: Boolean = false,
+    kind: TvFieldKind = TvFieldKind.TEXT,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    Column(modifier) {
-        Text(label, color = if (focused) EnigmaColors.Accent else EnigmaColors.Muted, fontSize = 11.sp)
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            interactionSource = interaction,
-            textStyle = TextStyle(color = EnigmaColors.Text, fontSize = 14.sp),
-            cursorBrush = SolidColor(EnigmaColors.Accent),
-            visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 3.dp)
-                .background(EnigmaColors.Raised, RoundedCornerShape(8.dp))
-                .border(
-                    if (focused) 2.dp else 1.dp,
-                    if (focused) EnigmaColors.Accent else Color(0xFF3A4458),
-                    RoundedCornerShape(8.dp),
-                )
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-        )
-    }
+    TvTextField(label, value, onValueChange, modifier, kind = kind)
 }
 
 @Composable
