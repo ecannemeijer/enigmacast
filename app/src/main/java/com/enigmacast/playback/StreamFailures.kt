@@ -49,6 +49,21 @@ internal object StreamFailures {
         }
         return StreamFailure.OTHER
     }
+
+    /** True when this app closed the socket on purpose. That is not a failed stream. */
+    fun isCancellation(error: Throwable): Boolean {
+        var current: Throwable? = error
+        var depth = 0
+        while (current != null && depth < 8) {
+            val message = current.message.orEmpty()
+            if (message.equals("Canceled", ignoreCase = true) || message.equals("cancelled", ignoreCase = true)) {
+                return true
+            }
+            current = current.cause
+            depth += 1
+        }
+        return false
+    }
 }
 
 /** Short descriptions of the playing audio and subtitle tracks for the channel banner. */

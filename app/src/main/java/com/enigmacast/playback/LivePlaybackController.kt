@@ -197,6 +197,7 @@ class LivePlaybackController @Inject constructor(
         currentUrl = null
         reconnectJob?.cancel()
         stopWatchdog(StreamHealth.IDLE)
+        clientFactory.cancelStream()
         releasePlayer()
         tsInspector.reset()
         _cues.value = emptyList()
@@ -216,6 +217,9 @@ class LivePlaybackController @Inject constructor(
         internet = false
         stopWatchdog(StreamHealth.IDLE)
         tsInspector.reset()
+        // Cancel the socket first. ExoPlayer's stop does not always close a blocked read,
+        // and the receiver keeps that tuner until the TCP connection is gone.
+        clientFactory.cancelStream()
         val exo = player ?: return
         exo.playWhenReady = false
         exo.stop()
@@ -241,6 +245,7 @@ class LivePlaybackController @Inject constructor(
         currentUrl = null
         failures = 0
         stopWatchdog(StreamHealth.IDLE)
+        clientFactory.cancelStream()
         player?.let { exo ->
             exo.playWhenReady = false
             exo.stop()
@@ -290,6 +295,9 @@ class LivePlaybackController @Inject constructor(
         val exo = ensurePlayer()
         reconnectJob?.cancel()
         reconnectJob = null
+        // Drop the previous stream socket before the new request. A blocked read survives
+        // ExoPlayer's stop, and the receiver holds that tuner until the socket is cancelled.
+        clientFactory.cancelStream()
         currentUrl = url
         streamAuthorization = authorization
         this.checkStart = checkStart
@@ -406,6 +414,7 @@ class LivePlaybackController @Inject constructor(
     fun release() {
         reconnectJob?.cancel()
         stopWatchdog(StreamHealth.IDLE)
+        clientFactory.cancelStream()
         releasePlayer()
     }
 
@@ -527,7 +536,7 @@ class LivePlaybackController @Inject constructor(
             .build()
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
-        val http = OkHttpDataSource.Factory(clientFactory.streamClient())
+        val http = OkHttpDataSource.Factory(clientFactory.streamCalls())
             .setTransferListener(byteCounter)
         val withAuthorization: DataSource.Factory = ResolvingDataSource.Factory(http) { spec: DataSpec ->
             val header = streamAuthorization
@@ -643,6 +652,8 @@ class LivePlaybackController @Inject constructor(
             error: IOException,
             wasCanceled: Boolean,
         ) {
+            // Closing the previous stream on purpose is not a failure of the one that is starting.
+            if (StreamFailures.isCancellation(error)) return
             // Media3 marks errors it will not retry as "canceled"; they still say why the start failed.
             lastFailure = StreamFailures.classify(error)
             EnigmaLog.player("load error ${error.javaClass.simpleName} → $lastFailure")
@@ -701,6 +712,7 @@ class LivePlaybackController @Inject constructor(
 
     private val listener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
+            if (StreamFailures.isCancellation(error)) return
             EnigmaLog.player("error ${error.errorCodeName}")
             if (internet) {
                 val exo = player

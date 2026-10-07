@@ -1,6 +1,7 @@
 package com.enigmacast.data.network
 
 import com.enigmacast.util.EnigmaLog
+import okhttp3.Call
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.security.SecureRandom
@@ -20,6 +21,9 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
 
     @Volatile
     private var streamClient: OkHttpClient? = null
+
+    @Volatile
+    private var oneStream: OneEnigmaStream? = null
 
     fun webifClient(allowInsecureCertificates: Boolean, timeoutSeconds: Int): OkHttpClient {
         val existing = webifClient
@@ -52,6 +56,22 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
             streamClient = built
             return built
         }
+    }
+
+    /** Stream requests for the player. A new Enigma2 stream closes the previous one. */
+    fun streamCalls(): Call.Factory {
+        oneStream?.let { return it }
+        synchronized(this) {
+            oneStream?.let { return it }
+            val created = OneEnigmaStream(streamClient())
+            oneStream = created
+            return created
+        }
+    }
+
+    /** Drops the open Enigma2 stream socket so the receiver frees its tuner. */
+    fun cancelStream() {
+        oneStream?.cancel()
     }
 
     private fun baseBuilder(readTimeoutSeconds: Long): OkHttpClient.Builder {
