@@ -162,9 +162,13 @@ Automatic stream restarts (after a failed start, a receiver that was away, or a 
 
 ## Internet and IPTV streams
 
-Bouquets can mix normal Enigma2 (DVB) channels with internet / IPTV entries. Those have a service reference whose path is an HTTP(S) URL, often percent-encoded, usually with type 4097, 5001, 5002 or 8193 (for example `4097:0:1:0:0:0:0:0:0:0:http%3a//cdn.example.com/live.ts`).
+Bouquets can mix normal Enigma2 (DVB) channels with internet / IPTV entries. Their service reference has ten identity fields, then the stream URL (its own `:` written as `%3a`, sometimes double-encoded as `%253a`), then a plain `:` and the channel name, usually with type 4097, 5001, 5002 or 8193:
 
-EnigmaCast detects that URL, plays it directly with ExoPlayer, and does **not** zap the receiver, check tuners, use ports 8001/8002 or apply Normal / Transcoded / Automatic. Credentials in the URL (`user:pass@host`) are kept; Enigma2 header fragments (`#User-Agent=…`) are dropped. The log line is `stream target kind=internet …`. Switching between an internet channel and a DVB channel keeps working (Back, OSD, AutoSwitch).
+`4097:0:1:0:0:0:0:0:0:0:https%3a//m1b2.worldcast.tv/dancetelevisionone/2/dancetelevisionone.m3u8:Dance TV - Best of Dance TV`
+
+EnigmaCast splits the reference on its plain `:` first and decodes only the URL field, so the channel name never ends up in the address and other escapes in the URL (`%2F` in a token) stay as they are. Credentials in the URL (`user:pass@host`) are kept; Enigma2 player options (`#User-Agent=…`) are dropped. The log line is `stream target kind=internet …`.
+
+These URLs are played directly with ExoPlayer: no tuner check, no ports 8001/8002, no Normal / Transcoded / Automatic. `.m3u8` (or `type=m3u8`) plays as HLS from the live edge, `.mpd` as DASH, `.ts` as MPEG-TS; anything else is detected by the player, and a stream it cannot read is tried once more as HLS. A failing stream is retried at most three times (1, 2 and 4 s apart); then the player stops and says "This internet stream format is not supported" or "could not be played after 3 attempts". OK tries again. In "Follow receiver" mode the app starts the URL at once and also asks the receiver to zap (best effort), so full screen, which follows the receiver, shows the same channel. The guide (`/api/epgservice`) is asked for these channels too: receivers with imported EPG for IPTV return programmes; others simply return none. Back, OSD and AutoSwitch keep working when switching between an internet channel and a DVB channel.
 
 ## AutoSwitch
 
@@ -206,12 +210,13 @@ All texts are Android string resources: English in `values/strings.xml`, Dutch i
 
 ## Settings
 
-Right from Settings opens a submenu with Receiver, Remote access, Playback, OSD, Info, and Language. Each page groups its options on cards, and every switch row toggles with OK.
+Right from Settings opens a submenu with Receiver, Remote access, Playback, OSD, General, Info, and Language. Each page groups its options on cards, and every switch row toggles with OK.
 
-- Receiver: host, ports, credentials, and connection test
+- Receiver: Autodetect, host, ports, credentials, and connection test
 - Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel (switch, paste or import the config, Allow VPN, Test tunnel)
 - Playback: viewing mode, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
 - OSD: PNG or JPG, and the fast poll after a key
+- General: Navigation sounds (the click when moving with the remote; on by default)
 - Info: version and build, debug overlay, verbose logging, OSD border
 
 Stable is the default. It uses a larger live buffer (about 2–15 s) and a 4 s live offset. Fast uses the short buffer (about 0.5–5 s) and a 1 s offset. Changing playback rebuilds the player, except for the audio sync, which applies at once.
@@ -237,7 +242,7 @@ Passwords and WireGuard configs are encrypted with an AES-256-GCM key in the And
 
 The settings model is a list of receivers plus an active id, so more than one receiver can be stored later. Version 1 edits the active receiver.
 
-Autodetect Enigma2 receiver (button, and a toggle to run it when the connection screen opens with an empty host) browses mDNS `_http._tcp` on the LAN, then asks each host `/api/about`. Only answers that look like OpenWebif are listed (model name when known); a single match fills in the address, several let you pick with OK. WireGuard is not used. Many images do not advertise OpenWebif, so a miss is normal and typing the IP address stays the fallback.
+Autodetect Enigma2 receiver is on the connection screen (button, and a toggle to run it when the screen opens with an empty host) and under Settings › Receiver › Autodetect. It browses mDNS `_http._tcp` and, at the same time, scans the TV's own /24 network (for example 192.168.1.1–254) on ports 80 and 8080 with a short TCP connect; VPN networks are skipped. Every host found is asked `/api/about`, and only answers that look like OpenWebif are listed (model name when known), sorted by address. A single match fills in the address, several let you pick with OK; then Save (or Connect). A search takes a few seconds. WireGuard is not used. Typing the IP address stays the fallback.
 
 ## OpenWebif
 
@@ -283,7 +288,8 @@ Settings can enable:
 - PNG OSD alpha depends on the image and the `grab` binary. On some boxes `mode=osd` is opaque black outside the widgets. Use OSD diagnostics on the SF8008 to see which mode keeps transparency.
 - AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. With passthrough, Android cannot measure how long the amplifier or soundbar takes to decode, so lip sync may need the HDMI audio sync value. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
 - DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
-- Autodetect (mDNS + `/api/about`) is best-effort: receivers that do not advertise `_http._tcp` are not found; always type the IP if needed.
+- Autodetect (mDNS + a /24 scan on ports 80 and 8080 + `/api/about`) is best-effort: a receiver on another subnet, on a different web port without mDNS, or behind a firewall that drops `/api/about` is not found; type the IP if needed.
+- Navigation sounds off silences the click that EnigmaCast's own screens make. Android only plays it while its System sounds setting is on; the app cannot change that setting, and beeps that the TV or remote make by themselves are outside the app.
 - AutoSwitch runs only while the app is open in the foreground (see AutoSwitch). Record is not available yet.
 - Remote access, transcoding and the built-in WireGuard tunnel are built from the OpenWebif and WireGuard sources and tested only in unit tests, not on a TV and receiver. Some Android TV builds lack the VPN permission dialog; the app then says so and the WireGuard app is the way to go.
 - Over the remote profile the receiver sees the router's address for this device's stream, so telling this device's own stream apart from others may miss it and count one tuner too many.
@@ -298,6 +304,8 @@ Settings can enable:
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN app on the TV can hide the receiver unless it routes the home subnet; the built-in tunnel only comes up when home does not answer.
 - HTTP 401: fill in the OpenWebif username and password.
 - An IPTV / internet channel tries the receiver and fails: the service reference should contain `http%3a//` or `https%3a//` after the tenth field. `adb logcat | grep "stream target"` should say `kind=internet`; if it says `kind=enigma2`, the bouquet entry has no embedded URL.
+- An internet channel says the format is not supported: `adb logcat | grep -E "switching live stream|internet stream"` shows `type=` (HLS, DASH, TS or auto) and each try. The stream may need a header the app does not send, or use a format the TV's player cannot read; check the URL in VLC on a PC.
+- The remote clicks on every move: Settings › General › Navigation sounds off. If it still clicks, turn off System sounds in the Android TV settings (Device preferences › Sound) or check the TV's own key-beep option.
 - The stream does not start: `adb logcat | grep -E "stream target|switching live stream"` shows the exact URL (without credentials), the route and whether it is transcoded. At home it should be `http://<receiver>:8001/<service reference>`; a transcoded URL on a closed port means the transcoding port in the receiver settings does not match the TranscodingSetup plugin (use "Ask the receiver" in Settings → Playback → Stream type), or choose Normal.
 - HTTPS fails with a certificate error: enable the self-signed option only for that receiver, or install a certificate the TV already trusts.
 - "All tuners are busy" while you expect a free tuner: put the receiver in standby (not deep standby) so its own picture frees a tuner, and check for running recordings or other devices streaming (OpenWebif's About page lists them). Choosing a channel on the same transponder as a running stream always works.
