@@ -9,6 +9,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.R
+import com.enigmacast.data.discovery.AutodetectResult
+import com.enigmacast.data.discovery.DiscoveredHost
 import com.enigmacast.data.discovery.DiscoveredReceiver
 import com.enigmacast.data.discovery.ReceiverAutodetect
 import com.enigmacast.data.network.ReceiverRouter
@@ -84,10 +86,6 @@ class ConnectionViewModel @Inject constructor(
     private var saved = ReceiverConfig()
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
-    var discoveredReceivers by mutableStateOf<List<DiscoveredReceiver>>(emptyList())
-
-    /** Progress and result of the last autodetection, shown next to the Autodetect button. */
-    var discoveryStatus by mutableStateOf(UiText.Empty)
     private var receiverId: String = ""
 
     /** Settings › Playback › Stream type: the result of the last save or port detection. */
@@ -325,47 +323,51 @@ class ConnectionViewModel @Inject constructor(
         }
     }
 
-    /** When true, the connection screen runs autodetection once if the host field is empty. */
-    var autodetectOnOpen by mutableStateOf(true)
+    /** The AutoDetect dialog; [AutodetectState.Hidden] when it is closed. */
+    var autodetectState by mutableStateOf<AutodetectState>(AutodetectState.Hidden)
+        private set
+    private var autodetectJob: Job? = null
 
-    fun discover() {
-        if (busy) return
-        busy = true
-        discoveredReceivers = emptyList()
-        discoveryStatus = UiText.res(R.string.conn_autodetect_searching)
-        viewModelScope.launch {
-            val found = runCatching { autodetect.find() }.getOrDefault(emptyList())
-            discoveredReceivers = found
-            discoveryStatus = when {
-                found.isEmpty() -> UiText.res(R.string.conn_autodetect_none)
-                found.size == 1 -> {
-                    selectReceiver(found.first())
-                    UiText.res(R.string.conn_autodetect_one, found.first().label)
-                }
-                else -> UiText.res(R.string.conn_autodetect_many, found.size)
+    /** AutoDetect button: open the dialog and search (again). The form is not changed until a receiver is chosen. */
+    fun startAutodetect() {
+        autodetectJob?.cancel()
+        autodetectState = AutodetectState.Searching
+        val formHost = host.trim().takeIf { it.isNotBlank() }?.let { DiscoveredHost(it, httpPort.trim().toIntOrNull() ?: 80) }
+        autodetectJob = viewModelScope.launch {
+            val result = try {
+                autodetect.find(formHost)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                EnigmaLog.discoveryError("autodetect failed: ${error.javaClass.simpleName} ${error.message.orEmpty()}")
+                AutodetectResult(emptyList(), emptyList(), 0, 0)
             }
-            busy = false
+            autodetectState = when {
+                result.receivers.isNotEmpty() -> AutodetectState.Results(result.receivers)
+                result.subnets.isEmpty() -> AutodetectState.NoNetwork
+                else -> AutodetectState.NothingFound(result.subnets.joinToString(), result.scannedAddresses)
+            }
         }
     }
 
-    /** Fills host, OpenWebif port and HTTPS from a receiver found by autodetection. */
-    fun selectReceiver(receiver: DiscoveredReceiver) {
+    /** Cancel / Back while searching, or Close: stop the search and close the dialog. */
+    fun closeAutodetect() {
+        autodetectJob?.cancel()
+        autodetectJob = null
+        autodetectState = AutodetectState.Hidden
+    }
+
+    /** OK on a result: fill host, OpenWebif port and HTTPS; the user still presses Save. */
+    fun chooseDetected(receiver: DiscoveredReceiver) {
         host = receiver.host
         httpPort = receiver.httpPort.toString()
         useHttps = receiver.useHttps
-        if (name.isBlank() && receiver.model.isNotBlank()) name = receiver.model
-        discoveryStatus = UiText.res(R.string.conn_autodetect_selected, receiver.label)
+        status = UiText.res(R.string.autodetect_chosen, receiver.label)
+        closeAutodetect()
     }
 
-    /** True when [receiver] is the address in the form now. */
+    /** True when [receiver] is the address in the form now (marked in the result list). */
     fun isSelected(receiver: DiscoveredReceiver): Boolean =
         host.trim() == receiver.host && httpPort.trim() == receiver.httpPort.toString() && useHttps == receiver.useHttps
-
-    /** Runs once from the connection screen when the host is still empty and the toggle is on. */
-    fun maybeAutodetectOnOpen() {
-        if (!autodetectOnOpen || host.isNotBlank() || busy) return
-        discover()
-    }
 
     private fun launchAction(block: suspend (ReceiverConfig) -> Unit) {
         val config = currentConfig()

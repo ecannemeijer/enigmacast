@@ -17,7 +17,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
@@ -62,7 +64,8 @@ fun ConnectionScreen(
         focusedLabelColor = MaterialTheme.colorScheme.primary,
         unfocusedLabelColor = Color(0xFFB7C0D0),
     )
-    LaunchedEffect(Unit) { viewModel.maybeAutodetectOnOpen() }
+    val autodetectFocus = remember { FocusRequester() }
+    AutodetectDialogHost(viewModel, autodetectFocus)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -85,7 +88,10 @@ fun ConnectionScreen(
             )
         }
         LabeledField(stringResource(R.string.field_receiver_name), viewModel.name, { viewModel.name = it }, fieldColors)
-        LabeledField(stringResource(R.string.field_host), viewModel.host, { viewModel.host = it }, fieldColors)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            LabeledField(stringResource(R.string.field_host), viewModel.host, { viewModel.host = it }, fieldColors, Modifier.weight(1f))
+            TvButton(stringResource(R.string.action_autodetect), viewModel::startAutodetect, Modifier.focusRequester(autodetectFocus))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             LabeledField(stringResource(R.string.field_http_port), viewModel.httpPort, { viewModel.httpPort = it }, fieldColors, Modifier.weight(1f))
             LabeledField(stringResource(R.string.field_stream_port), viewModel.streamPort, { viewModel.streamPort = it }, fieldColors, Modifier.weight(1f))
@@ -106,24 +112,7 @@ fun ConnectionScreen(
         RemoteSection(viewModel, fieldColors)
         WireGuardSection(viewModel, fieldColors)
         AccessModeSection(viewModel)
-        ToggleRow(stringResource(R.string.conn_autodetect_toggle), viewModel.autodetectOnOpen) {
-            viewModel.autodetectOnOpen = it
-        }
-        Text(stringResource(R.string.conn_autodetect_hint), color = Color(0xFFB7C0D0), fontSize = 15.sp)
-        if (viewModel.discoveryStatus.isNotEmpty()) {
-            Text(viewModel.discoveryStatus.asString(), color = Color.White, fontSize = 16.sp)
-        }
-        if (viewModel.discoveredReceivers.isNotEmpty()) {
-            Text(stringResource(R.string.conn_autodetect_results), color = Color.White, fontSize = 18.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                viewModel.discoveredReceivers.take(6).forEach { found ->
-                    val mark = if (viewModel.isSelected(found)) "✓ " else ""
-                    TvButton(text = mark + found.label, onClick = { viewModel.selectReceiver(found) })
-                }
-            }
-        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TvButton(stringResource(R.string.action_autodetect), viewModel::discover, enabled = !viewModel.busy)
             TvButton(stringResource(R.string.action_test_connection), viewModel::test, enabled = !viewModel.busy)
             if (viewModel.remoteHost.isNotBlank()) {
                 TvButton(stringResource(R.string.action_test_remote), viewModel::testRemote, enabled = !viewModel.busy)

@@ -1,19 +1,17 @@
 package com.enigmacast.data.discovery
 
-/**
- * A host on the LAN that answered as OpenWebif / Enigma2 during autodetection.
- * [label] is what the D-pad list shows (model when known, else the address).
- */
+/** An Enigma2 receiver that answered `/api/about` during Autodetect. */
 data class DiscoveredReceiver(
     val host: String,
     val httpPort: Int,
     val useHttps: Boolean = false,
     val model: String = "",
     val image: String = "",
+    val loginRequired: Boolean = false,
 ) {
-    val label: String
-        get() {
-            val address = if (httpPort == 80 && !useHttps || httpPort == 443 && useHttps) host else "$host:$httpPort"
-            return if (model.isNotBlank()) "$model ($address)" else address
-        }
+    /** `192.168.1.209:80`: always with the port, as shown in the result list. */
+    val address: String get() = "$host:$httpPort"
+
+    /** `SF8008 4K (192.168.1.209:80)`, or just the address when the model is unknown. */
+    val label: String get() = if (model.isNotBlank()) "$model ($address)" else address
 }

@@ -506,7 +506,7 @@ fun TvChoiceDialog(
 }
 
 @Composable
-private fun DialogButton(
+internal fun DialogButton(
     label: String,
     onClick: () -> Unit,
     destructive: Boolean,
@@ -528,6 +528,37 @@ private fun DialogButton(
         ),
     ) {
         Text(label, fontSize = 16.sp)
+    }
+}
+
+/** A small button that sits in a row of [CompactField]s (about the height of the input box). */
+@Composable
+fun CompactButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.03f),
+        colors = ButtonDefaults.colors(
+            containerColor = EnigmaColors.Raised,
+            contentColor = EnigmaColors.Text,
+            focusedContainerColor = EnigmaColors.Accent,
+            focusedContentColor = EnigmaColors.OnAccent,
+            pressedContainerColor = EnigmaColors.Accent,
+            pressedContentColor = EnigmaColors.OnAccent,
+        ),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(label, fontSize = 14.sp, maxLines = 1)
     }
 }
 

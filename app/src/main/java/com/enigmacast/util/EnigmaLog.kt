@@ -36,6 +36,15 @@ object EnigmaLog {
         Timber.tag("EnigmaConnection").i(message)
     }
 
+    /** Autodetect: interfaces, subnet, scan timing, each hit and every `/api/about` answer. */
+    fun discovery(message: String) {
+        Timber.tag("EnigmaDiscovery").i(message)
+    }
+
+    fun discoveryError(message: String) {
+        Timber.tag("EnigmaDiscovery").w(message)
+    }
+
     /** [url] with any `user:password@` and password-like query values masked. */
     fun sanitizeUrl(url: String): String {
         return url.replace(Regex("://[^/@\\s]+@"), "://***@")

@@ -1,41 +1,20 @@
 package com.enigmacast.data.discovery
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AutodetectPlanTest {
     @Test
-    fun theScanCoversTheOwnSlash24ButNotTheTvItself() {
-        val hosts = SubnetScan.candidates("192.168.1.42")
-        assertEquals(253, hosts.size)
-        assertEquals("192.168.1.1", hosts.first())
-        assertEquals("192.168.1.254", hosts.last())
-        assertFalse("192.168.1.42" in hosts)
-        assertTrue("192.168.1.209" in hosts)
-        assertEquals("192.168.1.0/24", SubnetScan.subnetLabel("192.168.1.42"))
-    }
-
-    @Test
-    fun onlyPrivateNetworksAreScanned() {
-        assertEquals(253, SubnetScan.candidates("10.0.0.5").size)
-        assertEquals(253, SubnetScan.candidates("172.20.3.7").size)
-        assertTrue(SubnetScan.candidates("172.32.0.1").isEmpty())
-        assertTrue(SubnetScan.candidates("8.8.8.8").isEmpty())
-        assertTrue(SubnetScan.candidates("not-an-ip").isEmpty())
-        assertEquals(listOf(80, 8080), SubnetScan.PORTS)
-    }
-
-    @Test
-    fun mdnsHostsTryTheirPortFirstAndScannedHostsOnlyTheOpenOne() {
+    fun scannedHostsUseTheOpenPortAndMdnsHostsAlsoTheUsualOnes() {
         val plan = AutodetectPlan.probes(
-            mdns = listOf(DiscoveredHost("192.168.1.209", 8081)),
+            mdns = listOf(DiscoveredHost("192.168.1.30", 8081)),
             scanned = listOf(DiscoveredHost("192.168.1.209", 80), DiscoveredHost("192.168.1.50", 8080)),
         ).toMap()
-        assertEquals(listOf(8081, 80, 443, 8080), plan["192.168.1.209"])
+        assertEquals(listOf(80), plan["192.168.1.209"])
         assertEquals(listOf(8080), plan["192.168.1.50"])
-        assertEquals(2, plan.size)
+        assertEquals(listOf(8081, 80, 8080), plan["192.168.1.30"])
     }
 
     @Test
@@ -45,9 +24,32 @@ class AutodetectPlanTest {
     }
 
     @Test
-    fun theLabelShowsModelAndOnlyANonDefaultPort() {
-        assertEquals("Vu+ Duo 4K (192.168.1.209)", DiscoveredReceiver("192.168.1.209", 80, model = "Vu+ Duo 4K").label)
+    fun theLabelAlwaysShowsModelAndAddressWithPort() {
+        assertEquals("SF8008 4K (192.168.1.209:80)", DiscoveredReceiver("192.168.1.209", 80, model = "SF8008 4K").label)
         assertEquals("192.168.1.50:8080", DiscoveredReceiver("192.168.1.50", 8080).label)
-        assertEquals("box (10.0.0.2)", DiscoveredReceiver("10.0.0.2", 443, useHttps = true, model = "box").label)
+    }
+
+    @Test
+    fun theScanStopsAtItsBudgetAndKeepsWhatItFound() = runBlocking {
+        val scanner = TcpPortScanner(parallel = 4, connectTimeoutMs = 400) { host, _, _ ->
+            Thread.sleep(50)
+            host.endsWith(".2")
+        }
+        val hosts = LanRange.hosts("192.168.1.42", 24)
+        val started = System.currentTimeMillis()
+        val outcome = scanner.scan(hosts, listOf(80), budgetMs = 300)
+        val took = System.currentTimeMillis() - started
+        assertTrue(outcome.timedOut)
+        assertEquals(listOf(DiscoveredHost("192.168.1.2", 80)), outcome.hits)
+        assertTrue("checked ${outcome.checked}", outcome.checked in 4 until outcome.total)
+        assertTrue("took $took ms", took < 1_000)
+    }
+
+    @Test
+    fun allPortEightyChecksComeBeforePort8080() = runBlocking {
+        val order = java.util.Collections.synchronizedList(mutableListOf<Int>())
+        val scanner = TcpPortScanner(parallel = 1) { _, port, _ -> order += port; false }
+        scanner.scan(listOf("10.0.0.1", "10.0.0.2"), listOf(80, 8080), budgetMs = 5_000)
+        assertEquals(listOf(80, 80, 8080, 8080), order)
     }
 }

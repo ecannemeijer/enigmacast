@@ -267,37 +267,6 @@ class OpenWebifApi @Inject constructor(
         return OpenWebifJson.parseNowEvents(get(config, endpoints.epgNow(config, bouquetReference)))
     }
 
-    /**
-     * Cheap "is this OpenWebif?" check for LAN autodetection: `/api/about` only.
-     * HTTP 401 counts as yes (login required). Anything else that is not a usable about
-     * page returns null. Never logs the body.
-     */
-    suspend fun identify(config: ReceiverConfig): ReceiverCapabilities? {
-        val response = try {
-            execute(config, endpoints.about(config), accept = "application/json")
-        } catch (error: OpenWebifException) {
-            return if (error.statusCode == 401) {
-                ReceiverCapabilities(authenticationRequired = true)
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            return null
-        }
-        if (response.code == 401) return ReceiverCapabilities(authenticationRequired = true)
-        if (response.code !in 200..299) return null
-        val body = response.bytes.toString(Charsets.UTF_8)
-        val capabilities = runCatching {
-            OpenWebifJson.parseAbout(body, https = config.useHttps, streamingAvailable = false, grabs = GrabSupport(png = false, jpg = false, osd = false, all = false, authenticationRequired = false))
-        }.getOrNull() ?: return null
-        // A random HTTP server can return 200 with HTML; require something Enigma2-like.
-        val looksLikeOpenWebif = capabilities.model.isNotBlank() ||
-            capabilities.enigmaVersion.isNotBlank() ||
-            capabilities.webifVersion.isNotBlank() ||
-            capabilities.imageDistro.isNotBlank()
-        return capabilities.takeIf { looksLikeOpenWebif }
-    }
-
     /** `/api/about` alone (model, image, transcoding), without the grab and stream port probes. */
     suspend fun about(config: ReceiverConfig): ReceiverCapabilities = OpenWebifJson.parseAbout(
         get(config, endpoints.about(config)),
