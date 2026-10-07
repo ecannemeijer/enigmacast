@@ -85,6 +85,9 @@ class ConnectionViewModel @Inject constructor(
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
     var discoveredReceivers by mutableStateOf<List<DiscoveredReceiver>>(emptyList())
+
+    /** Progress and result of the last autodetection, shown next to the Autodetect button. */
+    var discoveryStatus by mutableStateOf(UiText.Empty)
     private var receiverId: String = ""
 
     /** Settings › Playback › Stream type: the result of the last save or port detection. */
@@ -328,11 +331,12 @@ class ConnectionViewModel @Inject constructor(
     fun discover() {
         if (busy) return
         busy = true
-        status = UiText.res(R.string.conn_autodetect_searching)
+        discoveredReceivers = emptyList()
+        discoveryStatus = UiText.res(R.string.conn_autodetect_searching)
         viewModelScope.launch {
             val found = runCatching { autodetect.find() }.getOrDefault(emptyList())
             discoveredReceivers = found
-            status = when {
+            discoveryStatus = when {
                 found.isEmpty() -> UiText.res(R.string.conn_autodetect_none)
                 found.size == 1 -> {
                     selectReceiver(found.first())
@@ -349,7 +353,13 @@ class ConnectionViewModel @Inject constructor(
         host = receiver.host
         httpPort = receiver.httpPort.toString()
         useHttps = receiver.useHttps
+        if (name.isBlank() && receiver.model.isNotBlank()) name = receiver.model
+        discoveryStatus = UiText.res(R.string.conn_autodetect_selected, receiver.label)
     }
+
+    /** True when [receiver] is the address in the form now. */
+    fun isSelected(receiver: DiscoveredReceiver): Boolean =
+        host.trim() == receiver.host && httpPort.trim() == receiver.httpPort.toString() && useHttps == receiver.useHttps
 
     /** Runs once from the connection screen when the host is still empty and the toggle is on. */
     fun maybeAutodetectOnOpen() {

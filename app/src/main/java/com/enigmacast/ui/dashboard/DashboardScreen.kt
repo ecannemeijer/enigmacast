@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -30,8 +31,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -1040,6 +1043,43 @@ private fun InfoSettingsPanel(
 private fun ReceiverSettingsPanel(
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
+    SettingsCard(stringResource(R.string.conn_autodetect_results_title)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(horizontal = 6.dp),
+        ) {
+            // Stays enabled while searching so D-pad focus never drops off a disabled tile;
+            // a second press is ignored by the view model.
+            ActionTile(
+                icon = Icons.Filled.Search,
+                label = stringResource(R.string.action_autodetect),
+                onClick = viewModel::discover,
+                tone = TileTone.Primary,
+            )
+            Text(
+                if (viewModel.discoveryStatus.isNotEmpty()) viewModel.discoveryStatus.asString()
+                else stringResource(R.string.conn_autodetect_hint_short),
+                color = EnigmaColors.Muted,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (viewModel.discoveredReceivers.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(horizontal = 6.dp).horizontalScroll(rememberScrollState()),
+            ) {
+                viewModel.discoveredReceivers.take(8).forEach { found ->
+                    ActionTile(
+                        icon = if (viewModel.isSelected(found)) Icons.Filled.Check else Icons.Filled.Home,
+                        label = found.label,
+                        onClick = { viewModel.selectReceiver(found) },
+                    )
+                }
+            }
+        }
+    }
     SettingsCard(stringResource(R.string.connection)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
             CompactField(stringResource(R.string.field_name), viewModel.name, { viewModel.name = it }, Modifier.weight(1f))

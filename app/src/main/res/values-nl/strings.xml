@@ -98,10 +98,10 @@
     <string name="default_receiver_name">Woonkamer</string>
     <string name="conn_saved">%s opgeslagen</string>
     <string name="conn_autodetect_searching">Enigma2-ontvangers op het netwerk zoeken…</string>
-    <string name="conn_autodetect_none">Geen Enigma2-ontvanger gevonden op dit netwerk. Vul het IP-adres zelf in.</string>
+    <string name="conn_autodetect_none">Geen Enigma2-ontvanger gevonden op dit netwerk. Controleer of de ontvanger aan staat en op hetzelfde netwerk zit, of vul het IP-adres zelf in.</string>
     <string name="conn_autodetect_toggle">Automatisch zoeken bij openen van dit scherm</string>
-    <string name="conn_autodetect_hint">Zoekt OpenWebif op het lokale netwerk (mDNS). Alleen ontvangers die als Enigma2 antwoorden komen in de lijst. WireGuard wordt niet gebruikt. U kunt het IP-adres altijd zelf invullen.</string>
-    <string name="conn_autodetect_one">%s gevonden. Adres ingevuld; test de verbinding of verbind.</string>
+    <string name="conn_autodetect_hint">Zoekt OpenWebif op het lokale netwerk: ontvangers die zich aanmelden (mDNS) en een snelle scan van dit netwerk op poort 80 en 8080. Alleen ontvangers die antwoorden als Enigma2 worden getoond. WireGuard wordt niet gebruikt. Je kunt het IP-adres altijd zelf invullen.</string>
+    <string name="conn_autodetect_one">%s gevonden. Het adres is ingevuld; sla op of verbind om het te gebruiken.</string>
     <string name="conn_autodetect_many">%d Enigma2-ontvangers gevonden. Kies er een met OK.</string>
     <string name="conn_autodetect_results">Gevonden Enigma2-ontvangers</string>
     <string name="conn_request_failed">Verzoek mislukt</string>
@@ -141,6 +141,9 @@
     <string name="action_save">Opslaan</string>
     <string name="action_connect">Verbinden</string>
     <string name="settings">Instellingen</string>
+    <string name="conn_autodetect_selected">%s gekozen. Sla op of verbind om deze te gebruiken.</string>
+    <string name="conn_autodetect_results_title">Automatisch zoeken</string>
+    <string name="conn_autodetect_hint_short">Zoekt Enigma2-ontvangers op dit netwerk (duurt een paar seconden) en vult het adres in.</string>
     <string name="update_allow_install">Sta toe dat deze app updates installeert en druk daarna opnieuw op Bijwerken.</string>
     <string name="update_download_failed">Download mislukt</string>
     <string name="update_download_failed_retry">%s\nDruk op Bijwerken om het opnieuw te proberen, of op Annuleren om de stream te hervatten.</string>

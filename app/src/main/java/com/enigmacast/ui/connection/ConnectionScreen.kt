@@ -110,11 +110,15 @@ fun ConnectionScreen(
             viewModel.autodetectOnOpen = it
         }
         Text(stringResource(R.string.conn_autodetect_hint), color = Color(0xFFB7C0D0), fontSize = 15.sp)
+        if (viewModel.discoveryStatus.isNotEmpty()) {
+            Text(viewModel.discoveryStatus.asString(), color = Color.White, fontSize = 16.sp)
+        }
         if (viewModel.discoveredReceivers.isNotEmpty()) {
             Text(stringResource(R.string.conn_autodetect_results), color = Color.White, fontSize = 18.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 viewModel.discoveredReceivers.take(6).forEach { found ->
-                    TvButton(text = found.label, onClick = { viewModel.selectReceiver(found) })
+                    val mark = if (viewModel.isSelected(found)) "✓ " else ""
+                    TvButton(text = mark + found.label, onClick = { viewModel.selectReceiver(found) })
                 }
             }
         }
