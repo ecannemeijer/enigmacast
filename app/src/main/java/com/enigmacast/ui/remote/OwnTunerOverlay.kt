@@ -214,23 +214,23 @@ private fun ChannelBanner(
             .padding(20.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Picon(channel, picon, cachedPicon, Modifier.width(150.dp).height(90.dp))
-        Spacer(Modifier.width(20.dp))
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Picon(channel, picon, cachedPicon, Modifier.width(116.dp).height(68.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1.25f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (number > 0) {
                     Text(
                         "$number",
                         color = EnigmaColors.Accent,
-                        fontSize = 26.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(end = 14.dp),
+                        modifier = Modifier.padding(end = 10.dp),
                     )
                 }
                 Text(
                     channel.name,
                     color = Color.White,
-                    fontSize = 26.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -244,7 +244,7 @@ private fun ChannelBanner(
                 EventLine(current, emphasised = true)
                 ProgressBar(current, nowSec)
             } else {
-                Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 16.sp)
+                Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 14.sp)
             }
             if (next != null) EventLine(next, emphasised = false)
             if (details && current != null) {
@@ -253,8 +253,8 @@ private fun ChannelBanner(
                     Text(
                         plot,
                         color = EnigmaColors.Muted,
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
                         maxLines = 6,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 4.dp),
@@ -262,19 +262,18 @@ private fun ChannelBanner(
                 }
             }
         }
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(14.dp))
         Column(
-            modifier = Modifier.widthIn(min = 160.dp),
+            modifier = Modifier.weight(0.85f),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val infoView = OsdInfoPresenter.present(osdInfo, osdFields)
-                if (!infoView.isEmpty) OsdSkins.of(osdSkin).Strip(infoView, Modifier)
-                videoLabel(player).takeIf { it.isNotBlank() }?.let { Tag(it) }
+            val infoView = OsdInfoPresenter.present(osdInfo, osdFields)
+            val resolution = videoLabel(player)
+            if (!infoView.isEmpty || resolution.isNotBlank()) {
+                OsdSkins.of(osdSkin).Strip(infoView, Modifier.fillMaxWidth()) {
+                    if (resolution.isNotBlank()) Tag(resolution)
+                }
             }
             if (player.audioLabel.isNotEmpty()) {
                 val more = if (player.audioTrackCount > 1) {
@@ -282,19 +281,18 @@ private fun ChannelBanner(
                 } else {
                     ""
                 }
-                Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more, Modifier.widthIn(max = 260.dp))
+                Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more, Modifier.widthIn(max = 220.dp))
             }
             when {
-                player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()), Modifier.widthIn(max = 260.dp))
-                player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available), Modifier.widthIn(max = 260.dp))
+                player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()), Modifier.widthIn(max = 220.dp))
+                player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available), Modifier.widthIn(max = 220.dp))
             }
             Text(
                 stringResource(if (optionsHint) R.string.osd_banner_hint_options else R.string.osd_banner_hint),
                 color = EnigmaColors.Subtle,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 260.dp),
             )
         }
     }
@@ -306,15 +304,20 @@ private fun EventLine(event: EpgEvent, emphasised: Boolean) {
         Text(
             listOf(event.beginLabel, event.endLabel).filter { it.isNotBlank() }.joinToString(" – "),
             color = if (emphasised) EnigmaColors.Accent else EnigmaColors.Muted,
-            fontSize = if (emphasised) 18.sp else 15.sp,
-            modifier = Modifier.width(130.dp),
+            fontSize = if (emphasised) 15.sp else 13.sp,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(118.dp),
         )
         Text(
             event.title.ifBlank { stringResource(R.string.osd_unknown_programme) },
             color = if (emphasised) Color.White else EnigmaColors.Muted,
-            fontSize = if (emphasised) 18.sp else 15.sp,
+            fontSize = if (emphasised) 15.sp else 13.sp,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -346,12 +349,14 @@ private fun Tag(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         color = Color.White,
-        fontSize = 13.sp,
+        fontSize = 11.sp,
         maxLines = 1,
+        softWrap = false,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
+            .widthIn(max = 168.dp)
             .background(EnigmaColors.Raised, RoundedCornerShape(6.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
 
@@ -373,8 +378,8 @@ internal fun Picon(
     modifier: Modifier = Modifier,
     fallbackSize: TextUnit = 14.sp,
 ) {
-    var bitmap by remember(entry.reference) { mutableStateOf(cachedPicon(entry)) }
-    LaunchedEffect(entry.reference) {
+    var bitmap by remember(entry.reference, entry.picon) { mutableStateOf(cachedPicon(entry)) }
+    LaunchedEffect(entry.reference, entry.picon) {
         if (bitmap == null) bitmap = picon(entry)
     }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {

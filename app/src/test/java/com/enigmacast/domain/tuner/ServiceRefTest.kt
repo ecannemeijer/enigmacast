@@ -49,8 +49,11 @@ class ServiceRefTest {
     }
 
     @Test
-    fun piconNameUsesFirstTenFields() {
-        assertEquals("/picon/1_0_19_4651_3FC_1_C00000_0_0_0.png", ServiceRef.piconPath(npo1))
+    fun piconNameUsesTheTvTypeTheReceiverStores() {
+        assertEquals("/picon/1_0_1_4651_3FC_1_C00000_0_0_0.png", ServiceRef.piconPath(npo1))
+        assertEquals("/picon/1_0_1_1_2_3_4_0_0_0.png", ServiceRef.piconPath("1:0:16:1:2:3:4:0:0:0:"))
+        assertEquals("/picon/1_0_1_1_2_3_4_0_0_0.png", ServiceRef.piconPath("1:0:1:1:2:3:4:0:0:0:"))
+        assertEquals("/picon/1_0_2_1_2_3_4_0_0_0.png", ServiceRef.piconPath("1:0:2:1:2:3:4:0:0:0:"))
     }
 
     @Test

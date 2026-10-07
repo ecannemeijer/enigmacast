@@ -94,7 +94,7 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/timeraddbyeventid?sRef=${encode(serviceReference)}&eventid=$eventId")
     }
 
-    /** A path from OpenWebif such as `/picon/1_0_19_….png`, on the web interface host. */
+    /** A path from OpenWebif such as `/picon/1_0_1_….png`, on the web interface host. */
     fun picon(config: ReceiverConfig, path: String): String = api(config, path)
 
     fun zap(config: ReceiverConfig, serviceReference: String): String {

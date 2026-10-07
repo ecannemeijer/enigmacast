@@ -64,11 +64,16 @@ object ServiceRef {
         }
     }
 
-    /** The classic picon file name OpenWebif serves under `/picon/`. */
+    /**
+     * The picon file OpenWebif serves under `/picon/`. Enigma2 keeps every TV service
+     * under type `1`, so an HD reference `1:0:19:…` is the file `1_0_1_….png`. Radio stays `2`.
+     */
     fun piconPath(reference: String): String? {
         if (!needsTuner(reference)) return null
-        val base = fields(reference).take(10).joinToString("_")
-        return "/picon/$base.png"
+        val parts = fields(reference).take(10).toMutableList()
+        if (parts.size < 3) return null
+        if (parts[2] != "1" && parts[2] != "2") parts[2] = "1"
+        return "/picon/${parts.joinToString("_")}.png"
     }
 
     /** Enigma2 reports stream clients as "::ffff:192.168.1.20"; compare the plain address. */

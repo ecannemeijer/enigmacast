@@ -205,7 +205,7 @@ data class BouquetEntry(
     val reference: String,
     /** Enigma2 channel number (bouquet start + position), or 0 when OpenWebif did not say. */
     val number: Int = 0,
-    /** Picon path on the receiver, e.g. `/picon/1_0_19_….png`, or empty. */
+    /** Picon path on the receiver, e.g. `/picon/1_0_1_….png`, or empty. */
     val picon: String = "",
 )
 

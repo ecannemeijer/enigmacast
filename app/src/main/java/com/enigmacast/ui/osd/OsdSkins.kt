@@ -2,8 +2,10 @@ package com.enigmacast.ui.osd
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,7 +27,7 @@ import com.enigmacast.util.asString
  */
 interface OsdSkin {
     @Composable
-    fun Strip(view: OsdInfoView, modifier: Modifier)
+    fun Strip(view: OsdInfoView, modifier: Modifier, trailing: @Composable () -> Unit = {})
 }
 
 object OsdSkins {
@@ -35,16 +37,18 @@ object OsdSkins {
 }
 
 /**
- * One row of pills, the same shape as the resolution tag, so the banner does not grow taller.
- * The banner places this row to the left of that resolution tag.
+ * Pills in the same shape as the resolution tag. They wrap inside the width the banner
+ * gives them, at most two lines, so a long encryption name cannot crush the programme text.
  */
 object StandardOsdSkin : OsdSkin {
+    @OptIn(ExperimentalLayoutApi::class)
     @Composable
-    override fun Strip(view: OsdInfoView, modifier: Modifier) {
-        Row(
+    override fun Strip(view: OsdInfoView, modifier: Modifier, trailing: @Composable () -> Unit) {
+        FlowRow(
             modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            maxLines = 2,
         ) {
             view.signal?.let { signal ->
                 signal.strengthPercent?.let { Pill(stringResource(R.string.osd_signal_pill, stringResource(R.string.osd_signal_strength), it)) }
@@ -60,6 +64,7 @@ object StandardOsdSkin : OsdSkin {
             }
             view.tuner?.let { Pill(it.asString()) }
             view.technical?.let { Pill(it) }
+            trailing()
         }
     }
 }
@@ -69,12 +74,13 @@ private fun Pill(text: String, color: Color = Color.White) {
     Text(
         text,
         color = color,
-        fontSize = 13.sp,
+        fontSize = 11.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
+            .widthIn(max = 168.dp)
             .background(EnigmaColors.Raised, RoundedCornerShape(6.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
 
