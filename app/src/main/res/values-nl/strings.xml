@@ -189,9 +189,6 @@
     <string name="wake_question">Zal ik de Enigma2 aanzetten?</string>
     <string name="wake_yes">Ja, aanzetten</string>
     <string name="no">Nee</string>
-    <string name="no_channel">Geen kanaal</string>
-    <string name="loading_channel">Kanaal laden</string>
-    <string name="no_programme">Geen programma</string>
     <string name="bouquets">Bouquets</string>
     <string name="channels">Kanalen</string>
     <string name="skins_subtitle">Hier kun je straks een skin voor het OSD kiezen.</string>
@@ -348,7 +345,6 @@
     <string name="sleep_app_set">Slaaptimer: EnigmaCast sluit over %d min</string>
     <string name="sleep_app_off">Slaaptimer uit</string>
     <string name="sleep_app_warning">Slaaptimer: EnigmaCast sluit over 1 minuut. Zet hem uit onder ▼ opties.</string>
-    <string name="epg_guide_title">Tv-gids</string>
     <string name="epg_guide_hint">OK: kijken of opnemen · ◀ aan het begin: bouquets · Terug: menu</string>
     <string name="epg_panel_hint">◀ Zenders · OK: nu kijken of opnemen</string>
     <string name="epg_loading">Gids laden…</string>

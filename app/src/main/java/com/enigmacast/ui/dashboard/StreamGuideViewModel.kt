@@ -3,11 +3,14 @@ package com.enigmacast.ui.dashboard
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.R
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.domain.epg.RecordPrompt
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.PowerAction
@@ -18,9 +21,13 @@ import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.LiveZapFlow
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.ChannelNavigator
 import com.enigmacast.domain.tuner.StreamModePolicy
+import com.enigmacast.live.GuideGridController
+import com.enigmacast.live.GuideRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
+import com.enigmacast.live.PiconRepository
 import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
@@ -47,6 +54,8 @@ class StreamGuideViewModel @Inject constructor(
     private val endpoints: OpenWebifEndpoints,
     private val session: OwnTunerSession,
     private val streamTargets: StreamTargets,
+    guideRepository: GuideRepository,
+    private val picons: PiconRepository,
 ) : ViewModel() {
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
@@ -68,6 +77,19 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var waking by mutableStateOf(false)
         private set
+    var recordPrompt by mutableStateOf<RecordPrompt?>(null)
+        private set
+    var recordBusy by mutableStateOf(false)
+        private set
+
+    /** A short message under the mini player (recording set, not possible, ...). */
+    var notice by mutableStateOf(UiText.Empty)
+        private set
+    private val guideRecorder = guideRepository
+    private var noticeJob: Job? = null
+
+    /** The programme grid of the Stream page: this bouquet's channels on a time axis. */
+    val grid = GuideGridController(viewModelScope, guideRepository, { settingsRepository.current().activeReceiver() })
     private var tuneJob: Job? = null
     private var lastPressedReference = ""
     private var previewJob: Job? = null
@@ -92,7 +114,100 @@ class StreamGuideViewModel @Inject constructor(
         viewModelScope.launch {
             session.state.collect(::mirror)
         }
+        viewModelScope.launch {
+            snapshotFlow { Triple(selectedBouquetReference, channels, tunedReference) }.collect { (bouquet, list, tuned) ->
+                grid.show(bouquet, list, tuned)
+            }
+        }
     }
+
+    /** Up/Down/CH± in the grid. A new row forgets the OK press, so OK there tunes instead of going full screen. */
+    fun moveGridRows(delta: Int) {
+        grid.moveRows(delta)
+        val focused = grid.state.value.focusedChannel
+        if (focused == null || !BouquetChannels.sameService(focused.reference, lastPressedReference)) {
+            lastPressedReference = ""
+        }
+    }
+
+    /** Left/Right in the grid; false when Left is already on the programme on air (the bouquets open then). */
+    fun moveGridTime(direction: Int): Boolean = grid.moveTime(direction)
+
+    /** Back from the player: the highlight on the channel that is playing, at the current time. */
+    fun focusTunedInGrid() {
+        if (tunedReference.isNotBlank()) grid.focusChannel(tunedReference)
+    }
+
+    /**
+     * OK in the grid: a programme on air (or a gap now) starts that channel in the mini player,
+     * a second OK on it goes full screen; a later programme asks to record it.
+     */
+    fun chooseInGrid(onStarted: () -> Unit, onFullscreen: () -> Unit) {
+        val (channel, cell) = grid.focused() ?: return
+        val event = cell.event
+        val now = System.currentTimeMillis() / 1000
+        if (cell.startSec <= now) {
+            tune(channel, onStarted, onFullscreen)
+            return
+        }
+        if (event == null) return
+        if (event.eventId < 0) {
+            showNotice(UiText.res(R.string.epg_record_unavailable))
+            return
+        }
+        recordPrompt = RecordPrompt(event, channel.name)
+    }
+
+    /** Asks the receiver to record the programme in [recordPrompt]. */
+    fun confirmRecording() {
+        val prompt = recordPrompt ?: return
+        if (recordBusy) return
+        recordBusy = true
+        viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver()
+            val result = try {
+                receiver?.let { guideRecorder.record(it, prompt.event) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                EnigmaLog.service("record failed: ${error.javaClass.simpleName}")
+                null
+            }
+            val success = result?.success == true
+            if (success) grid.markRecorded(prompt.event)
+            recordPrompt = null
+            recordBusy = false
+            showNotice(
+                when {
+                    success -> UiText.res(R.string.epg_record_set, prompt.event.title)
+                    result != null && result.message.isNotBlank() -> UiText.res(R.string.epg_record_refused, result.message)
+                    else -> UiText.res(R.string.epg_record_failed)
+                },
+            )
+        }
+    }
+
+    fun dismissRecording() {
+        if (!recordBusy) recordPrompt = null
+    }
+
+    private fun showNotice(text: UiText) {
+        notice = text
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch {
+            delay(NOTICE_MS)
+            notice = UiText.Empty
+        }
+    }
+
+    suspend fun picon(entry: BouquetEntry): ImageBitmap? {
+        val receiver = settingsRepository.current().activeReceiver() ?: return null
+        return picons.load(receiver, entry)
+    }
+
+    fun cachedPicon(entry: BouquetEntry): ImageBitmap? = picons.cached(entry)
+
+    fun numberOf(entry: BouquetEntry): Int = ChannelNavigator.numberOf(channels, entry)
 
     /**
      * Switching modes drops the running stream: the follow mode streams what the receiver
@@ -285,33 +400,6 @@ class StreamGuideViewModel @Inject constructor(
         }
     }
 
-    fun preview(channel: BouquetEntry) {
-        if (!BouquetChannels.sameService(channel.reference, lastPressedReference)) {
-            lastPressedReference = ""
-        }
-        if (BouquetChannels.sameService(channel.reference, shownReference)) return
-        if (tuneJob?.isActive == true) return
-        displayName = channel.name
-        shownReference = channel.reference
-        val token = ++guideToken
-        previewJob?.cancel()
-        previewJob = viewModelScope.launch {
-            delay(180)
-            val receiver = settingsRepository.current().activeReceiver() ?: return@launch
-            runCatching { serviceSource.channelGuide(receiver, channel.reference, channel.name) }
-                .onSuccess { loaded ->
-                    if (token != guideToken) return@onSuccess
-                    guide = loaded
-                    displayName = loaded.channelName.ifBlank { channel.name }
-                    status = UiText.Empty
-                }
-                .onFailure { error ->
-                    if (token != guideToken) return@onFailure
-                    status = error.uiMessage(UiText.res(R.string.guide_epg_unavailable))
-                }
-        }
-    }
-
     fun tune(channel: BouquetEntry, onStarted: () -> Unit, onFullscreen: () -> Unit) {
         if (lastPressedReference.isNotBlank() && BouquetChannels.sameService(channel.reference, lastPressedReference)) {
             val refused = session.state.value.tuner.status.let { it == TunerStatus.FULL || it == TunerStatus.PROBLEM }
@@ -494,5 +582,9 @@ class StreamGuideViewModel @Inject constructor(
             .onFailure { error ->
                 if (status.isEmpty()) status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
             }
+    }
+
+    private companion object {
+        const val NOTICE_MS = 4_000L
     }
 }

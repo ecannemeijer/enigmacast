@@ -192,9 +192,6 @@
     <string name="wake_question">Shall I turn the Enigma2 on?</string>
     <string name="wake_yes">Yes, turn on</string>
     <string name="no">No</string>
-    <string name="no_channel">No channel</string>
-    <string name="loading_channel">Loading channel</string>
-    <string name="no_programme">No programme</string>
     <string name="bouquets">Bouquets</string>
     <string name="channels">Channels</string>
     <string name="skins_subtitle">Here you will be able to choose a skin for the OSD.</string>
@@ -351,7 +348,6 @@
     <string name="sleep_app_set">Sleep timer: EnigmaCast closes in %d min</string>
     <string name="sleep_app_off">Sleep timer off</string>
     <string name="sleep_app_warning">Sleep timer: EnigmaCast closes in 1 minute. Switch it off under ▼ options.</string>
-    <string name="epg_guide_title">TV guide</string>
     <string name="epg_guide_hint">OK: watch or record · ◀ at the start: bouquets · Back: menu</string>
     <string name="epg_panel_hint">◀ Channels · OK: watch now or record</string>
     <string name="epg_loading">Loading the guide…</string>

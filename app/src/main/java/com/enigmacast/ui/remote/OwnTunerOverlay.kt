@@ -33,19 +33,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
@@ -93,16 +93,7 @@ fun OwnTunerOverlay(
     val tuner = own.tuner
     Box(modifier = Modifier.fillMaxSize()) {
         val channel = own.channel
-        if (ui.guide) {
-            GuideGrid(
-                ui = ui,
-                numberOf = numberOf,
-                picon = picon,
-                cachedPicon = cachedPicon,
-                actions = guideActions,
-            )
-        }
-        if (!ui.guide && (tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING)) {
+        if ((tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING)) {
             StatusPill(
                 text = tuner.message.asString().ifBlank { stringResource(R.string.loading) },
                 color = EnigmaColors.Accent,
@@ -110,7 +101,7 @@ fun OwnTunerOverlay(
             )
         }
         val tunerProblem = tuner.status == TunerStatus.FULL || tuner.status == TunerStatus.PROBLEM || tuner.status == TunerStatus.NO_PICTURE
-        if (tunerProblem && !ui.guide) {
+        if (tunerProblem) {
             TunerNotice(
                 tuner = tuner,
                 channelName = channel?.name.orEmpty(),
@@ -142,7 +133,7 @@ fun OwnTunerOverlay(
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
-        if (ui.banner && channel != null && !ui.channelList && !ui.guide) {
+        if (ui.banner && channel != null && !ui.channelList) {
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                 ChannelBanner(
                     channel = channel,
@@ -176,7 +167,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
-        ui.recordPrompt?.let { prompt -> RecordDialog(prompt, ui.recordBusy, guideActions) }
+        ui.recordPrompt?.let { prompt -> RecordDialog(prompt, ui.recordBusy, guideActions.onConfirmRecording, guideActions.onDismissRecording) }
     }
 }
 

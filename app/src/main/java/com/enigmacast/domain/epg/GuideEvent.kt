@@ -30,3 +30,6 @@ data class GuideEvent(
 
 /** The receiver's answer to "record this programme". */
 data class TimerResult(val success: Boolean, val message: String)
+
+/** "Record this programme?" for a programme that has not started yet. */
+data class RecordPrompt(val event: GuideEvent, val channelName: String)

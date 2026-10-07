@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -44,8 +45,10 @@ import com.enigmacast.R
 import com.enigmacast.domain.epg.GuideCell
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.epg.GuideTimeline
+import com.enigmacast.domain.epg.RecordPrompt
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.tuner.NowEvents
+import com.enigmacast.live.GuideGridState
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.TvConfirmDialog
@@ -57,47 +60,23 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** What the guide screens can ask the view model to do. */
+/** What the channel list's programme panel can ask the view model to do. */
 data class GuideActions(
     val onOpenChannelEpg: (BouquetEntry) -> Unit,
     val onChooseProgramme: (BouquetEntry, GuideEvent) -> Unit,
-    val onChooseGuideBouquet: (BouquetEntry) -> Unit,
     val onConfirmRecording: () -> Unit,
     val onDismissRecording: () -> Unit,
 )
 
-/** Where the live picture shrinks to while the guide is open (top right, above the grid). */
-internal object GuidePreview {
-    val Top = 14.dp
-    val End = 24.dp
-    val Width = 304.dp
-    val Height = 171.dp
-}
-
-private val HeaderHeight = 194.dp
-private val ChannelColumn = 210.dp
-private val RowHeight = 40.dp
+private val ChannelColumn = 200.dp
+private val RowHeight = 38.dp
 private val CellShape = RoundedCornerShape(4.dp)
 private val Airing = Color(0xFF262626)
 private val Empty = Color(0xFF121212)
 
-/**
- * The full-screen TV guide (Back in the player): channels as rows on the left, programmes on
- * a two-hour time axis with a now-line, details of the highlighted programme and the live
- * picture above. The view model moves the highlight; this only draws, so no cell needs focus
- * and only the rows on screen are composed.
- */
+/** The current time in seconds, refreshed every 30 s so now-lines and progress move. */
 @Composable
-fun GuideGrid(
-    ui: RemoteDisplayUiState,
-    numberOf: (BouquetEntry) -> Int,
-    picon: suspend (BouquetEntry) -> ImageBitmap?,
-    cachedPicon: (BouquetEntry) -> ImageBitmap?,
-    actions: GuideActions,
-    modifier: Modifier = Modifier,
-) {
-    val channels = ui.own.channels
-    val cursor = ui.guideCursor
+fun rememberGuideClock(): Long {
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -105,79 +84,95 @@ fun GuideGrid(
             nowSec = System.currentTimeMillis() / 1000
         }
     }
-    val focusedChannel = channels.getOrNull(cursor.row)
-    val focusedEvents = focusedChannel?.let { ui.guideEvents[NowEvents.key(it.reference)] }.orEmpty()
-    val focusedCell = remember(focusedEvents, cursor, nowSec) { GuideTimeline.focusedCell(focusedEvents, cursor, nowSec) }
+    return nowSec
+}
+
+/**
+ * The programme grid (dashboard, Stream): channels as rows on the left, programmes on a
+ * two-hour time axis with a now-line. The view model moves the highlight; this only draws,
+ * so no cell needs focus and only the rows on screen are composed. [active] is false while
+ * the grid does not have the focus (the highlight is then drawn dimmed).
+ */
+@Composable
+fun GuideTimelineGrid(
+    state: GuideGridState,
+    playingReference: String,
+    active: Boolean,
+    nowSec: Long,
+    numberOf: (BouquetEntry) -> Int,
+    picon: suspend (BouquetEntry) -> ImageBitmap?,
+    cachedPicon: (BouquetEntry) -> ImageBitmap?,
+    modifier: Modifier = Modifier,
+) {
+    val cursor = state.cursor
     val focusSec = maxOf(cursor.focusSec, nowSec)
-    Row(modifier = modifier.fillMaxSize()) {
-        if (ui.guideBouquets) {
-            Box(Modifier.fillMaxHeight().background(EnigmaColors.Canvas)) {
-                BouquetPanel(bouquets = ui.bouquets, activeReference = ui.own.bouquetReference, onChoose = actions.onChooseGuideBouquet)
-            }
-            Box(Modifier.fillMaxHeight().width(1.dp).background(EnigmaColors.Raised))
-        }
-        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            Row(modifier = Modifier.fillMaxWidth().height(HeaderHeight)) {
-                GuideHeader(
-                    channel = focusedChannel,
-                    number = focusedChannel?.let(numberOf) ?: 0,
-                    cell = focusedCell,
-                    nowSec = nowSec,
-                    recorded = focusedCell?.event?.recordKey?.let { it in ui.recordedKeys } == true,
-                    loading = ui.guideLoading,
-                    failed = ui.guideFailed,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
+    BoxWithConstraints(modifier = modifier.background(EnigmaColors.Canvas)) {
+        val timeline = maxWidth - ChannelColumn
+        val dpPerSec = timeline.value / GuideTimeline.WINDOW_SEC
+        Column(Modifier.fillMaxSize()) {
+            TimeRuler(cursor.windowStartSec, nowSec, dpPerSec)
+            if (state.channels.isEmpty()) {
+                Text(
+                    stringResource(R.string.osd_no_channels_loaded),
+                    color = EnigmaColors.Muted,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(16.dp),
                 )
-                Spacer(Modifier.width(GuidePreview.Width + GuidePreview.End + 16.dp))
             }
-            BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth().background(EnigmaColors.Canvas)) {
-                val timeline = maxWidth - ChannelColumn
-                val dpPerSec = timeline.value / GuideTimeline.WINDOW_SEC
-                Column(Modifier.fillMaxSize()) {
-                    TimeRuler(cursor.windowStartSec, nowSec, dpPerSec)
-                    if (channels.isEmpty()) {
-                        Text(
-                            stringResource(R.string.osd_no_channels_loaded),
-                            color = EnigmaColors.Muted,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    }
-                    GuideRows(
-                        ui = ui,
-                        focusSec = focusSec,
-                        nowSec = nowSec,
-                        dpPerSec = dpPerSec,
-                        numberOf = numberOf,
-                        picon = picon,
-                        cachedPicon = cachedPicon,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        stringResource(R.string.epg_guide_hint),
-                        color = EnigmaColors.Subtle,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 6.dp),
-                    )
-                }
-                val nowOffset = (nowSec - cursor.windowStartSec) * dpPerSec
-                if (nowOffset >= 0 && nowOffset <= timeline.value) {
-                    Box(
-                        Modifier
-                            .offset(x = ChannelColumn + nowOffset.dp)
-                            .padding(bottom = 26.dp)
-                            .width(2.dp)
-                            .fillMaxHeight()
-                            .background(EnigmaColors.Accent.copy(alpha = 0.85f)),
-                    )
-                }
-            }
+            GuideRows(
+                state = state,
+                playingReference = playingReference,
+                active = active,
+                focusSec = focusSec,
+                nowSec = nowSec,
+                dpPerSec = dpPerSec,
+                numberOf = numberOf,
+                picon = picon,
+                cachedPicon = cachedPicon,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                stringResource(R.string.epg_guide_hint),
+                color = EnigmaColors.Subtle,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+            )
+        }
+        val nowOffset = (nowSec - cursor.windowStartSec) * dpPerSec
+        if (nowOffset >= 0 && nowOffset <= timeline.value) {
+            Box(
+                Modifier
+                    .offset(x = ChannelColumn + nowOffset.dp)
+                    .padding(bottom = 20.dp)
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .background(EnigmaColors.Accent.copy(alpha = 0.85f)),
+            )
         }
     }
 }
 
+/** Details of the highlighted programme: channel, title, time, progress, description and what OK does. */
+@Composable
+fun GuideDetails(
+    title: String,
+    channel: BouquetEntry?,
+    number: Int,
+    cell: GuideCell?,
+    nowSec: Long,
+    recorded: Boolean,
+    loading: Boolean,
+    failed: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    GuideHeader(title, channel, number, cell, nowSec, recorded, loading, failed, modifier)
+}
+
 @Composable
 private fun GuideHeader(
+    title: String,
     channel: BouquetEntry?,
     number: Int,
     cell: GuideCell?,
@@ -191,11 +186,19 @@ private fun GuideHeader(
     Column(
         modifier = modifier
             .background(EnigmaColors.Canvas)
-            .padding(start = 28.dp, end = 16.dp, top = 18.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+            .padding(start = 16.dp, end = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.epg_guide_title), color = EnigmaColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                title,
+                color = EnigmaColors.Accent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 220.dp),
+            )
             if (channel != null) {
                 Text(
                     (if (number > 0) "   $number  " else "   ") + channel.name,
@@ -216,7 +219,7 @@ private fun GuideHeader(
         Text(
             event?.title ?: stringResource(R.string.osd_no_programme_data),
             color = if (event != null) Color.White else EnigmaColors.Muted,
-            fontSize = 22.sp,
+            fontSize = 19.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -233,12 +236,12 @@ private fun GuideHeader(
                     Text("  ●  " + stringResource(R.string.epg_recording), color = EnigmaColors.Danger, fontSize = 14.sp)
                 }
             }
-            if (airing) GuideProgress(event.progress(nowSec), Modifier.width(320.dp))
+            if (airing) GuideProgress(event.progress(nowSec), Modifier.width(280.dp))
             Text(
                 event.description,
                 color = EnigmaColors.Muted,
-                fontSize = 14.sp,
-                lineHeight = 19.sp,
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
@@ -284,7 +287,9 @@ private fun TimeRuler(windowStartSec: Long, nowSec: Long, dpPerSec: Float) {
 
 @Composable
 private fun GuideRows(
-    ui: RemoteDisplayUiState,
+    state: GuideGridState,
+    playingReference: String,
+    active: Boolean,
     focusSec: Long,
     nowSec: Long,
     dpPerSec: Float,
@@ -293,8 +298,8 @@ private fun GuideRows(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
 ) {
-    val channels = ui.own.channels
-    val row = ui.guideCursor.row
+    val channels = state.channels
+    val row = state.cursor.row
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (row - 2).coerceAtLeast(0))
     // Keep the highlighted row on screen without jumping when it already is.
     LaunchedEffect(row, channels.size) {
@@ -312,17 +317,19 @@ private fun GuideRows(
             row > lastFull -> listState.scrollToItem((row - (lastFull - first)).coerceAtLeast(0))
         }
     }
+    val playingKey = NowEvents.key(playingReference)
     LazyColumn(state = listState, modifier = modifier.fillMaxWidth()) {
         itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
             GuideRow(
                 entry = entry,
                 number = numberOf(entry),
-                events = ui.guideEvents[NowEvents.key(entry.reference)].orEmpty(),
-                windowStartSec = ui.guideCursor.windowStartSec,
+                events = state.eventsOf(entry),
+                windowStartSec = state.cursor.windowStartSec,
                 focusSec = if (index == row) focusSec else null,
-                playing = NowEvents.key(entry.reference) == NowEvents.key(ui.own.channel?.reference.orEmpty()),
+                active = active,
+                playing = playingReference.isNotBlank() && NowEvents.key(entry.reference) == playingKey,
                 nowSec = nowSec,
-                recordedKeys = ui.recordedKeys,
+                recordedKeys = state.recordedKeys,
                 dpPerSec = dpPerSec,
                 picon = picon,
                 cachedPicon = cachedPicon,
@@ -338,6 +345,7 @@ private fun GuideRow(
     events: List<GuideEvent>,
     windowStartSec: Long,
     focusSec: Long?,
+    active: Boolean,
     playing: Boolean,
     nowSec: Long,
     recordedKeys: Set<String>,
@@ -354,7 +362,7 @@ private fun GuideRow(
                 .width(ChannelColumn)
                 .fillMaxHeight()
                 .padding(end = 2.dp)
-                .background(if (focusSec != null) EnigmaColors.Raised else Color.Transparent, CellShape)
+                .background(if (focusSec != null && active) EnigmaColors.Raised else Color.Transparent, CellShape)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -381,7 +389,8 @@ private fun GuideRow(
                 val focused = focusSec != null && cell.contains(focusSec)
                 GuideCellBox(
                     cell = cell,
-                    focused = focused,
+                    focused = focused && active,
+                    marked = focused && !active,
                     airing = cell.startSec <= nowSec && nowSec < cell.endSec,
                     recorded = cell.event?.recordKey?.let { it in recordedKeys } == true,
                     x = ((cell.startSec - windowStartSec) * dpPerSec).dp,
@@ -393,10 +402,11 @@ private fun GuideRow(
 }
 
 @Composable
-private fun GuideCellBox(cell: GuideCell, focused: Boolean, airing: Boolean, recorded: Boolean, x: Dp, width: Dp) {
+private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, recorded: Boolean, x: Dp, width: Dp) {
     val event = cell.event
     val background = when {
         focused -> EnigmaColors.Focus
+        marked -> EnigmaColors.Raised
         event == null -> Empty
         airing -> Airing
         else -> EnigmaColors.Card
@@ -535,15 +545,15 @@ fun ChannelEpgPanel(
 
 /** "Record this programme?" with what, when and where. */
 @Composable
-fun RecordDialog(prompt: RecordPrompt, busy: Boolean, actions: GuideActions) {
+fun RecordDialog(prompt: RecordPrompt, busy: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val nowSec = System.currentTimeMillis() / 1000
     TvConfirmDialog(
         title = stringResource(R.string.epg_record_title),
         message = stringResource(R.string.epg_record_message, prompt.event.title, timeRange(prompt.event, nowSec), prompt.channelName),
         confirmLabel = stringResource(R.string.epg_record),
         dismissLabel = stringResource(R.string.cancel),
-        onConfirm = actions.onConfirmRecording,
-        onDismiss = actions.onDismissRecording,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
         busy = busy,
     )
 }

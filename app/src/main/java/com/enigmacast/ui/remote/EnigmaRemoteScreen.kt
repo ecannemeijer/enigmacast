@@ -72,7 +72,6 @@ fun EnigmaRemoteScreen(
         GuideActions(
             onOpenChannelEpg = viewModel::openChannelEpg,
             onChooseProgramme = viewModel::chooseProgramme,
-            onChooseGuideBouquet = viewModel::chooseGuideBouquet,
             onConfirmRecording = viewModel::confirmRecording,
             onDismissRecording = viewModel::dismissRecording,
         )
@@ -84,15 +83,7 @@ fun EnigmaRemoteScreen(
             debugBorders = ui.osdDebugBorders,
             cues = ui.cues,
             picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
-            // The programme guide shows the live picture small, top right above the grid.
-            modifier = if (ui.ownTuner && ui.guide) {
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = GuidePreview.Top, end = GuidePreview.End)
-                    .size(GuidePreview.Width, GuidePreview.Height)
-            } else {
-                Modifier.fillMaxSize()
-            },
+            modifier = Modifier.fillMaxSize(),
         )
         if (ui.ownTuner) {
             OwnTunerOverlay(
