@@ -378,6 +378,9 @@ class OpenWebifApi @Inject constructor(
         }
     }
 
+    /** JSON body of [url]; throws [OpenWebifException] with the status code for non-2xx answers. */
+    internal suspend fun body(config: ReceiverConfig, url: String): String = get(config, url)
+
     private suspend fun get(config: ReceiverConfig, url: String): String {
         val response = execute(config, url, accept = "application/json")
         if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))

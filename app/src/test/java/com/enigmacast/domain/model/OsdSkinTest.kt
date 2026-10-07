@@ -9,13 +9,13 @@ class OsdSkinTest {
     @Test
     fun settingsFromBeforeSkinsUseTheStandardSkin() {
         val saved = """{"receivers":[],"streamMode":"OWN_TUNER"}"""
-        assertEquals(OsdSkin.STANDARD, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
+        assertEquals(OsdSkinId.STANDARD, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
     }
 
     @Test
     fun theSkinChoiceIsSavedByName() {
-        val saved = openWebifJson.encodeToString(AppSettings.serializer(), AppSettings(osdSkin = OsdSkin.STANDARD))
-        assertEquals(OsdSkin.STANDARD, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
-        assertEquals(R.string.skin_standard, OsdSkin.STANDARD.label)
+        val saved = openWebifJson.encodeToString(AppSettings.serializer(), AppSettings(osdSkin = OsdSkinId.STANDARD))
+        assertEquals(OsdSkinId.STANDARD, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
+        assertEquals(R.string.skin_standard, OsdSkinId.STANDARD.label)
     }
 }

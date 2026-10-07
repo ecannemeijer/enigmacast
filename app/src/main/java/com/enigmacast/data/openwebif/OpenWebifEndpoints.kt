@@ -38,6 +38,9 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
 
     fun current(config: ReceiverConfig): String = api(config, "/api/getcurrent")
 
+    /** Signal of the receiver's current frontend: `tunersignal` on openATV and OpenPLi, `signal` on some images. */
+    fun signalPaths(config: ReceiverConfig): List<String> = listOf(api(config, "/api/tunersignal"), api(config, "/api/signal"))
+
     fun epgService(config: ReceiverConfig, serviceReference: String): String {
         return api(config, "/api/epgservice?sRef=${encode(serviceReference)}")
     }

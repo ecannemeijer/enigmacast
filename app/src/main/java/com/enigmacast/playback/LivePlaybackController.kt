@@ -39,6 +39,7 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
+import com.enigmacast.domain.osdinfo.TsStreamFacts
 import com.enigmacast.domain.model.PlaybackSettings
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.tuner.RestartBudget
@@ -136,6 +137,18 @@ class LivePlaybackController @Inject constructor(
     /** Audio and subtitle tracks of the stream that plays, for the quick options bar. */
     val tracks: StateFlow<TrackMenu> = _tracks.asStateFlow()
     private val _stats = MutableStateFlow(StreamStats())
+    private val _streamFacts = MutableStateFlow(TsStreamFacts())
+
+    /**
+     * What the receiver's MPEG-TS says about its own service (CAIDs, teletext, scrambled or
+     * not); empty for internet streams. Updated from the loader thread.
+     */
+    val streamFacts: StateFlow<TsStreamFacts> = _streamFacts.asStateFlow()
+    private val tsInspector = TsInspector { facts -> _streamFacts.value = facts }
+
+    /** Read on the loader thread: only the receiver's own TS streams are inspected. */
+    @Volatile
+    private var inspectStream = false
 
     /** Measured bitrate, dropped frames and stalls of the stream that plays. */
     val stats: StateFlow<StreamStats> = _stats.asStateFlow()
@@ -185,6 +198,7 @@ class LivePlaybackController @Inject constructor(
         reconnectJob?.cancel()
         stopWatchdog(StreamHealth.IDLE)
         releasePlayer()
+        tsInspector.reset()
         _cues.value = emptyList()
         _subtitlesAvailable.value = false
         _state.value = PlayerState()
@@ -201,6 +215,7 @@ class LivePlaybackController @Inject constructor(
         failures = 0
         internet = false
         stopWatchdog(StreamHealth.IDLE)
+        tsInspector.reset()
         val exo = player ?: return
         exo.playWhenReady = false
         exo.stop()
@@ -279,6 +294,8 @@ class LivePlaybackController @Inject constructor(
         streamAuthorization = authorization
         this.checkStart = checkStart
         this.internet = internet
+        inspectStream = !internet
+        tsInspector.reset()
         startWatchdog()
         if (internet) _health.value = StreamHealth.STARTING
         resetStats()
@@ -516,7 +533,10 @@ class LivePlaybackController @Inject constructor(
             val header = streamAuthorization
             if (header == null) spec else spec.withAdditionalHeaders(mapOf("Authorization" to header))
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(withAuthorization, extractors)
+        val inspected = DataSource.Factory {
+            InspectingDataSource(withAuthorization.createDataSource(), tsInspector) { inspectStream }
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(inspected, extractors)
             .setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy())
         val exo = ExoPlayer.Builder(context)
             .setLoadControl(loadControl())
@@ -555,6 +575,7 @@ class LivePlaybackController @Inject constructor(
             frameRate = video?.frameRate ?: 0f,
             videoCodec = video?.sampleMimeType.orEmpty(),
             audioCodec = audio?.sampleMimeType.orEmpty(),
+            audioChannels = audio?.channelCount?.takeIf { it > 0 } ?: 0,
             bufferMs = exo.totalBufferedDuration,
             liveOffsetMs = if (liveOffset == C.TIME_UNSET) -1 else liveOffset,
             error = exo.playerError?.errorCodeName,

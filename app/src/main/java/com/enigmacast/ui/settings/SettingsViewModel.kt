@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.AppSettings
+import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.playback.AudioSync
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +53,7 @@ class SettingsViewModel @Inject constructor(
     fun setVerboseLogging(enabled: Boolean) = update { it.copy(debug = it.debug.copy(verboseLogging = enabled)) }
     fun setDebugBorders(enabled: Boolean) = update { it.copy(osd = it.osd.copy(debugBorders = enabled)) }
     fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
+    fun setOsdInfoFields(fields: OsdInfoFields) = update { it.copy(osdInfo = fields) }
     fun setInsecureCertificates(enabled: Boolean) = update { current ->
         val active = current.activeReceiver() ?: return@update current
         val updated = active.copy(allowInsecureCertificates = enabled)

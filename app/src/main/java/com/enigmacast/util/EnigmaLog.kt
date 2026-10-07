@@ -36,6 +36,11 @@ object EnigmaLog {
         Timber.tag("EnigmaConnection").i(message)
     }
 
+    /** OSD channel info: endpoints used, what was trusted for our stream, CA state changes. */
+    fun osdInfo(message: String) {
+        Timber.tag("EnigmaOsdInfo").i(message)
+    }
+
     /** Autodetect: interfaces, subnet, scan timing, each hit and every `/api/about` answer. */
     fun discovery(message: String) {
         Timber.tag("EnigmaDiscovery").i(message)

@@ -15,6 +15,9 @@ import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
 import com.enigmacast.domain.osd.GrabFormat
+import com.enigmacast.domain.osdinfo.ReceiverCurrent
+import com.enigmacast.domain.osdinfo.SignalReading
+import com.enigmacast.domain.osdinfo.StreamClientInfo
 import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.remote.EnigmaKey
@@ -81,4 +84,16 @@ interface EpgSource {
 
     /** Asks the receiver to record one programme. */
     suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult
+}
+
+/** Receiver-side data for the OSD info strip (OpenWebif). */
+interface OsdInfoSource {
+    /** Signal of the receiver's current frontend; null when the image has no signal endpoint. */
+    suspend fun signal(config: ReceiverConfig): SignalReading?
+
+    /** The receiver's own current service (`/api/getcurrent`). */
+    suspend fun current(config: ReceiverConfig): ReceiverCurrent
+
+    /** Stream clients from `/api/about`, with tuner and transponder on openATV. */
+    suspend fun streamClients(config: ReceiverConfig): List<StreamClientInfo>
 }

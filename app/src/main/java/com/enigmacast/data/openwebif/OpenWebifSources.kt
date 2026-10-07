@@ -19,7 +19,11 @@ import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.domain.osdinfo.ReceiverCurrent
+import com.enigmacast.domain.osdinfo.SignalReading
+import com.enigmacast.domain.osdinfo.StreamClientInfo
 import com.enigmacast.domain.source.EpgSource
+import com.enigmacast.domain.source.OsdInfoSource
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
@@ -27,6 +31,8 @@ import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
+import com.enigmacast.util.EnigmaLog
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -135,4 +141,41 @@ class OpenWebifEpgSource @Inject constructor(
 
     override suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult =
         api.addTimer(config, serviceReference, eventId)
+}
+
+@Singleton
+class OpenWebifOsdInfoSource @Inject constructor(
+    private val api: OpenWebifApi,
+    private val endpoints: OpenWebifEndpoints,
+) : OsdInfoSource {
+    /** Per receiver: the signal URL that answered, or "" when neither exists. */
+    private val signalUrl = ConcurrentHashMap<String, String>()
+
+    override suspend fun signal(config: ReceiverConfig): SignalReading? {
+        val key = "${config.id}@${config.host}:${config.httpPort}"
+        val known = signalUrl[key]
+        if (known == "") return null
+        val candidates = if (known != null) listOf(known) else endpoints.signalPaths(config)
+        for (url in candidates) {
+            try {
+                val reading = OsdInfoJson.parseSignal(api.body(config, url))
+                if (known == null) {
+                    signalUrl[key] = url
+                    EnigmaLog.osdInfo("signal endpoint ${url.substringAfter("/api/")}")
+                }
+                return reading
+            } catch (error: OpenWebifException) {
+                if (error.statusCode != 404) throw error
+            }
+        }
+        signalUrl[key] = ""
+        EnigmaLog.osdInfo("no signal endpoint (tunersignal and signal both 404)")
+        return null
+    }
+
+    override suspend fun current(config: ReceiverConfig): ReceiverCurrent =
+        OsdInfoJson.parseCurrent(api.body(config, endpoints.current(config)))
+
+    override suspend fun streamClients(config: ReceiverConfig): List<StreamClientInfo> =
+        OsdInfoJson.parseStreamClients(api.body(config, endpoints.about(config)))
 }

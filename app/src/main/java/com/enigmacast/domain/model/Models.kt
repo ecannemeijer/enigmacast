@@ -93,14 +93,25 @@ data class DebugSettings(
  * settings before this option existed (the field is missing there, so the default applies).
  */
 /**
- * Look of the OSD the app draws itself (channel banner, channel list, notices in
- * own-tuner mode). Only the current look exists for now; the "OSD skins" menu will list
- * these entries and store the choice in [AppSettings.osdSkin].
+ * Stored id of the OSD skin (the look of the OSD the app draws itself). The skins themselves
+ * are in `ui.osd.OsdSkins`, keyed by this id; only [STANDARD] exists for now. Saved by name,
+ * so renaming the class does not touch existing settings.
  */
 @Serializable
-enum class OsdSkin(@StringRes val label: Int) {
+enum class OsdSkinId(@StringRes val label: Int) {
     STANDARD(R.string.skin_standard),
 }
+
+/** Which extra information the channel banner shows (Settings › OSD). */
+@Serializable
+data class OsdInfoFields(
+    val signal: Boolean = true,
+    val satellite: Boolean = true,
+    val tuner: Boolean = true,
+    val encryption: Boolean = true,
+    /** Frequency, polarisation, symbol rate, FEC and modulation on a second line. */
+    val technical: Boolean = false,
+)
 
 @Serializable
 enum class StreamMode {
@@ -129,7 +140,9 @@ data class AppSettings(
     val debug: DebugSettings = DebugSettings(),
     val streamMode: StreamMode = StreamMode.OWN_TUNER,
     val lastChannel: LastChannel = LastChannel(),
-    val osdSkin: OsdSkin = OsdSkin.STANDARD,
+    val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
+    /** Extra info in the channel banner; missing in older settings, so the defaults apply. */
+    val osdInfo: OsdInfoFields = OsdInfoFields(),
     /** Picture mode per channel (key: `NowEvents.key` of the service); channels without one use AUTO. */
     val pictureModes: Map<String, PictureMode> = emptyMap(),
     /** Channels last watched with an own tuner, newest first (see `RecentChannels`). */
@@ -271,6 +284,8 @@ data class PlayerState(
     val frameRate: Float = 0f,
     val videoCodec: String = "",
     val audioCodec: String = "",
+    /** Channels of the audio that plays (2, 6 …); 0 when not known. */
+    val audioChannels: Int = 0,
     val bufferMs: Long = 0,
     val liveOffsetMs: Long = -1,
     val error: String? = null,
