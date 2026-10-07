@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
@@ -61,6 +62,7 @@ fun ConnectionScreen(
         focusedLabelColor = MaterialTheme.colorScheme.primary,
         unfocusedLabelColor = Color(0xFFB7C0D0),
     )
+    LaunchedEffect(Unit) { viewModel.maybeAutodetectOnOpen() }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -104,16 +106,20 @@ fun ConnectionScreen(
         RemoteSection(viewModel, fieldColors)
         WireGuardSection(viewModel, fieldColors)
         AccessModeSection(viewModel)
-        if (viewModel.discoveredHosts.isNotEmpty()) {
-            Text(stringResource(R.string.discovered_hosts), color = Color.White, fontSize = 18.sp)
+        ToggleRow(stringResource(R.string.conn_autodetect_toggle), viewModel.autodetectOnOpen) {
+            viewModel.autodetectOnOpen = it
+        }
+        Text(stringResource(R.string.conn_autodetect_hint), color = Color(0xFFB7C0D0), fontSize = 15.sp)
+        if (viewModel.discoveredReceivers.isNotEmpty()) {
+            Text(stringResource(R.string.conn_autodetect_results), color = Color.White, fontSize = 18.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                viewModel.discoveredHosts.take(6).forEach { found ->
-                    TvButton(text = found, onClick = { viewModel.selectHost(found) })
+                viewModel.discoveredReceivers.take(6).forEach { found ->
+                    TvButton(text = found.label, onClick = { viewModel.selectReceiver(found) })
                 }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            TvButton(stringResource(R.string.action_search), viewModel::discover, enabled = !viewModel.busy)
+            TvButton(stringResource(R.string.action_autodetect), viewModel::discover, enabled = !viewModel.busy)
             TvButton(stringResource(R.string.action_test_connection), viewModel::test, enabled = !viewModel.busy)
             if (viewModel.remoteHost.isNotBlank()) {
                 TvButton(stringResource(R.string.action_test_remote), viewModel::testRemote, enabled = !viewModel.busy)

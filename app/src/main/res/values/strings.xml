@@ -98,8 +98,13 @@
     <string name="info_loading">Loading info…</string>
     <string name="default_receiver_name">Living room</string>
     <string name="conn_saved">Saved %s</string>
-    <string name="conn_searching">Searching the network…</string>
-    <string name="conn_none_found">No receivers found. Enter the IP address manually.</string>
+    <string name="conn_autodetect_searching">Looking for Enigma2 receivers on the network…</string>
+    <string name="conn_autodetect_none">No Enigma2 receiver found on this network. Enter the IP address manually.</string>
+    <string name="conn_autodetect_toggle">Autodetect when this screen opens</string>
+    <string name="conn_autodetect_hint">Looks for OpenWebif on the local network (mDNS). Only receivers that answer as Enigma2 are listed. WireGuard is not used. You can always type the IP address yourself.</string>
+    <string name="conn_autodetect_one">Found %s. Address filled in; test the connection or connect.</string>
+    <string name="conn_autodetect_many">Found %d Enigma2 receivers. Select one with OK.</string>
+    <string name="conn_autodetect_results">Enigma2 receivers found</string>
     <string name="conn_request_failed">Request failed</string>
     <string name="conn_openwebif_unavailable">OpenWebif is not available</string>
     <string name="conn_failed">Connection failed</string>
@@ -132,8 +137,7 @@
     <string name="field_username">Username</string>
     <string name="field_password">Password</string>
     <string name="allow_self_signed">Allow self-signed certificate</string>
-    <string name="discovered_hosts">Discovered hosts</string>
-    <string name="action_search">Search</string>
+    <string name="action_autodetect">Autodetect Enigma2 receiver</string>
     <string name="action_test_connection">Test connection</string>
     <string name="action_save">Save</string>
     <string name="action_connect">Connect</string>
@@ -488,10 +492,6 @@
     <plurals name="power_details_more">
         <item quantity="one">+%d more</item>
         <item quantity="other">+%d more</item>
-    </plurals>
-    <plurals name="conn_found_hosts">
-        <item quantity="one">Found %d host. Select it, then test the connection.</item>
-        <item quantity="other">Found %d hosts. Select one, then test the connection.</item>
     </plurals>
     <plurals name="osd_audio_languages">
         <item quantity="one">"  (%d language)"</item>

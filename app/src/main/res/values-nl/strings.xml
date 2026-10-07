@@ -95,8 +95,13 @@
     <string name="info_loading">Info laden…</string>
     <string name="default_receiver_name">Woonkamer</string>
     <string name="conn_saved">%s opgeslagen</string>
-    <string name="conn_searching">Netwerk doorzoeken…</string>
-    <string name="conn_none_found">Geen ontvangers gevonden. Vul het IP-adres zelf in.</string>
+    <string name="conn_autodetect_searching">Enigma2-ontvangers op het netwerk zoeken…</string>
+    <string name="conn_autodetect_none">Geen Enigma2-ontvanger gevonden op dit netwerk. Vul het IP-adres zelf in.</string>
+    <string name="conn_autodetect_toggle">Automatisch zoeken bij openen van dit scherm</string>
+    <string name="conn_autodetect_hint">Zoekt OpenWebif op het lokale netwerk (mDNS). Alleen ontvangers die als Enigma2 antwoorden komen in de lijst. WireGuard wordt niet gebruikt. U kunt het IP-adres altijd zelf invullen.</string>
+    <string name="conn_autodetect_one">%s gevonden. Adres ingevuld; test de verbinding of verbind.</string>
+    <string name="conn_autodetect_many">%d Enigma2-ontvangers gevonden. Kies er een met OK.</string>
+    <string name="conn_autodetect_results">Gevonden Enigma2-ontvangers</string>
     <string name="conn_request_failed">Verzoek mislukt</string>
     <string name="conn_openwebif_unavailable">OpenWebif is niet beschikbaar</string>
     <string name="conn_failed">Verbinding mislukt</string>
@@ -129,8 +134,7 @@
     <string name="field_username">Gebruikersnaam</string>
     <string name="field_password">Wachtwoord</string>
     <string name="allow_self_signed">Zelfondertekend certificaat toestaan</string>
-    <string name="discovered_hosts">Gevonden apparaten</string>
-    <string name="action_search">Zoeken</string>
+    <string name="action_autodetect">Enigma2-ontvanger automatisch zoeken</string>
     <string name="action_test_connection">Verbinding testen</string>
     <string name="action_save">Opslaan</string>
     <string name="action_connect">Verbinden</string>
@@ -485,10 +489,6 @@
     <plurals name="power_details_more">
         <item quantity="one">+%d meer</item>
         <item quantity="other">+%d meer</item>
-    </plurals>
-    <plurals name="conn_found_hosts">
-        <item quantity="one">%d apparaat gevonden. Kies het en test daarna de verbinding.</item>
-        <item quantity="other">%d apparaten gevonden. Kies er een en test daarna de verbinding.</item>
     </plurals>
     <plurals name="osd_audio_languages">
         <item quantity="one">"  (%d taal)"</item>

@@ -9,7 +9,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.R
-import com.enigmacast.data.discovery.NsdReceiverDiscovery
+import com.enigmacast.data.discovery.DiscoveredReceiver
+import com.enigmacast.data.discovery.ReceiverAutodetect
 import com.enigmacast.data.network.ReceiverRouter
 import com.enigmacast.data.network.TunnelState
 import com.enigmacast.data.network.TunnelStatus
@@ -47,7 +48,7 @@ class ConnectionViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val api: OpenWebifApi,
-    private val discovery: NsdReceiverDiscovery,
+    private val autodetect: ReceiverAutodetect,
     private val tunnel: WireGuardTunnel,
     private val router: ReceiverRouter,
     private val quality: StreamQualityController,
@@ -83,7 +84,7 @@ class ConnectionViewModel @Inject constructor(
     private var saved = ReceiverConfig()
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
-    var discoveredHosts by mutableStateOf<List<String>>(emptyList())
+    var discoveredReceivers by mutableStateOf<List<DiscoveredReceiver>>(emptyList())
     private var receiverId: String = ""
 
     /** Settings › Playback › Stream type: the result of the last save or port detection. */
@@ -321,24 +322,39 @@ class ConnectionViewModel @Inject constructor(
         }
     }
 
+    /** When true, the connection screen runs autodetection once if the host field is empty. */
+    var autodetectOnOpen by mutableStateOf(true)
+
     fun discover() {
         if (busy) return
         busy = true
-        status = UiText.res(R.string.conn_searching)
+        status = UiText.res(R.string.conn_autodetect_searching)
         viewModelScope.launch {
-            val hosts = runCatching { discovery.discoverHosts() }.getOrDefault(emptyList())
-            discoveredHosts = hosts
-            status = if (hosts.isEmpty()) {
-                UiText.res(R.string.conn_none_found)
-            } else {
-                UiText.plural(R.plurals.conn_found_hosts, hosts.size, hosts.size)
+            val found = runCatching { autodetect.find() }.getOrDefault(emptyList())
+            discoveredReceivers = found
+            status = when {
+                found.isEmpty() -> UiText.res(R.string.conn_autodetect_none)
+                found.size == 1 -> {
+                    selectReceiver(found.first())
+                    UiText.res(R.string.conn_autodetect_one, found.first().label)
+                }
+                else -> UiText.res(R.string.conn_autodetect_many, found.size)
             }
             busy = false
         }
     }
 
-    fun selectHost(value: String) {
-        host = value
+    /** Fills host, OpenWebif port and HTTPS from a receiver found by autodetection. */
+    fun selectReceiver(receiver: DiscoveredReceiver) {
+        host = receiver.host
+        httpPort = receiver.httpPort.toString()
+        useHttps = receiver.useHttps
+    }
+
+    /** Runs once from the connection screen when the host is still empty and the toggle is on. */
+    fun maybeAutodetectOnOpen() {
+        if (!autodetectOnOpen || host.isNotBlank() || busy) return
+        discover()
     }
 
     private fun launchAction(block: suspend (ReceiverConfig) -> Unit) {

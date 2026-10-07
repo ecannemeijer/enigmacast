@@ -12,13 +12,21 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
+/** One mDNS `_http._tcp` answer before it is checked with `/api/about`. */
+data class DiscoveredHost(val host: String, val port: Int)
+
+/**
+ * Browses the LAN for HTTP services (mDNS / NSD). Many Enigma2 images advertise OpenWebif
+ * this way; some do not, so a miss is normal and manual entry stays the fallback. WireGuard
+ * is not used: discovery is local only.
+ */
 @Singleton
 class NsdReceiverDiscovery @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    suspend fun discoverHosts(timeoutMs: Long = 4_000): List<String> = withContext(Dispatchers.Main) {
+    suspend fun discoverHosts(timeoutMs: Long = 4_000): List<DiscoveredHost> = withContext(Dispatchers.Main) {
         val manager = context.getSystemService(NsdManager::class.java) ?: return@withContext emptyList()
-        val found = linkedSetOf<String>()
+        val found = linkedMapOf<String, DiscoveredHost>()
         withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine { continuation ->
                 val listener = object : NsdManager.DiscoveryListener {
@@ -40,7 +48,9 @@ class NsdReceiverDiscovery @Inject constructor(
                             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
 
                             override fun onServiceResolved(resolved: NsdServiceInfo) {
-                                resolved.host?.hostAddress?.let { found += it }
+                                val address = resolved.host?.hostAddress?.takeIf { it.isNotBlank() } ?: return
+                                val port = resolved.port.takeIf { it in 1..65535 } ?: 80
+                                found.putIfAbsent("$address:$port", DiscoveredHost(address, port))
                             }
                         })
                     }
@@ -58,6 +68,6 @@ class NsdReceiverDiscovery @Inject constructor(
                 }
             }
         }
-        found.toList()
+        found.values.toList()
     }
 }
