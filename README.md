@@ -212,7 +212,7 @@ All texts are Android string resources: English in `values/strings.xml`, Dutch i
 
 Right from Settings opens a submenu with Receiver, Remote access, Playback, OSD, General, Info, and Language. Each page groups its options on cards, and every switch row toggles with OK.
 
-- Receiver: Autodetect, host, ports, credentials, and connection test
+- Receiver: host (with the AutoDetect button next to it), ports, credentials, and connection test
 - Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel (switch, paste or import the config, Allow VPN, Test tunnel)
 - Playback: viewing mode, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
 - OSD: PNG or JPG, and the fast poll after a key
@@ -242,7 +242,7 @@ Passwords and WireGuard configs are encrypted with an AES-256-GCM key in the And
 
 The settings model is a list of receivers plus an active id, so more than one receiver can be stored later. Version 1 edits the active receiver.
 
-Autodetect Enigma2 receiver is on the connection screen (button, and a toggle to run it when the screen opens with an empty host) and under Settings › Receiver › Autodetect. It browses mDNS `_http._tcp` and, at the same time, scans the TV's own /24 network (for example 192.168.1.1–254) on ports 80 and 8080 with a short TCP connect; VPN networks are skipped. Every host found is asked `/api/about`, and only answers that look like OpenWebif are listed (model name when known), sorted by address. A single match fills in the address, several let you pick with OK; then Save (or Connect). A search takes a few seconds. WireGuard is not used. Typing the IP address stays the fallback.
+**AutoDetect** is a button next to the IP field, on the connection screen and under Settings › Receiver. It opens a dialog with a spinner ("Searching for Enigma2 receivers…") and Cancel. The search reads the TV's own IPv4 address and prefix (ConnectivityManager and the network interfaces; VPNs such as WireGuard are skipped) and scans that subnet, the whole /24 for a home network (for example 192.168.1.1–254), on ports 80 and 8080: 40 connections at a time, 400 ms connect timeout, at most 8 seconds. mDNS `_http._tcp` runs alongside. Every open port (and the address already in the form) is asked `/api/about` with short timeouts and without login; only answers that look like OpenWebif are listed (HTTP 401 counts as a receiver that needs a login). The dialog then lists each receiver as model plus IP:port (and the image); OK fills in host, port and HTTPS, and Save stores it. If nothing answers, the dialog says how many addresses on which subnet were searched, with Try again and Close. Focus returns to the AutoDetect button when the dialog closes. WireGuard is not used, and typing the IP address stays the fallback.
 
 ## OpenWebif
 
@@ -288,7 +288,7 @@ Settings can enable:
 - PNG OSD alpha depends on the image and the `grab` binary. On some boxes `mode=osd` is opaque black outside the widgets. Use OSD diagnostics on the SF8008 to see which mode keeps transparency.
 - AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. With passthrough, Android cannot measure how long the amplifier or soundbar takes to decode, so lip sync may need the HDMI audio sync value. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
 - DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
-- Autodetect (mDNS + a /24 scan on ports 80 and 8080 + `/api/about`) is best-effort: a receiver on another subnet, on a different web port without mDNS, or behind a firewall that drops `/api/about` is not found; type the IP if needed.
+- AutoDetect scans only the TV's own subnet (the /24 around its address on wider networks) on ports 80 and 8080, plus mDNS. A receiver on another subnet, on another web port without mDNS, in deep standby, or behind a firewall that drops `/api/about` is not found; type the IP if needed.
 - Navigation sounds off silences the click that EnigmaCast's own screens make. Android only plays it while its System sounds setting is on; the app cannot change that setting, and beeps that the TV or remote make by themselves are outside the app.
 - AutoSwitch runs only while the app is open in the foreground (see AutoSwitch). Record is not available yet.
 - Remote access, transcoding and the built-in WireGuard tunnel are built from the OpenWebif and WireGuard sources and tested only in unit tests, not on a TV and receiver. Some Android TV builds lack the VPN permission dialog; the app then says so and the WireGuard app is the way to go.
@@ -303,6 +303,7 @@ Settings can enable:
 
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN app on the TV can hide the receiver unless it routes the home subnet; the built-in tunnel only comes up when home does not answer.
 - HTTP 401: fill in the OpenWebif username and password.
+- AutoDetect finds nothing: `adb logcat -s EnigmaDiscovery` shows the interfaces the TV reported (`interface eth0 192.168.1.42/24 via …`), the subnet that was scanned, every open port (`open 192.168.1.209:80`), each `/api/about` answer (`about 192.168.1.209:80 -> HTTP 200, Enigma2 …`) and the timing. "no private IPv4 LAN found" means the TV reported no usable address; a receiver missing from the `open` lines was not reachable on 80/8080 from the TV.
 - An IPTV / internet channel tries the receiver and fails: the service reference should contain `http%3a//` or `https%3a//` after the tenth field. `adb logcat | grep "stream target"` should say `kind=internet`; if it says `kind=enigma2`, the bouquet entry has no embedded URL.
 - An internet channel says the format is not supported: `adb logcat | grep -E "switching live stream|internet stream"` shows `type=` (HLS, DASH, TS or auto) and each try. The stream may need a header the app does not send, or use a format the TV's player cannot read; check the URL in VLC on a PC.
 - The remote clicks on every move: Settings › General › Navigation sounds off. If it still clicks, turn off System sounds in the Android TV settings (Device preferences › Sound) or check the TV's own key-beep option.
