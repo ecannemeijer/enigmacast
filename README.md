@@ -160,6 +160,12 @@ Transcoded viewing therefore needs a receiver with a hardware encoder, and on Br
 
 Automatic stream restarts (after a failed start, a receiver that was away, or a quality change) are limited to three tries, 1, 2 and 4 seconds apart. After that the error stays on screen until you press OK; a stream that plays resets the count. The Quality tile in the player's quick options overrides the stream type until the next channel start, and Stream info shows the level and why it was chosen.
 
+## Internet and IPTV streams
+
+Bouquets can mix normal Enigma2 (DVB) channels with internet / IPTV entries. Those have a service reference whose path is an HTTP(S) URL, often percent-encoded, usually with type 4097, 5001, 5002 or 8193 (for example `4097:0:1:0:0:0:0:0:0:0:http%3a//cdn.example.com/live.ts`).
+
+EnigmaCast detects that URL, plays it directly with ExoPlayer, and does **not** zap the receiver, check tuners, use ports 8001/8002 or apply Normal / Transcoded / Automatic. Credentials in the URL (`user:pass@host`) are kept; Enigma2 header fragments (`#User-Agent=…`) are dropped. The log line is `stream target kind=internet …`. Switching between an internet channel and a DVB channel keeps working (Back, OSD, AutoSwitch).
+
 ## AutoSwitch
 
 In the TV guide on the dashboard and in the programme panel of the channel list, OK on a programme that has not started yet opens a dialog: **AutoSwitch**, **Record**, **Cancel**. The first button has focus.
@@ -231,7 +237,7 @@ Passwords and WireGuard configs are encrypted with an AES-256-GCM key in the And
 
 The settings model is a list of receivers plus an active id, so more than one receiver can be stored later. Version 1 edits the active receiver.
 
-Network discovery is a Search button. It browses mDNS `_http._tcp` and fills in a host if something answers. Many images do not advertise OpenWebif reliably, so discovery never runs by itself and a failure leaves manual setup working.
+Autodetect Enigma2 receiver (button, and a toggle to run it when the connection screen opens with an empty host) browses mDNS `_http._tcp` on the LAN, then asks each host `/api/about`. Only answers that look like OpenWebif are listed (model name when known); a single match fills in the address, several let you pick with OK. WireGuard is not used. Many images do not advertise OpenWebif, so a miss is normal and typing the IP address stays the fallback.
 
 ## OpenWebif
 
@@ -277,7 +283,7 @@ Settings can enable:
 - PNG OSD alpha depends on the image and the `grab` binary. On some boxes `mode=osd` is opaque black outside the widgets. Use OSD diagnostics on the SF8008 to see which mode keeps transparency.
 - AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. With passthrough, Android cannot measure how long the amplifier or soundbar takes to decode, so lip sync may need the HDMI audio sync value. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
 - DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
-- mDNS discovery is best-effort.
+- Autodetect (mDNS + `/api/about`) is best-effort: receivers that do not advertise `_http._tcp` are not found; always type the IP if needed.
 - AutoSwitch runs only while the app is open in the foreground (see AutoSwitch). Record is not available yet.
 - Remote access, transcoding and the built-in WireGuard tunnel are built from the OpenWebif and WireGuard sources and tested only in unit tests, not on a TV and receiver. Some Android TV builds lack the VPN permission dialog; the app then says so and the WireGuard app is the way to go.
 - Over the remote profile the receiver sees the router's address for this device's stream, so telling this device's own stream apart from others may miss it and count one tuner too many.
@@ -291,6 +297,7 @@ Settings can enable:
 
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN app on the TV can hide the receiver unless it routes the home subnet; the built-in tunnel only comes up when home does not answer.
 - HTTP 401: fill in the OpenWebif username and password.
+- An IPTV / internet channel tries the receiver and fails: the service reference should contain `http%3a//` or `https%3a//` after the tenth field. `adb logcat | grep "stream target"` should say `kind=internet`; if it says `kind=enigma2`, the bouquet entry has no embedded URL.
 - The stream does not start: `adb logcat | grep -E "stream target|switching live stream"` shows the exact URL (without credentials), the route and whether it is transcoded. At home it should be `http://<receiver>:8001/<service reference>`; a transcoded URL on a closed port means the transcoding port in the receiver settings does not match the TranscodingSetup plugin (use "Ask the receiver" in Settings → Playback → Stream type), or choose Normal.
 - HTTPS fails with a certificate error: enable the self-signed option only for that receiver, or install a certificate the TV already trusts.
 - "All tuners are busy" while you expect a free tuner: put the receiver in standby (not deep standby) so its own picture frees a tuner, and check for running recordings or other devices streaming (OpenWebif's About page lists them). Choosing a channel on the same transponder as a running stream always works.
