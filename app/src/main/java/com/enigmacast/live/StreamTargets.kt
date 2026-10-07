@@ -29,7 +29,7 @@ class StreamTargets @Inject constructor(
         val route = router.route(config)
         val effective = ReceiverRouting.effective(config, route)
         val choice = quality.choose(config, route)
-        val url = url(endpoints, effective, reference, choice.level, choice.separator)
+        val url = url(endpoints, effective, reference, choice.level)
         val authorization = endpoints.streamAuthorization(effective)
         EnigmaLog.player(
             "stream target route=${route.name.lowercase()} profile=${config.streamProfile.name.lowercase()} " +
@@ -41,9 +41,9 @@ class StreamTargets @Inject constructor(
 
     companion object {
         /** The original stream for [StreamLevel.DIRECT], else the transcoded one; [effective] is already routed. */
-        fun url(endpoints: OpenWebifEndpoints, effective: ReceiverConfig, reference: String, level: StreamLevel, separator: Char): String {
+        fun url(endpoints: OpenWebifEndpoints, effective: ReceiverConfig, reference: String, level: StreamLevel): String {
             val preset = level.preset ?: return endpoints.stream(effective, reference)
-            return TranscodeUrls.build(effective.host, effective.transcodingPort, endpoints.encode(reference), preset, separator)
+            return TranscodeUrls.build(effective.host, effective.transcodingPort, endpoints.encode(reference), preset)
         }
     }
 }

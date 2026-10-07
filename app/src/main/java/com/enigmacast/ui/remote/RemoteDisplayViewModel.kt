@@ -257,6 +257,9 @@ class RemoteDisplayViewModel @Inject constructor(
             quality.state.collect { state -> _ui.update { it.copy(quality = state) } }
         }
         viewModelScope.launch {
+            quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
+        }
+        viewModelScope.launch {
             // Following the receiver: reopen the receiver's channel with the new quality.
             quality.restarts.collect {
                 if (_ui.value.ownTuner) return@collect

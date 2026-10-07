@@ -28,6 +28,7 @@ import com.enigmacast.live.GuideRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
+import com.enigmacast.live.StreamQualityController
 import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
@@ -56,6 +57,7 @@ class StreamGuideViewModel @Inject constructor(
     private val streamTargets: StreamTargets,
     guideRepository: GuideRepository,
     private val picons: PiconRepository,
+    private val quality: StreamQualityController,
 ) : ViewModel() {
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
@@ -113,6 +115,9 @@ class StreamGuideViewModel @Inject constructor(
         }
         viewModelScope.launch {
             session.state.collect(::mirror)
+        }
+        viewModelScope.launch {
+            quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
         }
         viewModelScope.launch {
             snapshotFlow { Triple(selectedBouquetReference, channels, tunedReference) }.collect { (bouquet, list, tuned) ->
@@ -191,11 +196,11 @@ class StreamGuideViewModel @Inject constructor(
         if (!recordBusy) recordPrompt = null
     }
 
-    private fun showNotice(text: UiText) {
+    private fun showNotice(text: UiText, durationMs: Long = NOTICE_MS) {
         notice = text
         noticeJob?.cancel()
         noticeJob = viewModelScope.launch {
-            delay(NOTICE_MS)
+            delay(durationMs)
             notice = UiText.Empty
         }
     }
@@ -586,5 +591,6 @@ class StreamGuideViewModel @Inject constructor(
 
     private companion object {
         const val NOTICE_MS = 4_000L
+        const val NOTICE_LONG_MS = 8_000L
     }
 }

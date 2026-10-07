@@ -9,7 +9,7 @@ enum class QualityReason { START, STALLS, STABLE, MANUAL, FALLBACK }
  * stable stretches (through [StreamQualityPolicy]), and the quick options override.
  *
  * Rules that keep a failure from looping:
- * - without transcoding support (or after a transcoder failure) a start is always the original;
+ * - after a transcoder failure a start is always the original until the settings change;
  * - the fallback happens at most once per receiver, and only for a transcoded start that never played.
  */
 class QualitySession {
@@ -31,7 +31,7 @@ class QualitySession {
 
     /** The level for a new stream start; [base] is what the receiver and route allow. */
     fun choose(receiverKey: String, base: QualityInputs): StreamLevel {
-        val next = if (receiverKey in transcoderFailed) base.copy(transcodingSupported = false) else base
+        val next = if (receiverKey in transcoderFailed) base.copy(transcoderFailed = true) else base
         if (next != inputs || receiverKey != key) {
             level = StreamQualityPolicy.initial(next, lastGood)
             if (receiverKey != key || reason != QualityReason.FALLBACK) reason = QualityReason.START
@@ -42,7 +42,7 @@ class QualitySession {
         level = if (StreamQualityPolicy.adaptive(next)) StreamQualityPolicy.atMost(level, ceiling) else ceiling
         inputs = next
         key = receiverKey
-        val chosen = manual?.let { if (it.transcoded && !next.transcodingSupported) StreamLevel.DIRECT else it } ?: level
+        val chosen = manual?.let { if (it.transcoded && next.transcoderFailed) StreamLevel.DIRECT else it } ?: level
         streamingTranscoded = chosen.transcoded
         reachedPlaying = false
         return chosen
@@ -61,7 +61,7 @@ class QualitySession {
         if (!streamingTranscoded || reachedPlaying || key.isEmpty() || key in transcoderFailed) return false
         transcoderFailed += key
         streamingTranscoded = false
-        inputs = inputs?.copy(transcodingSupported = false)
+        inputs = inputs?.copy(transcoderFailed = true)
         level = StreamLevel.DIRECT
         if (manual?.transcoded == true) manual = null
         reason = QualityReason.FALLBACK
@@ -82,9 +82,17 @@ class QualitySession {
         return StreamQualityPolicy.afterStable(current, level, stableForMs)?.also { change(it, QualityReason.STABLE) }
     }
 
+    /** The user's choice in the quick options; choosing a transcoded level gives the transcoder a new try. */
     fun setManual(choice: StreamLevel?) {
         manual = choice
+        if (choice?.transcoded == true) transcoderFailed.remove(key)
         reason = if (choice == null) QualityReason.START else QualityReason.MANUAL
+    }
+
+    /** The stream type or port changed in the settings: the transcoder may work now. */
+    fun forgetFailures() {
+        transcoderFailed.clear()
+        if (reason == QualityReason.FALLBACK) reason = QualityReason.START
     }
 
     fun ceiling(): StreamLevel = inputs?.let(StreamQualityPolicy::ceiling) ?: StreamLevel.DIRECT

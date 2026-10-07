@@ -33,20 +33,24 @@ enum class StreamLevel(val preset: TranscodePreset?) {
 data class QualityInputs(
     val profile: StreamProfile,
     val preset: TranscodePreset,
-    /** From `/api/about` (`transcoding`): an encoder plus the TranscodingSetup plugin. */
+    /** From `/api/about` (`transcoding`): an encoder plus the TranscodingSetup plugin. Only Automatic relies on it. */
     val transcodingSupported: Boolean,
     /** Remote profile or tunnel: the stream crosses the internet. At home it never does. */
     val remote: Boolean,
+    /** A transcoded start of this receiver failed in this session: everything plays Normal until the setting changes. */
+    val transcoderFailed: Boolean = false,
 )
 
 /**
- * Direct always sends the original stream. Transcoded uses the chosen preset when the
- * receiver can transcode, else falls back to direct. Auto always sends the original at home
- * (the home network has the bandwidth, and the transcoding port may not even be open), and a
- * transcoded copy over the remote profile or tunnel; only there does it step down after
- * repeated stalls and back up after a long stable stretch, never above [ceiling]. A live
- * stream arrives at its own bitrate, so throughput cannot show spare bandwidth: going up is
- * a careful, time-based try that a new stall undoes.
+ * Normal (DIRECT) always sends the original stream. Transcoded is the user's explicit choice
+ * and always asks the receiver's encoder at the chosen preset, at home too and without
+ * trusting `/api/about` (some images do not report it); if that start fails, the session
+ * falls back to Normal once ([QualitySession]). Automatic sends the original at home (the
+ * home network has the bandwidth, and the transcoding port may not even be open), and a
+ * transcoded copy over the remote profile or tunnel when the receiver reports transcoding;
+ * only there does it step down after repeated stalls and back up after a long stable
+ * stretch, never above [ceiling]. A live stream arrives at its own bitrate, so throughput
+ * cannot show spare bandwidth: going up is a careful, time-based try that a new stall undoes.
  */
 object StreamQualityPolicy {
     const val STALL_WINDOW_MS = 60_000L
@@ -54,12 +58,13 @@ object StreamQualityPolicy {
     const val STABLE_TO_STEP_UP_MS = 10 * 60_000L
 
     fun adaptive(inputs: QualityInputs): Boolean =
-        inputs.profile == StreamProfile.AUTO && inputs.transcodingSupported && inputs.remote
+        inputs.profile == StreamProfile.AUTO && inputs.transcodingSupported && inputs.remote && !inputs.transcoderFailed
 
     fun ceiling(inputs: QualityInputs): StreamLevel = when {
-        !inputs.transcodingSupported -> StreamLevel.DIRECT
+        inputs.transcoderFailed -> StreamLevel.DIRECT
         inputs.profile == StreamProfile.DIRECT -> StreamLevel.DIRECT
         inputs.profile == StreamProfile.TRANSCODED -> StreamLevel.of(inputs.preset)
+        !inputs.transcodingSupported -> StreamLevel.DIRECT
         inputs.remote -> StreamLevel.HIGH
         else -> StreamLevel.DIRECT
     }
@@ -93,16 +98,44 @@ object StreamQualityPolicy {
 }
 
 /**
- * Transcoded stream URLs as OpenWebif writes them in its `device=phone` playlists: the
- * service reference on the transcoding port with `bitrate` (bit/s), `width` and `height`.
- * OpenPLi-style images separate the parameters with `&`, other images with `?`.
+ * Transcoded stream URLs. Enigma2's stream server (`lib/dvb/streamserver.cpp`, OpenATV and
+ * OpenPLi alike) transcodes when the request has `bitrate`, and reads `width` and `height`
+ * as `&`-separated parameters; it only turns a repeated `?` into `&` for old clients. So the
+ * query is always `?bitrate=<bit/s>&width=<px>&height=<px>`, never with a second `?`.
+ *
+ * The port: boxes with a Broadcom encoder use the TranscodingSetup plugin's port (8001 or
+ * 8002); other encoder boxes transcode on the normal stream port 8001. OpenWebif knows which
+ * and writes it in its phone playlist (`/web/stream.m3u?device=phone`), see [detect].
  */
 object TranscodeUrls {
-    private val ampersandImages = setOf("openpli", "satdreamgr", "openvision")
+    const val DEFAULT_PORT = 8002
 
-    fun separator(imageDistro: String): Char = if (imageDistro.trim().lowercase() in ampersandImages) '&' else '?'
+    fun query(preset: TranscodePreset): String =
+        "?bitrate=${preset.bitrateKbps * 1000}&width=${preset.width}&height=${preset.height}"
 
-    fun build(host: String, port: Int, encodedReference: String, preset: TranscodePreset, separator: Char): String =
-        "http://$host:$port/$encodedReference?bitrate=${preset.bitrateKbps * 1000}" +
-            "${separator}width=${preset.width}${separator}height=${preset.height}"
+    fun build(host: String, port: Int, encodedReference: String, preset: TranscodePreset): String =
+        "http://$host:$port/$encodedReference${query(preset)}"
+
+    /**
+     * What OpenWebif's phone playlist says: the port of the first stream URL, and whether it
+     * carries transcoding parameters (no `bitrate` means the receiver offers no transcoding).
+     * Null when the playlist has no stream URL. The URL may contain the stream password; only
+     * the port is kept.
+     */
+    fun detect(playlist: String): TranscodeDetection? {
+        val line = playlist.lineSequence().map { it.trim() }.firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+            ?: return null
+        val uri = runCatching { java.net.URI(line.substringBefore(' ')) }.getOrNull() ?: return null
+        val port = when {
+            uri.port > 0 -> uri.port
+            uri.scheme == "https" -> 443
+            else -> 80
+        }
+        val query = uri.rawQuery.orEmpty().replace('?', '&')
+        val transcodes = query.split('&').any { it.startsWith("bitrate=") }
+        return TranscodeDetection(port, transcodes)
+    }
 }
+
+/** The receiver's own answer to "where do you transcode?". */
+data class TranscodeDetection(val port: Int, val transcodes: Boolean)

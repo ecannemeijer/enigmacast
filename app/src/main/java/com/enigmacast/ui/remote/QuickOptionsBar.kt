@@ -262,7 +262,9 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         }
         QuickOption.QUALITY -> {
             val manual = ui.quality.manual
-            val levels = if (ui.quality.transcodingSupported == true) StreamLevel.entries else listOf(StreamLevel.DIRECT)
+            // Transcoded levels are always offered: picking one tries the receiver's encoder (once) even when
+            // /api/about does not report it, and falls back to Normal with a message if it fails.
+            val levels = StreamLevel.entries
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }

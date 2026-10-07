@@ -839,6 +839,7 @@ private fun PlaybackSettingsPanel(
             onSelect = { viewModel.setStreamMode(if (it == 0) StreamMode.OWN_TUNER else StreamMode.FOLLOW_RECEIVER) },
         )
     }
+    StreamTypeCard()
     SettingsCard(stringResource(R.string.picture)) {
         ChoiceRow(
             title = stringResource(R.string.buffer),

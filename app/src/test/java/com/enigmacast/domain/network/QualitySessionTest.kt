@@ -67,11 +67,36 @@ class QualitySessionTest {
     }
 
     @Test
-    fun withoutTranscodingSupportEveryProfileIsTheOriginal() {
+    fun withoutTranscodingSupportAutomaticAndNormalPlayTheOriginal() {
         val session = QualitySession()
         val unsupported = autoRemote.copy(transcodingSupported = false)
-        StreamProfile.entries.forEach { profile ->
-            assertEquals(StreamLevel.DIRECT, session.choose(key, unsupported.copy(profile = profile)))
+        assertEquals(StreamLevel.DIRECT, session.choose(key, unsupported))
+        assertEquals(StreamLevel.DIRECT, session.choose(key, unsupported.copy(profile = StreamProfile.DIRECT)))
+    }
+
+    @Test
+    fun transcodedOnTheLanIsTriedOnceThenNormalUntilTheSettingsChange() {
+        val session = QualitySession()
+        val transcodedHome = autoHome.copy(profile = StreamProfile.TRANSCODED, transcodingSupported = false)
+        assertEquals(StreamLevel.MEDIUM, session.choose(key, transcodedHome))
+        assertTrue(session.onStartFailed())
+        repeat(3) {
+            assertEquals(StreamLevel.DIRECT, session.choose(key, transcodedHome))
+            assertFalse(session.onStartFailed())
         }
+        session.forgetFailures()
+        assertEquals(StreamLevel.MEDIUM, session.choose(key, transcodedHome))
+    }
+
+    @Test
+    fun choosingATranscodedLevelInTheQuickOptionsTriesTheTranscoderAgainOnce() {
+        val session = QualitySession()
+        session.choose(key, autoHome.copy(profile = StreamProfile.TRANSCODED))
+        assertTrue(session.onStartFailed())
+        session.setManual(StreamLevel.HIGH)
+        assertEquals(StreamLevel.HIGH, session.choose(key, autoHome.copy(profile = StreamProfile.TRANSCODED)))
+        assertTrue(session.onStartFailed())
+        assertEquals(StreamLevel.DIRECT, session.choose(key, autoHome.copy(profile = StreamProfile.TRANSCODED)))
+        assertFalse(session.onStartFailed())
     }
 }

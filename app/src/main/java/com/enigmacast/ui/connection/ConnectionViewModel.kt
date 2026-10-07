@@ -25,12 +25,17 @@ import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.domain.network.WireGuardSummary
 import com.enigmacast.domain.network.WireGuardText
 import com.enigmacast.domain.validation.ReceiverConfigValidator
+import com.enigmacast.live.StreamQualityController
 import com.enigmacast.locale.AppLanguageStore
+import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -45,6 +50,7 @@ class ConnectionViewModel @Inject constructor(
     private val discovery: NsdReceiverDiscovery,
     private val tunnel: WireGuardTunnel,
     private val router: ReceiverRouter,
+    private val quality: StreamQualityController,
 ) : ViewModel() {
     var name by mutableStateOf(AppLanguageStore.wrap(context).getString(R.string.default_receiver_name))
     var host by mutableStateOf("")
@@ -79,6 +85,13 @@ class ConnectionViewModel @Inject constructor(
     var busy by mutableStateOf(false)
     var discoveredHosts by mutableStateOf<List<String>>(emptyList())
     private var receiverId: String = ""
+
+    /** Settings › Playback › Stream type: the result of the last save or port detection. */
+    var streamTypeStatus by mutableStateOf(UiText.Empty)
+        private set
+    var detecting by mutableStateOf(false)
+        private set
+    private var portSaveJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -116,6 +129,92 @@ class ConnectionViewModel @Inject constructor(
         get() = WireGuardText.summarize(wireGuardConfigInUse())
 
     fun consentIntent(): Intent? = tunnel.consentIntent()
+
+    /** Normal, Transcoded or Automatic, saved at once. Transcoded and Automatic ask the receiver for its transcoding port. */
+    fun chooseStreamProfile(profile: StreamProfile) {
+        if (streamProfile == profile) return
+        streamProfile = profile
+        streamTypeStatus = UiText.Empty
+        saveStreamType()
+        if (profile != StreamProfile.DIRECT) detectTranscodingPort()
+    }
+
+    fun chooseTranscodePreset(preset: TranscodePreset) {
+        if (transcodePreset == preset) return
+        transcodePreset = preset
+        saveStreamType()
+    }
+
+    /** The port field; a valid port is saved half a second after the last key. */
+    fun editTranscodingPort(text: String) {
+        transcodingPort = text.filter(Char::isDigit).take(5)
+        portSaveJob?.cancel()
+        val port = transcodingPort.toIntOrNull()
+        if (port == null || port !in 1..65535) {
+            streamTypeStatus = UiText.res(R.string.stream_type_port_invalid)
+            return
+        }
+        streamTypeStatus = UiText.Empty
+        portSaveJob = viewModelScope.launch {
+            delay(PORT_SAVE_DELAY_MS)
+            saveStreamType()
+        }
+    }
+
+    /**
+     * Asks OpenWebif's phone playlist where the receiver transcodes and puts that port in
+     * the field: 8002 (or 8001) from the TranscodingSetup plugin on Broadcom boxes, the
+     * normal stream port 8001 on other encoder boxes.
+     */
+    fun detectTranscodingPort() {
+        if (detecting) return
+        detecting = true
+        streamTypeStatus = UiText.res(R.string.stream_type_detecting)
+        viewModelScope.launch {
+            val config = settingsRepository.current().activeReceiver()
+            val detection = try {
+                config?.let { api.transcodeDetection(ReceiverRouting.effective(it, ReceiverRoute.HOME)) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                EnigmaLog.connection("transcoding port detection failed: ${error.javaClass.simpleName}")
+                streamTypeStatus = error.uiMessage(UiText.res(R.string.stream_type_detect_failed))
+                detecting = false
+                return@launch
+            }
+            detecting = false
+            streamTypeStatus = when {
+                detection == null -> UiText.res(R.string.stream_type_detect_failed)
+                !detection.transcodes -> UiText.res(R.string.stream_type_no_transcoding)
+                else -> {
+                    transcodingPort = detection.port.toString()
+                    saveStreamType()
+                    UiText.res(R.string.stream_type_detected, detection.port)
+                }
+            }
+            EnigmaLog.connection("transcoding port detected=${detection?.port} transcodes=${detection?.transcodes}")
+        }
+    }
+
+    /** Writes only the stream type fields into the saved receiver, so other unsaved edits stay unsaved. */
+    private fun saveStreamType() {
+        val port = transcodingPort.trim().toIntOrNull()?.takeIf { it in 1..65535 } ?: saved.transcodingPort
+        val profile = streamProfile
+        val preset = transcodePreset
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                settings.copy(
+                    receivers = settings.receivers.map { receiver ->
+                        if (receiver.id != receiverId) receiver
+                        else receiver.copy(streamProfile = profile, transcodePreset = preset, transcodingPort = port)
+                    },
+                )
+            }
+            saved = saved.copy(streamProfile = profile, transcodePreset = preset, transcodingPort = port)
+            quality.settingsChanged()
+            EnigmaLog.connection("stream type ${profile.name.lowercase()} preset=${preset.name.lowercase()} transcodingPort=$port")
+        }
+    }
 
     /** The tunnel switch; only switching it on looks at the VPN permission (nothing starts until saved and needed). */
     fun setWireGuardEnabled(on: Boolean) {
@@ -207,6 +306,8 @@ class ConnectionViewModel @Inject constructor(
 
     fun save(onSaved: () -> Unit = {}) = launchAction { config ->
         settingsRepository.upsertReceiver(config)
+        saved = config
+        quality.settingsChanged()
         status = UiText.res(R.string.conn_saved, config.name)
         onSaved()
     }
@@ -312,5 +413,6 @@ class ConnectionViewModel @Inject constructor(
 
     private companion object {
         const val MAX_CONFIG_BYTES = 64 * 1024
+        const val PORT_SAVE_DELAY_MS = 500L
     }
 }

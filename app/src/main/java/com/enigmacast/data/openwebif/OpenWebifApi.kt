@@ -18,6 +18,8 @@ import com.enigmacast.domain.model.ReceiverDetails
 import com.enigmacast.domain.model.SleepTimerAction
 import com.enigmacast.domain.model.SleepTimerStatus
 import com.enigmacast.domain.model.VolumeStatus
+import com.enigmacast.domain.network.TranscodeDetection
+import com.enigmacast.domain.network.TranscodeUrls
 import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
@@ -272,6 +274,17 @@ class OpenWebifApi @Inject constructor(
         streamingAvailable = false,
         grabs = GrabSupport(png = false, jpg = false, osd = false, all = false, authenticationRequired = false),
     )
+
+    /**
+     * Asks OpenWebif where this receiver transcodes ([TranscodeUrls.detect]); null when the
+     * answer has no stream URL. The playlist may contain the stream password, so it is never logged.
+     */
+    suspend fun transcodeDetection(config: ReceiverConfig): TranscodeDetection? {
+        val response = execute(config, endpoints.phonePlaylist(config), accept = "*/*")
+        if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
+        if (response.code !in 200..299) throw OpenWebifException("HTTP ${response.code}", response.code)
+        return TranscodeUrls.detect(response.bytes.toString(Charsets.UTF_8))
+    }
 
     suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> {
         return OpenWebifJson.parseGuideEvents(get(config, endpoints.epgService(config, serviceReference)), serviceReference)

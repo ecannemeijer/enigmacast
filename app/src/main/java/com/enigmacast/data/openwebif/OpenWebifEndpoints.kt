@@ -112,6 +112,14 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
     }
 
     /**
+     * OpenWebif's playlist for phones: the stream URL with the transcoding port and
+     * parameters when the receiver can transcode. OpenWebif does not check the reference,
+     * so a placeholder is enough to learn the port.
+     */
+    fun phonePlaylist(config: ReceiverConfig, serviceReference: String = PLACEHOLDER_REFERENCE): String =
+        api(config, "/web/stream.m3u?ref=${encode(serviceReference)}&device=phone")
+
+    /**
      * Enigma2's stream server checks `Authorization: Basic` against the receiver's system
      * account when "stream authentication" is on, and ignores the header otherwise. The
      * same user and password as for OpenWebif are sent whenever a user name is set.
@@ -124,5 +132,9 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
     fun encode(value: String): String {
         // Charset overload exists only on API 33+. The string overload works from API 1.
         return URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    }
+
+    private companion object {
+        const val PLACEHOLDER_REFERENCE = "1:0:1:0:0:0:0:0:0:0:"
     }
 }

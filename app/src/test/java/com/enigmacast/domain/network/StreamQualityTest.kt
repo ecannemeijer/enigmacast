@@ -14,8 +14,15 @@ class StreamQualityTest {
     fun directAndUnsupportedAlwaysUseTheOriginal() {
         assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.initial(autoRemote.copy(profile = StreamProfile.DIRECT)))
         assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.initial(autoRemote.copy(transcodingSupported = false)))
-        assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.initial(autoRemote.copy(profile = StreamProfile.TRANSCODED, transcodingSupported = false)))
         assertFalse(StreamQualityPolicy.adaptive(autoRemote.copy(transcodingSupported = false)))
+    }
+
+    @Test
+    fun transcodedIsForcedAtHomeEvenWhenTheReceiverDoesNotReportTranscoding() {
+        val transcodedHome = autoHome.copy(profile = StreamProfile.TRANSCODED, transcodingSupported = false)
+        assertEquals(StreamLevel.MEDIUM, StreamQualityPolicy.initial(transcodedHome))
+        assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.initial(transcodedHome.copy(transcoderFailed = true)))
+        assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.initial(autoRemote.copy(transcoderFailed = true)))
     }
 
     @Test
@@ -57,13 +64,30 @@ class StreamQualityTest {
     }
 
     @Test
-    fun transcodedUrlsFollowTheImageStyle() {
-        assertEquals('&', TranscodeUrls.separator("openpli"))
-        assertEquals('?', TranscodeUrls.separator("openatv"))
+    fun transcodedUrlsUseOneQuestionMarkAndAmpersands() {
         assertEquals(
             "http://box:8002/1%3A0%3A19%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A?bitrate=1200000&width=1024&height=576",
-            TranscodeUrls.build("box", 8002, "1%3A0%3A19%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A", TranscodePreset.MEDIUM, '&'),
+            TranscodeUrls.build("box", 8002, "1%3A0%3A19%3A1%3A0%3A0%3A0%3A0%3A0%3A0%3A", TranscodePreset.MEDIUM),
         )
-        assertTrue(TranscodeUrls.build("box", 8001, "ref", TranscodePreset.HIGH, '?').endsWith("ref?bitrate=2500000?width=1280?height=720"))
+        TranscodePreset.entries.forEach { preset ->
+            val url = TranscodeUrls.build("box", 8001, "ref", preset)
+            assertEquals(1, url.count { it == '?' })
+            assertTrue(url.endsWith("ref?bitrate=${preset.bitrateKbps * 1000}&width=${preset.width}&height=${preset.height}"))
+        }
+    }
+
+    @Test
+    fun detectsThePortFromOpenWebifsPhonePlaylist() {
+        // Broadcom box with the TranscodingSetup plugin on 8002 (OpenATV style, repeated '?').
+        val broadcom = "#EXTM3U \n#EXTVLCOPT:http-reconnect=true \nhttp://192.168.1.209:8002/1:0:19:1B6C:C88:3:EB0000:0:0:0:?bitrate=1000000?width=1280?height=720?aspectratio=2?interlaced=0\n"
+        assertEquals(TranscodeDetection(8002, transcodes = true), TranscodeUrls.detect(broadcom))
+        // HiSilicon box: the encoder sits behind the normal stream port; with stream authentication on.
+        val hisilicon = "#EXTM3U\n#EXTVLCOPT:http-reconnect=true\nhttp://root:secret@192.168.1.209:8001/1:0:19:1B6C:C88:3:EB0000:0:0:0:?bitrate=1000000?width=1280?height=720\n"
+        assertEquals(TranscodeDetection(8001, transcodes = true), TranscodeUrls.detect(hisilicon))
+        val pli = "#EXTM3U\nhttp://192.168.1.209:8001/1:0:19:1B6C:C88:3:EB0000:0:0:0:?bitrate=1000000&width=1280&height=720\n"
+        assertEquals(TranscodeDetection(8001, transcodes = true), TranscodeUrls.detect(pli))
+        // No encoder: OpenWebif writes the plain stream URL.
+        assertEquals(TranscodeDetection(8001, transcodes = false), TranscodeUrls.detect("#EXTM3U\nhttp://box:8001/1:0:1:0:0:0:0:0:0:0:\n"))
+        assertEquals(null, TranscodeUrls.detect("<html>login</html>"))
     }
 }

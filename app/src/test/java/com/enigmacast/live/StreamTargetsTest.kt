@@ -21,21 +21,35 @@ class StreamTargetsTest {
     @Test
     fun theLanDefaultConfigStreamsTheOriginalOnPort8001() {
         val effective = ReceiverRouting.effective(lan, ReceiverRoute.HOME)
-        assertEquals("http://192.168.1.209:8001/$encoded", StreamTargets.url(endpoints, effective, rtl4, StreamLevel.DIRECT, '?'))
+        assertEquals("http://192.168.1.209:8001/$encoded", StreamTargets.url(endpoints, effective, rtl4, StreamLevel.DIRECT))
     }
 
     @Test
     fun theStreamUrlNeverCarriesCredentials() {
-        val url = StreamTargets.url(endpoints, lan, rtl4, StreamLevel.DIRECT, '?')
+        val url = StreamTargets.url(endpoints, lan, rtl4, StreamLevel.DIRECT)
         assertFalse(url.contains("root") || url.contains("secret"))
         assertEquals(okhttp3.Credentials.basic("root", "secret"), endpoints.streamAuthorization(lan))
     }
 
     @Test
-    fun transcodedStreamsUseTheTranscodingPort() {
+    fun transcodedStreamsUseTheTranscodingPortAndOneQuestionMark() {
         assertEquals(
-            "http://192.168.1.209:8002/$encoded?bitrate=1200000?width=1024?height=576",
-            StreamTargets.url(endpoints, lan, rtl4, StreamLevel.MEDIUM, '?'),
+            "http://192.168.1.209:8002/$encoded?bitrate=1200000&width=1024&height=576",
+            StreamTargets.url(endpoints, lan, rtl4, StreamLevel.MEDIUM),
+        )
+        assertEquals(
+            "http://192.168.1.209:8001/$encoded?bitrate=2500000&width=1280&height=720",
+            StreamTargets.url(endpoints, lan.copy(transcodingPort = 8001), rtl4, StreamLevel.HIGH),
+        )
+    }
+
+    @Test
+    fun theRemoteProfileUsesItsOwnTranscodingPort() {
+        val config = lan.copy(remoteHost = "box.example.org", remoteTranscodingPort = 18002, accessMode = com.enigmacast.domain.network.AccessMode.REMOTE)
+        val effective = ReceiverRouting.effective(config, ReceiverRoute.REMOTE)
+        assertEquals(
+            "http://box.example.org:18002/$encoded?bitrate=600000&width=640&height=360",
+            StreamTargets.url(endpoints, effective, rtl4, StreamLevel.LOW),
         )
     }
 

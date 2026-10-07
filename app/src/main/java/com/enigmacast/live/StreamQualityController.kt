@@ -1,6 +1,7 @@
 package com.enigmacast.live
 
 import android.os.SystemClock
+import com.enigmacast.R
 import com.enigmacast.data.openwebif.OpenWebifApi
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.network.QualityInputs
@@ -10,11 +11,11 @@ import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.StreamLevel
 import com.enigmacast.domain.network.StreamProfile
 import com.enigmacast.domain.network.StreamQualityPolicy
-import com.enigmacast.domain.network.TranscodeUrls
 import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.playback.StreamStats
 import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,8 @@ data class QualityState(
     val transcodingSupported: Boolean? = null,
     val manual: StreamLevel? = null,
     val reason: QualityReason = QualityReason.START,
+    /** A transcoded start failed in this session; transcoded choices play Normal until the settings change. */
+    val transcoderFailed: Boolean = false,
 )
 
 /** A request to open the channel again with another quality; [manual] when the user chose it. */
@@ -50,18 +53,16 @@ data class QualityRestart(val manual: Boolean)
  * stream for the rest of the session (once). A change asks the player to restart ([restarts]).
  *
  * Transcoding support comes from OpenWebif's `/api/about` (`transcoding`), read once per
- * receiver and session, and only when transcoding could be used at all (not for Direct, and
- * not for Auto at home), so a home stream never waits for it.
+ * receiver and session, and only for Automatic away from home, so a home stream never waits
+ * for it. Transcoded is the user's explicit choice and is tried without asking.
  */
 @Singleton
 class StreamQualityController @Inject constructor(
     private val api: OpenWebifApi,
     private val playback: LivePlaybackController,
 ) {
-    private class Capability(val transcoding: Boolean, val separator: Char)
-
-    /** What [choose] decided: the level and the parameter separator of the receiver's image. */
-    data class Choice(val level: StreamLevel, val separator: Char, val transcodingSupported: Boolean)
+    /** What [choose] decided. */
+    data class Choice(val level: StreamLevel, val transcodingSupported: Boolean)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(QualityState())
@@ -70,8 +71,12 @@ class StreamQualityController @Inject constructor(
 
     /** The stream should be opened again with a new quality. */
     val restarts: SharedFlow<QualityRestart> = _restarts.asSharedFlow()
+    private val _notices = MutableSharedFlow<UiText>(extraBufferCapacity = 2)
 
-    private val capabilities = mutableMapOf<String, Capability>()
+    /** Messages for the screen, such as "transcoded stream unavailable, switched to Normal". */
+    val notices: SharedFlow<UiText> = _notices.asSharedFlow()
+
+    private val capabilities = mutableMapOf<String, Boolean>()
     private val session = QualitySession()
     private val stallTimes = ArrayDeque<Long>()
     private var lastStalls = 0
@@ -91,16 +96,12 @@ class StreamQualityController @Inject constructor(
     suspend fun choose(config: ReceiverConfig, route: ReceiverRoute): Choice {
         val key = receiverKey(config)
         val remote = route != ReceiverRoute.HOME
-        val mayTranscode = when (config.streamProfile) {
-            StreamProfile.DIRECT -> false
-            StreamProfile.AUTO -> remote
-            StreamProfile.TRANSCODED -> true
-        } || session.manual?.transcoded == true
-        val capability = if (mayTranscode && !session.transcoderFailed(key)) capability(config) else null
+        // Only Automatic away from home depends on what /api/about says; Transcoded is forced.
+        val askReceiver = config.streamProfile == StreamProfile.AUTO && remote && !session.transcoderFailed(key)
         val base = QualityInputs(
             profile = config.streamProfile,
             preset = config.transcodePreset,
-            transcodingSupported = capability?.transcoding == true,
+            transcodingSupported = askReceiver && transcodingReported(config),
             remote = remote,
         )
         val previous = session.inputs
@@ -110,7 +111,7 @@ class StreamQualityController @Inject constructor(
             stableSinceMs = now()
         }
         publish(chosen)
-        return Choice(chosen, capability?.separator ?: '?', session.inputs?.transcodingSupported == true)
+        return Choice(chosen, chosen.transcoded)
     }
 
     /** Quality picked in the quick options bar for this session; null goes back to the setting. */
@@ -118,6 +119,12 @@ class StreamQualityController @Inject constructor(
         session.setManual(choice)
         EnigmaLog.service("quality manual ${choice?.name ?: "off"}")
         _restarts.tryEmit(QualityRestart(manual = true))
+    }
+
+    /** The stream type, preset or port changed in the settings: give the transcoder a new chance. */
+    fun settingsChanged() {
+        session.forgetFailures()
+        _state.value = _state.value.copy(transcoderFailed = false)
     }
 
     private fun onStats(stats: StreamStats) {
@@ -138,7 +145,8 @@ class StreamQualityController @Inject constructor(
                 // A transcoder that never delivered (port closed, busy encoder): use the original stream, once.
                 if (!session.onStartFailed()) return
                 publish(StreamLevel.DIRECT)
-                EnigmaLog.service("transcoded stream failed (${health.name.lowercase()}), using the original stream")
+                EnigmaLog.service("transcoded stream failed (${health.name.lowercase()}), switched to the normal stream")
+                _notices.tryEmit(UiText.res(R.string.quality_transcode_unavailable))
                 _restarts.tryEmit(QualityRestart(manual = false))
             }
             else -> Unit
@@ -170,20 +178,20 @@ class StreamQualityController @Inject constructor(
             transcodingSupported = current.transcodingSupported,
             manual = session.manual,
             reason = session.reason,
+            transcoderFailed = current.transcoderFailed,
         )
     }
 
-    private suspend fun capability(config: ReceiverConfig): Capability {
+    private suspend fun transcodingReported(config: ReceiverConfig): Boolean {
         val key = receiverKey(config)
         capabilities[key]?.let { return it }
         return try {
-            val about = api.about(config)
-            Capability(about.transcoding, TranscodeUrls.separator(about.imageDistro)).also { capabilities[key] = it }
+            api.about(config).transcoding.also { capabilities[key] = it }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
             EnigmaLog.service("transcoding check failed: ${error.javaClass.simpleName}")
-            Capability(false, '?')
+            false
         }
     }
 
