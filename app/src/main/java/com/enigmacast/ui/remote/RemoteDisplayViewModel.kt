@@ -25,6 +25,8 @@ import com.enigmacast.domain.model.ConnectionState
 import com.enigmacast.domain.model.DebugInfo
 import com.enigmacast.domain.model.EnigmaService
 import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.model.OsdInfoFields
+import com.enigmacast.domain.model.OsdSkinId
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.network.PlainHttpRisk
 import com.enigmacast.domain.network.ReceiverRoute
@@ -34,10 +36,15 @@ import com.enigmacast.domain.osd.GrabFormat
 import com.enigmacast.domain.osd.OsdConfig
 import com.enigmacast.domain.osd.OsdController
 import com.enigmacast.domain.osd.OsdPollState
+import com.enigmacast.domain.osdinfo.OsdInfo
+import com.enigmacast.domain.osdinfo.OsdInfoBuilder
+import com.enigmacast.domain.osdinfo.OsdInfoInput
+import com.enigmacast.domain.osdinfo.PlayerFacts
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.EnigmaKeyMapper
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.domain.service.ServiceMonitor
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
@@ -53,6 +60,7 @@ import com.enigmacast.domain.tuner.OwnTunerKeys
 import com.enigmacast.domain.tuner.StreamModePolicy
 import com.enigmacast.live.GuideRepository
 import com.enigmacast.live.NowEpgRepository
+import com.enigmacast.live.OsdInfoRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
@@ -80,6 +88,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -148,6 +157,10 @@ data class RemoteDisplayUiState(
     val programmePrompt: ProgrammePrompt? = null,
     /** Programmes with AutoSwitch set ([GuideEvent.programmeKey]). */
     val autoSwitchKeys: Set<String> = emptySet(),
+    /** Receiver facts for the channel banner. The skin draws [osdInfo]; this stays independent of the look. */
+    val osdInfo: OsdInfo = OsdInfo.Empty,
+    val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
+    val osdInfoFields: OsdInfoFields = OsdInfoFields(),
 )
 
 
@@ -171,6 +184,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val router: ReceiverRouter,
     private val quality: StreamQualityController,
     private val reminders: ReminderScheduler,
+    private val osdInfoRepository: OsdInfoRepository,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -196,6 +210,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private var infoJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
     private var bannerJob: Job? = null
+    private var osdInfoJob: Job? = null
+    private var osdInfoKey: String? = null
     private var numberJob: Job? = null
     private var noticeJob: Job? = null
     private var nowEpgJob: Job? = null
@@ -216,6 +232,8 @@ class RemoteDisplayViewModel @Inject constructor(
                     it.copy(
                         debugOverlayEnabled = settings.debug.overlay,
                         osdDebugBorders = settings.osd.debugBorders,
+                        osdSkin = settings.osdSkin,
+                        osdInfoFields = settings.osdInfo,
                         hdmiPassthrough = settings.playback.hdmiPassthrough,
                         recent = settings.recentChannels,
                         receiverAddress = settings.activeReceiver()?.let { receiver -> "${receiver.host}:${receiver.streamingPort}" }.orEmpty(),
@@ -313,6 +331,7 @@ class RemoteDisplayViewModel @Inject constructor(
     fun openQuickBar() {
         bannerJob?.cancel()
         _ui.update { it.copy(quickBar = true, quickBarToken = it.quickBarToken + 1) }
+        watchOsdInfo()
     }
 
     /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
@@ -728,18 +747,66 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun showBanner(details: Boolean = _ui.value.details, fromZap: Boolean = false) {
         ownSession.refreshGuideIfStale()
         _ui.update { it.copy(banner = true, details = details, bannerFromZap = fromZap) }
+        watchOsdInfo()
         bannerJob?.cancel()
         // The quick bar keeps the banner up while it has the focus.
         if (_ui.value.quickBar) return
         bannerJob = viewModelScope.launch {
             delay(if (details) DETAILS_VISIBLE_MS else BANNER_VISIBLE_MS)
             _ui.update { it.copy(banner = false, details = false) }
+            watchOsdInfo()
         }
     }
 
     private fun hideBanner() {
         bannerJob?.cancel()
         _ui.update { it.copy(banner = false, details = false, quickBar = false) }
+        watchOsdInfo()
+    }
+
+    /**
+     * Polls receiver signal and service data only while the channel banner or quick bar is
+     * visible, and folds it with the stream's own TS facts into [OsdInfo].
+     */
+    private fun watchOsdInfo() {
+        val ui = _ui.value
+        val visible = ui.ownTuner && (ui.banner || ui.quickBar)
+        val reference = ui.currentService?.reference.orEmpty()
+        val receiver = settingsSnapshot.activeReceiver()
+        if (!visible || reference.isBlank() || receiver == null) {
+            osdInfoJob?.cancel()
+            osdInfoJob = null
+            return
+        }
+        val key = "${receiver.id}|$reference"
+        if (osdInfoJob?.isActive == true && osdInfoKey == key) return
+        osdInfoJob?.cancel()
+        if (osdInfoKey != key) _ui.update { it.copy(osdInfo = OsdInfo.Empty) }
+        osdInfoKey = key
+        val internet = ServiceStreams.internetUrl(reference) != null || ServiceStreams.isStreamPlayer(reference)
+        osdInfoJob = viewModelScope.launch {
+            combine(osdInfoRepository.watch(receiver, reference), playback.streamFacts, playback.state) { data, stream, player ->
+                OsdInfoBuilder.build(
+                    OsdInfoInput(
+                        reference = reference,
+                        internet = internet,
+                        followsReceiver = false,
+                        receiver = data,
+                        stream = stream,
+                        player = PlayerFacts(
+                            width = player.videoWidth,
+                            height = player.videoHeight,
+                            pixelRatio = player.pixelRatio,
+                            audioMime = player.audioCodec,
+                            audioChannels = player.audioChannels,
+                            subtitleTracks = player.subtitleTrackCount,
+                        ),
+                    ),
+                )
+            }.collect { info ->
+                _ui.update { it.copy(osdInfo = info) }
+            }
+        }
     }
 
     private fun showNotice(text: UiText, durationMs: Long = NOTICE_MS) {

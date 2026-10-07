@@ -75,6 +75,7 @@ import com.enigmacast.BuildConfig
 import com.enigmacast.R
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
+import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.PowerEvent
@@ -82,6 +83,7 @@ import com.enigmacast.locale.AppLanguage
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.playback.AudioSync
 import com.enigmacast.ui.connection.ConnectionViewModel
+import com.enigmacast.ui.osd.OsdInfoSettings
 import com.enigmacast.ui.power.ReceiverPowerPanel
 import com.enigmacast.ui.power.ReceiverPowerViewModel
 import com.enigmacast.ui.power.powerStateColor
@@ -793,7 +795,7 @@ private fun SettingsHub(
                         settings.playback.audioDelayPassthroughMs,
                         viewModel,
                     )
-                    SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
+                    SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, settings.osdInfo, viewModel)
                     SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, viewModel)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
                     SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus)
@@ -1003,8 +1005,10 @@ private fun LanguageSettingsPanel(
 private fun OsdSettingsPanel(
     format: String,
     fastPolling: Boolean,
+    info: OsdInfoFields,
     viewModel: SettingsViewModel,
 ) {
+    OsdInfoSettings(info, viewModel::setOsdInfoFields)
     SettingsCard(stringResource(R.string.receiver_osd)) {
         ChoiceRow(
             title = stringResource(R.string.osd_format),

@@ -53,7 +53,10 @@ import com.enigmacast.R
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EpgEvent
+import com.enigmacast.domain.model.OsdInfoFields
+import com.enigmacast.domain.model.OsdSkinId
 import com.enigmacast.domain.model.PlayerState
+import com.enigmacast.domain.osdinfo.OsdInfo
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.tuner.ChannelListNavigation
 import com.enigmacast.domain.tuner.NowEvent
@@ -62,6 +65,8 @@ import com.enigmacast.domain.tuner.TunerUserKind
 import com.enigmacast.live.TunerState
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
+import com.enigmacast.ui.osd.OsdInfoPresenter
+import com.enigmacast.ui.osd.OsdSkins
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.StatusPill
@@ -143,6 +148,9 @@ fun OwnTunerOverlay(
                     tuner = tuner,
                     details = ui.details,
                     optionsHint = !ui.bannerFromZap && !ui.quickBar,
+                    osdInfo = ui.osdInfo,
+                    osdFields = ui.osdInfoFields,
+                    osdSkin = ui.osdSkin,
                     picon = picon,
                     cachedPicon = cachedPicon,
                 )
@@ -180,6 +188,9 @@ private fun ChannelBanner(
     tuner: TunerState,
     details: Boolean,
     optionsHint: Boolean,
+    osdInfo: OsdInfo,
+    osdFields: OsdInfoFields,
+    osdSkin: OsdSkinId,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
@@ -253,27 +264,37 @@ private fun ChannelBanner(
         }
         Spacer(Modifier.width(20.dp))
         Column(
-            modifier = Modifier.widthIn(min = 160.dp, max = 260.dp),
+            modifier = Modifier.widthIn(min = 160.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            videoLabel(player).takeIf { it.isNotBlank() }?.let { Tag(it) }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val infoView = OsdInfoPresenter.present(osdInfo, osdFields)
+                if (!infoView.isEmpty) OsdSkins.of(osdSkin).Strip(infoView, Modifier)
+                videoLabel(player).takeIf { it.isNotBlank() }?.let { Tag(it) }
+            }
             if (player.audioLabel.isNotEmpty()) {
                 val more = if (player.audioTrackCount > 1) {
                     pluralStringResource(R.plurals.osd_audio_languages, player.audioTrackCount, player.audioTrackCount)
                 } else {
                     ""
                 }
-                Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more)
+                Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more, Modifier.widthIn(max = 260.dp))
             }
             when {
-                player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()))
-                player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available))
+                player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()), Modifier.widthIn(max = 260.dp))
+                player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available), Modifier.widthIn(max = 260.dp))
             }
             Text(
                 stringResource(if (optionsHint) R.string.osd_banner_hint_options else R.string.osd_banner_hint),
                 color = EnigmaColors.Subtle,
                 fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 260.dp),
             )
         }
     }
@@ -321,14 +342,14 @@ private fun ProgressBar(event: EpgEvent, nowSec: Long) {
 }
 
 @Composable
-private fun Tag(text: String) {
+private fun Tag(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         color = Color.White,
         fontSize = 13.sp,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
+        modifier = modifier
             .background(EnigmaColors.Raised, RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp),
     )

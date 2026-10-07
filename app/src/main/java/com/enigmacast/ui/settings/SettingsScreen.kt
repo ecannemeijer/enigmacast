@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.R
+import com.enigmacast.ui.osd.OsdInfoSettings
 import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
@@ -69,6 +70,7 @@ fun SettingsScreen(
                 ToggleRow(stringResource(R.string.fast_osd_polling), settings.osd.fastPolling, viewModel::setFastPolling)
                 ToggleRow(stringResource(R.string.osd_debug_border), settings.osd.debugBorders, viewModel::setDebugBorders)
             }
+            OsdInfoSettings(settings.osdInfo, viewModel::setOsdInfoFields)
             SettingsCard(stringResource(R.string.connection)) {
                 ToggleRow(
                     title = stringResource(R.string.allow_self_signed),
