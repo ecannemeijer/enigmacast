@@ -219,6 +219,8 @@ Right from Settings opens a submenu with Receiver, Remote access, Playback, OSD,
 - General: Navigation sounds (the click when moving with the remote; on by default)
 - Info: version and build, debug overlay, verbose logging, OSD border
 
+**Text fields** work the same everywhere (Settings › Receiver, Remote access, Stream type, and the connection screen). Moving onto a field only highlights it: amber border and a small "Press OK to edit" hint, with no keyboard and no cursor, so Up, Down, Left and Right move straight to the next item (Right from the IP field reaches AutoDetect). OK starts editing and opens the matching keyboard: URI for host/IP, numbers for ports, password for passwords. The keyboard's Done, OK on the remote, or one Back ends editing and leaves the highlight on the same field. Back while typing never closes the screen; on Android 9–10 the first Back may only close the keyboard. The value is kept as you type and stored with Save/Connect as before. In the multi-line WireGuard field, Enter types a new line.
+
 Stable is the default. It uses a larger live buffer (about 2–15 s) and a 4 s live offset. Fast uses the short buffer (about 0.5–5 s) and a 1 s offset. Changing playback rebuilds the player, except for the audio sync, which applies at once.
 
 Stereo downmixes AC3 and E-AC3 to PCM. HDMI leaves passthrough to the device when the HDMI output reports those formats. DVB subtitles are drawn on the video when the transport stream has a text track. The Playback page says whether the current stream has subtitles.
@@ -231,7 +233,7 @@ Audio sync corrects sound that runs behind or ahead of the picture, from -500 to
 2. Note the receiver IP, the HTTP port (usually 80), and whether a username and password are set.
 3. Leave the streaming server on port 8001 unless the image uses another port.
 4. Start EnigmaCast. The first launch opens the connection screen.
-5. Enter the receiver name, host, ports, and optional credentials.
+5. Enter the receiver name, host, ports, and optional credentials (move to a field, press OK to type, then Done or Back).
 6. Test connection, then Connect.
 
 The test calls `/api/about`, probes `/grab` for PNG and JPG in `osd` and `all` modes, and checks that the streaming port accepts a TCP connection. A successful test shows the model, image, and Enigma version returned by OpenWebif.
