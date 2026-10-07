@@ -35,38 +35,39 @@ data class QualityInputs(
     val preset: TranscodePreset,
     /** From `/api/about` (`transcoding`): an encoder plus the TranscodingSetup plugin. */
     val transcodingSupported: Boolean,
-    /** Remote profile or tunnel: the stream crosses the internet. */
-    val internet: Boolean,
-    val metered: Boolean,
+    /** Remote profile or tunnel: the stream crosses the internet. At home it never does. */
+    val remote: Boolean,
 )
 
 /**
  * Direct always sends the original stream. Transcoded uses the chosen preset when the
- * receiver can transcode, else falls back to direct. Auto sends the original at home on an
- * unmetered network and a transcoded copy over the internet or a metered network; it steps
- * down after repeated stalls and back up after a long stable stretch, never above
- * [ceiling]. A live stream arrives at its own bitrate, so throughput cannot show spare
- * bandwidth: going up is a careful, time-based try that a new stall undoes.
+ * receiver can transcode, else falls back to direct. Auto always sends the original at home
+ * (the home network has the bandwidth, and the transcoding port may not even be open), and a
+ * transcoded copy over the remote profile or tunnel; only there does it step down after
+ * repeated stalls and back up after a long stable stretch, never above [ceiling]. A live
+ * stream arrives at its own bitrate, so throughput cannot show spare bandwidth: going up is
+ * a careful, time-based try that a new stall undoes.
  */
 object StreamQualityPolicy {
     const val STALL_WINDOW_MS = 60_000L
     const val STALLS_TO_STEP_DOWN = 2
     const val STABLE_TO_STEP_UP_MS = 10 * 60_000L
 
-    fun adaptive(inputs: QualityInputs): Boolean = inputs.profile == StreamProfile.AUTO && inputs.transcodingSupported
+    fun adaptive(inputs: QualityInputs): Boolean =
+        inputs.profile == StreamProfile.AUTO && inputs.transcodingSupported && inputs.remote
 
     fun ceiling(inputs: QualityInputs): StreamLevel = when {
         !inputs.transcodingSupported -> StreamLevel.DIRECT
         inputs.profile == StreamProfile.DIRECT -> StreamLevel.DIRECT
         inputs.profile == StreamProfile.TRANSCODED -> StreamLevel.of(inputs.preset)
-        inputs.internet || inputs.metered -> StreamLevel.HIGH
+        inputs.remote -> StreamLevel.HIGH
         else -> StreamLevel.DIRECT
     }
 
-    /** The first level: the ceiling, except Auto over the internet starts at the middle preset (or the last good one). */
+    /** The first level: the ceiling, except Auto away from home starts at the middle preset (or the last good one). */
     fun initial(inputs: QualityInputs, lastGood: StreamLevel? = null): StreamLevel {
         val ceiling = ceiling(inputs)
-        if (!adaptive(inputs) || !(inputs.internet || inputs.metered)) return ceiling
+        if (!adaptive(inputs)) return ceiling
         return atMost(lastGood ?: StreamLevel.MEDIUM, ceiling)
     }
 

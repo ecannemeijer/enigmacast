@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StreamQualityTest {
-    private val autoHome = QualityInputs(StreamProfile.AUTO, TranscodePreset.MEDIUM, transcodingSupported = true, internet = false, metered = false)
-    private val autoRemote = autoHome.copy(internet = true)
+    private val autoHome = QualityInputs(StreamProfile.AUTO, TranscodePreset.MEDIUM, transcodingSupported = true, remote = false)
+    private val autoRemote = autoHome.copy(remote = true)
 
     @Test
     fun directAndUnsupportedAlwaysUseTheOriginal() {
@@ -29,7 +29,7 @@ class StreamQualityTest {
     fun autoIsOriginalAtHomeAndTranscodedRemotely() {
         assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.initial(autoHome))
         assertEquals(StreamLevel.MEDIUM, StreamQualityPolicy.initial(autoRemote))
-        assertEquals(StreamLevel.MEDIUM, StreamQualityPolicy.initial(autoHome.copy(metered = true)))
+        assertFalse(StreamQualityPolicy.adaptive(autoHome))
         assertEquals(StreamLevel.HIGH, StreamQualityPolicy.ceiling(autoRemote))
         assertEquals(StreamLevel.LOW, StreamQualityPolicy.initial(autoRemote, lastGood = StreamLevel.LOW))
         assertEquals(StreamLevel.HIGH, StreamQualityPolicy.initial(autoRemote, lastGood = StreamLevel.DIRECT))
@@ -40,7 +40,9 @@ class StreamQualityTest {
         val now = 100_000L
         assertNull(StreamQualityPolicy.afterStalls(autoHome, StreamLevel.DIRECT, listOf(now - 5_000), now))
         assertNull(StreamQualityPolicy.afterStalls(autoHome, StreamLevel.DIRECT, listOf(now - 90_000, now - 1_000), now))
-        assertEquals(StreamLevel.HIGH, StreamQualityPolicy.afterStalls(autoHome, StreamLevel.DIRECT, listOf(now - 30_000, now - 1_000), now))
+        // At home Auto never steps down into transcoding, however much it stalls.
+        assertNull(StreamQualityPolicy.afterStalls(autoHome, StreamLevel.DIRECT, listOf(now - 30_000, now - 1_000), now))
+        assertEquals(StreamLevel.LOW, StreamQualityPolicy.afterStalls(autoRemote, StreamLevel.MEDIUM, listOf(now - 30_000, now - 1_000), now))
         assertEquals(StreamLevel.LOW, StreamQualityPolicy.afterStalls(autoRemote, StreamLevel.MEDIUM, listOf(now, now), now))
         assertNull(StreamQualityPolicy.afterStalls(autoRemote, StreamLevel.LOW, listOf(now, now), now))
     }
@@ -51,7 +53,7 @@ class StreamQualityTest {
         assertNull(StreamQualityPolicy.afterStable(autoRemote, StreamLevel.LOW, stable - 1))
         assertEquals(StreamLevel.MEDIUM, StreamQualityPolicy.afterStable(autoRemote, StreamLevel.LOW, stable))
         assertNull(StreamQualityPolicy.afterStable(autoRemote, StreamLevel.HIGH, stable))
-        assertEquals(StreamLevel.DIRECT, StreamQualityPolicy.afterStable(autoHome, StreamLevel.HIGH, stable))
+        assertNull(StreamQualityPolicy.afterStable(autoHome, StreamLevel.HIGH, stable))
     }
 
     @Test

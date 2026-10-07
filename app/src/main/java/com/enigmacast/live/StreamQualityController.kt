@@ -1,11 +1,11 @@
 package com.enigmacast.live
 
-import android.content.Context
-import android.net.ConnectivityManager
 import android.os.SystemClock
 import com.enigmacast.data.openwebif.OpenWebifApi
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.network.QualityInputs
+import com.enigmacast.domain.network.QualityReason
+import com.enigmacast.domain.network.QualitySession
 import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.StreamLevel
 import com.enigmacast.domain.network.StreamProfile
@@ -15,7 +15,6 @@ import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.playback.StreamStats
 import com.enigmacast.util.EnigmaLog
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +30,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Why the stream has its current quality. */
-enum class QualityReason { START, STALLS, STABLE, MANUAL, FALLBACK }
-
 /** The quality in use, for the stream info and the quick options bar. */
 data class QualityState(
     val level: StreamLevel = StreamLevel.DIRECT,
@@ -44,47 +40,42 @@ data class QualityState(
     val reason: QualityReason = QualityReason.START,
 )
 
+/** A request to open the channel again with another quality; [manual] when the user chose it. */
+data class QualityRestart(val manual: Boolean)
+
 /**
- * Picks direct or transcoded streams ([StreamQualityPolicy]) and adapts while watching:
- * repeated stalls step the quality down, a long stable stretch steps it up, and a
- * transcoded stream that never starts falls back to the original stream for the rest of
- * the session. A change asks the player to restart the stream ([restarts]).
+ * Picks direct or transcoded streams ([QualitySession], [StreamQualityPolicy]) and adapts
+ * while watching away from home: repeated stalls step the quality down, a long stable
+ * stretch steps it up, and a transcoded stream that never starts falls back to the original
+ * stream for the rest of the session (once). A change asks the player to restart ([restarts]).
  *
  * Transcoding support comes from OpenWebif's `/api/about` (`transcoding`), read once per
- * receiver and session, and only when the profile is not Direct.
+ * receiver and session, and only when transcoding could be used at all (not for Direct, and
+ * not for Auto at home), so a home stream never waits for it.
  */
 @Singleton
 class StreamQualityController @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val api: OpenWebifApi,
     private val playback: LivePlaybackController,
 ) {
     private class Capability(val transcoding: Boolean, val separator: Char)
 
     /** What [choose] decided: the level and the parameter separator of the receiver's image. */
-    data class Choice(val level: StreamLevel, val separator: Char)
+    data class Choice(val level: StreamLevel, val separator: Char, val transcodingSupported: Boolean)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(QualityState())
     val state: StateFlow<QualityState> = _state.asStateFlow()
-    private val _restarts = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _restarts = MutableSharedFlow<QualityRestart>(extraBufferCapacity = 1)
 
     /** The stream should be opened again with a new quality. */
-    val restarts: SharedFlow<Unit> = _restarts.asSharedFlow()
+    val restarts: SharedFlow<QualityRestart> = _restarts.asSharedFlow()
 
     private val capabilities = mutableMapOf<String, Capability>()
-    private val transcoderFailed = mutableSetOf<String>()
-    private var inputs: QualityInputs? = null
-    private var inputsKey = ""
-    private var level = StreamLevel.DIRECT
-    private var manual: StreamLevel? = null
-    private var reason = QualityReason.START
-    private var lastGood: StreamLevel? = null
+    private val session = QualitySession()
     private val stallTimes = ArrayDeque<Long>()
     private var lastStalls = 0
     private var stableSinceMs = now()
-    private var streamingTranscoded = false
-    private var reachedPlaying = false
 
     init {
         scope.launch { playback.stats.collect(::onStats) }
@@ -99,36 +90,34 @@ class StreamQualityController @Inject constructor(
 
     suspend fun choose(config: ReceiverConfig, route: ReceiverRoute): Choice {
         val key = receiverKey(config)
-        val capability = if (config.streamProfile == StreamProfile.DIRECT) null else capability(config)
-        val supported = capability?.transcoding == true && key !in transcoderFailed
-        val next = QualityInputs(
+        val remote = route != ReceiverRoute.HOME
+        val mayTranscode = when (config.streamProfile) {
+            StreamProfile.DIRECT -> false
+            StreamProfile.AUTO -> remote
+            StreamProfile.TRANSCODED -> true
+        } || session.manual?.transcoded == true
+        val capability = if (mayTranscode && !session.transcoderFailed(key)) capability(config) else null
+        val base = QualityInputs(
             profile = config.streamProfile,
             preset = config.transcodePreset,
-            transcodingSupported = supported,
-            internet = route != ReceiverRoute.HOME,
-            metered = metered(),
+            transcodingSupported = capability?.transcoding == true,
+            remote = remote,
         )
-        if (next != inputs || key != inputsKey) {
-            level = StreamQualityPolicy.initial(next, lastGood)
-            if (reason != QualityReason.FALLBACK) reason = QualityReason.START
+        val previous = session.inputs
+        val chosen = session.choose(key, base)
+        if (session.inputs != previous) {
             stallTimes.clear()
             stableSinceMs = now()
         }
-        inputs = next
-        inputsKey = key
-        val chosen = manual?.let { if (it.transcoded && !supported) StreamLevel.DIRECT else it } ?: level
-        streamingTranscoded = chosen.transcoded
-        reachedPlaying = false
         publish(chosen)
-        return Choice(chosen, capability?.separator ?: '?')
+        return Choice(chosen, capability?.separator ?: '?', session.inputs?.transcodingSupported == true)
     }
 
     /** Quality picked in the quick options bar for this session; null goes back to the setting. */
     fun setManual(choice: StreamLevel?) {
-        manual = choice
-        reason = if (choice == null) QualityReason.START else QualityReason.MANUAL
+        session.setManual(choice)
         EnigmaLog.service("quality manual ${choice?.name ?: "off"}")
-        _restarts.tryEmit(Unit)
+        _restarts.tryEmit(QualityRestart(manual = true))
     }
 
     private fun onStats(stats: StreamStats) {
@@ -139,58 +128,48 @@ class StreamQualityController @Inject constructor(
         lastStalls = stats.stalls
         stableSinceMs = now
         while (stallTimes.isNotEmpty() && now - stallTimes.first() > StreamQualityPolicy.STALL_WINDOW_MS) stallTimes.removeFirst()
-        val current = inputs ?: return
-        if (manual != null) return
-        StreamQualityPolicy.afterStalls(current, level, stallTimes.toList(), now)?.let { change(it, QualityReason.STALLS) }
+        session.afterStalls(stallTimes.toList(), now)?.let { changed(it) }
     }
 
     private fun onHealth(health: StreamHealth) {
         when (health) {
-            StreamHealth.PLAYING -> reachedPlaying = true
+            StreamHealth.PLAYING -> session.onPlaying()
             StreamHealth.NO_TUNER, StreamHealth.UNREACHABLE, StreamHealth.FAILED, StreamHealth.NO_PICTURE -> {
-                // A transcoder that never delivered (port closed, busy encoder): use the original stream.
-                if (!streamingTranscoded || reachedPlaying || inputsKey.isEmpty()) return
-                transcoderFailed += inputsKey
-                streamingTranscoded = false
-                inputs = inputs?.copy(transcodingSupported = false)
-                reason = QualityReason.FALLBACK
+                // A transcoder that never delivered (port closed, busy encoder): use the original stream, once.
+                if (!session.onStartFailed()) return
+                publish(StreamLevel.DIRECT)
                 EnigmaLog.service("transcoded stream failed (${health.name.lowercase()}), using the original stream")
-                _restarts.tryEmit(Unit)
+                _restarts.tryEmit(QualityRestart(manual = false))
             }
             else -> Unit
         }
     }
 
     private fun checkStable() {
-        val current = inputs ?: return
-        if (manual != null) return
         if (playback.stats.value.bitrateKbps <= 0) {
             stableSinceMs = now()
             return
         }
-        StreamQualityPolicy.afterStable(current, level, now() - stableSinceMs)?.let { change(it, QualityReason.STABLE) }
+        session.afterStable(now() - stableSinceMs)?.let { changed(it) }
     }
 
-    private fun change(next: StreamLevel, why: QualityReason) {
-        level = next
-        lastGood = next
-        reason = why
+    private fun changed(next: StreamLevel) {
         stallTimes.clear()
         stableSinceMs = now()
         publish(next)
-        EnigmaLog.service("quality ${next.name.lowercase()} (${why.name.lowercase()})")
-        _restarts.tryEmit(Unit)
+        EnigmaLog.service("quality ${next.name.lowercase()} (${session.reason.name.lowercase()})")
+        _restarts.tryEmit(QualityRestart(manual = false))
     }
 
     private fun publish(chosen: StreamLevel) {
-        val current = inputs ?: return
+        val current = session.inputs ?: return
         _state.value = QualityState(
             level = chosen,
-            ceiling = StreamQualityPolicy.ceiling(current),
+            ceiling = session.ceiling(),
             profile = current.profile,
             transcodingSupported = current.transcodingSupported,
-            manual = manual,
-            reason = reason,
+            manual = session.manual,
+            reason = session.reason,
         )
     }
 
@@ -207,9 +186,6 @@ class StreamQualityController @Inject constructor(
             Capability(false, '?')
         }
     }
-
-    private fun metered(): Boolean =
-        runCatching { context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered == true }.getOrDefault(false)
 
     private fun receiverKey(config: ReceiverConfig) = "${config.id}|${config.host}:${config.httpPort}"
 

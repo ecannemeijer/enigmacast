@@ -1,0 +1,47 @@
+package com.enigmacast.live
+
+import com.enigmacast.data.openwebif.OpenWebifEndpoints
+import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.network.ReceiverRoute
+import com.enigmacast.domain.network.ReceiverRouting
+import com.enigmacast.domain.network.StreamLevel
+import com.enigmacast.util.EnigmaLog
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Test
+
+class StreamTargetsTest {
+    private val endpoints = OpenWebifEndpoints()
+    private val rtl4 = "1:0:19:1B6C:C88:3:EB0000:0:0:0:"
+    private val encoded = "1%3A0%3A19%3A1B6C%3AC88%3A3%3AEB0000%3A0%3A0%3A0%3A"
+
+    /** Enrico's setup: OpenWebif on port 80, stream port 8001, a password moved to the Keystore. */
+    private val lan = ReceiverConfig(id = "box", name = "SF8008", host = "192.168.1.209", username = "root", password = "secret")
+
+    @Test
+    fun theLanDefaultConfigStreamsTheOriginalOnPort8001() {
+        val effective = ReceiverRouting.effective(lan, ReceiverRoute.HOME)
+        assertEquals("http://192.168.1.209:8001/$encoded", StreamTargets.url(endpoints, effective, rtl4, StreamLevel.DIRECT, '?'))
+    }
+
+    @Test
+    fun theStreamUrlNeverCarriesCredentials() {
+        val url = StreamTargets.url(endpoints, lan, rtl4, StreamLevel.DIRECT, '?')
+        assertFalse(url.contains("root") || url.contains("secret"))
+        assertEquals(okhttp3.Credentials.basic("root", "secret"), endpoints.streamAuthorization(lan))
+    }
+
+    @Test
+    fun transcodedStreamsUseTheTranscodingPort() {
+        assertEquals(
+            "http://192.168.1.209:8002/$encoded?bitrate=1200000?width=1024?height=576",
+            StreamTargets.url(endpoints, lan, rtl4, StreamLevel.MEDIUM, '?'),
+        )
+    }
+
+    @Test
+    fun loggedUrlsHideCredentials() {
+        assertEquals("http://***@box:8001/ref", EnigmaLog.sanitizeUrl("http://root:secret@box:8001/ref"))
+        assertEquals("http://box/api/x?a=1&password=***", EnigmaLog.sanitizeUrl("http://box/api/x?a=1&password=secret"))
+    }
+}

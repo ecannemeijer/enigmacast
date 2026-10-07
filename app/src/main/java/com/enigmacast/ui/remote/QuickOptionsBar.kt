@@ -60,6 +60,7 @@ import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.network.PlainHttpRisk
+import com.enigmacast.domain.network.QualityReason
 import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.StreamLevel
 import com.enigmacast.domain.player.AudioDelayChoices
@@ -68,7 +69,6 @@ import com.enigmacast.domain.player.QuickOption
 import com.enigmacast.domain.player.QuickOptions
 import com.enigmacast.domain.player.SleepTimerChoices
 import com.enigmacast.domain.tuner.NowEvents
-import com.enigmacast.live.QualityReason
 import com.enigmacast.playback.AudioSync
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors

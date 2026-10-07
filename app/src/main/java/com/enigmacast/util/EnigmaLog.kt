@@ -36,7 +36,9 @@ object EnigmaLog {
         Timber.tag("EnigmaConnection").i(message)
     }
 
+    /** [url] with any `user:password@` and password-like query values masked. */
     fun sanitizeUrl(url: String): String {
         return url.replace(Regex("://[^/@\\s]+@"), "://***@")
+            .replace(Regex("(?i)([?&](?:password|pass|pwd|token)=)[^&#\\s]*"), "$1***")
     }
 }

@@ -261,7 +261,7 @@ class LivePlaybackController @Inject constructor(
         exo.setMediaItem(item, true)
         exo.prepare()
         exo.playWhenReady = true
-        EnigmaLog.player("switching live stream")
+        EnigmaLog.player("switching live stream ${EnigmaLog.sanitizeUrl(url)} auth=${if (authorization == null) "none" else "basic"}")
     }
 
     /** Plays audio track [id] (from [tracks]) and prefers its language on the next channels too. */
