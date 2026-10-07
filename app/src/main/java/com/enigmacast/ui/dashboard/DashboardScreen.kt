@@ -128,6 +128,7 @@ private enum class DashSection {
 
 private enum class SettingPage {
     Receiver,
+    Remote,
     Playback,
     Osd,
     Info,
@@ -755,6 +756,7 @@ private fun SettingsHub(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receiver), page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
+                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { page = SettingPage.Remote }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
                 SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
@@ -769,6 +771,7 @@ private fun SettingsHub(
             ) {
                 when (page) {
                     SettingPage.Receiver -> ReceiverSettingsPanel()
+                    SettingPage.Remote -> RemoteAccessSettingsPanel()
                     SettingPage.Playback -> PlaybackSettingsPanel(
                         settings.streamMode,
                         settings.playback.lowLatency,
@@ -1063,7 +1066,7 @@ private fun ReceiverSettingsPanel(
 }
 
 @Composable
-private fun CompactField(
+internal fun CompactField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,

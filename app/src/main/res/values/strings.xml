@@ -366,6 +366,11 @@
     <string name="epg_record_failed">Could not set the recording.</string>
     <string name="epg_record_unavailable">This programme has no event id, so it cannot be recorded from here.</string>
     <string name="epg_recording">Recording set</string>
+    <string name="settings_remote">Remote access</string>
+    <string name="remote_settings_intro">For %1$s (%2$s), saved with this receiver. Leave the remote profile empty and the tunnel off if you only watch at home.</string>
+    <string name="remote_profile_title">Remote profile (DynDNS)</string>
+    <string name="wg_off_note">Off: EnigmaCast starts no VPN and changes no routes; every connection goes straight over the network.</string>
+    <string name="wg_paste_hint">Paste the WireGuard config ([Interface] and [Peer]) in the field below, or import a .conf file. Keys are shown as dots.</string>
     <string name="conn_http_internet_warning">This address is on the internet and the connection is plain HTTP: your password and pictures can be read on the way. Use HTTPS, or the remote profile with the WireGuard tunnel.</string>
     <string name="conn_remote_title">Remote access (optional)</string>
     <string name="conn_remote_intro">To watch away from home: the receiver\'s DynDNS name or public address and the ports your router forwards to it. Leave empty if you only watch at home.</string>

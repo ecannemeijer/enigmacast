@@ -244,7 +244,7 @@ private fun WireGuardSection(viewModel: ConnectionViewModel, fieldColors: androi
     }
     Text(stringResource(R.string.conn_wg_title), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
     Text(stringResource(R.string.conn_wg_intro), color = Color(0xFFB7C0D0), fontSize = 16.sp)
-    ToggleRow(stringResource(R.string.wg_toggle), viewModel.wireGuard) { viewModel.wireGuard = it }
+    ToggleRow(stringResource(R.string.wg_toggle), viewModel.wireGuard, viewModel::setWireGuardEnabled)
     if (!viewModel.wireGuard) return
     if (viewModel.wireGuardSaved && viewModel.wireGuardText.isBlank()) {
         Text(stringResource(R.string.conn_wg_saved), color = Color(0xFF8FD18F), fontSize = 15.sp)
@@ -310,7 +310,7 @@ private fun WireGuardSection(viewModel: ConnectionViewModel, fieldColors: androi
     }
 }
 
-private fun WireGuardIssue.label(): Int = when (this) {
+internal fun WireGuardIssue.label(): Int = when (this) {
     WireGuardIssue.EMPTY -> R.string.wg_issue_empty
     WireGuardIssue.NO_INTERFACE -> R.string.wg_issue_no_interface
     WireGuardIssue.NO_PRIVATE_KEY -> R.string.wg_issue_no_private_key
@@ -321,7 +321,7 @@ private fun WireGuardIssue.label(): Int = when (this) {
     WireGuardIssue.NO_ALLOWED_IPS -> R.string.wg_issue_no_allowed_ips
 }
 
-private fun TunnelState.label(): Int = when (this) {
+internal fun TunnelState.label(): Int = when (this) {
     TunnelState.OFF -> R.string.wg_status_off
     TunnelState.CONNECTING -> R.string.wg_status_connecting
     TunnelState.UP -> R.string.wg_status_up
@@ -330,7 +330,7 @@ private fun TunnelState.label(): Int = when (this) {
 }
 
 /** Shows private and preshared keys as dots; same length, so cursor positions stay the same. */
-private object HideWireGuardKeys : VisualTransformation {
+internal object HideWireGuardKeys : VisualTransformation {
     private val keyLine = Regex("(?im)^(\\s*(?:PrivateKey|PresharedKey)\\s*=\\s*)(\\S+)")
 
     override fun filter(text: AnnotatedString): TransformedText {

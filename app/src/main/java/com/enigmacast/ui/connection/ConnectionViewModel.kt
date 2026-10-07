@@ -117,6 +117,12 @@ class ConnectionViewModel @Inject constructor(
 
     fun consentIntent(): Intent? = tunnel.consentIntent()
 
+    /** The tunnel switch; only switching it on looks at the VPN permission (nothing starts until saved and needed). */
+    fun setWireGuardEnabled(on: Boolean) {
+        wireGuard = on
+        if (on) refreshVpnConsent()
+    }
+
     fun refreshVpnConsent() {
         vpnAllowed = tunnel.consentIntent() == null
     }

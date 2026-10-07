@@ -363,6 +363,11 @@
     <string name="epg_record_failed">Kon de opname niet instellen.</string>
     <string name="epg_record_unavailable">Dit programma heeft geen event-id en kan hier niet worden opgenomen.</string>
     <string name="epg_recording">Opname ingesteld</string>
+    <string name="settings_remote">Toegang van buitenaf</string>
+    <string name="remote_settings_intro">Voor %1$s (%2$s), bewaard bij deze ontvanger. Laat het externe profiel leeg en de tunnel uit als je alleen thuis kijkt.</string>
+    <string name="remote_profile_title">Extern profiel (DynDNS)</string>
+    <string name="wg_off_note">Uit: EnigmaCast start geen VPN en verandert geen routes; elke verbinding gaat rechtstreeks over het netwerk.</string>
+    <string name="wg_paste_hint">Plak de WireGuard-config ([Interface] en [Peer]) in het veld hieronder, of importeer een .conf-bestand. Sleutels worden als puntjes getoond.</string>
     <string name="conn_http_internet_warning">Dit adres ligt op internet en de verbinding is gewoon HTTP: je wachtwoord en beelden zijn onderweg leesbaar. Gebruik HTTPS, of het externe profiel met de WireGuard-tunnel.</string>
     <string name="conn_remote_title">Toegang van buitenaf (optioneel)</string>
     <string name="conn_remote_intro">Om buitenshuis te kijken: de DynDNS-naam of het publieke adres van de ontvanger en de poorten die je router ernaar doorstuurt. Laat leeg als je alleen thuis kijkt.</string>
