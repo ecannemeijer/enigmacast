@@ -6,6 +6,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.ParserException
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -40,6 +41,7 @@ import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.domain.model.PlaybackSettings
 import com.enigmacast.domain.model.PlayerState
+import com.enigmacast.domain.tuner.RestartBudget
 import com.enigmacast.domain.tuner.StreamFailure
 import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.domain.tuner.StreamStartCheck
@@ -65,6 +67,9 @@ class LiveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(8) {
         // A refused login or an unknown service does not get better by asking again.
         val code = (loadErrorInfo.exception as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         if (code == 401 || code == 403 || code == 404) return C.TIME_UNSET
+        // An unreadable format (e.g. an HLS playlist opened as TS) stays unreadable; let the
+        // controller decide instead of retrying the same load forever.
+        if (loadErrorInfo.exception is ParserException) return C.TIME_UNSET
         return (500L * loadErrorInfo.errorCount).coerceAtMost(5_000L)
     }
 }
@@ -92,6 +97,15 @@ class LivePlaybackController @Inject constructor(
     private var firstFrame = false
     private var lastFailure = StreamFailure.NONE
     private var watchdog: Job? = null
+
+    /** The stream that plays is an internet / IPTV URL, not the receiver's 8001/8002 stream. */
+    private var internet = false
+    private var internetMime: String? = null
+    private var hlsTried = false
+    private var internetAttempts = 0
+
+    /** True while an internet / IPTV URL is the current stream (quality logic ignores it). */
+    val playingInternet: Boolean get() = internet && currentUrl != null
     private val bytesLoaded = AtomicLong()
     private val hold = PlaybackHold()
     private val _held = MutableStateFlow(false)
@@ -161,7 +175,7 @@ class LivePlaybackController @Inject constructor(
         if (player != null) {
             releasePlayer()
             ensurePlayer()
-            if (url != null) play(url, force = true, authorization = streamAuthorization, checkStart = checkStart)
+            if (url != null) play(url, force = true, authorization = streamAuthorization, checkStart = checkStart, internet = internet)
         }
     }
 
@@ -185,6 +199,7 @@ class LivePlaybackController @Inject constructor(
         reconnectJob = null
         currentUrl = null
         failures = 0
+        internet = false
         stopWatchdog(StreamHealth.IDLE)
         val exo = player ?: return
         exo.playWhenReady = false
@@ -204,7 +219,7 @@ class LivePlaybackController @Inject constructor(
      * the latest requested stream is remembered instead.
      */
     fun holdForUpdate() {
-        if (!hold.hold(currentUrl?.let { StreamRequest(it, streamAuthorization, checkStart) })) return
+        if (!hold.hold(currentUrl?.let { StreamRequest(it, streamAuthorization, checkStart, internet) })) return
         _held.value = true
         reconnectJob?.cancel()
         reconnectJob = null
@@ -227,7 +242,7 @@ class LivePlaybackController @Inject constructor(
         _held.value = false
         EnigmaLog.player("app update hold released, resume=${request != null}")
         if (request != null) {
-            play(request.url, force = true, authorization = request.authorization, checkStart = request.checkStart)
+            play(request.url, force = true, authorization = request.authorization, checkStart = request.checkStart, internet = request.internet)
         }
     }
 
@@ -236,32 +251,93 @@ class LivePlaybackController @Inject constructor(
      * stream authentication). With [checkStart] the start is watched: a stream the
      * receiver refuses ends up in [health] and is not retried endlessly.
      */
-    fun play(url: String, force: Boolean = false, authorization: String? = null, checkStart: Boolean = false) {
+    fun play(
+        url: String,
+        force: Boolean = false,
+        authorization: String? = null,
+        checkStart: Boolean = false,
+        internet: Boolean = false,
+    ) {
         if (!playbackEnabled) return
-        if (!hold.admit(StreamRequest(url, authorization, checkStart))) return
+        if (!hold.admit(StreamRequest(url, authorization, checkStart, internet))) return
         val exo = ensurePlayer()
         if (!force && url == currentUrl && exo.playerError == null && exo.playbackState != Player.STATE_IDLE) {
             return
         }
+        // A new request (not an automatic retry) gets a fresh retry budget and format guess.
+        internetAttempts = 0
+        hlsTried = false
+        internetMime = null
+        start(url, authorization, checkStart, internet)
+    }
+
+    private fun start(url: String, authorization: String?, checkStart: Boolean, internet: Boolean) {
+        val exo = ensurePlayer()
+        reconnectJob?.cancel()
+        reconnectJob = null
         currentUrl = url
         streamAuthorization = authorization
         this.checkStart = checkStart
+        this.internet = internet
         startWatchdog()
+        if (internet) _health.value = StreamHealth.STARTING
         resetStats()
         // Track overrides belong to the previous stream; the preferred language stays.
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .build()
-        val item = MediaItem.Builder()
-            .setUri(url)
-            .setMimeType(MimeTypes.VIDEO_MP2T)
-            .setLiveConfiguration(liveConfiguration())
-            .build()
-        exo.setMediaItem(item, true)
+        val builder = MediaItem.Builder().setUri(url)
+        val mime: String?
+        if (internet) {
+            // HLS / DASH / TS by URL; unknown → Media3 sniffs it (and HLS is tried once after a parse error).
+            mime = internetMime ?: InternetMedia.mimeTypeFor(url)
+            if (mime != null) builder.setMimeType(mime)
+            // No forced offset: live HLS starts at the playlist's live edge (its own hold-back).
+        } else {
+            mime = MimeTypes.VIDEO_MP2T
+            builder.setMimeType(mime).setLiveConfiguration(liveConfiguration())
+        }
+        exo.setMediaItem(builder.build(), true)
         exo.prepare()
         exo.playWhenReady = true
-        EnigmaLog.player("switching live stream ${EnigmaLog.sanitizeUrl(url)} auth=${if (authorization == null) "none" else "basic"}")
+        EnigmaLog.player(
+            "switching live stream ${EnigmaLog.sanitizeUrl(url)} auth=${if (authorization == null) "none" else "basic"}" +
+                if (internet) " kind=internet type=${mime ?: "auto"}" else "",
+        )
+    }
+
+    /** An internet stream failed: try HLS once, retry within the cap, or stop and say why. */
+    private fun onInternetFailure() {
+        val url = currentUrl ?: return
+        val exo = player ?: return
+        val mime = internetMime ?: InternetMedia.mimeTypeFor(url)
+        when (val action = InternetRetry.next(lastFailure, internetAttempts, mime, hlsTried, settings.autoReconnect)) {
+            InternetRetryAction.TryHls -> {
+                hlsTried = true
+                internetMime = MimeTypes.APPLICATION_M3U8
+                EnigmaLog.player("internet stream could not be read as a plain stream; trying HLS")
+                start(url, streamAuthorization, checkStart, internet = true)
+            }
+            is InternetRetryAction.Retry -> {
+                internetAttempts += 1
+                EnigmaLog.player("internet stream ${lastFailure.name.lowercase()}: try $internetAttempts/${RestartBudget.MAX_ATTEMPTS} in ${action.delayMs} ms")
+                reconnectJob?.cancel()
+                reconnectJob = (scope ?: ownScope).launch {
+                    delay(action.delayMs)
+                    if (currentUrl == url) start(url, streamAuthorization, checkStart, internet = true)
+                }
+            }
+            is InternetRetryAction.GiveUp -> {
+                EnigmaLog.player("internet stream stopped after $internetAttempts tries: ${action.health.name.lowercase()}")
+                reconnectJob?.cancel()
+                reconnectJob = null
+                exo.playWhenReady = false
+                exo.stop()
+                _health.value = action.health
+                publish()
+            }
+        }
     }
 
     /** Plays audio track [id] (from [tracks]) and prefers its language on the next channels too. */
@@ -300,14 +376,14 @@ class LivePlaybackController @Inject constructor(
     fun restart(): Boolean {
         val url = currentUrl ?: return false
         failures = 0
-        play(url, force = true, authorization = streamAuthorization, checkStart = checkStart)
+        play(url, force = true, authorization = streamAuthorization, checkStart = checkStart, internet = internet)
         return true
     }
 
     fun reconnect() {
         val url = currentUrl ?: return
         if (!settings.autoReconnect && failures > 0) return
-        play(url, force = true, authorization = streamAuthorization, checkStart = checkStart)
+        start(url, streamAuthorization, checkStart, internet)
     }
 
     fun release() {
@@ -605,6 +681,19 @@ class LivePlaybackController @Inject constructor(
     private val listener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             EnigmaLog.player("error ${error.errorCodeName}")
+            if (internet) {
+                val exo = player
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && exo != null) {
+                    // Live HLS fell out of the window (e.g. after a pause): jump back to the live edge.
+                    exo.seekToDefaultPosition()
+                    exo.prepare()
+                    return
+                }
+                lastFailure = StreamFailures.classify(error)
+                publish()
+                onInternetFailure()
+                return
+            }
             if (checkStart) {
                 lastFailure = StreamFailures.classify(error)
                 if (watchdog != null) checkHealth()
@@ -615,6 +704,7 @@ class LivePlaybackController @Inject constructor(
 
         override fun onRenderedFirstFrame() {
             firstFrame = true
+            if (internet) _health.value = StreamHealth.PLAYING
             if (checkStart && watchdog != null) checkHealth()
         }
 
@@ -622,6 +712,16 @@ class LivePlaybackController @Inject constructor(
             if (playbackState == Player.STATE_READY) {
                 failures = 0
                 wasReady = true
+                if (internet) {
+                    internetAttempts = 0
+                    // Audio-only internet radio never renders a frame; READY is enough.
+                    if (_health.value == StreamHealth.STARTING) _health.value = StreamHealth.PLAYING
+                }
+            }
+            if (playbackState == Player.STATE_ENDED && internet && currentUrl != null) {
+                // A live internet stream should not end; treat it like a dropped connection.
+                lastFailure = StreamFailure.ENDED
+                onInternetFailure()
             }
             // Running out of data after the picture had started is a stall.
             if (playbackState == Player.STATE_BUFFERING && wasReady && player?.playWhenReady == true) stalls += 1

@@ -26,6 +26,8 @@
     <string name="notice_number_not_in_list">Zender %d staat niet in deze lijst</string>
     <string name="tuner_retrying">Opnieuw proberen (%1$d van %2$d)…</string>
     <string name="tuner_gave_up">De stream startte niet na %1$d pogingen. Druk op OK om het opnieuw te proberen.</string>
+    <string name="internet_stream_unsupported">Dit formaat van de internetstream wordt niet ondersteund. Druk op OK om het opnieuw te proberen.</string>
+    <string name="internet_stream_failed">Deze internetstream kon na %1$d pogingen niet worden afgespeeld. Druk op OK om het opnieuw te proberen.</string>
     <string name="power_action_standby">Stand-by</string>
     <string name="power_action_wake">Aanzetten</string>
     <string name="power_action_toggle">Stand-by wisselen</string>

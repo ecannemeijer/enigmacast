@@ -18,6 +18,12 @@ enum class StreamHealth {
     /** Data arrives but no picture: usually a scrambled channel that the CI/CAM cannot descramble now. */
     NO_PICTURE,
     FAILED,
+
+    /** An internet / IPTV stream whose format the player cannot read, after the capped tries. */
+    INTERNET_UNSUPPORTED,
+
+    /** An internet / IPTV stream that kept failing (network, HTTP error), after the capped tries. */
+    INTERNET_FAILED,
 }
 
 enum class StreamFailure { NONE, HTTP_401, HTTP_OTHER, CONNECT, ENDED, PARSE, OTHER }

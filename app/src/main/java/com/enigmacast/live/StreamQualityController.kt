@@ -139,6 +139,8 @@ class StreamQualityController @Inject constructor(
     }
 
     private fun onHealth(health: StreamHealth) {
+        // Internet / IPTV URLs are never transcoded; their start says nothing about the encoder.
+        if (playback.playingInternet) return
         when (health) {
             StreamHealth.PLAYING -> session.onPlaying()
             StreamHealth.NO_TUNER, StreamHealth.UNREACHABLE, StreamHealth.FAILED, StreamHealth.NO_PICTURE -> {

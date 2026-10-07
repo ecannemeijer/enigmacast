@@ -1,7 +1,7 @@
 package com.enigmacast.playback
 
 /** A stream start: what [LivePlaybackController.play] was asked to play. */
-data class StreamRequest(val url: String, val authorization: String?, val checkStart: Boolean)
+data class StreamRequest(val url: String, val authorization: String?, val checkStart: Boolean, val internet: Boolean = false)
 
 /**
  * Bookkeeping for pausing live playback during an app update download. While held, start

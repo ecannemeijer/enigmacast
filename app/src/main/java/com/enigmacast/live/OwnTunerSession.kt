@@ -338,7 +338,7 @@ class OwnTunerSession @Inject constructor(
             _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
             val target = streamTargets.target(receiver, channel.reference)
             if (myToken != token) return
-            playback.play(target.url, force = true, authorization = target.authorization, checkStart = false)
+            playback.play(target.url, force = true, authorization = target.authorization, checkStart = false, internet = true)
             streaming = true
             saveLastChannel(channel)
             return
@@ -412,8 +412,16 @@ class OwnTunerSession @Inject constructor(
                 UiText.res(R.string.tuner_no_picture_detail),
             )
             StreamHealth.FAILED -> TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_stream_interrupted))
+            // Internet / IPTV: the player already used its three tries; OK starts again.
+            StreamHealth.INTERNET_UNSUPPORTED -> TunerState(TunerStatus.PROBLEM, UiText.res(R.string.internet_stream_unsupported))
+            StreamHealth.INTERNET_FAILED -> TunerState(
+                TunerStatus.PROBLEM,
+                UiText.res(R.string.internet_stream_failed, RestartBudget.MAX_ATTEMPTS),
+            )
         }
-        if (health == StreamHealth.NO_TUNER || health == StreamHealth.AUTH_REQUIRED || health == StreamHealth.UNREACHABLE) {
+        if (health == StreamHealth.NO_TUNER || health == StreamHealth.AUTH_REQUIRED || health == StreamHealth.UNREACHABLE ||
+            health == StreamHealth.INTERNET_UNSUPPORTED || health == StreamHealth.INTERNET_FAILED
+        ) {
             streaming = false
         }
         if (tuner.autoRetry && restarts.exhausted) {

@@ -260,6 +260,13 @@ class RemoteDisplayViewModel @Inject constructor(
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
         }
         viewModelScope.launch {
+            // Following the receiver there is no tuner overlay; say it when an internet stream gave up.
+            playback.health.collect { health ->
+                if (_ui.value.ownTuner) return@collect
+                internetProblem(health)?.let { showNotice(it, NOTICE_LONG_MS) }
+            }
+        }
+        viewModelScope.launch {
             reminders.scheduledKeys.collect { keys -> _ui.update { it.copy(autoSwitchKeys = keys) } }
         }
         viewModelScope.launch {
@@ -269,7 +276,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 val active = settingsSnapshot.activeReceiver() ?: return@collect
                 val reference = _ui.value.currentService?.reference?.takeIf { it.isNotBlank() } ?: return@collect
                 val target = streamTargets.target(active, reference)
-                playback.play(target.url, force = true, authorization = target.authorization)
+                playback.play(target.url, force = true, authorization = target.authorization, internet = target.internet)
             }
         }
         viewModelScope.launch {
@@ -472,7 +479,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 monitor.changes.collect { service ->
                     val active = settingsSnapshot.activeReceiver() ?: return@collect
                     val target = streamTargets.target(active, service.reference)
-                    playback.play(target.url, authorization = target.authorization)
+                    playback.play(target.url, authorization = target.authorization, internet = target.internet)
                 }
             }
             launch {

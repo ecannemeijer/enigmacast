@@ -39,6 +39,12 @@ object EnigmaLog {
     /** [url] with any `user:password@` and password-like query values masked. */
     fun sanitizeUrl(url: String): String {
         return url.replace(Regex("://[^/@\\s]+@"), "://***@")
+            // The same inside an encoded service reference (`sRef=…https%253a%252f%252fuser%253apass%2540host…`).
+            .replace(ENCODED_USERINFO, "$1***$2")
             .replace(Regex("(?i)([?&](?:password|pass|pwd|token)=)[^&#\\s]*"), "$1***")
     }
+
+    private val ENCODED_USERINFO = Regex(
+        "(?i)(%(?:25)?3a(?:%(?:25)?2f|/){2})(?:(?!%(?:25)?2f)[^/\\s&?#@])+?(@|%(?:25)?40)",
+    )
 }

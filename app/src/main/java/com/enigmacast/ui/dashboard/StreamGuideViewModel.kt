@@ -35,6 +35,7 @@ import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.ui.remote.AutoSwitchTexts
+import com.enigmacast.ui.remote.internetProblem
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.isEmpty
@@ -122,6 +123,12 @@ class StreamGuideViewModel @Inject constructor(
         }
         viewModelScope.launch {
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
+        }
+        viewModelScope.launch {
+            playback.health.collect { health ->
+                if (mode != StreamMode.FOLLOW_RECEIVER) return@collect
+                internetProblem(health)?.let { showNotice(it, NOTICE_LONG_MS) }
+            }
         }
         viewModelScope.launch {
             snapshotFlow { Triple(selectedBouquetReference, channels, tunedReference) }.collect { (bouquet, list, tuned) ->
@@ -428,9 +435,16 @@ class StreamGuideViewModel @Inject constructor(
             val target = streamTargets.target(receiver, channel.reference)
             val streamUrl = target.url
             if (target.internet) {
-                // Internet / IPTV: play the URL directly; do not zap the receiver.
-                EnigmaLog.service("internet stream ${channel.name}: playing without zap")
-                playback.play(streamUrl, force = true, authorization = target.authorization)
+                // Internet / IPTV: play the URL directly, without waiting for the receiver. The
+                // receiver is still asked to zap (best effort) so full screen, which follows the
+                // receiver in this mode, shows the same channel.
+                EnigmaLog.service("internet stream ${channel.name}: playing directly")
+                playback.stopForZap()
+                playback.play(streamUrl, force = true, authorization = target.authorization, internet = true)
+                launch {
+                    runCatching { serviceSource.zap(receiver, channel.reference) }
+                        .onFailure { if (it !is CancellationException) EnigmaLog.service("receiver zap for internet channel failed: ${it.javaClass.simpleName}") }
+                }
                 if (token != guideToken) return@launch
                 onStarted()
                 bouquetPinned = false
@@ -488,7 +502,7 @@ class StreamGuideViewModel @Inject constructor(
 
     private suspend fun startPlayback(receiver: ReceiverConfig, reference: String) {
         val target = streamTargets.target(receiver, reference)
-        playback.play(target.url, force = true, authorization = target.authorization)
+        playback.play(target.url, force = true, authorization = target.authorization, internet = target.internet)
     }
 
     private suspend fun loadGuide() {

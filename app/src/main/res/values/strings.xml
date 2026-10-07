@@ -29,6 +29,8 @@
     <string name="notice_number_not_in_list">Channel %d is not in this list</string>
     <string name="tuner_retrying">Trying again (%1$d of %2$d)…</string>
     <string name="tuner_gave_up">The stream did not start after %1$d attempts. Press OK to try again.</string>
+    <string name="internet_stream_unsupported">This internet stream format is not supported. Press OK to try again.</string>
+    <string name="internet_stream_failed">This internet stream could not be played after %1$d attempts. Press OK to try again.</string>
     <string name="power_action_standby">Standby</string>
     <string name="power_action_wake">Turn on</string>
     <string name="power_action_toggle">Toggle standby</string>
