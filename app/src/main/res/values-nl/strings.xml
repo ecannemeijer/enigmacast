@@ -491,6 +491,10 @@
     <string name="autoswitch_key_ok">OK</string>
     <string name="autoswitch_key_back">Terug</string>
     <string name="autoswitch_zap_failed">AutoSwitch kon de ontvanger niet naar %s schakelen.</string>
+    <string name="settings_general">Algemeen</string>
+    <string name="settings_interface">Bediening</string>
+    <string name="navigation_sounds">Klikgeluid bij navigeren</string>
+    <string name="navigation_sounds_desc">Klikgeluid bij bewegen met de afstandsbediening. Uit maakt EnigmaCast stil; de instelling Systeemgeluiden van Android en piepjes van de tv zelf vallen daarbuiten.</string>
     <plurals name="power_details_more">
         <item quantity="one">+%d meer</item>
         <item quantity="other">+%d meer</item>

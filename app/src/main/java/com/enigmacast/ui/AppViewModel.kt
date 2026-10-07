@@ -29,6 +29,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -52,6 +56,12 @@ class AppViewModel @Inject constructor(
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
+
+    /** Settings › General › Navigation sounds, applied to every app window. */
+    val navigationSounds: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.navigationSounds }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     var streamRunning by mutableStateOf(false)
         private set
     var updatePrompt by mutableStateOf<UpdatePrompt?>(null)

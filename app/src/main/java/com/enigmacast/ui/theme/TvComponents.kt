@@ -425,6 +425,7 @@ fun TvConfirmDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        NavigationSoundsForWindow()
         val confirmFocus = remember { FocusRequester() }
         val dismissFocus = remember { FocusRequester() }
         LaunchedEffect(busy) {
@@ -476,6 +477,7 @@ fun TvChoiceDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        NavigationSoundsForWindow()
         val firstFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
         Column(

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.update
 
+import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -74,6 +75,7 @@ fun AppUpdateDialog(
             dismissOnClickOutside = false,
         ),
     ) {
+        NavigationSoundsForWindow()
         val downloading = progress != null
         val updateFocus = remember { FocusRequester() }
         val cancelFocus = remember { FocusRequester() }

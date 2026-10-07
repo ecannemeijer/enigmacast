@@ -494,6 +494,10 @@
     <string name="autoswitch_key_ok">OK</string>
     <string name="autoswitch_key_back">Back</string>
     <string name="autoswitch_zap_failed">AutoSwitch could not switch the receiver to %s.</string>
+    <string name="settings_general">General</string>
+    <string name="settings_interface">Interface</string>
+    <string name="navigation_sounds">Navigation sounds</string>
+    <string name="navigation_sounds_desc">Click sound when moving with the remote. Off silences EnigmaCast; Android\'s own system sounds setting and beeps from the TV itself are not affected.</string>
     <plurals name="power_details_more">
         <item quantity="one">+%d more</item>
         <item quantity="other">+%d more</item>

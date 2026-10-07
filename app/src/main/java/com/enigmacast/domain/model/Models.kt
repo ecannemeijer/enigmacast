@@ -134,6 +134,8 @@ data class AppSettings(
     val pictureModes: Map<String, PictureMode> = emptyMap(),
     /** Channels last watched with an own tuner, newest first (see `RecentChannels`). */
     val recentChannels: List<LastChannel> = emptyList(),
+    /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */
+    val navigationSounds: Boolean = true,
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()

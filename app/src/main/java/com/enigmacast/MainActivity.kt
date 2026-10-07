@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +42,8 @@ import com.enigmacast.ui.reminder.AutoSwitchNotice
 import com.enigmacast.ui.remote.EnigmaRemoteScreen
 import com.enigmacast.ui.settings.SettingsScreen
 import com.enigmacast.ui.theme.EnigmaCastTheme
+import com.enigmacast.ui.theme.LocalNavigationSounds
+import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.update.AppUpdateDialog
 import com.enigmacast.util.asString
 import dagger.hilt.android.AndroidEntryPoint
@@ -145,6 +148,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (AppLanguage) -> Unit) {
+    val navigationSounds by appViewModel.navigationSounds.collectAsState()
+    CompositionLocalProvider(LocalNavigationSounds provides navigationSounds) {
+        NavigationSoundsForWindow()
+        EnigmaCastAppBody(appViewModel, onChooseLanguage)
+    }
+}
+
+@Composable
+private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (AppLanguage) -> Unit) {
     val view = LocalView.current
     LaunchedEffect(appViewModel.screen) {
         val activity = view.context.findActivity()

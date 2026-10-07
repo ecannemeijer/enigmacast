@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -186,6 +187,7 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         onDismissRequest = onClose,
         properties = PopupProperties(focusable = true),
     ) {
+        NavigationSoundsForWindow()
         Column(
             modifier = Modifier
                 .widthIn(min = 220.dp, max = 340.dp)

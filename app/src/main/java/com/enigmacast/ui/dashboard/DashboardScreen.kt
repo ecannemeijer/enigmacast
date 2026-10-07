@@ -135,6 +135,7 @@ private enum class SettingPage {
     Remote,
     Playback,
     Osd,
+    General,
     Info,
     Language,
 }
@@ -772,6 +773,7 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { page = SettingPage.Remote }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, null, menuFocus) { page = SettingPage.General }
                 SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
                 SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, null, menuFocus) { page = SettingPage.Language }
             }
@@ -796,6 +798,7 @@ private fun SettingsHub(
                         viewModel,
                     )
                     SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, viewModel)
+                    SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, viewModel)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
                     SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus)
                 }
@@ -1019,6 +1022,21 @@ private fun OsdSettingsPanel(
             description = stringResource(R.string.fast_refresh_desc),
             checked = fastPolling,
             onCheckedChange = viewModel::setFastPolling,
+        )
+    }
+}
+
+@Composable
+private fun GeneralSettingsPanel(
+    navigationSounds: Boolean,
+    viewModel: SettingsViewModel,
+) {
+    SettingsCard(stringResource(R.string.settings_interface)) {
+        ToggleRow(
+            title = stringResource(R.string.navigation_sounds),
+            description = stringResource(R.string.navigation_sounds_desc),
+            checked = navigationSounds,
+            onCheckedChange = viewModel::setNavigationSounds,
         )
     }
 }

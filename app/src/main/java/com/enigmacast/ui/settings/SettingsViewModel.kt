@@ -51,6 +51,7 @@ class SettingsViewModel @Inject constructor(
     fun setDebugOverlay(enabled: Boolean) = update { it.copy(debug = it.debug.copy(overlay = enabled)) }
     fun setVerboseLogging(enabled: Boolean) = update { it.copy(debug = it.debug.copy(verboseLogging = enabled)) }
     fun setDebugBorders(enabled: Boolean) = update { it.copy(osd = it.osd.copy(debugBorders = enabled)) }
+    fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
     fun setInsecureCertificates(enabled: Boolean) = update { current ->
         val active = current.activeReceiver() ?: return@update current
         val updated = active.copy(allowInsecureCertificates = enabled)
