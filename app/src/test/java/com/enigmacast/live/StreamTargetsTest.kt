@@ -5,8 +5,10 @@ import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.network.StreamLevel
+import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.util.EnigmaLog
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
@@ -58,4 +60,13 @@ class StreamTargetsTest {
         assertEquals("http://***@box:8001/ref", EnigmaLog.sanitizeUrl("http://root:secret@box:8001/ref"))
         assertEquals("http://box/api/x?a=1&password=***", EnigmaLog.sanitizeUrl("http://box/api/x?a=1&password=secret"))
     }
+    @Test
+    fun anInternetReferenceIsDetectedBeforeAnyReceiverUrlIsBuilt() {
+        val ref = "4097:0:1:0:0:0:0:0:0:0:http%3a//cdn.example.com/live.ts"
+        assertEquals("http://cdn.example.com/live.ts", ServiceStreams.internetUrl(ref))
+        // StreamTargets.target short-circuits on this; calling url() alone would wrongly hit the receiver.
+        val wrong = StreamTargets.url(endpoints, lan, ref, StreamLevel.MEDIUM)
+        assertTrue(wrong.startsWith("http://192.168.1.209:8002/"))
+    }
+
 }

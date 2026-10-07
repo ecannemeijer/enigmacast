@@ -427,6 +427,20 @@ class StreamGuideViewModel @Inject constructor(
             }
             val target = streamTargets.target(receiver, channel.reference)
             val streamUrl = target.url
+            if (target.internet) {
+                // Internet / IPTV: play the URL directly; do not zap the receiver.
+                EnigmaLog.service("internet stream ${channel.name}: playing without zap")
+                playback.play(streamUrl, force = true, authorization = target.authorization)
+                if (token != guideToken) return@launch
+                onStarted()
+                bouquetPinned = false
+                tunedReference = channel.reference
+                shownReference = channel.reference
+                displayName = channel.name
+                status = UiText.Empty
+                guide = null
+                return@launch
+            }
             val outcome = LiveZapFlow.run(
                 token = token,
                 isCurrent = { it == guideToken },

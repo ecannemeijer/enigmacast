@@ -9,6 +9,7 @@ import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.player.RecentChannels
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.tuner.ChannelNavigator
@@ -330,6 +331,18 @@ class OwnTunerSession @Inject constructor(
         playback.stopForZap()
         streaming = false
         loadGuide(channel, myToken)
+        val internet = ServiceStreams.isInternet(channel.reference)
+        if (internet) {
+            // IPTV / internet: play the URL in the service reference; no tuner, no Enigma2 stream port.
+            EnigmaLog.service("internet stream ${channel.name}: skipping tuner check")
+            _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
+            val target = streamTargets.target(receiver, channel.reference)
+            if (myToken != token) return
+            playback.play(target.url, force = true, authorization = target.authorization, checkStart = false)
+            streaming = true
+            saveLastChannel(channel)
+            return
+        }
         // Give the receiver a moment to notice the closed stream and free its tuner.
         if (hadStream) delay(STREAM_RELEASE_MS)
         val snapshot = runCatching { tunerSource.snapshot(receiver) }.getOrElse { error ->
