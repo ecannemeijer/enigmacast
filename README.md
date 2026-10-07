@@ -99,7 +99,7 @@ Settings → Playback → Viewing mode chooses how this device watches. Each dev
 
 - The device asks the stream server for `http://HOST:8001/<service reference>` itself. The receiver is not zapped, not woken, and may stay in standby. Its own screen, if it is on, is left alone.
 - With two tuners, two devices can each watch a different channel. A third device is told that all tuners are busy, unless its channel is on a transponder that is already tuned (Enigma2 then serves it from the same tuner).
-- The app draws its own OSD, because the receiver's OSD exists only on its own HDMI output. OK shows the channel banner (number, name, picon, now and next with times and progress, audio and subtitle tracks). OK again opens the channel list. Info or Guide shows the programme text. Up/Down and CH+/CH− zap this device, digits pick a channel number from the current bouquet, and Down on the banner opens the quick options bar. Back closes what is open (record question, options bar, programme panel, bouquet column, channel list, number entry, banner) one step at a time; with nothing open it returns to the dashboard. Colour and menu keys go nowhere; nothing is sent to the receiver.
+- The app draws its own OSD, because the receiver's OSD exists only on its own HDMI output. OK shows the channel banner (number, name, picon, now and next with times and progress, audio and subtitle tracks). OK again opens the channel list. Info or Guide shows the programme text. Up/Down and CH+/CH− zap this device, digits pick a channel number from the current bouquet, and Down on the banner opens the quick options bar. Back closes what is open (programme dialog, options bar, programme panel, bouquet column, channel list, number entry, banner) one step at a time; with nothing open it returns to the dashboard. Colour and menu keys go nowhere; nothing is sent to the receiver.
 - The full-screen channel list is dense, with about 15 rows on a 1080p screen. Each row shows the number, picon, name and the programme on air (start time, title, thin progress bar). The programmes come from one `/api/epgnow?bRef=…` request per bouquet. That request is cached and repeated after 5 minutes, or sooner once a programme has ended. Left in the list opens the bouquets with the current one focused. OK or Right shows that bouquet's channels and returns to the list, and Back closes the bouquet column. The chosen bouquet is remembered and also shown on the dashboard. Choosing a bouquet does not zap; OK on a channel does. Right on a channel opens its programme panel (see TV guide).
 - Back from the full-screen player returns to the dashboard with the guide's highlight and focus on the channel that was playing, at the current time.
 - The dashboard's channel list zaps this device's stream the same way. Its last channel is remembered and starts again the next time.
@@ -129,7 +129,7 @@ Down on the channel banner (own tuner), or holding Info while following the rece
 - Subtitles and Audio: the stream's tracks by language, plus the stereo/HDMI output
 - Picture: Auto (fit), 16:9, 4:3, Zoom (fill, crop edges), Stretch
 - Audio delay: the audio sync value of the output in use, saved as in Settings
-- Quality: Automatic or a fixed level (see Stream quality)
+- Quality: As in Settings, Normal, or a transcoded level (720p/576p/360p) for this channel (see Stream type)
 - Guide and Recent (own tuner only): back to the TV guide on the dashboard, and the last channels watched
 - Sleep: closes EnigmaCast after 15–120 minutes, with a warning a minute before
 - Stream info: video, audio, bitrate, buffer, dropped frames, stalls, source, route and quality
@@ -140,23 +140,38 @@ Down on the channel banner (own tuner), or holding Info while following the rece
 The guide is the dashboard's Stream page, below the mini player: channels of the current bouquet on the left, programmes on a time line on the right in half-hour columns, two hours at a time, with a line at the current time. The channel that plays is marked. Next to the mini player are the details of the highlighted programme. It works in both viewing modes.
 
 - Up/Down move a channel, CH+/CH− (or page keys) six channels; Left/Right move a programme and scroll the time line, up to seven days ahead
-- OK on a programme on air starts that channel in the mini player, OK again opens the full-screen player; OK on a coming programme asks whether to record it (`/api/timeraddbyeventid`), and a red dot marks it afterwards
+- OK on a programme on air starts that channel in the mini player, OK again opens the full-screen player; OK on a coming programme opens a dialog with AutoSwitch, Record and Cancel (see AutoSwitch), and a small clock marks programmes with AutoSwitch set
 - Left on the programme on air opens the bouquet column to switch bouquets
 - Back goes to the menu; Back from the full-screen player comes back here with the highlight on the channel that was playing
 
-Programmes are loaded per bouquet with `/api/epgmulti` in three-hour blocks, only for the visible time window, and kept for 30 minutes; rows are drawn lazily. In the channel list, Right opens a programme panel for the focused channel (`/api/epgservice`, kept 10 minutes) with the same OK-to-record.
+Programmes are loaded per bouquet with `/api/epgmulti` in three-hour blocks, only for the visible time window, and kept for 30 minutes; rows are drawn lazily. In the channel list, Right opens a programme panel for the focused channel (`/api/epgservice`, kept 10 minutes) with the same AutoSwitch / Record dialog and clock marks.
 
-## Stream quality
+## Stream type
 
-Per receiver (connection screen → Stream quality): Original, Transcoded or Automatic. The port used is logged at INFO with every stream start (`stream target route=… profile=… transcoding=… level=… url=…`, credentials removed).
+Settings → Playback → Stream type (per receiver; the connection screen has the same choice under Stream quality): **Normal**, **Transcoded** or **Automatic**. The port used is logged at INFO with every stream start (`stream target route=… profile=… transcoding=… level=… url=…`, credentials removed).
 
-- **Original** streams port 8001 unchanged.
-- **Transcoded** asks the receiver's hardware encoder for 720p/2.5 Mbit/s, 576p/1.2 Mbit/s or 360p/0.6 Mbit/s, on the transcoding port (usually 8002 on Broadcom boxes) with `bitrate`, `width` and `height` parameters as OpenWebif's own playlists do.
-- **Automatic** always streams the original on the home address (also on a metered network) and does not ask the receiver about transcoding there. Only on the remote profile or the tunnel does it start transcoded at 576p (or the last level that played well). Two stalls within a minute step one level down; ten minutes without a stall step one level up again. Live TV cannot show spare bandwidth, so going up is time-based, not measured.
+- **Normal** streams the channel unchanged from the stream port (8001): full quality, the receiver's encoder is not used.
+- **Transcoded** always asks the receiver's hardware encoder for a smaller stream, also at home: 720p/2.5 Mbit/s, 576p/1.2 Mbit/s or 360p/0.6 Mbit/s, as chosen in the Size row. The URL is `http://<receiver>:<transcoding port>/<service reference>?bitrate=<bit/s>&width=<w>&height=<h>`, with one question mark.
+- **Automatic** streams Normal on the home address (also on a metered network) and does not ask the receiver about transcoding there. Only on the remote profile or the tunnel, and only when `/api/about` reports transcoding, does it start transcoded at 576p (or the last level that played well). Two stalls within a minute step one level down; ten minutes without a stall step one level up again. Live TV cannot show spare bandwidth, so going up is time-based, not measured.
 
-Transcoding is only offered when `/api/about` reports it (`transcoding: true`, needs an encoder and the TranscodingSetup plugin). Without it every profile plays the original. A transcoded stream that fails before its first picture falls back to the original once, for the rest of the session. The transcoding port depends on the TranscodingSetup plugin (8001 or 8002), so check it there if transcoded streams fail.
+The transcoding port (default 8002) is editable on the same card. "Ask the receiver" (also done automatically when you choose Transcoded or Automatic) reads OpenWebif's phone playlist (`/web/stream.m3u?ref=…&device=phone`) and takes the port from it: OpenWebif builds that playlist from the TranscodingSetup plugin on Broadcom boxes (8001 or 8002) and from the normal stream port 8001 on boxes with another encoder (for example HiSilicon models such as the SF8008, where Enigma2's own stream server transcodes when the URL has `bitrate`). When the playlist has no transcoding parameters, the box has no encoder and the card says so.
 
-Automatic stream restarts (after a failed start, a receiver that was away, or a quality change) are limited to three tries, 1, 2 and 4 seconds apart. After that the error stays on screen until you press OK; a stream that plays resets the count. The Quality tile overrides the level until the next channel start, and Stream info shows the level and why it was chosen.
+Transcoded viewing therefore needs a receiver with a hardware encoder, and on Broadcom boxes the TranscodingSetup plugin with its port open. When a transcoded stream fails before its first picture, the app says "Transcoded stream unavailable; check the TranscodingSetup plugin and port. Switched to normal." and plays Normal for the rest of the session on that receiver; it does not try again by itself. Changing the stream type, size or port in Settings, or picking a transcoded level in the Quality tile, tries the encoder again once.
+
+Automatic stream restarts (after a failed start, a receiver that was away, or a quality change) are limited to three tries, 1, 2 and 4 seconds apart. After that the error stays on screen until you press OK; a stream that plays resets the count. The Quality tile in the player's quick options overrides the stream type until the next channel start, and Stream info shows the level and why it was chosen.
+
+## AutoSwitch
+
+In the TV guide on the dashboard and in the programme panel of the channel list, OK on a programme that has not started yet opens a dialog: **AutoSwitch**, **Record**, **Cancel**. The first button has focus.
+
+- **AutoSwitch** remembers the programme (channel, event id, start time, title) and marks it with a small clock in both guides. OK on a marked programme offers **Cancel AutoSwitch** instead.
+- Ten seconds before the programme begins, a notice appears at the top right of whatever screen is open (dashboard, full-screen player, settings): "<title> starts on <channel> in 10 s", counting down, with **OK: Switch now** and **Back: Cancel**. The notice never takes the focus: arrows and every other key keep working on the screen behind it; only OK and Back go to the notice while it shows.
+- When the countdown ends, the app switches to the channel the way you watch: with an own tuner its own stream zaps (the usual tuner check applies, so a full receiver shows the normal "tuners busy" message in the player); when following the receiver, the receiver zaps. The full-screen player opens if it was not open already.
+- Two programmes beginning within a minute of each other: the earliest (or the one set first) gets the notice, which names the other. Cancel shows the other one's countdown; switching drops the other, since only one channel can play.
+- Reminders are saved (their own DataStore file) and survive a restart; programmes that began while the app was closed are dropped when it starts.
+- AutoSwitch only works while EnigmaCast is open in the foreground. There is no alarm or background service: in the background or when the app is closed nothing appears. Back in the app within two minutes after the start, the notice still comes, with at least five seconds to cancel; later than that the reminder is dropped. It does not switch while the update dialog or the receiver setup screen is open.
+
+**Record** shows "Recording from EnigmaCast is coming soon." for now. The timer code (`/api/timeraddbyeventid`) is still in the app but not connected to any screen, ready for the Record feature.
 
 ## Remote access
 
@@ -175,7 +190,7 @@ Router and receiver:
 
 1. WireGuard server on the router (Fritz!Box, OpenWrt, UniFi, …) with a peer for the TV; AllowedIPs on the TV side = the home subnet (for example `192.168.1.0/24`). Forward or open UDP 51820 (or the router's port).
 2. Without a VPN: forward the OpenWebif HTTPS port (turn on HTTPS in OpenWebif) and 8001, and 8002 for transcoding, to the receiver; use a DynDNS name. Turn on stream authentication on the receiver. This exposes the receiver to the internet; the VPN is the safer setup.
-3. For transcoding: a box with a hardware encoder and the TranscodingSetup plugin.
+3. For transcoding: a box with a hardware encoder; on Broadcom boxes also the TranscodingSetup plugin, whose port must be forwarded too. "Ask the receiver" in Settings → Playback → Stream type finds the port.
 
 ## Language
 
@@ -189,7 +204,7 @@ Right from Settings opens a submenu with Receiver, Remote access, Playback, OSD,
 
 - Receiver: host, ports, credentials, and connection test
 - Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel (switch, paste or import the config, Allow VPN, Test tunnel)
-- Playback: Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
+- Playback: viewing mode, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
 - OSD: PNG or JPG, and the fast poll after a key
 - Info: version and build, debug overlay, verbose logging, OSD border
 
@@ -223,6 +238,7 @@ Network discovery is a Search button. It browses mDNS `_http._tcp` and fills in 
 All paths are built in `OpenWebifEndpoints`.
 
 - JSON API: `/api/about` (also the `transcoding` flag), `/api/epgmulti`, `/api/timeraddbyeventid`, `/api/statusinfo`, `/api/getcurrent`, `/api/powerstate` (`newstate`: 0 toggle standby, 1 deep standby, 2 reboot, 3 restart GUI, 4 wake, 5 standby), `/api/sleeptimer`, `/api/vol`, `/api/bouquets`, `/api/getservices`, `/api/epgservice`, `/api/zap`, `/api/remotecontrol`
+- Playlist: `/web/stream.m3u?ref=…&device=phone`, only to find the transcoding port
 - OSD: `/grab?format=png|jpg&mode=osd|all|video`
 - Stream: `http://HOST:8001/<percent-encoded service reference>`, with `Authorization: Basic` from the receiver's username and password when a username is set
 - Own-tuner mode also reads `/api/timerlist`, `/api/getservices` without `sRef` (bouquet start numbers), `/api/getservices?…&picon=1`, and picons from `/picon/`
@@ -262,6 +278,7 @@ Settings can enable:
 - AC3 and E-AC3 passthrough need an HDMI output that reports those formats. Stereo mode always downmixes. With passthrough, Android cannot measure how long the amplifier or soundbar takes to decode, so lip sync may need the HDMI audio sync value. MPEG-2 still depends on the Android TV decoder. If the SoC has no decoder, that track stays silent or the video stays black.
 - DVB subtitle placement is a simple cue overlay. Bitmap cues that are not positioned as a fraction of the video fall back toward the bottom of the picture.
 - mDNS discovery is best-effort.
+- AutoSwitch runs only while the app is open in the foreground (see AutoSwitch). Record is not available yet.
 - Remote access, transcoding and the built-in WireGuard tunnel are built from the OpenWebif and WireGuard sources and tested only in unit tests, not on a TV and receiver. Some Android TV builds lack the VPN permission dialog; the app then says so and the WireGuard app is the way to go.
 - Over the remote profile the receiver sees the router's address for this device's stream, so telling this device's own stream apart from others may miss it and count one tuner too many.
 - Own-tuner mode estimates free tuners from what OpenWebif reports. OpenPLi-based images (E2OpenPlugins OpenWebif) do not say which tuner a stream uses and may list a stream as a recording; FBC tuners, unicable, and tuners shared through a loop-through count as separate tuners there even when the dish cabling allows fewer. When the estimate is wrong, the stream start check still catches a refused stream.
@@ -274,7 +291,7 @@ Settings can enable:
 
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN app on the TV can hide the receiver unless it routes the home subnet; the built-in tunnel only comes up when home does not answer.
 - HTTP 401: fill in the OpenWebif username and password.
-- The stream does not start: `adb logcat | grep -E "stream target|switching live stream"` shows the exact URL (without credentials), the route and whether it is transcoded. At home it should be `http://<receiver>:8001/<service reference>`; a transcoded URL on a closed port means the transcoding port in the receiver settings does not match the TranscodingSetup plugin, or choose Original.
+- The stream does not start: `adb logcat | grep -E "stream target|switching live stream"` shows the exact URL (without credentials), the route and whether it is transcoded. At home it should be `http://<receiver>:8001/<service reference>`; a transcoded URL on a closed port means the transcoding port in the receiver settings does not match the TranscodingSetup plugin (use "Ask the receiver" in Settings → Playback → Stream type), or choose Normal.
 - HTTPS fails with a certificate error: enable the self-signed option only for that receiver, or install a certificate the TV already trusts.
 - "All tuners are busy" while you expect a free tuner: put the receiver in standby (not deep standby) so its own picture frees a tuner, and check for running recordings or other devices streaming (OpenWebif's About page lists them). Choosing a channel on the same transponder as a running stream always works.
 - "The receiver asks for a password for streams": Enigma2's "Require authentication for http streams" is on (OpenATV: Menu → Setup → Usage & GUI → Customize System Settings). The stream server checks the receiver's Linux account (usually `root` and its password), not a separate OpenWebif password. Enter that user and password under Settings → Receiver, or turn the setting off. OpenWebif's "Enable authentication for streaming" only affects its playlists, not this check.
