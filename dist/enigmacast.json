@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "11",
+  "versionCode": 11,
+  "versionName": "1.0.0-beta.8",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "A channel change closes the previous stream, so one viewer no longer holds both tuners."
+  "notes": "Onechannel stream fixed"
 }
