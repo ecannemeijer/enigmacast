@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.0.0-beta.4",
+  "versionCode": 9,
+  "versionName": "1.0.0-beta.6",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Asks to wake the receiver when it is in standby. Hold blue in the full-screen player to open teletext."
+  "notes": "AutoDetect finds the receiver on the LAN. Text fields open with OK, and navigation sounds can be turned off."
 }
