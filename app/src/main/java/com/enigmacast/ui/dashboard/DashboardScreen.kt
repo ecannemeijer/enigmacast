@@ -89,9 +89,10 @@ import com.enigmacast.ui.power.ReceiverPowerPanel
 import com.enigmacast.ui.power.ReceiverPowerViewModel
 import com.enigmacast.ui.power.powerStateColor
 import com.enigmacast.ui.remote.EnigmaVideoTexture
+import com.enigmacast.ui.remote.GuideActions
 import com.enigmacast.ui.remote.GuideDetails
 import com.enigmacast.ui.remote.GuideTimelineGrid
-import com.enigmacast.ui.remote.RecordDialog
+import com.enigmacast.ui.remote.ProgrammeDialog
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.ui.remote.rememberGuideClock
 import com.enigmacast.ui.settings.SettingsViewModel
@@ -423,8 +424,9 @@ private fun StreamPanel(
         if (menuFocused()) gridFocusToken += 1
         onPlayingChannelFocused()
     }
-    // A closed record dialog gives the focus back to the grid.
-    val prompt = guideModel.recordPrompt
+    // A closed programme dialog gives the focus back to the grid.
+    val prompt = guideModel.programmePrompt
+    val autoSwitchKeys by guideModel.autoSwitchKeys.collectAsState()
     var hadPrompt by remember { mutableStateOf(false) }
     LaunchedEffect(prompt == null) {
         if (prompt != null) {
@@ -458,7 +460,7 @@ private fun StreamPanel(
                     number = focused?.let(guideModel::numberOf) ?: 0,
                     cell = focusedCell,
                     nowSec = nowSec,
-                    recorded = focusedCell?.event?.let { it.recordKey in grid.recordedKeys } == true,
+                    autoSwitch = focusedCell?.event?.let { it.programmeKey in autoSwitchKeys } == true,
                     loading = grid.loading,
                     failed = grid.failed,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -506,6 +508,7 @@ private fun StreamPanel(
                 numberOf = guideModel::numberOf,
                 picon = guideModel::picon,
                 cachedPicon = guideModel::cachedPicon,
+                autoSwitchKeys = autoSwitchKeys,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -529,9 +532,16 @@ private fun StreamPanel(
             )
         }
     }
-    prompt?.let {
-        RecordDialog(it, guideModel.recordBusy, guideModel::confirmRecording, guideModel::dismissRecording)
+    val programmeActions = remember(guideModel) {
+        GuideActions(
+            onOpenChannelEpg = {},
+            onChooseProgramme = { _, _ -> },
+            onAutoSwitch = guideModel::toggleAutoSwitch,
+            onRecord = guideModel::chooseRecord,
+            onDismissProgramme = guideModel::dismissProgramme,
+        )
     }
+    prompt?.let { ProgrammeDialog(it, programmeActions) }
 }
 
 private val MiniPlayerHeight = 158.dp

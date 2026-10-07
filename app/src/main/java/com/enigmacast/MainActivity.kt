@@ -11,13 +11,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -29,10 +36,13 @@ import com.enigmacast.ui.AppViewModel
 import com.enigmacast.ui.connection.ConnectionScreen
 import com.enigmacast.ui.dashboard.DashboardScreen
 import com.enigmacast.ui.diagnostics.OsdDiagnosticsScreen
+import com.enigmacast.ui.reminder.AutoSwitchMessage
+import com.enigmacast.ui.reminder.AutoSwitchNotice
 import com.enigmacast.ui.remote.EnigmaRemoteScreen
 import com.enigmacast.ui.settings.SettingsScreen
 import com.enigmacast.ui.theme.EnigmaCastTheme
 import com.enigmacast.ui.update.AppUpdateDialog
+import com.enigmacast.util.asString
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -40,6 +50,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject lateinit var remoteInputBus: RemoteInputBus
     private val appViewModel: AppViewModel by viewModels()
+    private var reminderKeyDown = NO_KEY
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +83,43 @@ class MainActivity : ComponentActivity() {
         setContent { EnigmaCastAppContent(appViewModel, ::chooseLanguage) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        appViewModel.setForeground(true)
+    }
+
+    override fun onStop() {
+        appViewModel.setForeground(false)
+        super.onStop()
+    }
+
+    /**
+     * While the AutoSwitch countdown shows, OK switches now and Back cancels it; every other key
+     * (and the focus) stays with the screen. A key whose press went to the notice also gets its
+     * release, so the screen behind never sees half a key press.
+     */
+    private fun handleReminderKey(event: KeyEvent): Boolean {
+        val switch = event.keyCode in REMINDER_SWITCH_KEYS
+        if (!switch && event.keyCode !in REMINDER_CANCEL_KEYS) return false
+        val shown = appViewModel.reminderNotice.value != null
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (!shown && reminderKeyDown != event.keyCode) return false
+                reminderKeyDown = event.keyCode
+                true
+            }
+            KeyEvent.ACTION_UP -> {
+                if (reminderKeyDown != event.keyCode) return false
+                reminderKeyDown = NO_KEY
+                if (shown) {
+                    if (switch) appViewModel.switchToReminderNow() else appViewModel.cancelReminderNotice()
+                }
+                true
+            }
+            else -> false
+        }
+    }
+
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguageStore.wrap(newBase))
     }
@@ -87,6 +135,7 @@ class MainActivity : ComponentActivity() {
         if (appViewModel.updatePrompt != null) {
             return super.dispatchKeyEvent(event)
         }
+        if (handleReminderKey(event)) return true
         if (appViewModel.screen == AppScreen.Remote && remoteInputBus.handler?.invoke(event) == true) {
             return true
         }
@@ -134,6 +183,15 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (
             )
             AppScreen.Diagnostics -> OsdDiagnosticsScreen(onBack = appViewModel::back)
         }
+        val reminderNotice by appViewModel.reminderNotice.collectAsState()
+        Column(
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 28.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            reminderNotice?.let { AutoSwitchNotice(it) }
+            appViewModel.reminderMessage?.let { AutoSwitchMessage(it.asString()) }
+        }
         appViewModel.updatePrompt?.let { prompt ->
             // Its own window: the screen behind keeps its focus requests to itself.
             AppUpdateDialog(
@@ -156,3 +214,7 @@ private fun Context.findActivity(): Activity? {
     }
     return null
 }
+
+private const val NO_KEY = -1
+private val REMINDER_SWITCH_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
+private val REMINDER_CANCEL_KEYS = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE)

@@ -110,12 +110,10 @@ class GuideGridControllerTest {
         val grid = controller(FakeEpg(listOf(airing, next)))
         grid.show("bouquet-a", channels, three.reference)
         advanceUntilIdle()
-        grid.markRecorded(next)
         grid.show("bouquet-b", listOf(two, three), "")
         advanceUntilIdle()
         val state = grid.state.value
         assertEquals("bouquet-b", state.bouquetReference)
         assertEquals(0, state.cursor.row)
-        assertTrue(next.recordKey in state.recordedKeys)
     }
 }

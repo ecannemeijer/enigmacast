@@ -9,7 +9,11 @@ import com.enigmacast.BuildConfig
 import com.enigmacast.R
 import com.enigmacast.data.network.WireGuardTunnel
 import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.domain.reminder.Reminder
+import com.enigmacast.domain.reminder.ReminderNotice
+import com.enigmacast.live.AutoSwitcher
 import com.enigmacast.live.OwnTunerSession
+import com.enigmacast.live.ReminderScheduler
 import com.enigmacast.playback.AppSleepTimer
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.playback.SleepEvent
@@ -23,6 +27,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -41,6 +47,8 @@ class AppViewModel @Inject constructor(
     private val ownTuner: OwnTunerSession,
     private val sleepTimer: AppSleepTimer,
     private val tunnel: WireGuardTunnel,
+    private val reminders: ReminderScheduler,
+    private val autoSwitcher: AutoSwitcher,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -52,12 +60,23 @@ class AppViewModel @Inject constructor(
     var requestFinish: (() -> Unit)? = null
     private var downloadJob: Job? = null
 
+    /** The AutoSwitch countdown on screen, if any. */
+    val reminderNotice: StateFlow<ReminderNotice?> = reminders.notice
+
+    /** A short AutoSwitch problem message (the receiver would not zap). */
+    var reminderMessage by mutableStateOf<UiText?>(null)
+        private set
+    private var reminderMessageJob: Job? = null
+
     private var returnScreen = AppScreen.Connection
     private var decided = false
 
     init {
         playback.allowPlayback()
         watchSleepTimer()
+        viewModelScope.launch {
+            reminders.switches.collect { autoSwitch(it) }
+        }
         viewModelScope.launch {
             runCatching { settingsRepository.migrateSecrets() }
                 .onFailure { EnigmaLog.service("secret migration failed: ${it.javaClass.simpleName}") }
@@ -194,6 +213,35 @@ class AppViewModel @Inject constructor(
         screen = returnScreen
     }
 
+    fun switchToReminderNow() = reminders.switchNow()
+
+    fun cancelReminderNotice() = reminders.dismissNotice()
+
+    /** The activity went to the background or came back; AutoSwitch only runs in the foreground. */
+    fun setForeground(foreground: Boolean) = reminders.setForeground(foreground)
+
+    /** The countdown ended: zap the way the viewer watches and go full screen. */
+    private suspend fun autoSwitch(reminder: Reminder) {
+        if (updatePrompt != null || screen == AppScreen.Loading || screen == AppScreen.Connection) {
+            EnigmaLog.service("autoswitch skipped on ${screen.name}")
+            return
+        }
+        when (autoSwitcher.switchTo(reminder)) {
+            AutoSwitcher.Result.SWITCHED -> openStream()
+            AutoSwitcher.Result.ZAP_FAILED -> showReminderMessage(UiText.res(R.string.autoswitch_zap_failed, reminder.channelName))
+            AutoSwitcher.Result.NOT_THIS_RECEIVER -> Unit
+        }
+    }
+
+    private fun showReminderMessage(message: UiText) {
+        reminderMessage = message
+        reminderMessageJob?.cancel()
+        reminderMessageJob = viewModelScope.launch {
+            delay(REMINDER_MESSAGE_MS)
+            reminderMessage = null
+        }
+    }
+
     private fun watchSleepTimer() {
         viewModelScope.launch {
             sleepTimer.events.collect { event ->
@@ -211,5 +259,9 @@ class AppViewModel @Inject constructor(
         streamRunning = false
         tunnel.shutdown()
         requestFinish?.invoke()
+    }
+
+    private companion object {
+        const val REMINDER_MESSAGE_MS = 6_000L
     }
 }

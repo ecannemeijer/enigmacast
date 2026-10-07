@@ -10,7 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.enigmacast.R
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
-import com.enigmacast.domain.epg.RecordPrompt
+import com.enigmacast.domain.epg.ProgrammePrompt
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.PowerAction
@@ -28,11 +28,13 @@ import com.enigmacast.live.GuideRepository
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
+import com.enigmacast.live.ReminderScheduler
 import com.enigmacast.live.StreamQualityController
 import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
 import com.enigmacast.playback.LivePlaybackController
+import com.enigmacast.ui.remote.AutoSwitchTexts
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.isEmpty
@@ -41,6 +43,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -58,6 +61,7 @@ class StreamGuideViewModel @Inject constructor(
     guideRepository: GuideRepository,
     private val picons: PiconRepository,
     private val quality: StreamQualityController,
+    private val reminders: ReminderScheduler,
 ) : ViewModel() {
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
@@ -79,15 +83,15 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var waking by mutableStateOf(false)
         private set
-    var recordPrompt by mutableStateOf<RecordPrompt?>(null)
-        private set
-    var recordBusy by mutableStateOf(false)
+    var programmePrompt by mutableStateOf<ProgrammePrompt?>(null)
         private set
 
-    /** A short message under the mini player (recording set, not possible, ...). */
+    /** Programmes with AutoSwitch set ([GuideEvent.programmeKey]), marked in the grid. */
+    val autoSwitchKeys: StateFlow<Set<String>> = reminders.scheduledKeys
+
+    /** A short message under the mini player (AutoSwitch set, recording coming soon, ...). */
     var notice by mutableStateOf(UiText.Empty)
         private set
-    private val guideRecorder = guideRepository
     private var noticeJob: Job? = null
 
     /** The programme grid of the Stream page: this bouquet's channels on a time axis. */
@@ -145,7 +149,7 @@ class StreamGuideViewModel @Inject constructor(
 
     /**
      * OK in the grid: a programme on air (or a gap now) starts that channel in the mini player,
-     * a second OK on it goes full screen; a later programme asks to record it.
+     * a second OK on it goes full screen; a later programme offers AutoSwitch or Record.
      */
     fun chooseInGrid(onStarted: () -> Unit, onFullscreen: () -> Unit) {
         val (channel, cell) = grid.focused() ?: return
@@ -156,44 +160,27 @@ class StreamGuideViewModel @Inject constructor(
             return
         }
         if (event == null) return
-        if (event.eventId < 0) {
-            showNotice(UiText.res(R.string.epg_record_unavailable))
-            return
-        }
-        recordPrompt = RecordPrompt(event, channel.name)
+        programmePrompt = ProgrammePrompt(event, channel.name, reminders.isScheduled(event.programmeKey))
     }
 
-    /** Asks the receiver to record the programme in [recordPrompt]. */
-    fun confirmRecording() {
-        val prompt = recordPrompt ?: return
-        if (recordBusy) return
-        recordBusy = true
+    /** AutoSwitch in the programme dialog: set it, or cancel it when it was set. */
+    fun toggleAutoSwitch() {
+        val prompt = programmePrompt ?: return
+        programmePrompt = null
         viewModelScope.launch {
-            val receiver = settingsRepository.current().activeReceiver()
-            val result = try {
-                receiver?.let { guideRecorder.record(it, prompt.event) }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                EnigmaLog.service("record failed: ${error.javaClass.simpleName}")
-                null
-            }
-            val success = result?.success == true
-            if (success) grid.markRecorded(prompt.event)
-            recordPrompt = null
-            recordBusy = false
-            showNotice(
-                when {
-                    success -> UiText.res(R.string.epg_record_set, prompt.event.title)
-                    result != null && result.message.isNotBlank() -> UiText.res(R.string.epg_record_refused, result.message)
-                    else -> UiText.res(R.string.epg_record_failed)
-                },
-            )
+            val receiverId = settingsRepository.current().activeReceiver()?.id.orEmpty()
+            showNotice(AutoSwitchTexts.result(reminders.toggle(prompt.event, prompt.channelName, receiverId), prompt), NOTICE_LONG_MS)
         }
     }
 
-    fun dismissRecording() {
-        if (!recordBusy) recordPrompt = null
+    /** Record in the programme dialog: not available yet. */
+    fun chooseRecord() {
+        programmePrompt = null
+        showNotice(UiText.res(R.string.epg_record_coming_soon), NOTICE_LONG_MS)
+    }
+
+    fun dismissProgramme() {
+        programmePrompt = null
     }
 
     private fun showNotice(text: UiText, durationMs: Long = NOTICE_MS) {

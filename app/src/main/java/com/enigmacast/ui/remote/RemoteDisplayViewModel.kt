@@ -18,7 +18,7 @@ import com.enigmacast.data.network.ReceiverRouter
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.epg.GuideEvent
-import com.enigmacast.domain.epg.RecordPrompt
+import com.enigmacast.domain.epg.ProgrammePrompt
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ConnectionState
@@ -57,6 +57,7 @@ import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.live.PiconRepository
 import com.enigmacast.live.QualityState
+import com.enigmacast.live.ReminderScheduler
 import com.enigmacast.live.StreamQualityController
 import com.enigmacast.live.StreamTargets
 import com.enigmacast.live.TunerStatus
@@ -74,7 +75,6 @@ import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -145,10 +145,9 @@ data class RemoteDisplayUiState(
     val epgLoading: Boolean = false,
     /** The channel the list focuses; blank means the channel that plays. */
     val listFocusReference: String = "",
-    val recordPrompt: RecordPrompt? = null,
-    val recordBusy: Boolean = false,
-    /** Programmes set to record from this app in this session ([GuideEvent.recordKey]). */
-    val recordedKeys: Set<String> = emptySet(),
+    val programmePrompt: ProgrammePrompt? = null,
+    /** Programmes with AutoSwitch set ([GuideEvent.programmeKey]). */
+    val autoSwitchKeys: Set<String> = emptySet(),
 )
 
 
@@ -171,6 +170,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val streamTargets: StreamTargets,
     private val router: ReceiverRouter,
     private val quality: StreamQualityController,
+    private val reminders: ReminderScheduler,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -258,6 +258,9 @@ class RemoteDisplayViewModel @Inject constructor(
         }
         viewModelScope.launch {
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
+        }
+        viewModelScope.launch {
+            reminders.scheduledKeys.collect { keys -> _ui.update { it.copy(autoSwitchKeys = keys) } }
         }
         viewModelScope.launch {
             // Following the receiver: reopen the receiver's channel with the new quality.
@@ -656,59 +659,36 @@ class RemoteDisplayViewModel @Inject constructor(
     /** Left or Back in the programme panel: back to the list, on the same channel. */
     private fun closeChannelEpg() = applyPane(ChannelListNavigation.left(ListPane.EPG), focusList = true)
 
-    /** OK on a programme: watch the channel when it is on now, else offer to record it. */
+    /** OK on a programme: watch the channel when it is on now, else offer AutoSwitch or Record. */
     fun chooseProgramme(channel: BouquetEntry, event: GuideEvent) {
         if (event.beginEpochSec <= nowSec()) {
             watchFromGuide(channel)
             return
         }
-        if (event.eventId < 0) {
-            showNotice(UiText.res(R.string.epg_record_unavailable))
-            return
-        }
-        _ui.update { it.copy(recordPrompt = RecordPrompt(event, channel.name)) }
+        val prompt = ProgrammePrompt(event, channel.name, reminders.isScheduled(event.programmeKey))
+        _ui.update { it.copy(programmePrompt = prompt) }
     }
 
     private fun watchFromGuide(channel: BouquetEntry) {
         zapTo(channel)
     }
 
-    /** Asks the receiver to record the programme in [RemoteDisplayUiState.recordPrompt]. */
-    fun confirmRecording() {
-        val prompt = _ui.value.recordPrompt ?: return
-        val receiver = settingsSnapshot.activeReceiver() ?: return
-        if (_ui.value.recordBusy) return
-        _ui.update { it.copy(recordBusy = true) }
-        viewModelScope.launch {
-            val result = try {
-                guideRepository.record(receiver, prompt.event)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                EnigmaLog.service("record failed: ${error.javaClass.simpleName}")
-                null
-            }
-            val success = result?.success == true
-            _ui.update {
-                it.copy(
-                    recordPrompt = null,
-                    recordBusy = false,
-                    recordedKeys = if (success) it.recordedKeys + prompt.event.recordKey else it.recordedKeys,
-                )
-            }
-            showNotice(
-                when {
-                    success -> UiText.res(R.string.epg_record_set, prompt.event.title)
-                    result != null && result.message.isNotBlank() -> UiText.res(R.string.epg_record_refused, result.message)
-                    else -> UiText.res(R.string.epg_record_failed)
-                },
-                NOTICE_LONG_MS,
-            )
-        }
+    /** AutoSwitch in the programme dialog: set it, or cancel it when it was set. */
+    fun toggleAutoSwitch() {
+        val prompt = _ui.value.programmePrompt ?: return
+        _ui.update { it.copy(programmePrompt = null) }
+        val receiverId = settingsSnapshot.activeReceiver()?.id.orEmpty()
+        showNotice(AutoSwitchTexts.result(reminders.toggle(prompt.event, prompt.channelName, receiverId), prompt), NOTICE_LONG_MS)
     }
 
-    fun dismissRecording() {
-        if (!_ui.value.recordBusy) _ui.update { it.copy(recordPrompt = null) }
+    /** Record in the programme dialog: not available yet. */
+    fun chooseRecord() {
+        _ui.update { it.copy(programmePrompt = null) }
+        showNotice(UiText.res(R.string.epg_record_coming_soon), NOTICE_LONG_MS)
+    }
+
+    fun dismissProgramme() {
+        _ui.update { it.copy(programmePrompt = null) }
     }
 
     private fun nowSec(): Long = System.currentTimeMillis() / 1000
@@ -820,7 +800,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun ownBack() {
         val ui = _ui.value
         when {
-            ui.recordPrompt != null -> dismissRecording()
+            ui.programmePrompt != null -> dismissProgramme()
             ui.quickBar -> closeQuickBar()
             ui.channelList -> {
                 val pane = ChannelListNavigation.back(listPane(ui))

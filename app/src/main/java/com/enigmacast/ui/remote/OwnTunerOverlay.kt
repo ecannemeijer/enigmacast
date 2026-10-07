@@ -167,7 +167,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
-        ui.recordPrompt?.let { prompt -> RecordDialog(prompt, ui.recordBusy, guideActions.onConfirmRecording, guideActions.onDismissRecording) }
+        ui.programmePrompt?.let { prompt -> ProgrammeDialog(prompt, guideActions) }
     }
 }
 

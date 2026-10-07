@@ -24,8 +24,6 @@ data class GuideGridState(
     val events: Map<String, List<GuideEvent>> = emptyMap(),
     val loading: Boolean = false,
     val failed: Boolean = false,
-    /** Programmes set to record from this app in this session ([GuideEvent.recordKey]). */
-    val recordedKeys: Set<String> = emptySet(),
 ) {
     val focusedChannel: BouquetEntry? get() = channels.getOrNull(cursor.row)
 
@@ -118,10 +116,6 @@ class GuideGridController(
         val entry = state.focusedChannel ?: return null
         val cell = GuideTimeline.focusedCell(state.eventsOf(entry), state.cursor, clock()) ?: return null
         return entry to cell
-    }
-
-    fun markRecorded(event: GuideEvent) {
-        _state.update { it.copy(recordedKeys = it.recordedKeys + event.recordKey) }
     }
 
     private fun ensureData() {

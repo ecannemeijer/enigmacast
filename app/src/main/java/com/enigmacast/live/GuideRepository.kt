@@ -61,6 +61,10 @@ class GuideRepository @Inject constructor(
         return events
     }
 
+    /**
+     * Sets a receiver timer for [event]. Not used by the screens yet: Record in the programme
+     * dialog says "coming soon" until recording from the app is finished.
+     */
     suspend fun record(receiver: ReceiverConfig, event: GuideEvent): TimerResult =
         source.record(receiver, event.reference, event.eventId)
 

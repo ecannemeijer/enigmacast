@@ -72,8 +72,9 @@ fun EnigmaRemoteScreen(
         GuideActions(
             onOpenChannelEpg = viewModel::openChannelEpg,
             onChooseProgramme = viewModel::chooseProgramme,
-            onConfirmRecording = viewModel::confirmRecording,
-            onDismissRecording = viewModel::dismissRecording,
+            onAutoSwitch = viewModel::toggleAutoSwitch,
+            onRecord = viewModel::chooseRecord,
+            onDismissProgramme = viewModel::dismissProgramme,
         )
     }
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {

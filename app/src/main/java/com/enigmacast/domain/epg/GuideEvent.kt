@@ -22,7 +22,7 @@ data class GuideEvent(
     }
 
     /** Identifies the programme across guide reloads (event ids are only unique per channel). */
-    val recordKey: String get() = "${NowEvents.key(reference)}|$beginEpochSec"
+    val programmeKey: String get() = "${NowEvents.key(reference)}|$beginEpochSec"
 
     /** The long description when there is one, else the short one. */
     val description: String get() = plot.ifBlank { shortDescription }
@@ -31,5 +31,5 @@ data class GuideEvent(
 /** The receiver's answer to "record this programme". */
 data class TimerResult(val success: Boolean, val message: String)
 
-/** "Record this programme?" for a programme that has not started yet. */
-data class RecordPrompt(val event: GuideEvent, val channelName: String)
+/** OK on a programme that has not started yet: AutoSwitch, Record or Cancel. [autoSwitchSet] offers to cancel AutoSwitch instead. */
+data class ProgrammePrompt(val event: GuideEvent, val channelName: String, val autoSwitchSet: Boolean)

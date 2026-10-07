@@ -460,6 +460,49 @@ fun TvConfirmDialog(
     }
 }
 
+/**
+ * A question with several answers in a row ([choices], the last usually "Cancel"). The first
+ * answer gets focus; Back closes it like the last one.
+ */
+@Composable
+fun TvChoiceDialog(
+    title: String,
+    message: String,
+    choices: List<String>,
+    onChoose: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val firstFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+        Column(
+            modifier = Modifier
+                .widthIn(min = 420.dp, max = 640.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(18.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(18.dp))
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(title, color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(message, color = EnigmaColors.Muted, fontSize = 16.sp, lineHeight = 22.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+                choices.forEachIndexed { index, label ->
+                    DialogButton(
+                        label = label,
+                        onClick = { onChoose(index) },
+                        destructive = false,
+                        enabled = true,
+                        modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun DialogButton(
     label: String,

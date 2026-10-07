@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,18 +41,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.epg.GuideCell
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.epg.GuideTimeline
-import com.enigmacast.domain.epg.RecordPrompt
+import com.enigmacast.domain.epg.ProgrammePrompt
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.tuner.NowEvents
 import com.enigmacast.live.GuideGridState
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
-import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.ui.theme.EnigmaIcons
+import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.requestWhenReady
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -64,8 +67,9 @@ import java.util.Locale
 data class GuideActions(
     val onOpenChannelEpg: (BouquetEntry) -> Unit,
     val onChooseProgramme: (BouquetEntry, GuideEvent) -> Unit,
-    val onConfirmRecording: () -> Unit,
-    val onDismissRecording: () -> Unit,
+    val onAutoSwitch: () -> Unit,
+    val onRecord: () -> Unit,
+    val onDismissProgramme: () -> Unit,
 )
 
 private val ChannelColumn = 200.dp
@@ -103,6 +107,7 @@ fun GuideTimelineGrid(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
+    autoSwitchKeys: Set<String> = emptySet(),
 ) {
     val cursor = state.cursor
     val focusSec = maxOf(cursor.focusSec, nowSec)
@@ -129,6 +134,7 @@ fun GuideTimelineGrid(
                 numberOf = numberOf,
                 picon = picon,
                 cachedPicon = cachedPicon,
+                autoSwitchKeys = autoSwitchKeys,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -162,12 +168,12 @@ fun GuideDetails(
     number: Int,
     cell: GuideCell?,
     nowSec: Long,
-    recorded: Boolean,
+    autoSwitch: Boolean,
     loading: Boolean,
     failed: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    GuideHeader(title, channel, number, cell, nowSec, recorded, loading, failed, modifier)
+    GuideHeader(title, channel, number, cell, nowSec, autoSwitch, loading, failed, modifier)
 }
 
 @Composable
@@ -177,7 +183,7 @@ private fun GuideHeader(
     number: Int,
     cell: GuideCell?,
     nowSec: Long,
-    recorded: Boolean,
+    autoSwitch: Boolean,
     loading: Boolean,
     failed: Boolean,
     modifier: Modifier = Modifier,
@@ -232,8 +238,10 @@ private fun GuideHeader(
                     val left = ((event.endEpochSec - nowSec + 59) / 60).toInt()
                     Text("  ·  " + stringResource(R.string.epg_minutes_left, left), color = EnigmaColors.Muted, fontSize = 14.sp)
                 }
-                if (recorded) {
-                    Text("  ●  " + stringResource(R.string.epg_recording), color = EnigmaColors.Danger, fontSize = 14.sp)
+                if (autoSwitch) {
+                    Spacer(Modifier.width(12.dp))
+                    AutoSwitchMark(EnigmaColors.Accent, 16.dp)
+                    Text(" " + stringResource(R.string.autoswitch_set_label), color = EnigmaColors.Accent, fontSize = 14.sp)
                 }
             }
             if (airing) GuideProgress(event.progress(nowSec), Modifier.width(280.dp))
@@ -296,6 +304,7 @@ private fun GuideRows(
     numberOf: (BouquetEntry) -> Int,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
+    autoSwitchKeys: Set<String>,
     modifier: Modifier = Modifier,
 ) {
     val channels = state.channels
@@ -329,7 +338,7 @@ private fun GuideRows(
                 active = active,
                 playing = playingReference.isNotBlank() && NowEvents.key(entry.reference) == playingKey,
                 nowSec = nowSec,
-                recordedKeys = state.recordedKeys,
+                autoSwitchKeys = autoSwitchKeys,
                 dpPerSec = dpPerSec,
                 picon = picon,
                 cachedPicon = cachedPicon,
@@ -348,7 +357,7 @@ private fun GuideRow(
     active: Boolean,
     playing: Boolean,
     nowSec: Long,
-    recordedKeys: Set<String>,
+    autoSwitchKeys: Set<String>,
     dpPerSec: Float,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
@@ -392,7 +401,7 @@ private fun GuideRow(
                     focused = focused && active,
                     marked = focused && !active,
                     airing = cell.startSec <= nowSec && nowSec < cell.endSec,
-                    recorded = cell.event?.recordKey?.let { it in recordedKeys } == true,
+                    autoSwitch = cell.event?.programmeKey?.let { it in autoSwitchKeys } == true,
                     x = ((cell.startSec - windowStartSec) * dpPerSec).dp,
                     width = ((cell.endSec - cell.startSec) * dpPerSec).dp,
                 )
@@ -402,7 +411,7 @@ private fun GuideRow(
 }
 
 @Composable
-private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, recorded: Boolean, x: Dp, width: Dp) {
+private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, x: Dp, width: Dp) {
     val event = cell.event
     val background = when {
         focused -> EnigmaColors.Focus
@@ -421,7 +430,10 @@ private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, air
             .padding(horizontal = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (recorded) Text("● ", color = EnigmaColors.Danger, fontSize = 11.sp)
+        if (autoSwitch) {
+            AutoSwitchMark(if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, 12.dp)
+            Spacer(Modifier.width(4.dp))
+        }
         Text(
             event?.title.orEmpty(),
             color = when {
@@ -498,7 +510,10 @@ fun ChannelEpgPanel(
                     Text(clock(event.beginEpochSec), color = secondary, fontSize = 12.sp, modifier = Modifier.width(44.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (event.recordKey in ui.recordedKeys) Text("● ", color = EnigmaColors.Danger, fontSize = 11.sp)
+                            if (event.programmeKey in ui.autoSwitchKeys) {
+                                AutoSwitchMark(if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, 12.dp)
+                                Spacer(Modifier.width(4.dp))
+                            }
                             Text(
                                 event.title,
                                 fontSize = 13.sp,
@@ -543,19 +558,34 @@ fun ChannelEpgPanel(
     }
 }
 
-/** "Record this programme?" with what, when and where. */
+/** OK on a later programme: AutoSwitch (or cancel it when set), Record (coming soon) or Cancel. */
 @Composable
-fun RecordDialog(prompt: RecordPrompt, busy: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ProgrammeDialog(prompt: ProgrammePrompt, actions: GuideActions) {
     val nowSec = System.currentTimeMillis() / 1000
-    TvConfirmDialog(
-        title = stringResource(R.string.epg_record_title),
-        message = stringResource(R.string.epg_record_message, prompt.event.title, timeRange(prompt.event, nowSec), prompt.channelName),
-        confirmLabel = stringResource(R.string.epg_record),
-        dismissLabel = stringResource(R.string.cancel),
-        onConfirm = onConfirm,
-        onDismiss = onDismiss,
-        busy = busy,
+    val explanation = stringResource(if (prompt.autoSwitchSet) R.string.autoswitch_dialog_set else R.string.autoswitch_dialog_offer)
+    TvChoiceDialog(
+        title = prompt.event.title,
+        message = timeRange(prompt.event, nowSec) + " · " + prompt.channelName + "\n\n" + explanation,
+        choices = listOf(
+            stringResource(if (prompt.autoSwitchSet) R.string.autoswitch_cancel_action else R.string.autoswitch_action),
+            stringResource(R.string.epg_record),
+            stringResource(R.string.cancel),
+        ),
+        onChoose = { index ->
+            when (index) {
+                0 -> actions.onAutoSwitch()
+                1 -> actions.onRecord()
+                else -> actions.onDismissProgramme()
+            }
+        },
+        onDismiss = actions.onDismissProgramme,
     )
+}
+
+/** The small clock that marks a programme with AutoSwitch set. */
+@Composable
+private fun AutoSwitchMark(tint: Color, size: Dp) {
+    Icon(EnigmaIcons.Timer, contentDescription = stringResource(R.string.autoswitch_set_label), tint = tint, modifier = Modifier.size(size))
 }
 
 /** "Today 20:30 – 21:15 · 45 min". */
