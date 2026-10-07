@@ -12,6 +12,7 @@ import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.tuner.ChannelNavigator
+import com.enigmacast.domain.tuner.RestartBudget
 import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.domain.tuner.TunerAvailability
 import com.enigmacast.domain.tuner.TunerSnapshot
@@ -20,6 +21,7 @@ import com.enigmacast.domain.tuner.TunerVerdict
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
+import com.enigmacast.util.isNotEmpty
 import com.enigmacast.util.uiMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -90,14 +92,20 @@ class OwnTunerSession @Inject constructor(
     private var lastOwnAddresses: Set<String> = emptySet()
     private var streaming = false
     private var active = false
+    private val restarts = RestartBudget()
+    private var gaveUp = false
 
     init {
         scope.launch {
             playback.health.collect(::onHealth)
         }
-        // A new quality (stalls, stable stretch, fallback, quick options) reopens the channel.
+        // A new quality reopens the channel: at once when the user chose it, otherwise
+        // (stalls, stable stretch, transcoder fallback) within the automatic restart budget.
         scope.launch {
-            quality.restarts.collect { if (active && _state.value.channel != null) retry() }
+            quality.restarts.collect { restart ->
+                if (!active || _state.value.channel == null) return@collect
+                if (restart.manual) retry() else restartAutomatically("quality")
+            }
         }
     }
 
@@ -166,6 +174,8 @@ class OwnTunerSession @Inject constructor(
                 )
             }
         }
+        restarts.reset()
+        gaveUp = false
         startJob?.cancel()
         startJob = scope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
@@ -227,13 +237,18 @@ class OwnTunerSession @Inject constructor(
     fun onReceiverBack() {
         if (!active) return
         val status = _state.value.tuner.status
-        if (status == TunerStatus.PROBLEM || status == TunerStatus.IDLE) retry()
+        if (status == TunerStatus.PROBLEM || status == TunerStatus.IDLE) {
+            restarts.reset()
+            restartAutomatically("receiver back")
+        }
     }
 
     /** Leaving own-tuner mode: drop the stream so the other mode starts clean. */
     fun deactivate() {
         active = false
         token += 1
+        restarts.reset()
+        gaveUp = false
         startJob?.cancel()
         guideJob?.cancel()
         if (streaming) playback.stopForZap()
@@ -243,7 +258,50 @@ class OwnTunerSession @Inject constructor(
 
     /** Called periodically: restarts a stream that stopped because the receiver was away. */
     fun retryIfReceiverWasAway() {
-        if (active && _state.value.tuner.autoRetry && startJob?.isActive != true) retry()
+        if (active && _state.value.tuner.autoRetry && startJob?.isActive != true) restartAutomatically("receiver away")
+    }
+
+    /**
+     * Restarts the channel without the user asking, after a pause that grows with each try.
+     * After [RestartBudget.MAX_ATTEMPTS] tries without a picture it stops and shows the error;
+     * OK (or another channel) starts again.
+     */
+    private fun restartAutomatically(why: String) {
+        val channel = _state.value.channel ?: return
+        val wait = restarts.next()
+        if (wait == null) {
+            giveUp()
+            return
+        }
+        EnigmaLog.service("automatic restart ${restarts.attempts}/${RestartBudget.MAX_ATTEMPTS} in $wait ms ($why)")
+        token += 1
+        startJob?.cancel()
+        playback.stopForZap()
+        streaming = false
+        _state.update {
+            it.copy(
+                tuner = TunerState(
+                    TunerStatus.CHECKING,
+                    UiText.res(R.string.tuner_retrying, restarts.attempts, RestartBudget.MAX_ATTEMPTS),
+                ),
+            )
+        }
+        startJob = scope.launch {
+            delay(wait)
+            val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            startNow(receiver, channel)
+        }
+    }
+
+    private fun giveUp() {
+        if (gaveUp) return
+        gaveUp = true
+        EnigmaLog.service("stream did not start after ${RestartBudget.MAX_ATTEMPTS} automatic attempts; waiting for the user")
+        _state.update {
+            val reason = it.tuner.message.takeIf { message -> it.tuner.status == TunerStatus.PROBLEM && message.isNotEmpty() }
+            val text = UiText.res(R.string.tuner_gave_up, RestartBudget.MAX_ATTEMPTS)
+            it.copy(tuner = TunerState(TunerStatus.PROBLEM, if (reason == null) text else UiText.Joined(listOf(reason, text)), autoRetry = false))
+        }
     }
 
     /** Reloads now/next when the shown programme has ended. */
@@ -318,7 +376,11 @@ class OwnTunerSession @Inject constructor(
         val tuner = when (health) {
             StreamHealth.IDLE -> return
             StreamHealth.STARTING -> TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))
-            StreamHealth.PLAYING -> TunerState(TunerStatus.PLAYING)
+            StreamHealth.PLAYING -> {
+                restarts.reset()
+                gaveUp = false
+                TunerState(TunerStatus.PLAYING)
+            }
             StreamHealth.NO_TUNER -> {
                 val refused = TunerAvailability.refused(lastSnapshot, _state.value.channel?.reference.orEmpty(), lastOwnAddresses)
                 TunerState(TunerStatus.FULL, fullMessage(refused.used, refused.total), refused.used, refused.total, refused.users)
@@ -340,6 +402,14 @@ class OwnTunerSession @Inject constructor(
         }
         if (health == StreamHealth.NO_TUNER || health == StreamHealth.AUTH_REQUIRED || health == StreamHealth.UNREACHABLE) {
             streaming = false
+        }
+        if (tuner.autoRetry && restarts.exhausted) {
+            // The automatic tries are used up: say so now and wait for the user.
+            gaveUp = true
+            EnigmaLog.service("stream did not start after ${RestartBudget.MAX_ATTEMPTS} automatic attempts; waiting for the user")
+            val text = UiText.res(R.string.tuner_gave_up, RestartBudget.MAX_ATTEMPTS)
+            _state.update { it.copy(tuner = tuner.copy(message = UiText.Joined(listOf(tuner.message, text)), autoRetry = false)) }
+            return
         }
         _state.update { it.copy(tuner = tuner) }
     }

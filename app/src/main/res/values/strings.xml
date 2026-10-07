@@ -27,6 +27,8 @@
     <string name="guide_channels_unavailable">Channels not available</string>
     <string name="notice_bouquet_failed">Could not load bouquet %s</string>
     <string name="notice_number_not_in_list">Channel %d is not in this list</string>
+    <string name="tuner_retrying">Trying again (%1$d of %2$d)…</string>
+    <string name="tuner_gave_up">The stream did not start after %1$d attempts. Press OK to try again.</string>
     <string name="power_action_standby">Standby</string>
     <string name="power_action_wake">Turn on</string>
     <string name="power_action_toggle">Toggle standby</string>
