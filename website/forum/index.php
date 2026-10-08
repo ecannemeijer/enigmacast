@@ -37,31 +37,31 @@ $active = 'forum';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
 <h1>Forum</h1>
-<p class="lead">Vragen over de installatie horen bij Hulp. Een wens voor de app hoort bij Feature request.</p>
+<p class="lead">Questions about setup belong on Help. A wish for the app belongs on Feature request.</p>
 
 <?php if ($dbError !== null): ?>
     <section class="panel">
-        <p class="error">De database is nog niet klaar.</p>
-        <p><a class="btn" href="<?= e(url('install.php')) ?>">Installeren</a></p>
+        <p class="error">The database is not ready yet.</p>
+        <p><a class="btn" href="<?= e(url('install.php')) ?>">Install</a></p>
     </section>
 <?php else: ?>
     <div class="actions">
         <?php foreach ($categories as $category): ?>
             <a class="btn" href="<?= e(url('forum/?cat=' . rawurlencode($category['slug']))) ?>"><?= e($category['name']) ?></a>
         <?php endforeach; ?>
-        <a class="btn" href="<?= e(url('forum/')) ?>">Alles</a>
-        <a class="btn" href="<?= e(url('forum/new.php')) ?>">Nieuw bericht</a>
+        <a class="btn" href="<?= e(url('forum/')) ?>">All</a>
+        <a class="btn" href="<?= e(url('forum/new.php')) ?>">New post</a>
     </div>
     <section class="panel">
         <?php if ($topics === []): ?>
-            <p>Nog geen berichten. Maak een account en plaats de eerste vraag of een feature request.</p>
+            <p>No posts yet. Create an account and leave the first question or feature request.</p>
         <?php else: ?>
             <ul class="topic-list">
                 <?php foreach ($topics as $topic): ?>
                     <li>
                         <span class="badge"><?= e($topic['category_name']) ?></span>
                         <a href="<?= e(url('forum/topic.php?id=' . (int) $topic['id'])) ?>"><?= e($topic['title']) ?></a>
-                        <p class="meta"><?= e($topic['username']) ?> · <?= e($topic['created_at']) ?> · <?= (int) $topic['reply_count'] ?> antwoorden</p>
+                        <p class="meta"><?= e($topic['username']) ?> · <?= e($topic['created_at']) ?> · <?= (int) $topic['reply_count'] ?> <?= (int) $topic['reply_count'] === 1 ? 'reply' : 'replies' ?></p>
                     </li>
                 <?php endforeach; ?>
             </ul>

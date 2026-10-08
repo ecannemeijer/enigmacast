@@ -9,14 +9,14 @@ $notice = flash();
 
 $nav = [
     'home' => ['Home', url()],
-    'functies' => ['Functies', url('functies.php')],
-    'handleiding' => ['Handleiding', url('handleiding.php')],
+    'features' => ['Features', url('features.php')],
+    'guide' => ['Guide', url('guide.php')],
     'download' => ['Download', url('download.php')],
     'forum' => ['Forum', url('forum/')],
 ];
 ?>
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -38,10 +38,10 @@ $nav = [
     <p class="userbar">
         <?php if ($user): ?>
             <span><?= e($user['username']) ?></span>
-            <a href="<?= e(url('forum/logout.php')) ?>">Uitloggen</a>
+            <a href="<?= e(url('forum/logout.php')) ?>">Log out</a>
         <?php else: ?>
-            <a href="<?= e(url('forum/login.php')) ?>">Inloggen</a>
-            <a href="<?= e(url('forum/register.php')) ?>">Account</a>
+            <a href="<?= e(url('forum/login.php')) ?>">Log in</a>
+            <a href="<?= e(url('forum/register.php')) ?>">Sign up</a>
         <?php endif; ?>
     </p>
 </header>

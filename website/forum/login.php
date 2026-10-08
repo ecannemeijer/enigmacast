@@ -23,32 +23,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($row !== false && password_verify($password, $row['password_hash'])) {
             session_regenerate_id(true);
             $_SESSION['user_id'] = (int) $row['id'];
-            $_SESSION['flash'] = 'Je bent ingelogd.';
+            $_SESSION['flash'] = 'You are logged in.';
             header('Location: ' . $next);
             exit;
         }
-        $error = 'Gebruikersnaam of wachtwoord klopt niet.';
+        $error = 'Username or password is wrong.';
     } catch (PDOException) {
-        $error = 'Inloggen lukt nu niet. Is de database geïnstalleerd?';
+        $error = 'Could not log in. Is the database installed?';
     }
 }
 
-$pageTitle = 'Inloggen';
+$pageTitle = 'Log in';
 $active = 'forum';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
-<h1>Inloggen</h1>
+<h1>Log in</h1>
 <form class="panel" method="post" action="<?= e(url('forum/login.php')) ?>">
     <?= csrf_field() ?>
     <input type="hidden" name="next" value="<?= e($next) ?>">
     <?php if ($error !== null): ?>
         <p class="error"><?= e($error) ?></p>
     <?php endif; ?>
-    <label for="username">Gebruikersnaam</label>
+    <label for="username">Username</label>
     <input id="username" name="username" required maxlength="24" autocomplete="username" value="<?= e((string) ($_POST['username'] ?? '')) ?>">
-    <label for="password">Wachtwoord</label>
+    <label for="password">Password</label>
     <input id="password" name="password" type="password" required autocomplete="current-password">
-    <div class="actions"><button class="btn" type="submit">Inloggen</button></div>
-    <p>Nog geen account? <a href="<?= e(url('forum/register.php')) ?>">Account maken</a></p>
+    <div class="actions"><button class="btn" type="submit">Log in</button></div>
+    <p>No account yet? <a href="<?= e(url('forum/register.php')) ?>">Create one</a></p>
 </form>
 <?php require dirname(__DIR__) . '/includes/footer.php'; ?>

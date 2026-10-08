@@ -16,46 +16,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = (string) ($_POST['password'] ?? '');
     $again = (string) ($_POST['password_again'] ?? '');
     if (!preg_match('/^[A-Za-z0-9_]{3,24}$/', $username)) {
-        $error = 'Gebruikersnaam: 3 tot 24 tekens, letters, cijfers of _.';
+        $error = 'Username: 3 to 24 characters, letters, digits, or _.';
     } elseif (strlen($password) < 8) {
-        $error = 'Kies een wachtwoord van minstens 8 tekens.';
+        $error = 'Choose a password of at least 8 characters.';
     } elseif (!hash_equals($password, $again)) {
-        $error = 'De wachtwoorden komen niet overeen.';
+        $error = 'The passwords do not match.';
     } else {
         try {
             $stmt = db()->prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)');
             $stmt->execute([$username, password_hash($password, PASSWORD_DEFAULT)]);
             $_SESSION['user_id'] = (int) db()->lastInsertId();
-            $_SESSION['flash'] = 'Account aangemaakt.';
+            $_SESSION['flash'] = 'Account created.';
             header('Location: ' . url('forum/'));
             exit;
         } catch (PDOException $exception) {
             if ((int) ($exception->errorInfo[1] ?? 0) === 1062) {
-                $error = 'Die gebruikersnaam bestaat al.';
+                $error = 'That username is already taken.';
             } else {
-                $error = 'Account aanmaken lukt nu niet. Is de database geïnstalleerd?';
+                $error = 'Could not create the account. Is the database installed?';
             }
         }
     }
 }
 
-$pageTitle = 'Account';
+$pageTitle = 'Sign up';
 $active = 'forum';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
-<h1>Account maken</h1>
+<h1>Create an account</h1>
 <form class="panel" method="post" action="<?= e(url('forum/register.php')) ?>">
     <?= csrf_field() ?>
     <?php if ($error !== null): ?>
         <p class="error"><?= e($error) ?></p>
     <?php endif; ?>
-    <label for="username">Gebruikersnaam</label>
+    <label for="username">Username</label>
     <input id="username" name="username" required maxlength="24" autocomplete="username" value="<?= e((string) ($_POST['username'] ?? '')) ?>">
-    <label for="password">Wachtwoord</label>
+    <label for="password">Password</label>
     <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password">
-    <label for="password_again">Wachtwoord nog eens</label>
+    <label for="password_again">Password again</label>
     <input id="password_again" name="password_again" type="password" required minlength="8" autocomplete="new-password">
-    <div class="actions"><button class="btn" type="submit">Aanmaken</button></div>
-    <p>Al een account? <a href="<?= e(url('forum/login.php')) ?>">Inloggen</a></p>
+    <div class="actions"><button class="btn" type="submit">Create account</button></div>
+    <p>Already have an account? <a href="<?= e(url('forum/login.php')) ?>">Log in</a></p>
 </form>
 <?php require dirname(__DIR__) . '/includes/footer.php'; ?>

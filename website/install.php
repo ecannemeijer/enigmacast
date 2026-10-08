@@ -24,6 +24,7 @@ try {
 
     $table = $server->query("SHOW TABLES LIKE 'categories'")->fetch();
     if ($table !== false) {
+        $server->exec("UPDATE categories SET slug = 'help', name = 'Help' WHERE slug = 'hulp'");
         $already = true;
     }
 
@@ -43,26 +44,26 @@ try {
     $error = $exception->getMessage();
 }
 
-$pageTitle = 'Installeren';
+$pageTitle = 'Install';
 $active = '';
 require __DIR__ . '/includes/header.php';
 ?>
-<h1>Database installeren</h1>
+<h1>Install the database</h1>
 <?php if ($error !== null): ?>
     <section class="panel">
-        <p class="error">MySQL is niet bereikbaar of het schema liep vast.</p>
+        <p class="error">MySQL is not reachable, or the schema failed.</p>
         <p><?= e($error) ?></p>
-        <p>Start MySQL in XAMPP. De site verwacht gebruiker <code>root</code> zonder wachtwoord op <code>127.0.0.1</code>, database <code>enigmacast</code>. Pas <code>website/config.php</code> aan als dat bij jou anders is.</p>
+        <p>Start MySQL in XAMPP. The site expects user <code>root</code> with an empty password on <code>127.0.0.1</code>, database <code>enigmacast</code>. Change <code>website/config.php</code> if yours is different.</p>
     </section>
 <?php elseif ($already): ?>
     <section class="panel">
-        <p>De tabellen bestaan al. Installeren is daarom gestopt, zodat bestaande berichten blijven staan.</p>
-        <p><a class="btn" href="<?= e(url()) ?>">Naar de site</a></p>
+        <p>The tables already exist. Install stopped so existing posts stay in place.</p>
+        <p><a class="btn" href="<?= e(url()) ?>">Go to the site</a></p>
     </section>
 <?php elseif ($done): ?>
     <section class="panel">
-        <p>Database <code>enigmacast</code> staat klaar, met de borden Hulp en Feature request.</p>
-        <p><a class="btn" href="<?= e(url('forum/')) ?>">Naar het forum</a></p>
+        <p>Database <code>enigmacast</code> is ready, with the Help and Feature request boards.</p>
+        <p><a class="btn" href="<?= e(url('forum/')) ?>">Go to the forum</a></p>
     </section>
 <?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>

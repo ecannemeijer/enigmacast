@@ -13,9 +13,9 @@ try {
     $categories = [];
 }
 
-$picked = $_GET['cat'] ?? 'hulp';
+$picked = $_GET['cat'] ?? 'help';
 if (!is_string($picked)) {
-    $picked = 'hulp';
+    $picked = 'help';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -25,32 +25,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $categoryId = (int) ($_POST['category_id'] ?? 0);
     $allowed = array_map(static fn (array $row): int => (int) $row['id'], $categories);
     if ($title === '' || strlen($title) > 120) {
-        $error = 'Geef een titel van hooguit 120 tekens.';
+        $error = 'Enter a title of at most 120 characters.';
     } elseif ($body === '' || strlen($body) > 8000) {
-        $error = 'Schrijf een bericht van hooguit 8000 tekens.';
+        $error = 'Write a post of at most 8000 characters.';
     } elseif (!in_array($categoryId, $allowed, true)) {
-        $error = 'Kies Hulp of Feature request.';
+        $error = 'Choose Help or Feature request.';
     } else {
         $user = current_user();
         $stmt = db()->prepare('INSERT INTO topics (category_id, user_id, title, body) VALUES (?, ?, ?, ?)');
         $stmt->execute([$categoryId, (int) $user['id'], $title, $body]);
         $id = (int) db()->lastInsertId();
-        $_SESSION['flash'] = 'Bericht geplaatst.';
+        $_SESSION['flash'] = 'Post created.';
         header('Location: ' . url('forum/topic.php?id=' . $id));
         exit;
     }
     $picked = '';
 }
 
-$pageTitle = 'Nieuw bericht';
+$pageTitle = 'New post';
 $active = 'forum';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
-<h1>Nieuw bericht</h1>
+<h1>New post</h1>
 <?php if ($categories === []): ?>
     <section class="panel">
-        <p class="error">De database is nog niet klaar.</p>
-        <p><a class="btn" href="<?= e(url('install.php')) ?>">Installeren</a></p>
+        <p class="error">The database is not ready yet.</p>
+        <p><a class="btn" href="<?= e(url('install.php')) ?>">Install</a></p>
     </section>
 <?php else: ?>
     <form class="panel" method="post" action="<?= e(url('forum/new.php')) ?>">
@@ -58,7 +58,7 @@ require dirname(__DIR__) . '/includes/header.php';
         <?php if ($error !== null): ?>
             <p class="error"><?= e($error) ?></p>
         <?php endif; ?>
-        <label for="category_id">Bord</label>
+        <label for="category_id">Board</label>
         <select id="category_id" name="category_id">
             <?php foreach ($categories as $category): ?>
                 <option value="<?= (int) $category['id'] ?>" <?= ($picked === $category['slug'] || (string) ($_POST['category_id'] ?? '') === (string) $category['id']) ? 'selected' : '' ?>>
@@ -66,11 +66,11 @@ require dirname(__DIR__) . '/includes/header.php';
                 </option>
             <?php endforeach; ?>
         </select>
-        <label for="title">Titel</label>
+        <label for="title">Title</label>
         <input id="title" name="title" required maxlength="120" value="<?= e((string) ($_POST['title'] ?? '')) ?>">
-        <label for="body">Bericht</label>
+        <label for="body">Message</label>
         <textarea id="body" name="body" required maxlength="8000"><?= e((string) ($_POST['body'] ?? '')) ?></textarea>
-        <div class="actions"><button class="btn" type="submit">Plaatsen</button></div>
+        <div class="actions"><button class="btn" type="submit">Post</button></div>
     </form>
 <?php endif; ?>
 <?php require dirname(__DIR__) . '/includes/footer.php'; ?>

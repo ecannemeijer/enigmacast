@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS replies (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO categories (slug, name)
-SELECT 'hulp', 'Hulp'
-WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'hulp');
+SELECT 'help', 'Help'
+WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'help');
 
 INSERT INTO categories (slug, name)
 SELECT 'feature', 'Feature request'

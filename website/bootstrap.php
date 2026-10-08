@@ -94,7 +94,7 @@ function current_user(): ?array
 function require_login(): void
 {
     if (current_user() === null) {
-        $_SESSION['flash'] = 'Log in om een bericht te plaatsen.';
+        $_SESSION['flash'] = 'Log in to post a message.';
         $next = $_SERVER['REQUEST_URI'] ?? url('forum/');
         header('Location: ' . url('forum/login.php?next=' . rawurlencode($next)));
         exit;
@@ -120,7 +120,7 @@ function csrf_check(): void
     $known = $_SESSION['csrf'] ?? '';
     if (!is_string($sent) || !is_string($known) || !hash_equals($known, $sent)) {
         http_response_code(400);
-        exit('Ongeldig formulier. Ga terug en probeer het opnieuw.');
+        exit('Invalid form. Go back and try again.');
     }
 }
 
@@ -138,7 +138,7 @@ function release_info(): array
 {
     $release = [
         'versionCode' => null,
-        'versionName' => 'onbekend',
+        'versionName' => 'unknown',
         'apkUrl' => 'https://update.velixatv.com/enigmacast.apk',
         'notes' => '',
     ];

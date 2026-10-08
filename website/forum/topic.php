@@ -12,12 +12,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $body = trim((string) ($_POST['body'] ?? ''));
     if ($body === '' || strlen($body) > 8000) {
-        $error = 'Schrijf een antwoord van hooguit 8000 tekens.';
+        $error = 'Write a reply of at most 8000 characters.';
     } else {
         $user = current_user();
         $stmt = db()->prepare('INSERT INTO replies (topic_id, user_id, body) VALUES (?, ?, ?)');
         $stmt->execute([$id, (int) $user['id'], $body]);
-        $_SESSION['flash'] = 'Antwoord geplaatst.';
+        $_SESSION['flash'] = 'Reply posted.';
         header('Location: ' . url('forum/topic.php?id=' . $id));
         exit;
     }
@@ -51,13 +51,13 @@ try {
     $topic = null;
 }
 
-$pageTitle = $topic['title'] ?? 'Onderwerp';
+$pageTitle = $topic['title'] ?? 'Topic';
 $active = 'forum';
 require dirname(__DIR__) . '/includes/header.php';
 ?>
-<p><a href="<?= e(url('forum/')) ?>">Terug naar het forum</a></p>
+<p><a href="<?= e(url('forum/')) ?>">Back to the forum</a></p>
 <?php if ($topic === null): ?>
-    <h1>Onderwerp niet gevonden</h1>
+    <h1>Topic not found</h1>
 <?php else: ?>
     <h1><?= e($topic['title']) ?></h1>
     <article class="panel">
@@ -71,18 +71,18 @@ require dirname(__DIR__) . '/includes/header.php';
         </article>
     <?php endforeach; ?>
     <section class="panel">
-        <h2>Antwoorden</h2>
+        <h2>Reply</h2>
         <?php if ($error !== null): ?>
             <p class="error"><?= e($error) ?></p>
         <?php endif; ?>
         <?php if (current_user() === null): ?>
-            <p><a href="<?= e(url('forum/login.php?next=' . rawurlencode(url('forum/topic.php?id=' . $id)))) ?>">Log in</a> om te antwoorden.</p>
+            <p><a href="<?= e(url('forum/login.php?next=' . rawurlencode(url('forum/topic.php?id=' . $id)))) ?>">Log in</a> to reply.</p>
         <?php else: ?>
             <form method="post" action="<?= e(url('forum/topic.php?id=' . $id)) ?>">
                 <?= csrf_field() ?>
-                <label for="body">Jouw antwoord</label>
+                <label for="body">Your reply</label>
                 <textarea id="body" name="body" required maxlength="8000"></textarea>
-                <div class="actions"><button class="btn" type="submit">Plaatsen</button></div>
+                <div class="actions"><button class="btn" type="submit">Post</button></div>
             </form>
         <?php endif; ?>
     </section>

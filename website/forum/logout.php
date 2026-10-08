@@ -11,6 +11,6 @@ if (ini_get('session.use_cookies')) {
 }
 session_destroy();
 session_start();
-$_SESSION['flash'] = 'Je bent uitgelogd.';
+$_SESSION['flash'] = 'You are logged out.';
 header('Location: ' . url('forum/'));
 exit;
