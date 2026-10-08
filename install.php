@@ -9,7 +9,7 @@ header('Content-Type: text/html; charset=UTF-8');
 </head>
 <body>
     <h1>EnigmaCast</h1>
-    <p>Deze pagina draait vanuit <code>C:\xampp\htdocs\enigmacast\install.php</code>.</p>
+    <p>De site draait.</p>
     <p><a href="dist/enigmacast.json">dist/enigmacast.json</a></p>
 </body>
 </html>

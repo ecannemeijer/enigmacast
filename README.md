@@ -124,13 +124,13 @@ Settings can enable:
 
 ## Local XAMPP
 
-`http://localhost/enigmacast/install.php` is served from `C:\xampp\htdocs\enigmacast` by the localhost virtual host in `C:\xampp\apache\conf\extra\httpd-vhosts.conf`. That host has to be the first one and its document root has to stay `C:/xampp/htdocs`. From the project root, as administrator:
+The site uses its own local DNS name, the same way as the other hosts in `C:\xampp\apache\conf\extra\httpd-vhosts.conf`. The document root is `C:/xampp/htdocs/enigmacast`, so the installer is `http://enigmacast.<suffix>/install.php`. The suffix is taken from the names already in that file (`.test`, `.local`, and the other local names there). From the project root, as administrator:
 
 ```bat
 xampp\install.bat
 ```
 
-The script writes that virtual host, turns on `Include conf/extra/httpd-vhosts.conf` in `httpd.conf`, and leaves an existing `install.php` in place. Restart Apache from the XAMPP Control Panel when it is not running as a service.
+The script appends that virtual host, adds `127.0.0.1` for the name to the Windows hosts file, and does not replace the existing localhost site. An `install.php` already in the folder is left as it is. Restart Apache from the XAMPP Control Panel when it is not running as a service.
 
 ## Troubleshooting
 
