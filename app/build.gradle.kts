@@ -14,8 +14,8 @@ android {
         applicationId = libs.versions.applicationId.get()
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 13
-        versionName = "1.0.0-beta.10"
+        versionCode = 15
+        versionName = "1.0.0-beta.12"
     }
 
     buildTypes {

@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "1.0.0-beta.10",
+  "versionCode": 15,
+  "versionName": "1.0.0-beta.12",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Record a programme on the TV and play it from My Items."
+  "notes": "Radio bouquets are listed under the television bouquets."
 }

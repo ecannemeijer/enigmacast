@@ -16,6 +16,8 @@ class BouquetChannelsTest {
     fun televisionBouquetsAreTypeSevenFieldOne() {
         assertTrue(BouquetChannels.isTelevisionBouquet("1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"fav\" ORDER BY bouquet"))
         assertFalse(BouquetChannels.isTelevisionBouquet("1:7:2:0:0:0:0:0:0:0:FROM BOUQUET \"radio\" ORDER BY bouquet"))
+        assertTrue(BouquetChannels.isRadioBouquet("1:7:2:0:0:0:0:0:0:0:FROM BOUQUET \"radio\" ORDER BY bouquet"))
+        assertFalse(BouquetChannels.isRadioBouquet("1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"fav\" ORDER BY bouquet"))
     }
 
     @Test

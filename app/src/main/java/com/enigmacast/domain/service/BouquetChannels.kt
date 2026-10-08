@@ -12,6 +12,10 @@ object BouquetChannels {
         return field(reference, 1) == "7" && field(reference, 2) == "1"
     }
 
+    fun isRadioBouquet(reference: String): Boolean {
+        return field(reference, 1) == "7" && field(reference, 2) == "2"
+    }
+
     fun sameService(left: String, right: String): Boolean {
         if (left.isBlank() || right.isBlank()) return false
         return identity(left) == identity(right)

@@ -127,7 +127,7 @@ class OpenWebifApi @Inject constructor(
         val currentBody = get(config, endpoints.current(config))
         val service = OpenWebifJson.parseService(currentBody)
         val hinted = OpenWebifJson.bouquetReference(currentBody)
-        val bouquets = bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+        val bouquets = televisionBouquets(config)
         val hintedBouquet = bouquets.firstOrNull { bouquet ->
             hinted != null && bouquetIdentity(bouquet.reference) == bouquetIdentity(hinted)
         }
@@ -144,7 +144,11 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {
-        return bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+        val television = bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+        val radio = runCatching {
+            OpenWebifJson.parseBouquets(get(config, endpoints.radioBouquets(config)))
+        }.getOrDefault(emptyList()).filter { BouquetChannels.isRadioBouquet(it.reference) }
+        return television + radio
     }
 
     override suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {

@@ -65,6 +65,8 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
 
     fun bouquets(config: ReceiverConfig): String = api(config, "/api/bouquets")
 
+    fun radioBouquets(config: ReceiverConfig): String = api(config, "/api/bouquets?stype=radio")
+
     /** `picon=1` makes OpenWebif add each channel's picon path (or its default picon). */
     fun services(config: ReceiverConfig, bouquetReference: String): String {
         val encoded = encode(bouquetReference)
