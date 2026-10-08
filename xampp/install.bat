@@ -7,7 +7,6 @@ set "HTTPD=%XAMPP%\apache\bin\httpd.exe"
 set "APACHE_CONF=%XAMPP%\apache\conf\httpd.conf"
 set "TARGET_CONF=%XAMPP%\apache\conf\extra\httpd-enigmacast.conf"
 set "SITE=C:\xampp\htdocs\enigmacast"
-set "HOSTS=%SystemRoot%\System32\drivers\etc\hosts"
 set "INCLUDE_LINE=Include conf/extra/httpd-enigmacast.conf"
 
 if not exist "%HTTPD%" (
@@ -18,20 +17,20 @@ if not exist "%HTTPD%" (
 
 for %%I in ("%~dp0..") do set "REPO=%%~fI"
 
-if /I "%REPO%"=="%SITE%" goto :site_ready
-if exist "%SITE%" (
-    echo Map bestaat al: %SITE%
-    echo Die map wordt gebruikt. Er is geen junction gemaakt.
-    goto :site_ready
-)
-echo Junction %SITE% -^> %REPO%
-mklink /J "%SITE%" "%REPO%"
-if errorlevel 1 (
-    echo Junction mislukt. Kopieer het project naar %SITE% en start dit script opnieuw.
-    exit /b 1
+if /I not "%REPO%"=="%SITE%" if not exist "%SITE%" (
+    echo Junction %SITE% -^> %REPO%
+    mklink /J "%SITE%" "%REPO%"
+    if errorlevel 1 (
+        echo Junction mislukt. De bestanden worden gekopieerd.
+        mkdir "%SITE%"
+    )
 )
 
-:site_ready
+if not exist "%SITE%\dist" mkdir "%SITE%\dist"
+if not exist "%SITE%\dist\enigmacast.json" copy /Y "%REPO%\dist\enigmacast.json" "%SITE%\dist\enigmacast.json" >nul
+if not exist "%SITE%\index.html" copy /Y "%REPO%\index.html" "%SITE%\index.html" >nul
+if not exist "%SITE%\.htaccess" copy /Y "%REPO%\.htaccess" "%SITE%\.htaccess" >nul
+
 copy /Y "%~dp0enigmacast.conf" "%TARGET_CONF%" >nul
 if errorlevel 1 (
     echo Kon %TARGET_CONF% niet schrijven. Start dit script als administrator.
@@ -45,13 +44,10 @@ if errorlevel 1 (
     >> "%APACHE_CONF%" echo %INCLUDE_LINE%
 )
 
-findstr /L /C:"enigmacast.local" "%HOSTS%" >nul
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0patch-htaccess.ps1"
 if errorlevel 1 (
-    >> "%HOSTS%" echo 127.0.0.1 enigmacast.local
-    if errorlevel 1 (
-        echo Kon %HOSTS% niet bijwerken. Start dit script als administrator.
-        exit /b 1
-    )
+    echo .htaccess kon niet worden bijgewerkt. Start dit script als administrator.
+    exit /b 1
 )
 
 "%HTTPD%" -t
@@ -68,6 +64,5 @@ if errorlevel 1 (
 echo.
 echo EnigmaCast is bereikbaar op:
 echo   http://localhost/enigmacast/
-echo   http://enigmacast.local/
 echo   http://localhost/enigmacast/dist/enigmacast.json
 exit /b 0
