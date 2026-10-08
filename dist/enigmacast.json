@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "1.0.0-beta.9",
+  "versionCode": 13,
+  "versionName": "1.0.0-beta.10",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "More compact TV menus. Connect a receiver with Autodetect or Manual."
+  "notes": "Record a programme on the TV and play it from My Items."
 }
