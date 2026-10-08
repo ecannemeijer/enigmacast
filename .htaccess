@@ -1,0 +1,11 @@
+DirectoryIndex index.html index.php index.htm
+
+<IfModule mod_mime.c>
+    AddType application/json .json
+    AddType application/vnd.android.package-archive .apk
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\.git(/|$) - [F]
+</IfModule>

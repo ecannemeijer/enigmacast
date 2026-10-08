@@ -122,6 +122,16 @@ Settings can enable:
 - Passwords are not encrypted at rest.
 - A future receiver-side plugin can replace the OpenWebif sources (`OsdSource`, `RemoteControlSource`, `ServiceStateSource`) with a push transport without rewriting the player screen.
 
+## Local XAMPP
+
+The update files in `dist/` can be served from `C:\xampp\htdocs\enigmacast`. From the project root, as administrator:
+
+```bat
+xampp\install.bat
+```
+
+The script junctions that htdocs path to this checkout when the folder is missing, includes `xampp/enigmacast.conf` from Apache, and adds `enigmacast.local` to the hosts file. `localhost` stays pointed at the rest of `htdocs`. After Apache restarts the folder is available at `http://localhost/enigmacast/` and `http://enigmacast.local/`.
+
 ## Troubleshooting
 
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN on the TV will hide the receiver.
