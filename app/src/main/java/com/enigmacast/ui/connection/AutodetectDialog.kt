@@ -44,10 +44,15 @@ import kotlinx.coroutines.delay
 
 /**
  * Shows the AutoDetect dialog for [viewModel] and gives focus back to the AutoDetect button
- * ([returnFocus]) after it closes. Used by Settings › Receiver and the connection screen.
+ * ([returnFocus]) after it closes. [onChosen] runs when the user picks a receiver, before the
+ * dialog goes away. Used by Settings › Receiver and the connection screen.
  */
 @Composable
-fun AutodetectDialogHost(viewModel: ConnectionViewModel, returnFocus: FocusRequester) {
+fun AutodetectDialogHost(
+    viewModel: ConnectionViewModel,
+    returnFocus: FocusRequester,
+    onChosen: () -> Unit = {},
+) {
     val state = viewModel.autodetectState
     var wasOpen by remember { mutableStateOf(false) }
     LaunchedEffect(state is AutodetectState.Hidden) {
@@ -63,7 +68,10 @@ fun AutodetectDialogHost(viewModel: ConnectionViewModel, returnFocus: FocusReque
     AutodetectDialog(
         state = state,
         isSelected = viewModel::isSelected,
-        onChoose = viewModel::chooseDetected,
+        onChoose = { receiver ->
+            viewModel.chooseDetected(receiver)
+            onChosen()
+        },
         onRetry = viewModel::startAutodetect,
         onClose = viewModel::closeAutodetect,
     )
@@ -88,20 +96,20 @@ private fun AutodetectDialog(
         }
         Column(
             modifier = Modifier
-                .widthIn(min = 460.dp, max = 640.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(18.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(18.dp))
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .widthIn(min = 320.dp, max = 480.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.autodetect_title), color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.autodetect_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             when (state) {
                 AutodetectState.Searching -> {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(34.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(stringResource(R.string.autodetect_searching), color = EnigmaColors.Text, fontSize = 18.sp)
-                            Text(stringResource(R.string.autodetect_searching_hint), color = EnigmaColors.Muted, fontSize = 14.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(24.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(stringResource(R.string.autodetect_searching), color = EnigmaColors.Text, fontSize = 15.sp)
+                            Text(stringResource(R.string.autodetect_searching_hint), color = EnigmaColors.Muted, fontSize = 13.sp)
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
@@ -109,7 +117,7 @@ private fun AutodetectDialog(
                     }
                 }
                 is AutodetectState.Results -> {
-                    Text(stringResource(R.string.autodetect_results_hint), color = EnigmaColors.Muted, fontSize = 15.sp)
+                    Text(stringResource(R.string.autodetect_results_hint), color = EnigmaColors.Muted, fontSize = 13.sp)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
@@ -129,17 +137,17 @@ private fun AutodetectDialog(
                     }
                 }
                 is AutodetectState.NothingFound -> {
-                    Text(stringResource(R.string.autodetect_none), color = EnigmaColors.Text, fontSize = 18.sp)
+                    Text(stringResource(R.string.autodetect_none), color = EnigmaColors.Text, fontSize = 15.sp)
                     Text(
                         stringResource(R.string.autodetect_none_detail, state.addresses, state.subnets),
                         color = EnigmaColors.Muted,
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
                     )
                     RetryClose(primary, onRetry, onClose)
                 }
                 AutodetectState.NoNetwork -> {
-                    Text(stringResource(R.string.autodetect_no_network), color = EnigmaColors.Text, fontSize = 17.sp, lineHeight = 23.sp)
+                    Text(stringResource(R.string.autodetect_no_network), color = EnigmaColors.Text, fontSize = 14.sp, lineHeight = 19.sp)
                     RetryClose(primary, onRetry, onClose)
                 }
                 AutodetectState.Hidden -> Unit
@@ -175,7 +183,7 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val title = receiver.model.ifBlank { receiver.address }
-            Text((if (inUse) "✓ " else "") + title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text((if (inUse) "✓ " else "") + title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val details = buildList {
                 add(receiver.address)
                 if (receiver.image.isNotBlank()) add(receiver.image)

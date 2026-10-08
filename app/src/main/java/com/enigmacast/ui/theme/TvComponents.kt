@@ -41,6 +41,7 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.Switch
 import androidx.tv.material3.SwitchDefaults
 import androidx.tv.material3.Text
@@ -67,7 +68,8 @@ private fun rowColors() = ListItemDefaults.colors(
 
 /**
  * Side menu and submenu entry. [selected] keeps the open section marked while focus
- * is in the content, so the user always sees where they are.
+ * is in the content, so the user always sees where they are. A compact row, not a
+ * TV list item: those are at least 40 dp tall and look bulky on a large screen.
  */
 @Composable
 fun NavItem(
@@ -78,28 +80,28 @@ fun NavItem(
     modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
 ) {
-    ListItem(
-        selected = selected,
+    CompactListRow(
         onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .onFocusChanged { if (it.isFocused) onFocus() },
-        headlineContent = {
-            Text(label, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        },
-        leadingContent = {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-        },
-        colors = rowColors(),
-        shape = ListItemDefaults.shape(shape = RowShape),
-        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.03f),
-    )
+        selected = selected,
+        modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            color = LocalContentColor.current,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable
 fun PanelHeader(title: String, subtitle: String = "", modifier: Modifier = Modifier) {
-    Column(modifier.padding(bottom = 12.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+    Column(modifier.padding(bottom = 8.dp)) {
+        Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         if (subtitle.isNotBlank()) {
             Text(
                 subtitle,
@@ -433,14 +435,14 @@ fun TvConfirmDialog(
         }
         Column(
             modifier = Modifier
-                .widthIn(min = 420.dp, max = 560.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(18.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(18.dp))
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .widthIn(min = 320.dp, max = 480.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Text(message, color = EnigmaColors.Muted, fontSize = 16.sp, lineHeight = 22.sp)
+            Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(message, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
                 DialogButton(
                     label = confirmLabel,
@@ -482,14 +484,14 @@ fun TvChoiceDialog(
         LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
         Column(
             modifier = Modifier
-                .widthIn(min = 420.dp, max = 640.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(18.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(18.dp))
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .widthIn(min = 320.dp, max = 480.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Text(message, color = EnigmaColors.Muted, fontSize = 16.sp, lineHeight = 22.sp)
+            Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(message, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
                 choices.forEachIndexed { index, label ->
                     DialogButton(

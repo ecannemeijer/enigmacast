@@ -44,7 +44,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(EnigmaColors.Canvas)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 72.dp, vertical = 48.dp),
+            .padding(horizontal = 48.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         PanelHeader(stringResource(R.string.settings), receiver?.let { "${it.name}  ·  ${it.host}" } ?: stringResource(R.string.no_receiver))

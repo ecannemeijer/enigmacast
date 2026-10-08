@@ -133,6 +133,9 @@
     <string name="field_password">Password</string>
     <string name="allow_self_signed">Allow self-signed certificate</string>
     <string name="action_autodetect">AutoDetect</string>
+    <string name="action_manual">Manual</string>
+    <string name="receiver_current">Now connected to %1$s</string>
+    <string name="receiver_found">%1$s · %2$s · port %3$s · %4$s</string>
     <string name="action_test_connection">Test connection</string>
     <string name="action_save">Save</string>
     <string name="action_connect">Connect</string>
@@ -140,7 +143,7 @@
     <string name="autodetect_title">Find Enigma2 receiver</string>
     <string name="autodetect_searching">Searching for Enigma2 receivers…</string>
     <string name="autodetect_searching_hint">Checking this network on ports 80 and 8080. This takes up to 10 seconds.</string>
-    <string name="autodetect_results_hint">Choose a receiver with OK. The address is filled in; then press Save.</string>
+    <string name="autodetect_results_hint">Choose a receiver with OK. Then enter the login and press Save.</string>
     <string name="autodetect_none">No Enigma2 receiver found.</string>
     <string name="autodetect_none_detail">Searched %1$d addresses on %2$s (ports 80 and 8080). Check that the receiver is on (not in deep standby) and on the same network, or enter its IP address yourself.</string>
     <string name="autodetect_no_network">This TV has no local network address (Wi-Fi or Ethernet) to search from. Check the network connection, or enter the receiver\'s IP address yourself.</string>

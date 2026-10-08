@@ -407,33 +407,33 @@ private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifi
     }
     Column(
         modifier = modifier
-            .widthIn(max = 760.dp)
-            .background(EnigmaColors.Scrim, RoundedCornerShape(16.dp))
-            .padding(28.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .widthIn(max = 440.dp)
+            .background(EnigmaColors.Scrim, RoundedCornerShape(12.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
-                    .size(12.dp)
-                    .background(if (tuner.status == TunerStatus.NO_PICTURE) EnigmaColors.Accent else EnigmaColors.Danger, RoundedCornerShape(6.dp)),
+                    .size(8.dp)
+                    .background(if (tuner.status == TunerStatus.NO_PICTURE) EnigmaColors.Accent else EnigmaColors.Danger, RoundedCornerShape(4.dp)),
             )
-            Spacer(Modifier.width(10.dp))
-            Text(title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             if (channelName.isNotBlank()) {
-                Text("  ·  $channelName", color = EnigmaColors.Muted, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("  ·  $channelName", color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        Text(tuner.message.asString(), color = Color.White, fontSize = 18.sp, lineHeight = 25.sp)
+        Text(tuner.message.asString(), color = Color.White, fontSize = 13.sp, lineHeight = 17.sp)
         if (tuner.users.isNotEmpty()) {
-            Text(stringResource(R.string.osd_in_use), color = EnigmaColors.Muted, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.osd_in_use), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
             tuner.users.forEach { user ->
                 val prefix = when (user.kind) {
                     TunerUserKind.LIVE -> "📺"
                     TunerUserKind.RECORDING -> "⏺"
                     TunerUserKind.STREAM -> "📱"
                 }
-                Text("$prefix  ${user.text().asString()}", color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("$prefix  ${user.text().asString()}", color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         val hint = if (tuner.status == TunerStatus.NO_PICTURE) {
@@ -441,7 +441,7 @@ private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifi
         } else {
             stringResource(R.string.osd_hint_retry)
         }
-        Text(hint, color = EnigmaColors.Subtle, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(hint, color = EnigmaColors.Subtle, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 

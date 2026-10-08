@@ -88,6 +88,10 @@ class ConnectionViewModel @Inject constructor(
     var busy by mutableStateOf(false)
     private var receiverId: String = ""
 
+    /** True once a receiver has been saved, so the setup screen can name the current one. */
+    var hasSavedReceiver by mutableStateOf(false)
+        private set
+
     /** Settings › Playback › Stream type: the result of the last save or port detection. */
     var streamTypeStatus by mutableStateOf(UiText.Empty)
         private set
@@ -99,6 +103,7 @@ class ConnectionViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.current().activeReceiver()?.let { saved ->
                 receiverId = saved.id
+                hasSavedReceiver = true
                 name = saved.name
                 host = saved.host
                 httpPort = saved.httpPort.toString()
@@ -309,6 +314,7 @@ class ConnectionViewModel @Inject constructor(
     fun save(onSaved: () -> Unit = {}) = launchAction { config ->
         settingsRepository.upsertReceiver(config)
         saved = config
+        hasSavedReceiver = true
         quality.settingsChanged()
         status = UiText.res(R.string.conn_saved, config.name)
         onSaved()
@@ -319,6 +325,7 @@ class ConnectionViewModel @Inject constructor(
         status = result.message
         if (result.success) {
             settingsRepository.upsertReceiver(config)
+            hasSavedReceiver = true
             onConnected()
         }
     }
@@ -361,6 +368,10 @@ class ConnectionViewModel @Inject constructor(
         host = receiver.host
         httpPort = receiver.httpPort.toString()
         useHttps = receiver.useHttps
+        val defaultName = AppLanguageStore.wrap(context).getString(R.string.default_receiver_name)
+        if ((name.isBlank() || name == defaultName) && receiver.model.isNotBlank()) {
+            name = receiver.model
+        }
         status = UiText.res(R.string.autodetect_chosen, receiver.label)
         closeAutodetect()
     }

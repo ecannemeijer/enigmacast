@@ -130,6 +130,9 @@
     <string name="field_password">Wachtwoord</string>
     <string name="allow_self_signed">Zelfondertekend certificaat toestaan</string>
     <string name="action_autodetect">Automatisch zoeken</string>
+    <string name="action_manual">Handmatig</string>
+    <string name="receiver_current">Nu verbonden met %1$s</string>
+    <string name="receiver_found">%1$s · %2$s · poort %3$s · %4$s</string>
     <string name="action_test_connection">Verbinding testen</string>
     <string name="action_save">Opslaan</string>
     <string name="action_connect">Verbinden</string>
@@ -137,7 +140,7 @@
     <string name="autodetect_title">Enigma2-ontvanger zoeken</string>
     <string name="autodetect_searching">Zoeken naar Enigma2-ontvangers…</string>
     <string name="autodetect_searching_hint">Dit netwerk wordt doorzocht op poort 80 en 8080. Dit duurt tot 10 seconden.</string>
-    <string name="autodetect_results_hint">Kies een ontvanger met OK. Het adres wordt ingevuld; druk daarna op Opslaan.</string>
+    <string name="autodetect_results_hint">Kies een ontvanger met OK. Vul daarna de login in en druk op Opslaan.</string>
     <string name="autodetect_none">Geen Enigma2-ontvanger gevonden.</string>
     <string name="autodetect_none_detail">%1$d adressen doorzocht op %2$s (poort 80 en 8080). Controleer of de ontvanger aan staat (niet in diepe standby) en op hetzelfde netwerk zit, of vul het IP-adres zelf in.</string>
     <string name="autodetect_no_network">Deze tv heeft geen lokaal netwerkadres (wifi of ethernet) om vanaf te zoeken. Controleer de netwerkverbinding, of vul het IP-adres van de ontvanger zelf in.</string>

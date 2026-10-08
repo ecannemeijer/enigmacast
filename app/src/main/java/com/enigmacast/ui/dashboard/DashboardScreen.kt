@@ -1,10 +1,8 @@
 package com.enigmacast.ui.dashboard
 
-import com.enigmacast.ui.theme.CompactButton
-import com.enigmacast.ui.connection.AutodetectDialogHost
+import com.enigmacast.ui.connection.ReceiverSetup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -27,11 +24,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -69,7 +64,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.BuildConfig
 import com.enigmacast.R
@@ -95,7 +89,6 @@ import com.enigmacast.ui.remote.ProgrammeDialog
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.ui.remote.rememberGuideClock
 import com.enigmacast.ui.settings.SettingsViewModel
-import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
@@ -106,7 +99,6 @@ import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.StepperRow
-import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvConfirmDialog
 import com.enigmacast.ui.theme.TvFieldKind
@@ -123,8 +115,6 @@ private val FocusedButtonText = Color.White
 private enum class DashSection {
     Stream,
     Receiver,
-    RcInfo,
-    Skins,
     Settings,
 }
 
@@ -133,6 +123,7 @@ private enum class SettingPage {
     Remote,
     Playback,
     Osd,
+    RcInfo,
     General,
     Info,
     Language,
@@ -162,8 +153,6 @@ fun DashboardScreen(
     val channelFocus = remember { FocusRequester() }
     val receiverMenuFocus = remember { FocusRequester() }
     val receiverPageFocus = remember { FocusRequester() }
-    val rcMenuFocus = remember { FocusRequester() }
-    val skinsMenuFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
     val bouquetFocus = remember { FocusRequester() }
@@ -177,8 +166,6 @@ fun DashboardScreen(
                     when (section) {
                         DashSection.Stream -> streamFocus.requestFocus()
                         DashSection.Receiver -> receiverMenuFocus.requestFocus()
-                        DashSection.RcInfo -> rcMenuFocus.requestFocus()
-                        DashSection.Skins -> skinsMenuFocus.requestFocus()
                         DashSection.Settings -> settingsMenuFocus.requestFocus()
                     }
                 }
@@ -213,10 +200,10 @@ fun DashboardScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
-                    .width(200.dp)
+                    .width(168.dp)
                     .fillMaxHeight()
                     .background(EnigmaColors.Canvas)
-                    .padding(horizontal = 12.dp, vertical = 18.dp),
+                    .padding(horizontal = 10.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Image(
@@ -253,22 +240,6 @@ fun DashboardScreen(
                         .focusProperties { right = receiverPageFocus },
                     onFocus = { section = DashSection.Receiver },
                     onClick = { section = DashSection.Receiver },
-                )
-                NavItem(
-                    icon = Icons.Filled.Info,
-                    label = stringResource(R.string.nav_rc_info),
-                    selected = section == DashSection.RcInfo,
-                    modifier = Modifier.focusRequester(rcMenuFocus),
-                    onFocus = { section = DashSection.RcInfo },
-                    onClick = { section = DashSection.RcInfo },
-                )
-                NavItem(
-                    icon = EnigmaIcons.Palette,
-                    label = stringResource(R.string.nav_osd_skins),
-                    selected = section == DashSection.Skins,
-                    modifier = Modifier.focusRequester(skinsMenuFocus),
-                    onFocus = { section = DashSection.Skins },
-                    onClick = { section = DashSection.Skins },
                 )
                 NavItem(
                     icon = Icons.Filled.Settings,
@@ -325,8 +296,6 @@ fun DashboardScreen(
                             viewModel = powerModel,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        DashSection.RcInfo -> RcInfoPanel(Modifier.fillMaxSize())
-                        DashSection.Skins -> OsdSkinsPanel(Modifier.fillMaxSize())
                         DashSection.Settings -> SettingsHub(
                             settingsPageFocus,
                             settingsMenuFocus,
@@ -685,31 +654,6 @@ private fun BouquetRow(
 }
 
 @Composable
-private fun OsdSkinsPanel(modifier: Modifier = Modifier) {
-    Column(modifier) {
-        PanelHeader(stringResource(R.string.nav_osd_skins), stringResource(R.string.skins_subtitle))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(EnigmaIcons.Palette, contentDescription = null, tint = EnigmaColors.Accent, modifier = Modifier.size(32.dp))
-                Text(stringResource(R.string.coming_soon), color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text(
-                    stringResource(R.string.skins_detail),
-                    color = EnigmaColors.Muted,
-                    fontSize = 13.sp,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun RcInfoPanel(modifier: Modifier = Modifier) {
     Column(modifier) {
         PanelHeader(stringResource(R.string.rc_title), stringResource(R.string.rc_subtitle))
@@ -771,6 +715,7 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { page = SettingPage.Remote }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+                SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, null, menuFocus) { page = SettingPage.RcInfo }
                 SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, null, menuFocus) { page = SettingPage.General }
                 SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
                 SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, null, menuFocus) { page = SettingPage.Language }
@@ -796,6 +741,7 @@ private fun SettingsHub(
                         viewModel,
                     )
                     SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, settings.osdInfo, viewModel)
+                    SettingPage.RcInfo -> RcInfoPanel(Modifier.fillMaxWidth())
                     SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, viewModel)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
                     SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus)
@@ -1009,6 +955,22 @@ private fun OsdSettingsPanel(
     viewModel: SettingsViewModel,
 ) {
     OsdInfoSettings(info, viewModel::setOsdInfoFields)
+    SettingsCard(stringResource(R.string.nav_osd_skins)) {
+        Text(
+            stringResource(R.string.coming_soon),
+            color = EnigmaColors.Text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+        Text(
+            stringResource(R.string.skins_detail),
+            color = EnigmaColors.Muted,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+        )
+    }
     SettingsCard(stringResource(R.string.receiver_osd)) {
         ChoiceRow(
             title = stringResource(R.string.osd_format),
@@ -1062,51 +1024,11 @@ private fun ReceiverSettingsPanel(
     viewModel: ConnectionViewModel = hiltViewModel(),
 ) {
     val autodetectFocus = remember { FocusRequester() }
-    AutodetectDialogHost(viewModel, autodetectFocus)
-    SettingsCard(stringResource(R.string.connection)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.padding(horizontal = 6.dp),
-        ) {
-            CompactField(stringResource(R.string.field_name), viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
-            CompactField(stringResource(R.string.field_ip), viewModel.host, { viewModel.host = it }, Modifier.weight(1f), TvFieldKind.HOST)
-            CompactButton(
-                label = stringResource(R.string.action_autodetect),
-                onClick = viewModel::startAutodetect,
-                icon = Icons.Filled.Search,
-                modifier = Modifier.focusRequester(autodetectFocus),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField(stringResource(R.string.field_webif_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
-            CompactField(stringResource(R.string.field_stream_port_short), viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
-        }
-    }
-    SettingsCard(stringResource(R.string.login)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField(stringResource(R.string.field_user), viewModel.username, { viewModel.username = it }, Modifier.weight(1f))
-            CompactField(stringResource(R.string.field_password), viewModel.password, { viewModel.password = it }, Modifier.weight(1f), TvFieldKind.PASSWORD)
-        }
-        ToggleRow(
-            title = "HTTPS",
-            description = stringResource(R.string.https_desc),
-            checked = viewModel.useHttps,
-            onCheckedChange = { viewModel.useHttps = it },
-        )
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        ActionTile(
-            icon = Icons.Filled.Check,
-            label = stringResource(R.string.action_save),
-            onClick = { viewModel.save() },
-            enabled = !viewModel.busy,
-            tone = TileTone.Primary,
-        )
-        if (viewModel.status.isNotEmpty()) {
-            Text(viewModel.status.asString(), color = EnigmaColors.Muted, fontSize = 14.sp)
-        }
-    }
+    ReceiverSetup(
+        viewModel = viewModel,
+        autodetectFocus = autodetectFocus,
+        showConnect = false,
+    )
 }
 
 @Composable
