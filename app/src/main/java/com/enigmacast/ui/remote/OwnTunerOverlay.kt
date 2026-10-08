@@ -67,6 +67,8 @@ import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
 import com.enigmacast.ui.osd.OsdInfoPresenter
 import com.enigmacast.ui.osd.OsdSkins
+import com.enigmacast.ui.recording.RecordingDot
+import com.enigmacast.ui.recording.isRecording
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.StatusPill
@@ -148,6 +150,7 @@ fun OwnTunerOverlay(
                     tuner = tuner,
                     details = ui.details,
                     optionsHint = !ui.bannerFromZap && !ui.quickBar,
+                    recording = isRecording(ui.recordingReferences, channel.reference),
                     osdInfo = ui.osdInfo,
                     osdFields = ui.osdInfoFields,
                     osdSkin = ui.osdSkin,
@@ -188,6 +191,7 @@ private fun ChannelBanner(
     tuner: TunerState,
     details: Boolean,
     optionsHint: Boolean,
+    recording: Boolean,
     osdInfo: OsdInfo,
     osdFields: OsdInfoFields,
     osdSkin: OsdSkinId,
@@ -236,6 +240,9 @@ private fun ChannelBanner(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (recording) {
+                    RecordingDot(Modifier.padding(start = 8.dp))
+                }
                 if (tuner.status == TunerStatus.FULL) {
                     StatusPill(stringResource(R.string.osd_tuners_busy), EnigmaColors.Danger)
                 }
@@ -612,6 +619,7 @@ private fun ChannelPanel(
                         event = NowEvents.lookup(ui.nowEvents, entry.reference, nowSec),
                         nowSec = nowSec,
                         focused = focused,
+                        recording = isRecording(ui.recordingReferences, entry.reference),
                         picon = picon,
                         cachedPicon = cachedPicon,
                     )
@@ -628,6 +636,7 @@ private fun RowScope.ChannelRowContent(
     event: NowEvent?,
     nowSec: Long,
     focused: Boolean,
+    recording: Boolean,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
 ) {
@@ -640,6 +649,9 @@ private fun RowScope.ChannelRowContent(
     )
     Picon(entry, picon, cachedPicon, Modifier.width(36.dp).height(22.dp), fallbackSize = 8.sp)
     Spacer(Modifier.width(8.dp))
+    if (recording) {
+        RecordingDot(Modifier.padding(end = 6.dp))
+    }
     Text(
         entry.name,
         fontSize = 13.sp,

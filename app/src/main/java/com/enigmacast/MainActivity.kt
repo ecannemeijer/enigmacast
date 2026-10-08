@@ -180,6 +180,8 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onBindBack = { appViewModel.onDashboardBack = it },
                 focusPlayingChannel = appViewModel.focusPlayingChannel,
                 onPlayingChannelFocused = appViewModel::playingChannelFocused,
+                returnToMyItemsId = appViewModel.returnToMyItemsId,
+                onMyItemsFocused = appViewModel::myItemsFocused,
                 updatePromptShown = appViewModel.updatePrompt != null,
                 focusLanguageSetting = appViewModel.focusLanguageSetting,
                 onLanguageSettingFocused = appViewModel::languageSettingFocused,
@@ -187,6 +189,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,
+                onLeaveToMyItems = appViewModel::showDashboardFromRecording,
             )
             AppScreen.Settings -> SettingsScreen(
                 onBack = appViewModel::back,

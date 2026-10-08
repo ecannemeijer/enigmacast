@@ -8,6 +8,8 @@ data class NowEvent(
     val title: String,
     val beginEpochSec: Long,
     val durationSec: Long,
+    /** OpenWebif event id, for a receiver timer. -1 when the answer had none. */
+    val eventId: Int = -1,
 ) {
     val endEpochSec: Long get() = beginEpochSec + durationSec
 

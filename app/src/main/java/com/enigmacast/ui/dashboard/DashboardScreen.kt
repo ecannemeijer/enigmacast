@@ -71,6 +71,8 @@ import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.PowerAction
+import com.enigmacast.domain.model.RecordingTarget
+import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.PowerEvent
 import com.enigmacast.locale.AppLanguage
@@ -97,6 +99,7 @@ import com.enigmacast.ui.theme.InfoRow
 import com.enigmacast.ui.theme.NavItem
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
+import com.enigmacast.ui.recording.RecordConfirmDialog
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.ToggleRow
@@ -114,6 +117,7 @@ private val FocusedButtonText = Color.White
 
 private enum class DashSection {
     Stream,
+    MyItems,
     Receiver,
     Settings,
 }
@@ -138,6 +142,8 @@ fun DashboardScreen(
     onBindBack: ((() -> Boolean)?) -> Unit,
     focusPlayingChannel: Boolean = false,
     onPlayingChannelFocused: () -> Unit = {},
+    returnToMyItemsId: String? = null,
+    onMyItemsFocused: () -> Unit = {},
     updatePromptShown: Boolean = false,
     focusLanguageSetting: Boolean = false,
     onLanguageSettingFocused: () -> Unit = {},
@@ -146,16 +152,28 @@ fun DashboardScreen(
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
 ) {
     // After a language change the activity is recreated; reopen Settings › Language then.
-    var section by remember { mutableStateOf(if (focusLanguageSetting) DashSection.Settings else DashSection.Stream) }
+    // Back from a recording opens My Items on that row.
+    var section by remember {
+        mutableStateOf(
+            when {
+                focusLanguageSetting -> DashSection.Settings
+                returnToMyItemsId != null -> DashSection.MyItems
+                else -> DashSection.Stream
+            },
+        )
+    }
     var contentFocused by remember { mutableStateOf(false) }
     val streamFocus = remember { FocusRequester() }
     var streamItemFocused by remember { mutableStateOf(false) }
     val channelFocus = remember { FocusRequester() }
+    val myItemsMenuFocus = remember { FocusRequester() }
+    val myItemsListFocus = remember { FocusRequester() }
     val receiverMenuFocus = remember { FocusRequester() }
     val receiverPageFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
     val bouquetFocus = remember { FocusRequester() }
+    val myItemsModel: MyItemsViewModel = hiltViewModel()
     DisposableEffect(contentFocused, section, guideModel.askWake) {
         onBindBack {
             if (guideModel.askWake) {
@@ -165,6 +183,7 @@ fun DashboardScreen(
                 runCatching {
                     when (section) {
                         DashSection.Stream -> streamFocus.requestFocus()
+                        DashSection.MyItems -> myItemsMenuFocus.requestFocus()
                         DashSection.Receiver -> receiverMenuFocus.requestFocus()
                         DashSection.Settings -> settingsMenuFocus.requestFocus()
                     }
@@ -177,7 +196,23 @@ fun DashboardScreen(
         onDispose { onBindBack(null) }
     }
     LaunchedEffect(Unit) {
-        if (!focusLanguageSetting) streamFocus.requestFocus()
+        if (!focusLanguageSetting && returnToMyItemsId == null) streamFocus.requestFocus()
+    }
+    LaunchedEffect(returnToMyItemsId) {
+        val id = returnToMyItemsId ?: return@LaunchedEffect
+        myItemsModel.focusRow(id)
+        myItemsListFocus.requestWhenReady()
+        onMyItemsFocused()
+    }
+    LaunchedEffect(myItemsModel.focusToken, myItemsModel.pendingDelete, myItemsModel.selected) {
+        if (!myItemsModel.holdList) return@LaunchedEffect
+        if (myItemsModel.selected != null || myItemsModel.pendingDelete != null) return@LaunchedEffect
+        section = DashSection.MyItems
+        myItemsListFocus.requestWhenReady()
+    }
+    val openSection = { target: DashSection ->
+        val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
+        if (!keepList) section = target
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -228,8 +263,18 @@ fun DashboardScreen(
                         .focusRequester(streamFocus)
                         .onFocusChanged { streamItemFocused = it.isFocused }
                         .focusProperties { right = channelFocus },
-                    onFocus = { section = DashSection.Stream },
+                    onFocus = { openSection(DashSection.Stream) },
                     onClick = onStream,
+                )
+                NavItem(
+                    icon = EnigmaIcons.Record,
+                    label = stringResource(R.string.nav_my_items),
+                    selected = section == DashSection.MyItems,
+                    modifier = Modifier
+                        .focusRequester(myItemsMenuFocus)
+                        .focusProperties { right = myItemsListFocus },
+                    onFocus = { section = DashSection.MyItems },
+                    onClick = { section = DashSection.MyItems },
                 )
                 NavItem(
                     icon = EnigmaIcons.Power,
@@ -238,7 +283,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(receiverMenuFocus)
                         .focusProperties { right = receiverPageFocus },
-                    onFocus = { section = DashSection.Receiver },
+                    onFocus = { openSection(DashSection.Receiver) },
                     onClick = { section = DashSection.Receiver },
                 )
                 NavItem(
@@ -248,7 +293,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .focusProperties { right = settingsPageFocus },
-                    onFocus = { section = DashSection.Settings },
+                    onFocus = { openSection(DashSection.Settings) },
                     onClick = { section = DashSection.Settings },
                 )
                 Spacer(Modifier.height(8.dp))
@@ -290,6 +335,12 @@ fun DashboardScreen(
                             onMiniPlayer,
                             onStream,
                         )
+                        DashSection.MyItems -> MyItemsPanel(
+                            listFocus = myItemsListFocus,
+                            menuFocus = myItemsMenuFocus,
+                            onPlay = onStream,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                         DashSection.Receiver -> ReceiverPowerPanel(
                             pageFocus = receiverPageFocus,
                             menuFocus = receiverMenuFocus,
@@ -307,6 +358,9 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+        guideModel.recordAsk?.let { ask ->
+            RecordConfirmDialog(ask, onConfirm = guideModel::confirmRecord, onDismiss = guideModel::dismissRecord)
         }
         // Wait until the update prompt is closed: a second dialog window would take its focus.
         if (guideModel.askWake && !updatePromptShown) {
@@ -480,6 +534,7 @@ private fun StreamPanel(
                 picon = guideModel::picon,
                 cachedPicon = guideModel::cachedPicon,
                 autoSwitchKeys = autoSwitchKeys,
+                recordingReferences = guideModel.recordingReferences,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -738,6 +793,8 @@ private fun SettingsHub(
                         settings.playback.subtitlesEnabled,
                         settings.playback.audioDelayPcmMs,
                         settings.playback.audioDelayPassthroughMs,
+                        settings.playback.recordingTarget,
+                        settings.playback.recordingPreset,
                         viewModel,
                     )
                     SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, settings.osdInfo, viewModel)
@@ -781,11 +838,31 @@ private fun PlaybackSettingsPanel(
     subtitlesEnabled: Boolean,
     audioDelayPcmMs: Int,
     audioDelayPassthroughMs: Int,
+    recordingTarget: RecordingTarget,
+    recordingPreset: TranscodePreset?,
     viewModel: SettingsViewModel,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
     val passthroughActive by remote.audioPassthroughActive.collectAsStateWithLifecycle()
+    SettingsCard(stringResource(R.string.record_target)) {
+        ChoiceRow(
+            title = stringResource(R.string.record_target),
+            description = stringResource(R.string.record_target_desc),
+            options = listOf(stringResource(R.string.record_target_tv), stringResource(R.string.record_target_receiver)),
+            selectedIndex = if (recordingTarget == RecordingTarget.RECEIVER) 1 else 0,
+            onSelect = { viewModel.setRecordingTarget(if (it == 1) RecordingTarget.RECEIVER else RecordingTarget.TV) },
+        )
+        val presets = TranscodePreset.entries
+        ChoiceRow(
+            title = stringResource(R.string.record_size),
+            description = stringResource(R.string.record_size_desc),
+            options = listOf(stringResource(R.string.record_size_original)) +
+                presets.map { stringResource(R.string.quality_transcoded, it.height, it.bitrateKbps / 1000f) },
+            selectedIndex = presets.indexOf(recordingPreset).let { if (it < 0) 0 else it + 1 },
+            onSelect = { viewModel.setRecordingPreset(presets.getOrNull(it - 1)) },
+        )
+    }
     SettingsCard(stringResource(R.string.viewing_mode)) {
         ChoiceRow(
             title = stringResource(R.string.viewing_mode_title),

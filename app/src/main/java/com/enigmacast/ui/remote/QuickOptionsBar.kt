@@ -92,6 +92,7 @@ data class QuickBarActions(
     val onSleep: (Int) -> Unit,
     val onRestart: () -> Unit,
     val onQuality: (StreamLevel?) -> Unit,
+    val onRecord: () -> Unit,
 )
 
 private val TileShape = RoundedCornerShape(10.dp)
@@ -102,7 +103,7 @@ private val TileShape = RoundedCornerShape(10.dp)
  */
 @Composable
 fun QuickOptionsBar(ui: RemoteDisplayUiState, actions: QuickBarActions, modifier: Modifier = Modifier) {
-    val tiles = QuickOptions.tiles(ui.ownTuner)
+    val tiles = QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback)
     val firstFocus = remember { FocusRequester() }
     var open by remember { mutableStateOf<QuickOption?>(null) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -125,12 +126,17 @@ fun QuickOptionsBar(ui: RemoteDisplayUiState, actions: QuickBarActions, modifier
             Box {
                 QuickTile(
                     icon = option.icon(),
-                    label = option.label(),
+                    label = when {
+                        option == QuickOption.RECORD && ui.recordingTitle.isNotBlank() -> stringResource(R.string.my_items_stop)
+                        option == QuickOption.RESTART && ui.playerState.filePlayback -> stringResource(R.string.file_from_start)
+                        else -> option.label()
+                    },
                     value = tileValue(option, ui, nowMs),
                     onClick = {
                         when (option) {
                             QuickOption.GUIDE -> actions.onGuide()
                             QuickOption.RESTART -> actions.onRestart()
+                            QuickOption.RECORD -> actions.onRecord()
                             else -> open = option
                         }
                     },
@@ -270,7 +276,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }
-        QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO -> emptyList()
+        QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD -> emptyList()
     }
 }
 
@@ -410,6 +416,13 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     QuickOption.STREAM_INFO -> bitrateLabel(ui.stats.bitrateKbps)
     QuickOption.QUALITY -> qualityLabel(ui.quality.level)
     QuickOption.RESTART -> ""
+    QuickOption.RECORD -> if (ui.recordingTitle.isNotBlank()) ui.recordingTitle else {
+        val nowSec = nowMs / 1000
+        val reference = ui.own.channel?.reference ?: ui.currentService?.reference.orEmpty()
+        ui.own.guide?.currentEvent?.title
+            ?: NowEvents.lookup(ui.nowEvents, reference, nowSec)?.title
+            .orEmpty()
+    }
 }
 
 @Composable
@@ -425,6 +438,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.STREAM_INFO -> R.string.quick_stream_info
         QuickOption.QUALITY -> R.string.quick_quality
         QuickOption.RESTART -> R.string.quick_restart
+        QuickOption.RECORD -> R.string.epg_record
     },
 )
 
@@ -439,6 +453,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.STREAM_INFO -> Icons.Filled.Info
     QuickOption.QUALITY -> EnigmaIcons.Speed
     QuickOption.RESTART -> Icons.Filled.Refresh
+    QuickOption.RECORD -> EnigmaIcons.Record
 }
 
 @Composable

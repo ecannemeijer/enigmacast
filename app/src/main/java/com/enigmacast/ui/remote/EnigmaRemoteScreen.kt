@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,17 +41,24 @@ import com.enigmacast.domain.osd.OsdScale
 import com.enigmacast.domain.osd.OsdScaleMode
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.player.VideoScaling
+import com.enigmacast.ui.recording.RecordConfirmDialog
+import com.enigmacast.ui.recording.RecordingChip
 import com.enigmacast.ui.theme.EnigmaColors
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun EnigmaRemoteScreen(
     onLeaveToDashboard: () -> Unit,
+    onLeaveToMyItems: (String) -> Unit,
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
 ) {
-    DisposableEffect(onLeaveToDashboard) {
+    DisposableEffect(onLeaveToDashboard, onLeaveToMyItems) {
         viewModel.onLeaveToDashboard = onLeaveToDashboard
-        onDispose { viewModel.onLeaveToDashboard = null }
+        viewModel.onLeaveToMyItems = onLeaveToMyItems
+        onDispose {
+            viewModel.onLeaveToDashboard = null
+            viewModel.onLeaveToMyItems = null
+        }
     }
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val player = viewModel.player()
@@ -64,8 +72,9 @@ fun EnigmaRemoteScreen(
             onGuide = viewModel::openGuideFromBar,
             onRecent = viewModel::zapRecent,
             onSleep = viewModel::setSleepTimer,
-            onRestart = viewModel::restartStream,
+            onRestart = viewModel::restartFromBar,
             onQuality = viewModel::chooseQuality,
+            onRecord = viewModel::recordWatching,
         )
     }
     val guideActions = remember(viewModel) {
@@ -80,13 +89,41 @@ fun EnigmaRemoteScreen(
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         EnigmaVideoPlayer(
             player = player,
-            frame = ui.osdFrame,
+            frame = if (ui.playerState.filePlayback) null else ui.osdFrame,
             debugBorders = ui.osdDebugBorders,
             cues = ui.cues,
             picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
             modifier = Modifier.fillMaxSize(),
         )
-        if (ui.ownTuner) {
+        if (ui.recordingChannel.isNotBlank() && !ui.playerState.filePlayback) {
+            RecordingChip(
+                channel = ui.recordingChannel,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 28.dp, top = 24.dp),
+            )
+        }
+        if (ui.playerState.filePlayback) {
+            Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                if (ui.fileBar) {
+                    RecordingBar(
+                        ui = ui,
+                        onSeek = viewModel::seekFile,
+                        onTogglePause = viewModel::toggleFilePause,
+                        onOptions = viewModel::openFileOptions,
+                        onTouch = viewModel::touchFileBar,
+                    )
+                }
+                if (ui.quickBar) {
+                    QuickOptionsBar(
+                        ui = ui,
+                        actions = quickBarActions,
+                        modifier = Modifier
+                            .padding(horizontal = 36.dp, vertical = 12.dp)
+                            .background(EnigmaColors.Scrim, RoundedCornerShape(14.dp))
+                            .padding(8.dp),
+                    )
+                }
+            }
+        } else if (ui.ownTuner) {
             OwnTunerOverlay(
                 ui = ui,
                 picon = viewModel::picon,
@@ -113,6 +150,9 @@ fun EnigmaRemoteScreen(
         }
         if (ui.debugOverlayEnabled) {
             DebugOverlay(ui)
+        }
+        ui.recordAsk?.let { ask ->
+            RecordConfirmDialog(ask, onConfirm = viewModel::confirmRecord, onDismiss = viewModel::dismissRecord)
         }
     }
 }

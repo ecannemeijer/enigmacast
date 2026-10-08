@@ -422,6 +422,7 @@ fun TvConfirmDialog(
     destructive: Boolean = false,
     busy: Boolean = false,
     focusConfirm: Boolean = !destructive,
+    compact: Boolean = false,
 ) {
     Dialog(
         onDismissRequest = { if (!busy) onDismiss() },
@@ -435,20 +436,21 @@ fun TvConfirmDialog(
         }
         Column(
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 480.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .widthIn(min = if (compact) 240.dp else 320.dp, max = if (compact) 400.dp else 480.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(if (compact) 10.dp else 14.dp))
+                .padding(if (compact) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(message, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+            Text(title, color = EnigmaColors.Text, fontSize = if (compact) 15.sp else 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(message, color = EnigmaColors.Muted, fontSize = if (compact) 12.sp else 14.sp, lineHeight = if (compact) 16.sp else 19.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (compact) 2.dp else 6.dp)) {
                 DialogButton(
                     label = confirmLabel,
                     onClick = onConfirm,
                     destructive = destructive,
                     enabled = !busy,
+                    compact = compact,
                     modifier = Modifier.focusRequester(confirmFocus),
                 )
                 DialogButton(
@@ -456,6 +458,7 @@ fun TvConfirmDialog(
                     onClick = onDismiss,
                     destructive = false,
                     enabled = !busy,
+                    compact = compact,
                     modifier = Modifier.focusRequester(dismissFocus),
                 )
             }
@@ -474,6 +477,7 @@ fun TvChoiceDialog(
     choices: List<String>,
     onChoose: (Int) -> Unit,
     onDismiss: () -> Unit,
+    compact: Boolean = false,
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -484,21 +488,22 @@ fun TvChoiceDialog(
         LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
         Column(
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 480.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .widthIn(min = if (compact) 240.dp else 320.dp, max = if (compact) 420.dp else 480.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(if (compact) 10.dp else 14.dp))
+                .padding(if (compact) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(message, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+            Text(title, color = EnigmaColors.Text, fontSize = if (compact) 15.sp else 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(message, color = EnigmaColors.Muted, fontSize = if (compact) 12.sp else 14.sp, lineHeight = if (compact) 16.sp else 19.sp, maxLines = 3)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (compact) 2.dp else 6.dp)) {
                 choices.forEachIndexed { index, label ->
                     DialogButton(
                         label = label,
                         onClick = { onChoose(index) },
                         destructive = false,
                         enabled = true,
+                        compact = compact,
                         modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
                     )
                 }
@@ -513,13 +518,17 @@ internal fun DialogButton(
     onClick: () -> Unit,
     destructive: Boolean,
     enabled: Boolean,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(
+            horizontal = if (compact) 12.dp else 24.dp,
+            vertical = if (compact) 4.dp else 10.dp,
+        ),
         colors = ButtonDefaults.colors(
             containerColor = EnigmaColors.Raised,
             contentColor = if (destructive) EnigmaColors.Danger else EnigmaColors.Text,
@@ -529,7 +538,7 @@ internal fun DialogButton(
             pressedContentColor = if (destructive) EnigmaColors.OnFocus else EnigmaColors.OnAccent,
         ),
     ) {
-        Text(label, fontSize = 16.sp)
+        Text(label, fontSize = if (compact) 13.sp else 16.sp)
     }
 }
 

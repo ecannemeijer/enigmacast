@@ -155,6 +155,17 @@ data class RemoteDisplayUiState(
     /** The channel the list focuses; blank means the channel that plays. */
     val listFocusReference: String = "",
     val programmePrompt: ProgrammePrompt? = null,
+    /** Confirm before a recording is stored. */
+    val recordAsk: com.enigmacast.domain.recording.RecordAsk? = null,
+    /** Title of a capture that is being written now, blank when nothing is recording. */
+    val recordingTitle: String = "",
+    /** Channel names of the captures that are being written now. */
+    val recordingChannel: String = "",
+    /** Service references of the channels that are being recorded. */
+    val recordingReferences: Set<String> = emptySet(),
+    /** The recording playback bar is open. */
+    val fileBar: Boolean = false,
+    val fileTitle: String = "",
     /** Programmes with AutoSwitch set ([GuideEvent.programmeKey]). */
     val autoSwitchKeys: Set<String> = emptySet(),
     /** Receiver facts for the channel banner. The skin draws [osdInfo]; this stays independent of the look. */
@@ -185,6 +196,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val quality: StreamQualityController,
     private val reminders: ReminderScheduler,
     private val osdInfoRepository: OsdInfoRepository,
+    private val recordings: com.enigmacast.live.RecordingBook,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -209,7 +221,9 @@ class RemoteDisplayViewModel @Inject constructor(
     private var infoQuickBar = false
     private var infoJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
+    var onLeaveToMyItems: ((String) -> Unit)? = null
     private var bannerJob: Job? = null
+    private var fileBarJob: Job? = null
     private var osdInfoJob: Job? = null
     private var osdInfoKey: String? = null
     private var numberJob: Job? = null
@@ -223,6 +237,28 @@ class RemoteDisplayViewModel @Inject constructor(
     init {
         playback.attach(viewModelScope)
         inputBus.handler = ::handleKey
+        viewModelScope.launch {
+            playback.state.collect { state ->
+                if (!state.filePlayback && _ui.value.fileBar) hideFileBar()
+            }
+        }
+        viewModelScope.launch {
+            recordings.nowPlaying.collect { item ->
+                _ui.update { it.copy(fileTitle = item?.title.orEmpty()) }
+            }
+        }
+        viewModelScope.launch {
+            recordings.items.collect { list ->
+                val running = list.filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
+                _ui.update {
+                    it.copy(
+                        recordingTitle = running.firstOrNull()?.title.orEmpty(),
+                        recordingChannel = running.joinToString(" · ") { item -> item.channelName.ifBlank { item.title } },
+                        recordingReferences = running.map { item -> item.reference }.toSet(),
+                    )
+                }
+            }
+        }
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 settingsSnapshot = settings
@@ -290,7 +326,7 @@ class RemoteDisplayViewModel @Inject constructor(
         viewModelScope.launch {
             // Following the receiver: reopen the receiver's channel with the new quality.
             quality.restarts.collect {
-                if (_ui.value.ownTuner) return@collect
+                if (_ui.value.ownTuner || playback.isFilePlayback()) return@collect
                 val active = settingsSnapshot.activeReceiver() ?: return@collect
                 val reference = _ui.value.currentService?.reference?.takeIf { it.isNotBlank() } ?: return@collect
                 val target = streamTargets.target(active, reference)
@@ -332,6 +368,43 @@ class RemoteDisplayViewModel @Inject constructor(
         bannerJob?.cancel()
         _ui.update { it.copy(quickBar = true, quickBarToken = it.quickBarToken + 1) }
         watchOsdInfo()
+    }
+
+    fun showFileBar() {
+        _ui.update { it.copy(fileBar = true) }
+        armFileBarHide()
+    }
+
+    fun touchFileBar() {
+        if (_ui.value.fileBar) armFileBarHide()
+    }
+
+    fun hideFileBar() {
+        fileBarJob?.cancel()
+        _ui.update { it.copy(fileBar = false) }
+    }
+
+    fun openFileOptions() {
+        touchFileBar()
+        openQuickBar()
+    }
+
+    fun seekFile(positionMs: Long) {
+        playback.seekFile(positionMs)
+        touchFileBar()
+    }
+
+    fun toggleFilePause() {
+        playback.toggleFilePause()
+        touchFileBar()
+    }
+
+    private fun armFileBarHide() {
+        fileBarJob?.cancel()
+        fileBarJob = viewModelScope.launch {
+            delay(8_000)
+            if (!_ui.value.quickBar) _ui.update { it.copy(fileBar = false) }
+        }
     }
 
     /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
@@ -417,6 +490,17 @@ class RemoteDisplayViewModel @Inject constructor(
         if (_ui.value.ownTuner) ownSession.retry() else playback.restart()
     }
 
+    /** Restart tile: a recording goes back to the start, a channel opens again. */
+    fun restartFromBar() {
+        if (playback.isFilePlayback()) {
+            _ui.update { it.copy(quickBar = false) }
+            playback.seekFile(0)
+            touchFileBar()
+        } else {
+            restartStream()
+        }
+    }
+
     fun player() = playback.exoPlayer()
 
     /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
@@ -496,6 +580,7 @@ class RemoteDisplayViewModel @Inject constructor(
             }
             launch {
                 monitor.changes.collect { service ->
+                    if (playback.isFilePlayback()) return@collect
                     val active = settingsSnapshot.activeReceiver() ?: return@collect
                     val target = streamTargets.target(active, service.reference)
                     playback.play(target.url, authorization = target.authorization, internet = target.internet)
@@ -707,10 +792,98 @@ class RemoteDisplayViewModel @Inject constructor(
         showNotice(AutoSwitchTexts.result(reminders.toggle(prompt.event, prompt.channelName, receiverId), prompt), NOTICE_LONG_MS)
     }
 
-    /** Record in the programme dialog: not available yet. */
+    /** Record in the programme dialog: confirm the destination, then store it. */
     fun chooseRecord() {
+        val prompt = _ui.value.programmePrompt ?: return
         _ui.update { it.copy(programmePrompt = null) }
-        showNotice(UiText.res(R.string.epg_record_coming_soon), NOTICE_LONG_MS)
+        viewModelScope.launch {
+            when (val result = recordings.prepare(prompt.event, prompt.channelName)) {
+                is com.enigmacast.live.RecordingBook.PrepareResult.Ask -> _ui.update { it.copy(recordAsk = result.ask) }
+                is com.enigmacast.live.RecordingBook.PrepareResult.Message -> showNotice(result.text, NOTICE_LONG_MS)
+            }
+        }
+    }
+
+    fun confirmRecord() {
+        val ask = _ui.value.recordAsk ?: return
+        _ui.update { it.copy(recordAsk = null) }
+        viewModelScope.launch { showNotice(recordings.schedule(ask), NOTICE_LONG_MS) }
+    }
+
+    fun dismissRecord() {
+        _ui.update { it.copy(recordAsk = null) }
+    }
+
+    /** Record tile: stop a capture that is running, otherwise record the programme on now. */
+    fun recordWatching() {
+        val running = recordings.items.value.filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
+        if (running.isNotEmpty()) {
+            closeQuickBar()
+            viewModelScope.launch {
+                running.forEach { recordings.stop(it.id) }
+                showNotice(UiText.res(R.string.record_stopped), NOTICE_LONG_MS)
+            }
+            return
+        }
+        closeQuickBar()
+        viewModelScope.launch {
+            val ui = _ui.value
+            val reference = ui.own.channel?.reference?.takeIf { it.isNotBlank() }
+                ?: ui.currentService?.reference.orEmpty()
+            val channelName = ui.own.channel?.name?.takeIf { it.isNotBlank() }
+                ?: ui.currentService?.name.orEmpty()
+            if (reference.isBlank()) {
+                showNotice(UiText.res(R.string.record_no_programme), NOTICE_LONG_MS)
+                return@launch
+            }
+            val now = nowSec()
+            val event = airingFromBanner(ui, reference, now)
+                ?: airingFromNow(ui, reference, now)
+                ?: airingFromGuide(reference, now)
+            if (event == null) {
+                showNotice(UiText.res(R.string.record_no_programme), NOTICE_LONG_MS)
+                return@launch
+            }
+            when (val result = recordings.prepare(event, channelName.ifBlank { event.title })) {
+                is com.enigmacast.live.RecordingBook.PrepareResult.Ask -> _ui.update { it.copy(recordAsk = result.ask) }
+                is com.enigmacast.live.RecordingBook.PrepareResult.Message -> showNotice(result.text, NOTICE_LONG_MS)
+            }
+        }
+    }
+
+    private fun airingFromBanner(ui: RemoteDisplayUiState, reference: String, now: Long): GuideEvent? {
+        val current = ui.own.guide?.currentEvent ?: return null
+        if (current.eventId < 0 || current.beginEpochSec > now || current.beginEpochSec + current.durationSec <= now) return null
+        return GuideEvent(
+            eventId = current.eventId,
+            reference = reference,
+            title = current.title,
+            shortDescription = current.shortDescription,
+            plot = current.plot,
+            beginEpochSec = current.beginEpochSec,
+            durationSec = current.durationSec,
+        )
+    }
+
+    private fun airingFromNow(ui: RemoteDisplayUiState, reference: String, now: Long): GuideEvent? {
+        val current = NowEvents.lookup(ui.nowEvents, reference, now) ?: return null
+        if (current.eventId < 0) return null
+        return GuideEvent(
+            eventId = current.eventId,
+            reference = current.reference.ifBlank { reference },
+            title = current.title,
+            shortDescription = "",
+            plot = "",
+            beginEpochSec = current.beginEpochSec,
+            durationSec = current.durationSec,
+        )
+    }
+
+    private suspend fun airingFromGuide(reference: String, now: Long): GuideEvent? {
+        val receiver = settingsSnapshot.activeReceiver() ?: return null
+        return runCatching { guideRepository.serviceEvents(receiver, reference) }
+            .getOrDefault(emptyList())
+            .firstOrNull { it.isAiring(now) }
     }
 
     fun dismissProgramme() {
@@ -911,7 +1084,49 @@ class RemoteDisplayViewModel @Inject constructor(
         if (!ownSession.zapNumber(number)) showNotice(UiText.res(R.string.notice_number_not_in_list, number))
     }
 
+    private fun handleFileKey(event: KeyEvent): Boolean {
+        val ui = _ui.value
+        if (ui.quickBar) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) closeQuickBar()
+            return event.keyCode == KeyEvent.KEYCODE_BACK
+        }
+        if (ui.fileBar) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) hideFileBar()
+            return event.keyCode == KeyEvent.KEYCODE_BACK
+        }
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_UP) showFileBar()
+            }
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                if (event.action == KeyEvent.ACTION_UP) playback.toggleFilePause()
+            }
+            KeyEvent.KEYCODE_BACK -> if (event.action == KeyEvent.ACTION_UP) leaveRecording()
+        }
+        return true
+    }
+
+    /** Back from a recording: stop the file and return to that row in My Items. */
+    private fun leaveRecording() {
+        val id = recordings.nowPlaying.value?.id
+        playback.stopFile()
+        recordings.clearNowPlaying()
+        hideFileBar()
+        if (_ui.value.ownTuner) ownSession.resumeAfterFile() else resumeFollow()
+        if (id != null) onLeaveToMyItems?.invoke(id) else onLeaveToDashboard?.invoke()
+    }
+
+    private fun resumeFollow() {
+        val reference = _ui.value.currentService?.reference?.takeIf { it.isNotBlank() } ?: return
+        val receiver = settingsSnapshot.activeReceiver() ?: return
+        viewModelScope.launch {
+            val target = streamTargets.target(receiver, reference)
+            playback.play(target.url, force = true, authorization = target.authorization, internet = target.internet)
+        }
+    }
+
     private fun handleKey(event: KeyEvent): Boolean {
+        if (playback.isFilePlayback()) return handleFileKey(event)
         if (_ui.value.ownTuner) return handleOwnKey(event)
         if (_ui.value.quickBar) {
             // Following the receiver: the bar keeps the keys while it is open; Back closes it.

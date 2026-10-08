@@ -63,6 +63,7 @@ class StreamGuideViewModel @Inject constructor(
     private val picons: PiconRepository,
     private val quality: StreamQualityController,
     private val reminders: ReminderScheduler,
+    private val recordings: com.enigmacast.live.RecordingBook,
 ) : ViewModel() {
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
@@ -86,12 +87,17 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var programmePrompt by mutableStateOf<ProgrammePrompt?>(null)
         private set
+    var recordAsk by mutableStateOf<com.enigmacast.domain.recording.RecordAsk?>(null)
+        private set
 
     /** Programmes with AutoSwitch set ([GuideEvent.programmeKey]), marked in the grid. */
     val autoSwitchKeys: StateFlow<Set<String>> = reminders.scheduledKeys
 
     /** A short message under the mini player (AutoSwitch set, recording coming soon, ...). */
     var notice by mutableStateOf(UiText.Empty)
+        private set
+    /** Service references of channels this app is recording now. */
+    var recordingReferences by mutableStateOf<Set<String>>(emptySet())
         private set
     private var noticeJob: Job? = null
 
@@ -133,6 +139,14 @@ class StreamGuideViewModel @Inject constructor(
         viewModelScope.launch {
             snapshotFlow { Triple(selectedBouquetReference, channels, tunedReference) }.collect { (bouquet, list, tuned) ->
                 grid.show(bouquet, list, tuned)
+            }
+        }
+        viewModelScope.launch {
+            recordings.items.collect { list ->
+                recordingReferences = list
+                    .filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
+                    .map { it.reference }
+                    .toSet()
             }
         }
     }
@@ -180,10 +194,26 @@ class StreamGuideViewModel @Inject constructor(
         }
     }
 
-    /** Record in the programme dialog: not available yet. */
+    /** Record in the programme dialog: confirm the destination, then store it. */
     fun chooseRecord() {
+        val prompt = programmePrompt ?: return
         programmePrompt = null
-        showNotice(UiText.res(R.string.epg_record_coming_soon), NOTICE_LONG_MS)
+        viewModelScope.launch {
+            when (val result = recordings.prepare(prompt.event, prompt.channelName)) {
+                is com.enigmacast.live.RecordingBook.PrepareResult.Ask -> recordAsk = result.ask
+                is com.enigmacast.live.RecordingBook.PrepareResult.Message -> showNotice(result.text, NOTICE_LONG_MS)
+            }
+        }
+    }
+
+    fun confirmRecord() {
+        val ask = recordAsk ?: return
+        recordAsk = null
+        viewModelScope.launch { showNotice(recordings.schedule(ask), NOTICE_LONG_MS) }
+    }
+
+    fun dismissRecord() {
+        recordAsk = null
     }
 
     fun dismissProgramme() {
@@ -298,7 +328,7 @@ class StreamGuideViewModel @Inject constructor(
             } else {
                 loadGuide()
             }
-            if (!bouquetLoaded) loadBouquet()
+            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
         }
     }
 
@@ -331,7 +361,7 @@ class StreamGuideViewModel @Inject constructor(
             powerKnown = true
             status = UiText.Empty
             loadGuide()
-            if (!bouquetLoaded) loadBouquet()
+            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
         }
     }
 
@@ -379,7 +409,7 @@ class StreamGuideViewModel @Inject constructor(
         status = UiText.Empty
         viewModelScope.launch {
             loadGuide()
-            if (!bouquetLoaded) loadBouquet()
+            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
         }
     }
 
@@ -593,6 +623,7 @@ class StreamGuideViewModel @Inject constructor(
         runCatching { serviceSource.currentBouquetChannels(receiver) }
             .onSuccess { loaded ->
                 if (bouquetPinned) return@onSuccess
+                if (loaded.channels.isEmpty()) return@onSuccess
                 bouquetName = loaded.bouquetName
                 channels = loaded.channels
                 selectedBouquetReference = loaded.bouquetReference

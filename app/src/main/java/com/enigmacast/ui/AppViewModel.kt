@@ -53,6 +53,7 @@ class AppViewModel @Inject constructor(
     private val tunnel: WireGuardTunnel,
     private val reminders: ReminderScheduler,
     private val autoSwitcher: AutoSwitcher,
+    private val recordings: com.enigmacast.live.RecordingBook,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -84,6 +85,7 @@ class AppViewModel @Inject constructor(
     init {
         playback.allowPlayback()
         watchSleepTimer()
+        viewModelScope.launch { recordings.ensureArmed() }
         viewModelScope.launch {
             reminders.switches.collect { autoSwitch(it) }
         }
@@ -181,10 +183,26 @@ class AppViewModel @Inject constructor(
     var focusPlayingChannel by mutableStateOf(false)
         private set
 
+    /** Back from a recording: open My Items on this row instead of the programme grid. */
+    var returnToMyItemsId by mutableStateOf<String?>(null)
+        private set
+
     fun showDashboard() {
         decided = true
         focusPlayingChannel = true
+        returnToMyItemsId = null
         screen = AppScreen.Dashboard
+    }
+
+    fun showDashboardFromRecording(recordingId: String) {
+        decided = true
+        focusPlayingChannel = false
+        returnToMyItemsId = recordingId
+        screen = AppScreen.Dashboard
+    }
+
+    fun myItemsFocused() {
+        returnToMyItemsId = null
     }
 
     fun playingChannelFocused() {

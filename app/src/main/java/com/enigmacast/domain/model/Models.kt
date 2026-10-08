@@ -63,6 +63,13 @@ data class PlaybackSettings(
     val audioDelayPcmMs: Int = 0,
     /** Audio delay correction for AC3/E-AC3 sent undecoded over HDMI, -500..500 ms. */
     val audioDelayPassthroughMs: Int = 0,
+    /** Where Record stores the programme. Missing in older settings, so the TV is the default. */
+    val recordingTarget: RecordingTarget = RecordingTarget.TV,
+    /**
+     * Size of a recording stored on this TV. Null is the original stream.
+     * Missing in older settings, so those stay original. Receiver timers ignore this.
+     */
+    val recordingPreset: TranscodePreset? = null,
 )
 
 @Serializable
@@ -89,10 +96,6 @@ data class DebugSettings(
 )
 
 /**
- * How the app gets its picture. [OWN_TUNER] is the default, also for installs that saved
- * settings before this option existed (the field is missing there, so the default applies).
- */
-/**
  * Stored id of the OSD skin (the look of the OSD the app draws itself). The skins themselves
  * are in `ui.osd.OsdSkins`, keyed by this id; only [STANDARD] exists for now. Saved by name,
  * so renaming the class does not touch existing settings.
@@ -113,6 +116,10 @@ data class OsdInfoFields(
     val technical: Boolean = false,
 )
 
+/**
+ * How the app gets its picture. [OWN_TUNER] is the default, also for installs that saved
+ * settings before this option existed (the field is missing there, so the default applies).
+ */
 @Serializable
 enum class StreamMode {
     /** Each device streams its own channel from the stream port; the receiver can stay in standby. */
@@ -120,6 +127,13 @@ enum class StreamMode {
 
     /** Zap the receiver and stream what it shows, with its OSD (the behaviour before 1.0.0-beta.4). */
     FOLLOW_RECEIVER,
+}
+
+/** Where a recording from the guide is stored. [TV] is the default. */
+@Serializable
+enum class RecordingTarget {
+    TV,
+    RECEIVER,
 }
 
 /** The channel this device last watched in [StreamMode.OWN_TUNER]. */
@@ -190,6 +204,8 @@ data class EpgEvent(
     val beginEpochSec: Long,
     val durationSec: Long,
     val current: Boolean,
+    /** OpenWebif event id, for a receiver timer. -1 when the guide answer had none. */
+    val eventId: Int = -1,
 )
 
 data class ChannelGuide(
@@ -297,6 +313,10 @@ data class PlayerState(
     val subtitleTrackCount: Int = 0,
     /** Width of one video pixel relative to its height (anamorphic SD is about 1.42). */
     val pixelRatio: Float = 1f,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    val playing: Boolean = false,
+    val filePlayback: Boolean = false,
 )
 
 data class DebugInfo(

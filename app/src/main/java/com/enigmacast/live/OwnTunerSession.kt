@@ -104,21 +104,44 @@ class OwnTunerSession @Inject constructor(
         // (stalls, stable stretch, transcoder fallback) within the automatic restart budget.
         scope.launch {
             quality.restarts.collect { restart ->
-                if (!active || _state.value.channel == null) return@collect
+                if (!active || playback.isFilePlayback() || _state.value.channel == null) return@collect
                 if (restart.manual) retry() else restartAutomatically("quality")
             }
         }
     }
 
+    private var startAfterLoad = true
+
     /** Starts the last watched channel, or the receiver's last channel, once per app run. */
     fun ensureStarted() {
         active = true
         val current = _state.value
+        // A recording uses the player. Still load the bouquet, so Back can show the channels.
+        if (playback.isFilePlayback()) {
+            if (current.channels.isEmpty() && startJob?.isActive != true) loadInitial(startPlayback = false)
+            return
+        }
         if (current.channel != null) {
             if (current.tuner.status == TunerStatus.IDLE) start(current.channel)
             return
         }
         if (startJob?.isActive == true) return
+        if (current.channels.isEmpty()) loadInitial(startPlayback = true) else current.channels.firstOrNull()?.let(::start)
+    }
+
+    /** The recording stopped: play the channel that was on, or load the list and start one. */
+    fun resumeAfterFile() {
+        active = true
+        if (startJob?.isActive == true && _state.value.channels.isEmpty()) {
+            startAfterLoad = true
+            return
+        }
+        val channel = _state.value.channel
+        if (channel != null) start(channel) else ensureStarted()
+    }
+
+    private fun loadInitial(startPlayback: Boolean) {
+        startAfterLoad = startPlayback
         startJob = scope.launch {
             val settings = settingsRepository.current()
             val receiver = settings.activeReceiver() ?: return@launch
@@ -150,6 +173,7 @@ class OwnTunerSession @Inject constructor(
                 ?: last.reference.takeIf { it.isNotBlank() }?.let { BouquetEntry(last.name, it) }
                 ?: channels.firstOrNull()
             _state.update { it.copy(channels = channels, bouquetName = bouquetName, bouquetReference = bouquetReference) }
+            if (!startAfterLoad || playback.isFilePlayback()) return@launch
             if (target == null) {
                 _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
                 return@launch
@@ -268,6 +292,7 @@ class OwnTunerSession @Inject constructor(
      * OK (or another channel) starts again.
      */
     private fun restartAutomatically(why: String) {
+        if (playback.isFilePlayback()) return
         val channel = _state.value.channel ?: return
         val wait = restarts.next()
         if (wait == null) {
@@ -385,7 +410,7 @@ class OwnTunerSession @Inject constructor(
     }
 
     private fun onHealth(health: StreamHealth) {
-        if (!active || !streaming) return
+        if (!active || !streaming || playback.isFilePlayback()) return
         val tuner = when (health) {
             StreamHealth.IDLE -> return
             StreamHealth.STARTING -> TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))

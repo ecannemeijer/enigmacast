@@ -46,6 +46,9 @@ import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.epg.GuideCell
 import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.ui.recording.RecordingDot
+import com.enigmacast.ui.recording.isRecording
 import com.enigmacast.domain.epg.GuideTimeline
 import com.enigmacast.domain.epg.ProgrammePrompt
 import com.enigmacast.domain.model.BouquetEntry
@@ -108,6 +111,7 @@ fun GuideTimelineGrid(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
     autoSwitchKeys: Set<String> = emptySet(),
+    recordingReferences: Set<String> = emptySet(),
 ) {
     val cursor = state.cursor
     val focusSec = maxOf(cursor.focusSec, nowSec)
@@ -135,6 +139,7 @@ fun GuideTimelineGrid(
                 picon = picon,
                 cachedPicon = cachedPicon,
                 autoSwitchKeys = autoSwitchKeys,
+                recordingReferences = recordingReferences,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -305,6 +310,7 @@ private fun GuideRows(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     autoSwitchKeys: Set<String>,
+    recordingReferences: Set<String>,
     modifier: Modifier = Modifier,
 ) {
     val channels = state.channels
@@ -339,6 +345,7 @@ private fun GuideRows(
                 playing = playingReference.isNotBlank() && NowEvents.key(entry.reference) == playingKey,
                 nowSec = nowSec,
                 autoSwitchKeys = autoSwitchKeys,
+                recording = isRecording(recordingReferences, entry.reference),
                 dpPerSec = dpPerSec,
                 picon = picon,
                 cachedPicon = cachedPicon,
@@ -358,6 +365,7 @@ private fun GuideRow(
     playing: Boolean,
     nowSec: Long,
     autoSwitchKeys: Set<String>,
+    recording: Boolean,
     dpPerSec: Float,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
@@ -384,6 +392,9 @@ private fun GuideRow(
             )
             Picon(entry, picon, cachedPicon, Modifier.width(42.dp).height(26.dp), fallbackSize = 8.sp)
             Spacer(Modifier.width(8.dp))
+            if (recording) {
+                RecordingDot(Modifier.padding(end = 6.dp))
+            }
             Text(
                 entry.name,
                 color = if (playing) EnigmaColors.Accent else Color.White,

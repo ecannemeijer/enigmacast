@@ -1,0 +1,419 @@
+package com.enigmacast.live
+
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.os.Environment
+import com.enigmacast.R
+import com.enigmacast.data.openwebif.OpenWebifApi
+import com.enigmacast.data.openwebif.OpenWebifEndpoints
+import com.enigmacast.data.openwebif.OpenWebifJson
+import com.enigmacast.data.recording.DataStoreRecordingStorage
+import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.model.RecordingTarget
+import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.recording.RecordAsk
+import com.enigmacast.domain.recording.Recording
+import com.enigmacast.domain.recording.RecordingPlace
+import com.enigmacast.domain.recording.RecordingStatus
+import com.enigmacast.playback.LivePlaybackController
+import com.enigmacast.util.EnigmaLog
+import com.enigmacast.util.UiText
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Recordings started from the guide. On the TV a wekker starts a capture of the same stream
+ * the player uses; on the receiver OpenWebif sets a timer. Both stay in this list.
+ */
+@Singleton
+class RecordingBook @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val storage: DataStoreRecordingStorage,
+    private val settingsRepository: SettingsRepository,
+    private val api: OpenWebifApi,
+    private val endpoints: OpenWebifEndpoints,
+    private val streamTargets: StreamTargets,
+    private val playback: LivePlaybackController,
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val gate = Mutex()
+    private val _items = MutableStateFlow<List<Recording>>(emptyList())
+    val items: StateFlow<List<Recording>> = _items.asStateFlow()
+    private val _nowPlaying = MutableStateFlow<Recording?>(null)
+    val nowPlaying: StateFlow<Recording?> = _nowPlaying.asStateFlow()
+    private var loaded = false
+
+    init {
+        scope.launch { ensureArmed() }
+    }
+
+    /** Load saved recordings and arm anything that should start. Safe to call more than once. */
+    suspend fun ensureArmed() {
+        withContext(Dispatchers.IO) { awaitLoaded() }
+        arm()
+    }
+
+    /** Replace the in-memory list with what is stored. A stop can finish while My Items is closed. */
+    suspend fun reload() = gate.withLock {
+        _items.value = storage.load().sortedByDescending { it.beginEpochSec }
+        loaded = true
+    }
+
+    fun enqueue(id: String?, done: () -> Unit) {
+        scope.launch {
+            try {
+                awaitLoaded()
+                if (id.isNullOrBlank()) arm() else startCapture(id)
+            } finally {
+                done()
+            }
+        }
+    }
+
+    /** The confirm step. A programme that has already ended is refused. */
+    suspend fun prepare(event: GuideEvent, channelName: String): PrepareResult {
+        val now = nowSec()
+        if (event.endEpochSec <= now) return PrepareResult.Message(UiText.res(R.string.record_already_ended))
+        val settings = settingsRepository.current()
+        val place = settings.playback.recordingTarget
+        awaitLoaded()
+        val existing = _items.value.firstOrNull { it.reference == event.reference && it.beginEpochSec == event.beginEpochSec && it.isActive() }
+        if (existing != null) return PrepareResult.Message(UiText.res(R.string.record_already_set))
+        if (place == RecordingTarget.RECEIVER && event.eventId < 0) {
+            return PrepareResult.Message(UiText.res(R.string.record_no_event))
+        }
+        return PrepareResult.Ask(RecordAsk(event, channelName, place))
+    }
+
+    suspend fun schedule(ask: RecordAsk): UiText {
+        val settings = settingsRepository.current()
+        val receiver = settings.activeReceiver() ?: return UiText.res(R.string.conn_no_receiver_configured)
+        val event = ask.event
+        val now = nowSec()
+        val recording = Recording(
+            id = Recording.newId(),
+            title = event.title.ifBlank { ask.channelName },
+            channelName = ask.channelName,
+            reference = event.reference,
+            eventId = event.eventId,
+            beginEpochSec = event.beginEpochSec,
+            endEpochSec = event.endEpochSec,
+            place = if (ask.place == RecordingTarget.RECEIVER) RecordingPlace.RECEIVER else RecordingPlace.TV,
+            status = RecordingStatus.SCHEDULED,
+            receiverId = receiver.id,
+        )
+        return if (recording.place == RecordingPlace.RECEIVER) {
+            scheduleOnReceiver(receiver, recording)
+        } else {
+            save(recording)
+            if (recording.beginEpochSec <= now + START_SLOP_SEC) startCapture(recording.id)
+            else armOne(recording)
+            val whenText = if (event.beginEpochSec <= now) {
+                UiText.res(R.string.record_started_now, recording.title)
+            } else {
+                UiText.res(R.string.record_scheduled_tv, recording.title)
+            }
+            whenText
+        }
+    }
+
+    suspend fun stop(id: String) {
+        awaitLoaded()
+        val item = _items.value.firstOrNull { it.id == id } ?: return
+        if (item.place == RecordingPlace.TV) {
+            context.startService(RecordingCaptureService.stopIntent(context, id))
+            return
+        }
+        val receiver = receiverFor(item) ?: return
+        runCatching { api.deleteTimer(receiver, item.reference, item.beginEpochSec, item.endEpochSec) }
+        val movie = runCatching { findMovie(receiver, item) }.getOrNull()
+        if (movie != null) {
+            update(item.id) { it.copy(status = RecordingStatus.READY, fileName = movie.filename, error = "") }
+        } else {
+            update(item.id) { it.copy(status = RecordingStatus.READY, error = "") }
+        }
+    }
+
+    suspend fun delete(id: String) {
+        awaitLoaded()
+        val item = _items.value.firstOrNull { it.id == id } ?: return
+        if (item.place == RecordingPlace.TV) {
+            context.startService(RecordingCaptureService.stopIntent(context, id))
+            fileFor(item).delete()
+        } else {
+            val receiver = receiverFor(item)
+            if (receiver != null) {
+                runCatching { api.deleteTimer(receiver, item.reference, item.beginEpochSec, item.endEpochSec) }
+                if (item.fileName.isNotBlank()) {
+                    runCatching { api.deleteMovie(receiver, movieRef(item.fileName)) }
+                }
+            }
+        }
+        cancelAlarm(item.id)
+        remove(item.id)
+    }
+
+    /** Opens the file in the player. False when there is nothing to play yet. */
+    suspend fun play(id: String): Boolean {
+        awaitLoaded()
+        var item = _items.value.firstOrNull { it.id == id } ?: return false
+        if (item.place == RecordingPlace.RECEIVER && item.fileName.isBlank()) {
+            refreshReceiver()
+            item = _items.value.firstOrNull { it.id == id } ?: return false
+        }
+        if (item.place == RecordingPlace.TV) {
+            val file = fileFor(item)
+            if (!file.exists() || file.length() < MIN_PLAY_BYTES) return false
+            _nowPlaying.value = item
+            playback.playRecording(android.net.Uri.fromFile(file).toString(), null, durationMs(item))
+            return true
+        }
+        if (item.fileName.isBlank()) return false
+        val receiver = receiverFor(item) ?: return false
+        _nowPlaying.value = item
+        val url = endpoints.recordedFile(receiver, item.fileName)
+        playback.playRecording(url, endpoints.streamAuthorization(receiver), durationMs(item))
+        return true
+    }
+
+    fun clearNowPlaying() {
+        _nowPlaying.value = null
+    }
+
+    private fun durationMs(item: Recording): Long {
+        return ((item.endEpochSec - item.beginEpochSec).coerceAtLeast(0L)) * 1000L
+    }
+
+    /** Pulls timer and movie state for receiver recordings started here. */
+    suspend fun refreshReceiver() {
+        awaitLoaded()
+        val receiver = settingsRepository.current().activeReceiver() ?: return
+        val ours = _items.value.filter { it.place == RecordingPlace.RECEIVER }
+        if (ours.isEmpty()) return
+        val timers = runCatching { api.timers(receiver) }.getOrDefault(emptyList())
+        val movies = runCatching { api.movies(receiver) }.getOrDefault(emptyList())
+        ours.forEach { item ->
+            val timer = matchTimer(timers, item)
+            val movie = matchMovie(movies, item)
+            val status = when {
+                timer?.state == 2 -> RecordingStatus.RECORDING
+                movie != null && (timer == null || timer.state >= 3) -> RecordingStatus.READY
+                timer != null -> RecordingStatus.SCHEDULED
+                item.endEpochSec < nowSec() && movie == null -> RecordingStatus.FAILED
+                else -> item.status
+            }
+            update(item.id) {
+                it.copy(
+                    status = status,
+                    fileName = movie?.filename ?: it.fileName,
+                    error = if (status == RecordingStatus.FAILED) context.getString(R.string.record_missed) else it.error,
+                )
+            }
+        }
+    }
+
+    suspend fun markRecording(id: String) = update(id) { it.copy(status = RecordingStatus.RECORDING, error = "") }
+
+    suspend fun markReady(id: String) = update(id) { it.copy(status = RecordingStatus.READY, error = "") }
+
+    suspend fun markFailed(id: String, reason: String) {
+        update(id) { it.copy(status = RecordingStatus.FAILED, error = reason) }
+        _items.value.firstOrNull { it.id == id }?.let { fileFor(it).delete() }
+    }
+
+    /** The capture stopped on purpose. The row and the file stay in My Items. */
+    suspend fun markStopped(id: String, bytes: Long) {
+        val item = _items.value.firstOrNull { it.id == id }
+        if (item == null) {
+            EnigmaLog.service("recording missing id=$id bytes=$bytes")
+            return
+        }
+        val onDisk = if (item.place == RecordingPlace.TV) fileFor(item).takeIf { it.exists() }?.length() ?: 0L else 0L
+        val size = maxOf(bytes, onDisk)
+        if (item.status != RecordingStatus.RECORDING && item.status != RecordingStatus.SCHEDULED) {
+            EnigmaLog.service("recording kept ${item.title} already ${item.status} bytes=$size")
+            return
+        }
+        EnigmaLog.service("recording kept ${item.title} bytes=$size")
+        if (size >= MIN_PLAY_BYTES) markReady(id) else {
+            update(id) { it.copy(status = RecordingStatus.FAILED, error = context.getString(R.string.record_stopped)) }
+        }
+    }
+
+    suspend fun get(id: String): Recording? {
+        awaitLoaded()
+        return _items.value.firstOrNull { it.id == id }
+    }
+
+    fun fileFor(item: Recording): File = File(moviesDir(), "${item.id}.ts")
+
+    suspend fun streamFor(item: Recording): Triple<String, String?, String?>? {
+        val receiver = receiverFor(item) ?: return null
+        val preset = settingsRepository.current().playback.recordingPreset
+        val target = streamTargets.recording(receiver, item.reference, preset)
+        return Triple(target.url, target.authorization, target.fallbackUrl)
+    }
+
+    private suspend fun scheduleOnReceiver(receiver: ReceiverConfig, recording: Recording): UiText {
+        val result = try {
+            api.addTimer(receiver, recording.reference, recording.eventId)
+        } catch (error: Exception) {
+            EnigmaLog.service("record timer failed: ${error.javaClass.simpleName}")
+            return UiText.res(R.string.record_failed)
+        }
+        if (!result.success) {
+            val message = result.message.ifBlank { context.getString(R.string.record_failed) }
+            return UiText.Raw(message)
+        }
+        save(recording)
+        return UiText.res(R.string.record_scheduled_receiver, recording.title)
+    }
+
+    private suspend fun arm() {
+        val now = nowSec()
+        _items.value.filter { it.place == RecordingPlace.TV }.forEach { item ->
+            when {
+                item.status == RecordingStatus.SCHEDULED && item.endEpochSec <= now ->
+                    update(item.id) { it.copy(status = RecordingStatus.FAILED, error = context.getString(R.string.record_missed)) }
+                item.status == RecordingStatus.SCHEDULED && item.beginEpochSec <= now + START_SLOP_SEC -> startCapture(item.id)
+                item.status == RecordingStatus.SCHEDULED -> armOne(item)
+                item.status == RecordingStatus.RECORDING && item.endEpochSec > now -> startCapture(item.id)
+                else -> Unit
+            }
+        }
+    }
+
+    private fun armOne(item: Recording) {
+        val alarm = context.getSystemService(AlarmManager::class.java) ?: return
+        val whenMs = item.beginEpochSec * 1000
+        val pending = pending(item.id)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 31 && !alarm.canScheduleExactAlarms()) {
+                alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMs, pending)
+            } else {
+                alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMs, pending)
+            }
+        } catch (_: SecurityException) {
+            alarm.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, whenMs, pending)
+        }
+    }
+
+    private fun cancelAlarm(id: String) {
+        context.getSystemService(AlarmManager::class.java)?.cancel(pending(id))
+    }
+
+    private fun pending(id: String): PendingIntent {
+        val intent = Intent(context, RecordingAlarmReceiver::class.java).apply {
+            action = RecordingAlarmReceiver.ACTION_START
+            putExtra(RecordingCaptureService.EXTRA_ID, id)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            id.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun startCapture(id: String) {
+        val intent = RecordingCaptureService.startIntent(context, id)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
+    }
+
+    private suspend fun receiverFor(item: Recording): ReceiverConfig? {
+        val settings = settingsRepository.current()
+        return settings.receivers.firstOrNull { it.id == item.receiverId } ?: settings.activeReceiver()
+    }
+
+    private suspend fun findMovie(receiver: ReceiverConfig, item: Recording): OpenWebifJson.ReceiverMovie? {
+        return matchMovie(api.movies(receiver), item)
+    }
+
+    private suspend fun awaitLoaded() {
+        if (loaded) return
+        gate.withLock {
+            if (loaded) return
+            _items.value = storage.load()
+            loaded = true
+        }
+    }
+
+    private suspend fun save(item: Recording) = gate.withLock {
+        if (!loaded) {
+            _items.value = storage.load()
+            loaded = true
+        }
+        val next = _items.value.filterNot { it.id == item.id } + item
+        _items.value = next.sortedByDescending { it.beginEpochSec }
+        storage.save(_items.value)
+    }
+
+    private suspend fun update(id: String, transform: (Recording) -> Recording) = gate.withLock {
+        if (!loaded) {
+            _items.value = storage.load()
+            loaded = true
+        }
+        val next = _items.value.map { if (it.id == id) transform(it) else it }
+        _items.value = next
+        storage.save(next)
+    }
+
+    private suspend fun remove(id: String) = gate.withLock {
+        val next = _items.value.filterNot { it.id == id }
+        _items.value = next
+        storage.save(next)
+    }
+
+    private fun moviesDir(): File {
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    private fun nowSec(): Long = System.currentTimeMillis() / 1000
+
+    sealed class PrepareResult {
+        data class Ask(val ask: RecordAsk) : PrepareResult()
+        data class Message(val text: UiText) : PrepareResult()
+    }
+
+    companion object {
+        private const val START_SLOP_SEC = 20L
+        const val MIN_PLAY_BYTES = 64L * 1024
+
+        fun movieRef(filename: String): String {
+            if (filename.count { it == ':' } >= 8) return filename
+            return "1:0:0:0:0:0:0:0:0:0:$filename"
+        }
+
+        private fun matchTimer(timers: List<OpenWebifJson.ReceiverTimer>, item: Recording): OpenWebifJson.ReceiverTimer? {
+            timers.firstOrNull { it.eventId >= 0 && it.eventId == item.eventId && it.reference == item.reference }
+                ?.let { return it }
+            return timers.firstOrNull {
+                it.name.equals(item.title, true) && kotlin.math.abs(it.begin - item.beginEpochSec) < 180
+            }
+        }
+
+        private fun matchMovie(movies: List<OpenWebifJson.ReceiverMovie>, item: Recording): OpenWebifJson.ReceiverMovie? {
+            return movies.filter { movie -> movie.name.equals(item.title, true) }
+                .minByOrNull { movie ->
+                    if (movie.begin == 0L) Long.MAX_VALUE / 4 else kotlin.math.abs(movie.begin - item.beginEpochSec)
+                }
+        }
+    }
+}

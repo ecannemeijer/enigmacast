@@ -94,6 +94,23 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/timeraddbyeventid?sRef=${encode(serviceReference)}&eventid=$eventId")
     }
 
+    /** Removes a timer. [begin] and [end] are the unix times OpenWebif stored. */
+    fun timerDelete(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long): String {
+        return api(config, "/api/timerdelete?sRef=${encode(serviceReference)}&begin=$begin&end=$end")
+    }
+
+    fun movieList(config: ReceiverConfig): String = api(config, "/api/movielist")
+
+    /** Removes a recorded file. [serviceReference] is the movie's service reference. */
+    fun movieDelete(config: ReceiverConfig, serviceReference: String): String {
+        return api(config, "/api/moviedelete?sRef=${encode(serviceReference)}")
+    }
+
+    /** Plays a file the receiver already recorded, without tuning a channel. */
+    fun recordedFile(config: ReceiverConfig, path: String): String {
+        return api(config, "/file?file=${encode(path)}")
+    }
+
     /** A path from OpenWebif such as `/picon/1_0_1_….png`, on the web interface host. */
     fun picon(config: ReceiverConfig, path: String): String = api(config, path)
 

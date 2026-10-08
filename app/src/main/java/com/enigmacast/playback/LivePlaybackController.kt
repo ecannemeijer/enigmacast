@@ -17,6 +17,7 @@ import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
@@ -88,6 +89,11 @@ class LivePlaybackController @Inject constructor(
 ) {
     private var player: ExoPlayer? = null
     private var currentUrl: String? = null
+    /** A recording file, not a live tuner stream. It must not be restarted when it ends. */
+    private var filePlayback = false
+    /** Length of the recording when the file itself does not say how long it is. */
+    private var fileDurationMs = 0L
+    private var fileClock: Job? = null
     private var playbackEnabled = true
     private var settings = PlaybackSettings()
     private var scope: CoroutineScope? = null
@@ -194,6 +200,7 @@ class LivePlaybackController @Inject constructor(
 
     fun stop() {
         playbackEnabled = false
+        endFilePlayback()
         currentUrl = null
         reconnectJob?.cancel()
         stopWatchdog(StreamHealth.IDLE)
@@ -210,6 +217,7 @@ class LivePlaybackController @Inject constructor(
      * The same ExoPlayer is kept; [release] is for leaving the screen.
      */
     fun stopForZap() {
+        endFilePlayback()
         reconnectJob?.cancel()
         reconnectJob = null
         currentUrl = null
@@ -288,6 +296,7 @@ class LivePlaybackController @Inject constructor(
         internetAttempts = 0
         hlsTried = false
         internetMime = null
+        endFilePlayback()
         start(url, authorization, checkStart, internet)
     }
 
@@ -330,6 +339,92 @@ class LivePlaybackController @Inject constructor(
             "switching live stream ${EnigmaLog.sanitizeUrl(url)} auth=${if (authorization == null) "none" else "basic"}" +
                 if (internet) " kind=internet type=${mime ?: "auto"}" else "",
         )
+    }
+
+    /** True while a recording file is what the player shows, so a live zap does not replace it. */
+    fun isFilePlayback(): Boolean = filePlayback
+
+    /**
+     * Plays a finished or in-progress recording as a file, not as a live channel.
+     * Does not restart when the file ends, and does not take the viewer's tuner slot.
+     */
+    fun playRecording(url: String, authorization: String?, durationMs: Long = 0L) {
+        if (!playbackEnabled) return
+        val exo = ensurePlayer()
+        filePlayback = true
+        fileDurationMs = durationMs.coerceAtLeast(0L)
+        reconnectJob?.cancel()
+        reconnectJob = null
+        clientFactory.cancelStream()
+        currentUrl = url
+        streamAuthorization = authorization
+        checkStart = false
+        internet = false
+        inspectStream = false
+        stopWatchdog(StreamHealth.IDLE)
+        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .build()
+        val item = MediaItem.Builder().setUri(url).setMimeType(MimeTypes.VIDEO_MP2T).build()
+        exo.setMediaItem(item, true)
+        exo.prepare()
+        exo.playWhenReady = true
+        EnigmaLog.player("playing recording ${EnigmaLog.sanitizeUrl(url)}")
+        watchFileClock()
+    }
+
+    /** Jumps within the recording and keeps playing. */
+    fun seekFile(positionMs: Long) {
+        val exo = player ?: return
+        if (!filePlayback) return
+        val end = exo.duration.takeIf { it > 0 } ?: fileDurationMs.takeIf { it > 0 } ?: Long.MAX_VALUE
+        exo.seekTo(positionMs.coerceIn(0, end))
+        exo.playWhenReady = true
+        publish()
+    }
+
+    /** Leaves the recording so a channel can play again. */
+    fun stopFile() {
+        if (!filePlayback) return
+        endFilePlayback()
+        reconnectJob?.cancel()
+        reconnectJob = null
+        currentUrl = null
+        val exo = player ?: return
+        exo.playWhenReady = false
+        exo.stop()
+        exo.clearMediaItems()
+        publish()
+    }
+
+    private fun endFilePlayback() {
+        filePlayback = false
+        fileDurationMs = 0L
+        fileClock?.cancel()
+        fileClock = null
+    }
+
+    fun toggleFilePause() {
+        val exo = player ?: return
+        if (!filePlayback) return
+        if (exo.playbackState == Player.STATE_ENDED) {
+            exo.seekTo(0)
+            exo.playWhenReady = true
+        } else {
+            exo.playWhenReady = !exo.playWhenReady
+        }
+        publish()
+    }
+
+    private fun watchFileClock() {
+        fileClock?.cancel()
+        fileClock = ownScope.launch {
+            while (filePlayback) {
+                publish()
+                delay(250)
+            }
+        }
     }
 
     /** An internet stream failed: try HLS once, retry within the cap, or stop and say why. */
@@ -542,8 +637,10 @@ class LivePlaybackController @Inject constructor(
             val header = streamAuthorization
             if (header == null) spec else spec.withAdditionalHeaders(mapOf("Authorization" to header))
         }
+        // A recording on this TV is a file. OkHttp only accepts http(s), so local files go through a file source.
+        val localOrHttp = DefaultDataSource.Factory(context, withAuthorization)
         val inspected = DataSource.Factory {
-            InspectingDataSource(withAuthorization.createDataSource(), tsInspector) { inspectStream }
+            InspectingDataSource(localOrHttp.createDataSource(), tsInspector) { inspectStream }
         }
         val mediaSourceFactory = DefaultMediaSourceFactory(inspected, extractors)
             .setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy())
@@ -593,6 +690,10 @@ class LivePlaybackController @Inject constructor(
             subtitleLabel = TrackLabels.subtitle(exo.currentTracks, settings.subtitlesEnabled),
             subtitleTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_TEXT },
             pixelRatio = exo.videoSize.pixelWidthHeightRatio,
+            positionMs = exo.currentPosition.coerceAtLeast(0),
+            durationMs = exo.duration.takeIf { it > 0 } ?: fileDurationMs,
+            playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED,
+            filePlayback = filePlayback,
         )
         _tracks.value = TrackMenus.build(exo.currentTracks, settings.subtitlesEnabled)
     }
@@ -666,6 +767,7 @@ class LivePlaybackController @Inject constructor(
     }
 
     private fun scheduleReconnect() {
+        if (filePlayback) return
         if (!settings.autoReconnect) return
         // A refused start is final; the screen offers to try again.
         if (checkStart && _health.value in FINAL_REFUSALS) return

@@ -108,6 +108,7 @@ internal object OpenWebifJson {
                 beginEpochSec = begin,
                 durationSec = duration,
                 current = now in begin until begin + duration,
+                eventId = event.primitive("id")?.toIntOrNull() ?: -1,
             )
         }
         val upcoming = parsed.filter { event ->
@@ -236,7 +237,7 @@ internal object OpenWebifJson {
             val duration = event.primitive("duration_sec")?.toLongOrNull() ?: 0L
             val title = unescape(event.primitive("title").orEmpty()).trim()
             if (begin <= 0L || duration <= 0L || title.isBlank() || title == "N/A") return@mapNotNull null
-            NowEvent(reference, title, begin, duration)
+            NowEvent(reference, title, begin, duration, event.primitive("id")?.toIntOrNull() ?: -1)
         }
     }
 
@@ -275,6 +276,54 @@ internal object OpenWebifJson {
             ?: return TimerResult(false, "")
         val result = (root["result"] as? JsonPrimitive)?.let { it.booleanOrNull ?: it.contentOrNull.equals("true", true) } ?: false
         return TimerResult(result, unescape(root.primitive("message").orEmpty()))
+    }
+
+    data class ReceiverTimer(
+        val reference: String,
+        val name: String,
+        val begin: Long,
+        val end: Long,
+        val state: Int,
+        val eventId: Int,
+    )
+
+    data class ReceiverMovie(
+        val name: String,
+        val filename: String,
+        val serviceName: String,
+        val begin: Long,
+    )
+
+    fun parseTimers(body: String): List<ReceiverTimer> {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+        val array = findArray(root, "timers") ?: return emptyList()
+        return array.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val reference = item.primitive("serviceref") ?: item.primitive("sref") ?: return@mapNotNull null
+            ReceiverTimer(
+                reference = reference,
+                name = unescape(item.primitive("name") ?: item.primitive("title") ?: ""),
+                begin = item.primitive("begin")?.toLongOrNull() ?: 0L,
+                end = item.primitive("end")?.toLongOrNull() ?: 0L,
+                state = item.primitive("state")?.toIntOrNull() ?: 0,
+                eventId = item.primitive("eit")?.toIntOrNull() ?: -1,
+            )
+        }
+    }
+
+    fun parseMovies(body: String): List<ReceiverMovie> {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+        val array = findArray(root, "movies") ?: return emptyList()
+        return array.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val filename = item.primitive("filename") ?: return@mapNotNull null
+            ReceiverMovie(
+                name = unescape(item.primitive("eventname") ?: item.primitive("title") ?: ""),
+                filename = filename,
+                serviceName = unescape(item.primitive("servicename") ?: ""),
+                begin = item.primitive("begintime")?.toLongOrNull() ?: 0L,
+            )
+        }
     }
 
     /** Root `/api/getservices`: bouquet reference → number of channels before that bouquet. */

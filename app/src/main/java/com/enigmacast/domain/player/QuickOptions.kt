@@ -5,6 +5,7 @@ import com.enigmacast.domain.tuner.NowEvents
 
 /** The tiles of the quick options bar, left to right. */
 enum class QuickOption {
+    RECORD,
     SUBTITLES,
     AUDIO,
     PICTURE,
@@ -22,10 +23,18 @@ object QuickOptions {
      * Own tuner gets every tile. Following the receiver, zapping belongs to the receiver,
      * so the guide and recent channels are left out.
      */
-    fun tiles(ownTuner: Boolean): List<QuickOption> = if (ownTuner) {
-        QuickOption.entries
-    } else {
-        QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT)
+    fun tiles(ownTuner: Boolean, file: Boolean = false): List<QuickOption> = when {
+        file -> listOf(
+            QuickOption.SUBTITLES,
+            QuickOption.AUDIO,
+            QuickOption.PICTURE,
+            QuickOption.AUDIO_DELAY,
+            QuickOption.STREAM_INFO,
+            QuickOption.RESTART,
+            QuickOption.SLEEP,
+        )
+        ownTuner -> QuickOption.entries
+        else -> QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT)
     }
 }
 

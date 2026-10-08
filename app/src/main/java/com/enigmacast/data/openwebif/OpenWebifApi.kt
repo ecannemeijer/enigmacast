@@ -298,6 +298,22 @@ class OpenWebifApi @Inject constructor(
         return OpenWebifJson.parseTimerResult(get(config, endpoints.timerAddByEventId(config, serviceReference, eventId)))
     }
 
+    internal suspend fun timers(config: ReceiverConfig): List<OpenWebifJson.ReceiverTimer> {
+        return OpenWebifJson.parseTimers(get(config, endpoints.timerList(config)))
+    }
+
+    suspend fun deleteTimer(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long) {
+        get(config, endpoints.timerDelete(config, serviceReference, begin, end))
+    }
+
+    internal suspend fun movies(config: ReceiverConfig): List<OpenWebifJson.ReceiverMovie> {
+        return OpenWebifJson.parseMovies(get(config, endpoints.movieList(config)))
+    }
+
+    suspend fun deleteMovie(config: ReceiverConfig, serviceReference: String) {
+        get(config, endpoints.movieDelete(config, serviceReference))
+    }
+
     suspend fun testConnection(config: ReceiverConfig): ConnectionTestResult {
         return try {
             val probe = probe(config)

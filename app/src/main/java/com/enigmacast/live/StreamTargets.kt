@@ -6,6 +6,7 @@ import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.network.StreamLevel
+import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.domain.network.TranscodeUrls
 import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.util.EnigmaLog
@@ -22,6 +23,8 @@ data class StreamTarget(
     val route: ReceiverRoute,
     val level: StreamLevel,
     val internet: Boolean = false,
+    /** Same transcoded stream on the normal stream port, when that port differs from the encoder port. */
+    val fallbackUrl: String? = null,
 )
 
 /**
@@ -59,6 +62,32 @@ class StreamTargets @Inject constructor(
                 "auth=${if (authorization == null) "none" else "basic"} url=${EnigmaLog.sanitizeUrl(url)}",
         )
         return StreamTarget(url, authorization, route, choice.level, internet = false)
+    }
+
+    /**
+     * The stream a TV recording should save. [preset] null is the original broadcast.
+     * An internet channel has no receiver encoder, so it stays that channel's own URL.
+     */
+    suspend fun recording(config: ReceiverConfig, reference: String, preset: TranscodePreset?): StreamTarget {
+        val route = router.route(config)
+        val internetUrl = ServiceStreams.internetUrl(reference)
+        if (internetUrl != null) {
+            return StreamTarget(internetUrl, authorization = null, route = route, level = StreamLevel.DIRECT, internet = true)
+        }
+        val effective = ReceiverRouting.effective(config, route)
+        val level = preset?.let(StreamLevel::of) ?: StreamLevel.DIRECT
+        val url = url(endpoints, effective, reference, level)
+        val authorization = endpoints.streamAuthorization(effective)
+        val fallback = level.preset?.let { chosen ->
+            if (effective.transcodingPort == effective.streamingPort) null
+            else TranscodeUrls.build(effective.host, effective.streamingPort, endpoints.encode(reference), chosen)
+        }
+        EnigmaLog.player(
+            "recording target route=${route.name.lowercase()} level=${level.name.lowercase()} " +
+                "url=${EnigmaLog.sanitizeUrl(url)}" +
+                (fallback?.let { " fallback=${EnigmaLog.sanitizeUrl(it)}" } ?: ""),
+        )
+        return StreamTarget(url, authorization, route, level, internet = false, fallbackUrl = fallback)
     }
 
     companion object {
