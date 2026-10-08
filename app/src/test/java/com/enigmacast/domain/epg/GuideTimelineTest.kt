@@ -92,6 +92,17 @@ class GuideTimelineTest {
     }
 
     @Test
+    fun verticalStepWrapsAtTheEnds() {
+        val top = GuideCursor(row = 0, focusSec = base, windowStartSec = base)
+        val bottom = GuideCursor(row = 9, focusSec = base, windowStartSec = base)
+        assertEquals(9, GuideTimeline.moveVertical(top, -1, 10).row)
+        assertEquals(0, GuideTimeline.moveVertical(bottom, 1, 10).row)
+        assertEquals(base, GuideTimeline.moveVertical(top, -1, 10).focusSec)
+        assertEquals(0, GuideTimeline.moveVertical(top, -5, 10).row)
+        assertEquals(9, GuideTimeline.moveVertical(bottom, 6, 10).row)
+    }
+
+    @Test
     fun clampKeepsTheCursorOutOfThePast() {
         val now = base + 45 * 60
         val clamped = GuideTimeline.clamp(GuideCursor(12, base, base - slot), now, 5)

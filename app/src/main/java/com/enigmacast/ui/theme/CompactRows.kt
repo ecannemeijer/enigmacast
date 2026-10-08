@@ -19,10 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
@@ -84,4 +86,38 @@ suspend fun FocusRequester.requestWhenReady(attempts: Int = 10): Boolean {
         if (runCatching { requestFocus() }.isSuccess) return true
     }
     return false
+}
+
+/**
+ * Up on the first row and Down on the last row jump to the other end.
+ * A list of one row stays put. The caller scrolls the target on screen and focuses it.
+ */
+fun Modifier.wrapListEnds(
+    index: Int,
+    lastIndex: Int,
+    onWrapToFirst: () -> Unit,
+    onWrapToLast: () -> Unit,
+): Modifier = onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown || lastIndex <= 0) return@onPreviewKeyEvent false
+    when (event.key) {
+        Key.DirectionUp -> if (index == 0) {
+            onWrapToLast()
+            true
+        } else {
+            false
+        }
+        Key.DirectionDown -> if (index == lastIndex) {
+            onWrapToFirst()
+            true
+        } else {
+            false
+        }
+        else -> false
+    }
+}
+
+/** Scrolls [index] into view, then focuses this requester once the row is attached. */
+suspend fun FocusRequester.focusListRow(listState: LazyListState, index: Int) {
+    listState.scrollToItem(index)
+    requestWhenReady()
 }

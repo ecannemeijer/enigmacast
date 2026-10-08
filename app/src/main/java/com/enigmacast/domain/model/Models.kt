@@ -122,7 +122,7 @@ data class OsdInfoFields(
  */
 @Serializable
 enum class StreamMode {
-    /** Each device streams its own channel from the stream port; the receiver can stay in standby. */
+    /** Each device streams its own channel from the stream port, and the receiver is put in standby. */
     OWN_TUNER,
 
     /** Zap the receiver and stream what it shows, with its OSD (the behaviour before 1.0.0-beta.4). */

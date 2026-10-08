@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -93,6 +94,8 @@ import com.enigmacast.ui.remote.rememberGuideClock
 import com.enigmacast.ui.settings.SettingsViewModel
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.focusListRow
+import com.enigmacast.ui.theme.wrapListEnds
 import com.enigmacast.ui.theme.EnigmaIcons
 import com.enigmacast.ui.theme.FeedbackSnackbar
 import com.enigmacast.ui.theme.InfoRow
@@ -111,6 +114,7 @@ import com.enigmacast.util.UiText
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val FocusedButton = Color(0xFF8A5610)
 private val FocusedButtonText = Color.White
@@ -168,6 +172,10 @@ fun DashboardScreen(
     val channelFocus = remember { FocusRequester() }
     val myItemsMenuFocus = remember { FocusRequester() }
     val myItemsListFocus = remember { FocusRequester() }
+    // Recordings stay unfocusable until Right (or a return from playback/dialog) enters the list,
+    // so opening Mijn Items does not pull the highlight onto the first row.
+    var myItemsListActive by remember { mutableStateOf(returnToMyItemsId != null) }
+    var myItemsEnterToken by remember { mutableIntStateOf(0) }
     val receiverMenuFocus = remember { FocusRequester() }
     val receiverPageFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
@@ -200,13 +208,20 @@ fun DashboardScreen(
     }
     LaunchedEffect(returnToMyItemsId) {
         val id = returnToMyItemsId ?: return@LaunchedEffect
+        myItemsListActive = true
         myItemsModel.focusRow(id)
         myItemsListFocus.requestWhenReady()
         onMyItemsFocused()
     }
+    LaunchedEffect(myItemsEnterToken) {
+        if (myItemsEnterToken == 0) return@LaunchedEffect
+        myItemsListActive = true
+        myItemsListFocus.requestWhenReady()
+    }
     LaunchedEffect(myItemsModel.focusToken, myItemsModel.pendingDelete, myItemsModel.selected) {
         if (!myItemsModel.holdList) return@LaunchedEffect
         if (myItemsModel.selected != null || myItemsModel.pendingDelete != null) return@LaunchedEffect
+        myItemsListActive = true
         section = DashSection.MyItems
         myItemsListFocus.requestWhenReady()
     }
@@ -272,7 +287,18 @@ fun DashboardScreen(
                     selected = section == DashSection.MyItems,
                     modifier = Modifier
                         .focusRequester(myItemsMenuFocus)
-                        .focusProperties { right = myItemsListFocus },
+                        .onFocusChanged {
+                            if (it.isFocused && !myItemsModel.holdList && returnToMyItemsId == null) {
+                                myItemsListActive = false
+                            }
+                        }
+                        .focusProperties { right = myItemsListFocus }
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            myItemsListActive = true
+                            myItemsEnterToken += 1
+                            true
+                        },
                     onFocus = { section = DashSection.MyItems },
                     onClick = { section = DashSection.MyItems },
                 )
@@ -338,6 +364,7 @@ fun DashboardScreen(
                         DashSection.MyItems -> MyItemsPanel(
                             listFocus = myItemsListFocus,
                             menuFocus = myItemsMenuFocus,
+                            rowsFocusable = myItemsListActive,
                             onPlay = onStream,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -621,6 +648,10 @@ private fun BouquetColumn(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val firstFocus = remember { FocusRequester() }
+    val lastFocus = remember { FocusRequester() }
+    val lastIndex = bouquets.lastIndex
     val focusIndex = remember(openToken) {
         bouquets.indexOfFirst { it.reference == selectedReference }.let { if (it >= 0) it else 0 }
     }
@@ -665,7 +696,15 @@ private fun BouquetColumn(
                         onFocus = { onPreview(bouquet) },
                         modifier = Modifier
                             .then(if (index == focusIndex) Modifier.focusRequester(bouquetFocus) else Modifier)
+                            .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                            .then(if (index == lastIndex && lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
                             .focusProperties { left = settingsFocus }
+                            .wrapListEnds(
+                                index = index,
+                                lastIndex = lastIndex,
+                                onWrapToFirst = { scope.launch { firstFocus.focusListRow(listState, 0) } },
+                                onWrapToLast = { scope.launch { lastFocus.focusListRow(listState, lastIndex) } },
+                            )
                             .onPreviewKeyEvent { event ->
                                 if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
                                 onClose()

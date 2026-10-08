@@ -116,6 +116,7 @@ class StreamGuideViewModel @Inject constructor(
     private var powerKnown = false
     private var leaveOff = false
     private var mode: StreamMode? = null
+    private var standbyJob: Job? = null
 
     /** True while the guide drives this device's own stream instead of the receiver. */
     val ownTuner: Boolean get() = mode == StreamMode.OWN_TUNER
@@ -241,10 +242,16 @@ class StreamGuideViewModel @Inject constructor(
     /**
      * Switching modes drops the running stream: the follow mode streams what the receiver
      * shows, the own-tuner mode streams its own channel, and they must not mix.
+     * Own tuner also puts the receiver in standby, including when the app opens already in that mode.
      */
     private fun onModeChanged(next: StreamMode) {
         val previous = mode
         mode = next
+        if (StreamModePolicy.putsReceiverInStandby(next) && previous != next) {
+            standbyForOwnTuner()
+        } else if (!StreamModePolicy.putsReceiverInStandby(next)) {
+            standbyJob?.cancel()
+        }
         if (previous == null || previous == next) return
         EnigmaLog.service("stream mode $previous → $next")
         tuneJob?.cancel()
@@ -289,12 +296,37 @@ class StreamGuideViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            val current = mode ?: settingsRepository.current().streamMode.also { mode = it }
+            val current = mode ?: settingsRepository.current().streamMode.also(::onModeChanged)
             if (current == StreamMode.OWN_TUNER) refreshOwnTuner() else refreshFollowing()
         }
     }
 
-    /** Own tuner: never wake or zap the receiver; it may stay in standby. */
+    /**
+     * Own tuner leaves the receiver's screen off. Skip the command when it is already
+     * in standby, so opening the app does not toggle it back on.
+     */
+    private fun standbyForOwnTuner() {
+        standbyJob?.cancel()
+        standbyJob = viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            val already = try {
+                infoSource.powerState(receiver).inStandby
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (already == true) return@launch
+            ReceiverPowerFlow.run(
+                action = PowerAction.STANDBY,
+                wasInStandby = already,
+                send = { infoSource.setPowerState(receiver, PowerAction.STANDBY) },
+                readStandby = { infoSource.powerState(receiver).inStandby },
+            )
+        }
+    }
+
+    /** Own tuner: never wake or zap the receiver; standby is requested separately. */
     private suspend fun refreshOwnTuner() {
         session.ensureStarted()
         session.retryIfReceiverWasAway()

@@ -39,6 +39,8 @@ class StreamModeTest {
         assertFalse(StreamModePolicy.mirrorsReceiverOsd(own))
         assertFalse(StreamModePolicy.forwardsRemoteKeys(own))
         assertTrue(StreamModePolicy.checksTuners(own))
+        assertTrue(StreamModePolicy.putsReceiverInStandby(own))
+        assertFalse(StreamModePolicy.putsReceiverInStandby(follow))
         assertTrue(StreamModePolicy.zapsReceiver(follow))
         assertTrue(StreamModePolicy.asksToWakeReceiver(follow, inStandby = true))
         assertFalse(StreamModePolicy.asksToWakeReceiver(follow, inStandby = false))

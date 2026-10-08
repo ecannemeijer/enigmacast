@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,10 +73,13 @@ import com.enigmacast.ui.recording.isRecording
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.StatusPill
+import com.enigmacast.ui.theme.focusListRow
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.wrapListEnds
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -499,7 +503,11 @@ internal fun BouquetPanel(
     onChoose: (BouquetEntry) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
+    val firstFocus = remember { FocusRequester() }
+    val lastFocus = remember { FocusRequester() }
+    val lastIndex = bouquets.lastIndex
     val anchor = ChannelListNavigation.bouquetFocusIndex(bouquets, activeReference)
     LaunchedEffect(bouquets.size) {
         if (bouquets.isEmpty()) return@LaunchedEffect
@@ -525,7 +533,15 @@ internal fun BouquetPanel(
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                     modifier = Modifier
                         .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
+                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (index == lastIndex && lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
                         .focusProperties { left = FocusRequester.Cancel }
+                        .wrapListEnds(
+                            index = index,
+                            lastIndex = lastIndex,
+                            onWrapToFirst = { scope.launch { firstFocus.focusListRow(listState, 0) } },
+                            onWrapToLast = { scope.launch { lastFocus.focusListRow(listState, lastIndex) } },
+                        )
                         .onPreviewKeyEvent { event ->
                             if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false
                             if (event.type == KeyEventType.KeyDown) onChoose(bouquet)
@@ -556,7 +572,11 @@ private fun ChannelPanel(
     val channels = own.channels
     val current = own.channel?.reference.orEmpty()
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
+    val firstFocus = remember { FocusRequester() }
+    val lastFocus = remember { FocusRequester() }
+    val lastIndex = channels.lastIndex
     val epgOpen = ui.epgChannel != null
     // The playing channel, or the one whose programme panel was just closed.
     val anchor = ChannelListNavigation.channelFocusIndex(channels, ui.listFocusReference.ifBlank { current })
@@ -607,6 +627,14 @@ private fun ChannelPanel(
                     selected = BouquetChannels.sameService(entry.reference, current),
                     modifier = Modifier
                         .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
+                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (index == lastIndex && lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
+                        .wrapListEnds(
+                            index = index,
+                            lastIndex = lastIndex,
+                            onWrapToFirst = { scope.launch { firstFocus.focusListRow(listState, 0) } },
+                            onWrapToLast = { scope.launch { lastFocus.focusListRow(listState, lastIndex) } },
+                        )
                         .onPreviewKeyEvent { event ->
                             if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false
                             if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) onOpenEpg(entry)

@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ private val ClockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm"
 fun MyItemsPanel(
     listFocus: FocusRequester,
     menuFocus: FocusRequester,
+    rowsFocusable: Boolean,
     onPlay: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MyItemsViewModel = hiltViewModel(),
@@ -74,7 +76,10 @@ fun MyItemsPanel(
                 fontSize = 14.sp,
                 modifier = Modifier
                     .focusRequester(listFocus)
-                    .focusProperties { left = menuFocus }
+                    .focusProperties {
+                        canFocus = rowsFocusable
+                        left = menuFocus
+                    }
                     .focusable()
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             )
@@ -88,19 +93,21 @@ fun MyItemsPanel(
                 itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
                     RecordingRow(
                         item = item,
-                        modifier = if (item.id == focusOn) {
-                            Modifier.focusRequester(listFocus).focusProperties { left = menuFocus }
-                        } else {
-                            Modifier
-                        },
+                        modifier = Modifier
+                            .then(if (item.id == focusOn) Modifier.focusRequester(listFocus) else Modifier)
+                            .focusProperties {
+                                canFocus = rowsFocusable
+                                left = menuFocus
+                            },
                         onClick = { viewModel.open(item) },
                     )
                 }
             }
         }
     }
+    val focusTokenOnEnter = remember { viewModel.focusToken }
     LaunchedEffect(viewModel.focusToken) {
-        if (viewModel.focusToken == 0) return@LaunchedEffect
+        if (viewModel.focusToken == 0 || viewModel.focusToken == focusTokenOnEnter) return@LaunchedEffect
         if (viewModel.selected != null || viewModel.pendingDelete != null) return@LaunchedEffect
         val index = items.indexOfFirst { it.id == viewModel.focusId }
         if (index >= 0) listState.scrollToItem(index)

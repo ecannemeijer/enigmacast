@@ -96,10 +96,18 @@ object GuideTimeline {
         return GuideMove(cursor.copy(focusSec = focus, windowStartSec = window))
     }
 
-    /** Up/Down keep the moment in time, so the highlight does not drift while moving through channels. */
+    /**
+     * Up/Down keep the moment in time, so the highlight does not drift while moving through channels.
+     * A single step past either end wraps to the other end; a page jump stays inside the list.
+     */
     fun moveVertical(cursor: GuideCursor, delta: Int, rowCount: Int): GuideCursor {
         if (rowCount <= 0) return cursor
-        return cursor.copy(row = (cursor.row + delta).coerceIn(0, rowCount - 1))
+        val row = when {
+            delta == -1 && cursor.row == 0 -> rowCount - 1
+            delta == 1 && cursor.row == rowCount - 1 -> 0
+            else -> (cursor.row + delta).coerceIn(0, rowCount - 1)
+        }
+        return cursor.copy(row = row)
     }
 
     /** The cell the guide highlights in one channel's row. */
