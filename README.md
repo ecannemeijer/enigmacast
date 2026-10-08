@@ -124,13 +124,13 @@ Settings can enable:
 
 ## Local XAMPP
 
-The update files in `dist/` are served from `C:\xampp\htdocs\enigmacast`. A CodeIgniter front controller on the same host otherwise answers `Can't find a route for 'get: enigmacast/dist/enigmacast.json'`. From the project root, as administrator:
+`http://localhost/enigmacast/install.php` is served from `C:\xampp\htdocs\enigmacast` by the localhost virtual host in `C:\xampp\apache\conf\extra\httpd-vhosts.conf`. That host has to be the first one and its document root has to stay `C:/xampp/htdocs`. From the project root, as administrator:
 
 ```bat
 xampp\install.bat
 ```
 
-The script places `dist\enigmacast.json` in that folder, aliases `/enigmacast` in Apache without replacing the existing site, and adds a rewrite exception so CodeIgniter does not claim the path. Restart Apache from the XAMPP Control Panel if it is not running as a service. The manifest is then `http://localhost/enigmacast/dist/enigmacast.json`.
+The script writes that virtual host, turns on `Include conf/extra/httpd-vhosts.conf` in `httpd.conf`, and leaves an existing `install.php` in place. Restart Apache from the XAMPP Control Panel when it is not running as a service.
 
 ## Troubleshooting
 

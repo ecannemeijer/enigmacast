@@ -1,4 +1,4 @@
-DirectoryIndex index.html index.php index.htm
+DirectoryIndex install.php index.php index.html index.htm
 
 <IfModule mod_mime.c>
     AddType application/json .json
