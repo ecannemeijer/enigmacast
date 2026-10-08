@@ -13,9 +13,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -42,6 +44,7 @@ import com.enigmacast.domain.osd.OsdScaleMode
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.player.VideoScaling
 import com.enigmacast.ui.recording.RecordConfirmDialog
+import com.enigmacast.ui.search.SearchPanel
 import com.enigmacast.ui.recording.RecordingChip
 import com.enigmacast.ui.theme.EnigmaColors
 
@@ -75,6 +78,7 @@ fun EnigmaRemoteScreen(
             onRestart = viewModel::restartFromBar,
             onQuality = viewModel::chooseQuality,
             onRecord = viewModel::recordWatching,
+            onSearch = viewModel::openSearch,
         )
     }
     val guideActions = remember(viewModel) {
@@ -143,6 +147,20 @@ fun EnigmaRemoteScreen(
                     .padding(horizontal = 44.dp, vertical = 32.dp)
                     .background(EnigmaColors.Scrim, RoundedCornerShape(14.dp))
                     .padding(8.dp),
+            )
+        }
+        if (ui.searchOpen) {
+            SearchPanel(
+                rowsFocusable = true,
+                focusToken = ui.searchToken,
+                onPlayed = viewModel::finishSearchPlayback,
+                onBouquet = { viewModel.noteBouquet(it.name) },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(600.dp)
+                    .background(EnigmaColors.Scrim)
+                    .padding(horizontal = 12.dp, vertical = 20.dp),
             )
         }
         if (ui.connectionState !is ConnectionState.Connected && ui.connectionState !is ConnectionState.Idle) {

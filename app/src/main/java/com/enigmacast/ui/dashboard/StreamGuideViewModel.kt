@@ -615,6 +615,22 @@ class StreamGuideViewModel @Inject constructor(
             }
     }
 
+    /** Search picked a bouquet: show its channels in the guide without zapping. */
+    fun openBouquet(bouquet: BouquetEntry) {
+        bouquetPinned = true
+        lastPressedReference = ""
+        selectedBouquetReference = bouquet.reference
+        bouquetName = bouquet.name
+        val token = ++bouquetToken
+        bouquetJob?.cancel()
+        bouquetJob = viewModelScope.launch { showBouquet(bouquet, token) }
+    }
+
+    /** A search tune should follow the session again instead of a pinned bouquet. */
+    fun releaseBouquetPin() {
+        bouquetPinned = false
+    }
+
     fun previewBouquet(bouquet: BouquetEntry) {
         if (bouquet.reference == selectedBouquetReference && bouquetLoaded) return
         bouquetPinned = true

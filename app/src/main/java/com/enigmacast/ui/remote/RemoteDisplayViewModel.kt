@@ -134,6 +134,10 @@ data class RemoteDisplayUiState(
     val quickBar: Boolean = false,
     /** Bumped when the quick bar opens, so its first tile takes the focus. */
     val quickBarToken: Int = 0,
+    /** Unified search over the picture, opened from the first quick-bar tile. */
+    val searchOpen: Boolean = false,
+    /** Bumped when search opens, so the field takes the focus. */
+    val searchToken: Int = 0,
     val tracks: TrackMenu = TrackMenu(),
     val stats: StreamStats = StreamStats(),
     val pictureMode: PictureMode = PictureMode.AUTO,
@@ -370,6 +374,26 @@ class RemoteDisplayViewModel @Inject constructor(
         watchOsdInfo()
     }
 
+    fun openSearch() {
+        _ui.update { it.copy(searchOpen = true, searchToken = it.searchToken + 1) }
+    }
+
+    /** Back from search: the bar stays, and its first tile (Search) takes the focus again. */
+    fun closeSearch() {
+        _ui.update { it.copy(searchOpen = false, quickBarToken = it.quickBarToken + 1) }
+    }
+
+    /** A channel or recording started: leave the search panel and the bar. */
+    fun finishSearchPlayback() {
+        _ui.update { it.copy(searchOpen = false, quickBar = false) }
+        if (_ui.value.ownTuner && _ui.value.banner) showBanner()
+    }
+
+    fun noteBouquet(name: String) {
+        closeSearch()
+        showNotice(UiText.res(R.string.search_bouquet_set, name))
+    }
+
     fun showFileBar() {
         _ui.update { it.copy(fileBar = true) }
         armFileBarHide()
@@ -410,7 +434,7 @@ class RemoteDisplayViewModel @Inject constructor(
     /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
     fun closeQuickBar() {
         if (!_ui.value.quickBar) return
-        _ui.update { it.copy(quickBar = false) }
+        _ui.update { it.copy(quickBar = false, searchOpen = false) }
         if (_ui.value.ownTuner && _ui.value.banner) showBanner()
     }
 
@@ -1048,6 +1072,7 @@ class RemoteDisplayViewModel @Inject constructor(
         val ui = _ui.value
         when {
             ui.programmePrompt != null -> dismissProgramme()
+            ui.searchOpen -> closeSearch()
             ui.quickBar -> closeQuickBar()
             ui.channelList -> {
                 val pane = ChannelListNavigation.back(listPane(ui))
@@ -1128,6 +1153,13 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun handleKey(event: KeyEvent): Boolean {
         if (playback.isFilePlayback()) return handleFileKey(event)
         if (_ui.value.ownTuner) return handleOwnKey(event)
+        if (_ui.value.searchOpen) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) closeSearch()
+                return true
+            }
+            return false
+        }
         if (_ui.value.quickBar) {
             // Following the receiver: the bar keeps the keys while it is open; Back closes it.
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {

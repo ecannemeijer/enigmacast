@@ -33,6 +33,7 @@ class GuideGridControllerTest {
             return events.filter { it.endEpochSec > startSec && it.beginEpochSec < startSec + minutes * 60 }
         }
         override suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int) = TimerResult(true, "")
+        override suspend fun search(config: ReceiverConfig, query: String) = emptyList<com.enigmacast.domain.search.EpgSearchEvent>()
     }
 
     private fun event(id: Int, channel: BouquetEntry, begin: Long, minutes: Int) =

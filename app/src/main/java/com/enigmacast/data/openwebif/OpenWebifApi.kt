@@ -4,6 +4,7 @@ import com.enigmacast.R
 import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.data.network.ReceiverRouter
 import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.search.EpgSearchEvent
 import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
@@ -288,6 +289,10 @@ class OpenWebifApi @Inject constructor(
         if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
         if (response.code !in 200..299) throw OpenWebifException("HTTP ${response.code}", response.code)
         return TranscodeUrls.detect(response.bytes.toString(Charsets.UTF_8))
+    }
+
+    suspend fun epgSearch(config: ReceiverConfig, query: String): List<EpgSearchEvent> {
+        return OpenWebifJson.parseEpgSearch(get(config, endpoints.epgSearch(config, query)))
     }
 
     suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> {

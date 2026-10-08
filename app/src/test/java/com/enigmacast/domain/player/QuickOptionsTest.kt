@@ -9,10 +9,12 @@ import org.junit.Test
 class QuickOptionsTest {
     @Test
     fun followingTheReceiverLeavesOutZapTiles() {
-        assertEquals(QuickOption.RECORD, QuickOptions.tiles(ownTuner = true).first())
+        assertEquals(QuickOption.SEARCH, QuickOptions.tiles(ownTuner = true).first())
+        assertEquals(QuickOption.RECORD, QuickOptions.tiles(ownTuner = true)[1])
         assertTrue(QuickOption.GUIDE in QuickOptions.tiles(ownTuner = true))
+        assertFalse(QuickOption.SEARCH in QuickOptions.tiles(ownTuner = true, file = true))
         val follow = QuickOptions.tiles(ownTuner = false)
-        assertEquals(QuickOption.RECORD, follow.first())
+        assertEquals(QuickOption.SEARCH, follow.first())
         assertFalse(QuickOption.GUIDE in follow)
         assertFalse(QuickOption.RECENT in follow)
         assertTrue(QuickOption.PICTURE in follow)

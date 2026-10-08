@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,6 +94,7 @@ data class QuickBarActions(
     val onRestart: () -> Unit,
     val onQuality: (StreamLevel?) -> Unit,
     val onRecord: () -> Unit,
+    val onSearch: () -> Unit,
 )
 
 private val TileShape = RoundedCornerShape(10.dp)
@@ -134,6 +136,7 @@ fun QuickOptionsBar(ui: RemoteDisplayUiState, actions: QuickBarActions, modifier
                     value = tileValue(option, ui, nowMs),
                     onClick = {
                         when (option) {
+                            QuickOption.SEARCH -> actions.onSearch()
                             QuickOption.GUIDE -> actions.onGuide()
                             QuickOption.RESTART -> actions.onRestart()
                             QuickOption.RECORD -> actions.onRecord()
@@ -276,7 +279,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }
-        QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD -> emptyList()
+        QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD -> emptyList()
     }
 }
 
@@ -415,6 +418,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     }
     QuickOption.STREAM_INFO -> bitrateLabel(ui.stats.bitrateKbps)
     QuickOption.QUALITY -> qualityLabel(ui.quality.level)
+    QuickOption.SEARCH -> ""
     QuickOption.RESTART -> ""
     QuickOption.RECORD -> if (ui.recordingTitle.isNotBlank()) ui.recordingTitle else {
         val nowSec = nowMs / 1000
@@ -438,6 +442,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.STREAM_INFO -> R.string.quick_stream_info
         QuickOption.QUALITY -> R.string.quick_quality
         QuickOption.RESTART -> R.string.quick_restart
+        QuickOption.SEARCH -> R.string.nav_search
         QuickOption.RECORD -> R.string.epg_record
     },
 )
@@ -453,6 +458,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.STREAM_INFO -> Icons.Filled.Info
     QuickOption.QUALITY -> EnigmaIcons.Speed
     QuickOption.RESTART -> Icons.Filled.Refresh
+    QuickOption.SEARCH -> Icons.Filled.Search
     QuickOption.RECORD -> EnigmaIcons.Record
 }
 

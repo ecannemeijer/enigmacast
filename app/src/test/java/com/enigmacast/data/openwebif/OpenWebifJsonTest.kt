@@ -94,6 +94,26 @@ class OpenWebifJsonTest {
     }
 
     @Test
+    fun epgSearchKeepsTheChannelName() {
+        val body = """
+            {"events":[{
+              "id": 9,
+              "sref": "1:0:19:1:0:0:0:0:0:0:",
+              "sname": "Ziggo Sport",
+              "title": "Formula 1",
+              "shortdesc": "Race",
+              "longdesc": "",
+              "begin_timestamp": 1700000000,
+              "duration_sec": 7200
+            }]}
+        """.trimIndent()
+        val found = OpenWebifJson.parseEpgSearch(body).single()
+        assertEquals("Formula 1", found.event.title)
+        assertEquals("Ziggo Sport", found.channelName)
+        assertEquals("1:0:19:1:0:0:0:0:0:0:", found.event.reference)
+    }
+
+    @Test
     fun powerCommandReplyCountsAsSuccess() {
         assertTrue(OpenWebifJson.isSuccess("""{"result": true, "instandby": false}"""))
         assertFalse(OpenWebifJson.isSuccess("""{"result": false}"""))

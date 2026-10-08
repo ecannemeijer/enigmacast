@@ -5,6 +5,7 @@ import com.enigmacast.domain.tuner.NowEvents
 
 /** The tiles of the quick options bar, left to right. */
 enum class QuickOption {
+    SEARCH,
     RECORD,
     SUBTITLES,
     AUDIO,

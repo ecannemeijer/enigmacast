@@ -141,6 +141,8 @@ class OpenWebifEpgSource @Inject constructor(
 
     override suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult =
         api.addTimer(config, serviceReference, eventId)
+
+    override suspend fun search(config: ReceiverConfig, query: String) = api.epgSearch(config, query)
 }
 
 @Singleton

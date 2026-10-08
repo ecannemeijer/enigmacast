@@ -207,6 +207,7 @@
     <string name="osd_tuner">Tuner %s</string>
     <string name="osd_tuner_type">Tuner %1$s · %2$s</string>
     <string name="nav_stream">Stream</string>
+    <string name="nav_search">Search</string>
     <string name="nav_my_items">My Items</string>
     <string name="nav_receiver">Receiver</string>
     <string name="nav_rc_info">RC Info</string>
@@ -395,6 +396,18 @@
     <string name="epg_hint_watch">OK: watch</string>
     <string name="epg_hint_record">OK: AutoSwitch or record</string>
     <string name="epg_record">Record</string>
+    <string name="search_hint">Type at least 2 characters</string>
+    <string name="search_searching">Searching…</string>
+    <string name="search_empty">No results</string>
+    <string name="search_now">Now</string>
+    <string name="search_later">Upcoming</string>
+    <string name="search_recordings">Recordings</string>
+    <string name="search_stations">Channels</string>
+    <string name="search_bouquet">Bouquet</string>
+    <string name="search_channel_missing">That channel is not in a bouquet</string>
+    <string name="search_tune_failed">Could not switch to that channel</string>
+    <string name="search_unavailable">Not available</string>
+    <string name="search_bouquet_set">Bouquet %1$s</string>
     <string name="settings_remote">Remote access</string>
     <string name="remote_settings_intro">For %1$s (%2$s), saved with this receiver. Leave the remote profile empty and the tunnel off if you only watch at home.</string>
     <string name="remote_profile_title">Remote profile (DynDNS)</string>

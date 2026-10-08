@@ -2,6 +2,7 @@ package com.enigmacast.data.openwebif
 
 import com.enigmacast.R
 import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.search.EpgSearchEvent
 import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
@@ -266,6 +267,34 @@ internal object OpenWebifJson {
                 plot = unescape(event.primitive("longdesc").orEmpty()).trim(),
                 beginEpochSec = begin,
                 durationSec = duration,
+            )
+        }
+    }
+
+    /** `/api/epgsearch`: the same event fields as the guide, plus the channel name in `sname`. */
+    fun parseEpgSearch(body: String): List<EpgSearchEvent> {
+        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+        val array = findArray(root, "events") ?: return emptyList()
+        return array.mapNotNull { element ->
+            val event = element as? JsonObject ?: return@mapNotNull null
+            val reference = event.primitive("sref").orEmpty()
+            val begin = event.primitive("begin_timestamp")?.toLongOrNull() ?: 0L
+            val duration = event.primitive("duration_sec")?.toLongOrNull() ?: 0L
+            val title = unescape(event.primitive("title").orEmpty()).trim()
+            if (reference.isBlank() || begin <= 0L || duration <= 0L || title.isBlank() || title == "N/A") {
+                return@mapNotNull null
+            }
+            EpgSearchEvent(
+                event = GuideEvent(
+                    eventId = event.primitive("id")?.toIntOrNull() ?: -1,
+                    reference = reference,
+                    title = title,
+                    shortDescription = unescape(event.primitive("shortdesc").orEmpty()).trim(),
+                    plot = unescape(event.primitive("longdesc").orEmpty()).trim(),
+                    beginEpochSec = begin,
+                    durationSec = duration,
+                ),
+                channelName = unescape(event.primitive("sname").orEmpty()).trim(),
             )
         }
     }

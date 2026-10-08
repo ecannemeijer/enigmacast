@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -103,6 +104,7 @@ import com.enigmacast.ui.theme.NavItem
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.recording.RecordConfirmDialog
+import com.enigmacast.ui.search.SearchPanel
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.ToggleRow
@@ -121,6 +123,7 @@ private val FocusedButtonText = Color.White
 
 private enum class DashSection {
     Stream,
+    Search,
     MyItems,
     Receiver,
     Settings,
@@ -170,6 +173,9 @@ fun DashboardScreen(
     val streamFocus = remember { FocusRequester() }
     var streamItemFocused by remember { mutableStateOf(false) }
     val channelFocus = remember { FocusRequester() }
+    val searchMenuFocus = remember { FocusRequester() }
+    var searchActive by remember { mutableStateOf(false) }
+    var searchEnterToken by remember { mutableIntStateOf(0) }
     val myItemsMenuFocus = remember { FocusRequester() }
     val myItemsListFocus = remember { FocusRequester() }
     // Recordings stay unfocusable until Right (or a return from playback/dialog) enters the list,
@@ -191,6 +197,7 @@ fun DashboardScreen(
                 runCatching {
                     when (section) {
                         DashSection.Stream -> streamFocus.requestFocus()
+                        DashSection.Search -> searchMenuFocus.requestFocus()
                         DashSection.MyItems -> myItemsMenuFocus.requestFocus()
                         DashSection.Receiver -> receiverMenuFocus.requestFocus()
                         DashSection.Settings -> settingsMenuFocus.requestFocus()
@@ -212,6 +219,10 @@ fun DashboardScreen(
         myItemsModel.focusRow(id)
         myItemsListFocus.requestWhenReady()
         onMyItemsFocused()
+    }
+    LaunchedEffect(searchEnterToken) {
+        if (searchEnterToken == 0) return@LaunchedEffect
+        searchActive = true
     }
     LaunchedEffect(myItemsEnterToken) {
         if (myItemsEnterToken == 0) return@LaunchedEffect
@@ -280,6 +291,22 @@ fun DashboardScreen(
                         .focusProperties { right = channelFocus },
                     onFocus = { openSection(DashSection.Stream) },
                     onClick = onStream,
+                )
+                NavItem(
+                    icon = Icons.Filled.Search,
+                    label = stringResource(R.string.nav_search),
+                    selected = section == DashSection.Search,
+                    modifier = Modifier
+                        .focusRequester(searchMenuFocus)
+                        .onFocusChanged { if (it.isFocused) searchActive = false }
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            searchActive = true
+                            searchEnterToken += 1
+                            true
+                        },
+                    onFocus = { openSection(DashSection.Search) },
+                    onClick = { section = DashSection.Search },
                 )
                 NavItem(
                     icon = EnigmaIcons.Record,
@@ -360,6 +387,18 @@ fun DashboardScreen(
                             settingsMenuFocus,
                             onMiniPlayer,
                             onStream,
+                        )
+                        DashSection.Search -> SearchPanel(
+                            rowsFocusable = searchActive,
+                            focusToken = searchEnterToken,
+                            menuFocus = searchMenuFocus,
+                            onPrepare = guideModel::releaseBouquetPin,
+                            onPlayed = onStream,
+                            onBouquet = { bouquet ->
+                                guideModel.openBouquet(bouquet)
+                                section = DashSection.Stream
+                            },
+                            modifier = Modifier.fillMaxSize(),
                         )
                         DashSection.MyItems -> MyItemsPanel(
                             listFocus = myItemsListFocus,

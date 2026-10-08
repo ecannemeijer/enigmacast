@@ -88,6 +88,10 @@ fun TvTextField(
     large: Boolean = false,
     visualTransformation: VisualTransformation? = null,
     monospace: Boolean = false,
+    canFocus: Boolean = true,
+    fieldFocus: FocusRequester? = null,
+    leftFocus: FocusRequester? = null,
+    rightFocus: FocusRequester? = null,
 ) {
     var editing by remember { mutableStateOf(false) }
     var highlighted by remember { mutableStateOf(false) }
@@ -198,7 +202,13 @@ fun TvTextField(
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (fieldFocus != null) Modifier.focusRequester(fieldFocus) else Modifier)
                 .focusRequester(shell)
+                .focusProperties {
+                    this.canFocus = canFocus
+                    if (leftFocus != null) left = leftFocus
+                    if (rightFocus != null) right = rightFocus
+                }
                 .onFocusChanged { highlighted = it.isFocused }
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown && event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false

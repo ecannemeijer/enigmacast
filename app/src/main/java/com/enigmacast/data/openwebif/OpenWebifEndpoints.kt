@@ -79,6 +79,11 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
     fun timerList(config: ReceiverConfig): String = api(config, "/api/timerlist")
 
     /** The programme on air for every channel of one bouquet, in a single request. */
+    /** Full-EPG text search. OpenWebif matches the query and returns events with `sname`. */
+    fun epgSearch(config: ReceiverConfig, query: String): String {
+        return api(config, "/api/epgsearch?search=${encode(query)}")
+    }
+
     fun epgNow(config: ReceiverConfig, bouquetReference: String): String {
         return api(config, "/api/epgnow?bRef=${encode(bouquetReference)}")
     }

@@ -1,6 +1,7 @@
 package com.enigmacast.domain.source
 
 import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.search.EpgSearchEvent
 import com.enigmacast.domain.epg.TimerResult
 import com.enigmacast.domain.model.BouquetChannelList
 import com.enigmacast.domain.model.BouquetEntry
@@ -84,6 +85,9 @@ interface EpgSource {
 
     /** Asks the receiver to record one programme. */
     suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult
+
+    /** Programmes whose title matches [query], across every bouquet (`/api/epgsearch`). */
+    suspend fun search(config: ReceiverConfig, query: String): List<EpgSearchEvent>
 }
 
 /** Receiver-side data for the OSD info strip (OpenWebif). */

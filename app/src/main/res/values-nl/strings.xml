@@ -204,6 +204,7 @@
     <string name="osd_tuner">Tuner %s</string>
     <string name="osd_tuner_type">Tuner %1$s · %2$s</string>
     <string name="nav_stream">Stream</string>
+    <string name="nav_search">Zoeken</string>
     <string name="nav_my_items">Mijn items</string>
     <string name="nav_receiver">Ontvanger</string>
     <string name="nav_rc_info">RC-info</string>
@@ -392,6 +393,18 @@
     <string name="epg_hint_watch">OK: kijken</string>
     <string name="epg_hint_record">OK: AutoSwitch of opnemen</string>
     <string name="epg_record">Opnemen</string>
+    <string name="search_hint">Typ minstens 2 tekens</string>
+    <string name="search_searching">Zoeken…</string>
+    <string name="search_empty">Geen resultaten</string>
+    <string name="search_now">Nu</string>
+    <string name="search_later">Straks</string>
+    <string name="search_recordings">Opnames</string>
+    <string name="search_stations">Zenders</string>
+    <string name="search_bouquet">Boeket</string>
+    <string name="search_channel_missing">Die zender zit in geen boeket</string>
+    <string name="search_tune_failed">Overschakelen is mislukt</string>
+    <string name="search_unavailable">Niet beschikbaar</string>
+    <string name="search_bouquet_set">Boeket %1$s</string>
     <string name="settings_remote">Toegang van buitenaf</string>
     <string name="remote_settings_intro">Voor %1$s (%2$s), bewaard bij deze ontvanger. Laat het externe profiel leeg en de tunnel uit als je alleen thuis kijkt.</string>
     <string name="remote_profile_title">Extern profiel (DynDNS)</string>
