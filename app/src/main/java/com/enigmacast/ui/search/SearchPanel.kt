@@ -3,14 +3,18 @@ package com.enigmacast.ui.search
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -72,7 +76,7 @@ fun SearchPanel(
             label = stringResource(R.string.nav_search),
             value = viewModel.query,
             onValueChange = viewModel::onQuery,
-            canFocus = rowsFocusable,
+            browsable = rowsFocusable,
             fieldFocus = fieldFocus,
             leftFocus = menuFocus ?: FocusRequester.Cancel,
             rightFocus = if (menuFocus == null) FocusRequester.Cancel else null,
@@ -84,9 +88,10 @@ fun SearchPanel(
         }
         when {
             viewModel.query.trim().length < 2 -> Hint(stringResource(R.string.search_hint))
-            viewModel.searching && viewModel.results.isEmpty -> Hint(stringResource(R.string.search_searching))
+            viewModel.searching && viewModel.results.isEmpty -> SearchSpinner()
             !viewModel.searching && viewModel.results.isEmpty -> Hint(stringResource(R.string.search_empty))
             else -> {
+                if (viewModel.searching) SearchSpinner()
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -122,6 +127,16 @@ fun SearchPanel(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchSpinner() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+    ) {
+        CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(22.dp))
     }
 }
 

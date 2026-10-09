@@ -1,18 +1,29 @@
 package com.enigmacast.ui.connection
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.enigmacast.data.discovery.AboutProbe
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -166,11 +177,19 @@ private fun RetryClose(primary: FocusRequester, onRetry: () -> Unit, onClose: ()
 
 @Composable
 private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    var preview by remember(receiver.address) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(receiver.address, receiver.loginRequired) {
+        if (receiver.loginRequired) return@LaunchedEffect
+        val bytes = AboutProbe().preview(receiver) ?: return@LaunchedEffect
+        preview = withContext(Dispatchers.IO) {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }
+    }
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
         scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.02f),
         colors = ButtonDefaults.colors(
             containerColor = EnigmaColors.Raised,
@@ -181,7 +200,7 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
             pressedContentColor = EnigmaColors.OnAccent,
         ),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val title = receiver.model.ifBlank { receiver.address }
             Text((if (inUse) "✓ " else "") + title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val details = buildList {
@@ -191,6 +210,19 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
                 if (inUse) add(stringResource(R.string.autodetect_in_use))
             }
             Text(details.joinToString("  ·  "), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        preview?.let { bitmap ->
+            val ratio = (bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1)).coerceIn(1.2f, 1.78f)
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .padding(start = 10.dp)
+                    .height(36.dp)
+                    .aspectRatio(ratio, matchHeightConstraintsFirst = true)
+                    .clip(RoundedCornerShape(4.dp)),
+            )
         }
     }
 }

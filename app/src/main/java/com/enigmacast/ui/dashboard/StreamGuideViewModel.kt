@@ -69,6 +69,9 @@ class StreamGuideViewModel @Inject constructor(
         private set
     var channels by mutableStateOf<List<BouquetEntry>>(emptyList())
         private set
+    /** True only while the first channel list is fetched. The wait dialog uses this. */
+    var loadingChannels by mutableStateOf(false)
+        private set
     var bouquetName by mutableStateOf("")
         private set
     var bouquets by mutableStateOf<List<BouquetEntry>>(emptyList())
@@ -269,6 +272,7 @@ class StreamGuideViewModel @Inject constructor(
 
     private fun mirror(state: OwnTunerState) {
         if (mode != StreamMode.OWN_TUNER) return
+        loadingChannels = state.loadingChannels
         if (!bouquetPinned && state.channels.isNotEmpty()) {
             channels = state.channels
             bouquetName = state.bouquetName
@@ -285,9 +289,10 @@ class StreamGuideViewModel @Inject constructor(
                 guide = state.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) }
             }
         }
-        status = when (state.tuner.status) {
-            TunerStatus.PLAYING, TunerStatus.IDLE -> UiText.Empty
-            TunerStatus.FULL -> UiText.Joined(
+        status = when {
+            state.loadingChannels -> UiText.Empty
+            state.tuner.status == TunerStatus.PLAYING || state.tuner.status == TunerStatus.IDLE -> UiText.Empty
+            state.tuner.status == TunerStatus.FULL -> UiText.Joined(
                 listOf(state.tuner.message) + state.tuner.users.map { UiText.res(R.string.bullet_item, it.text()) },
             )
             else -> state.tuner.message
@@ -664,23 +669,29 @@ class StreamGuideViewModel @Inject constructor(
 
     private suspend fun loadBouquet() {
         val receiver = settingsRepository.current().activeReceiver() ?: return
-        if (!bouquetPinned) {
-            runCatching { serviceSource.televisionBouquets(receiver) }
-                .onSuccess { bouquets = it }
+        val first = !bouquetLoaded && channels.isEmpty() && mode != StreamMode.OWN_TUNER
+        if (first) loadingChannels = true
+        try {
+            if (!bouquetPinned) {
+                runCatching { serviceSource.televisionBouquets(receiver) }
+                    .onSuccess { bouquets = it }
+            }
+            runCatching { serviceSource.currentBouquetChannels(receiver) }
+                .onSuccess { loaded ->
+                    if (bouquetPinned) return@onSuccess
+                    if (loaded.channels.isEmpty()) return@onSuccess
+                    bouquetName = loaded.bouquetName
+                    channels = loaded.channels
+                    selectedBouquetReference = loaded.bouquetReference
+                    bouquetLoaded = true
+                    EnigmaLog.service("bouquet ${loaded.bouquetName} channels=${loaded.channels.size}")
+                }
+                .onFailure { error ->
+                    if (status.isEmpty()) status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
+                }
+        } finally {
+            if (first) loadingChannels = false
         }
-        runCatching { serviceSource.currentBouquetChannels(receiver) }
-            .onSuccess { loaded ->
-                if (bouquetPinned) return@onSuccess
-                if (loaded.channels.isEmpty()) return@onSuccess
-                bouquetName = loaded.bouquetName
-                channels = loaded.channels
-                selectedBouquetReference = loaded.bouquetReference
-                bouquetLoaded = true
-                EnigmaLog.service("bouquet ${loaded.bouquetName} channels=${loaded.channels.size}")
-            }
-            .onFailure { error ->
-                if (status.isEmpty()) status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
-            }
     }
 
     private companion object {

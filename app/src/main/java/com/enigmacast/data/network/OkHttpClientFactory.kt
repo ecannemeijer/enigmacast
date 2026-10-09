@@ -74,6 +74,14 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
         oneStream?.cancel()
     }
 
+    /** Closes the stream and ignores new Enigma2 stream calls until [releaseStream]. */
+    fun holdStreamClosed(): Int = streamCalls().let { (oneStream ?: return 0).holdClosed() }
+
+    /** Lets the next Enigma2 stream open when [ticket] is still the active hold. */
+    fun releaseStream(ticket: Int): Boolean = oneStream?.release(ticket) ?: true
+
+    fun streamHoldTicket(): Int = oneStream?.currentTicket() ?: 0
+
     private fun baseBuilder(readTimeoutSeconds: Long): OkHttpClient.Builder {
         return OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)

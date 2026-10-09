@@ -88,6 +88,26 @@ class AboutProbe(
         }
     }
 
+    /** A small video grab for the result row. Only when OpenWebif did not ask for a login. */
+    suspend fun preview(receiver: DiscoveredReceiver): ByteArray? {
+        if (receiver.loginRequired) return null
+        val scheme = if (receiver.useHttps) "https" else "http"
+        val url = "$scheme://${receiver.host}:${receiver.httpPort}/grab?format=jpg&mode=video"
+        return try {
+            runInterruptible(Dispatchers.IO) {
+                client.newCall(Request.Builder().url(url).header("Accept", "image/jpeg").build()).execute().use { response ->
+                    if (!response.isSuccessful) return@use null
+                    val type = response.header("Content-Type").orEmpty()
+                    if (!type.startsWith("image/")) return@use null
+                    response.body?.bytes()?.takeIf { it.size > 32 }
+                }
+            }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            null
+        }
+    }
+
     companion object {
         private const val MAX_BODY = 512L * 1024
 

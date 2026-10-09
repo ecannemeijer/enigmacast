@@ -31,7 +31,7 @@ internal object LiveZapFlow {
         startStream: () -> Unit,
         timeoutMs: Long = 2_500L,
         pollMs: Long = 80L,
-        cleanupDelayMs: Long = 100L,
+        cleanupDelayMs: Long = 400L,
         log: (String) -> Unit = { EnigmaLog.service(it) },
     ): Outcome {
         log("tune requested: $reference")

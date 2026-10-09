@@ -93,6 +93,7 @@ import com.enigmacast.ui.remote.ProgrammeDialog
 import com.enigmacast.ui.remote.RemoteDisplayViewModel
 import com.enigmacast.ui.remote.rememberGuideClock
 import com.enigmacast.ui.settings.SettingsViewModel
+import com.enigmacast.ui.theme.ChannelsLoadingDialog
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.focusListRow
@@ -634,6 +635,9 @@ private fun StreamPanel(
         )
     }
     prompt?.let { ProgrammeDialog(it, programmeActions) }
+    if (guideModel.loadingChannels) {
+        ChannelsLoadingDialog(stringResource(R.string.channels_please_wait))
+    }
 }
 
 private val MiniPlayerHeight = 158.dp

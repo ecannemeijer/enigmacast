@@ -212,11 +212,16 @@ class LivePlaybackController @Inject constructor(
         _state.value = PlayerState()
     }
 
+    /** True while a live URL is loaded, so a zap must wait for that socket to close. */
+    fun hasOpenStream(): Boolean = currentUrl != null
+
     /**
      * Drops the live MPEG-TS source before a zap so the receiver can free the tuner.
      * The same ExoPlayer is kept; [release] is for leaving the screen.
+     * Returns a ticket for [playAfterRelease]. Until that play, player retries cannot
+     * open the Enigma2 stream again and keep the tuner.
      */
-    fun stopForZap() {
+    fun stopForZap(): Int {
         endFilePlayback()
         reconnectJob?.cancel()
         reconnectJob = null
@@ -227,13 +232,17 @@ class LivePlaybackController @Inject constructor(
         tsInspector.reset()
         // Cancel the socket first. ExoPlayer's stop does not always close a blocked read,
         // and the receiver keeps that tuner until the TCP connection is gone.
-        clientFactory.cancelStream()
-        val exo = player ?: return
+        val ticket = clientFactory.holdStreamClosed()
+        val exo = player ?: return ticket
         exo.playWhenReady = false
         exo.stop()
         exo.clearMediaItems()
         EnigmaLog.player("live stream released for zap")
+        return ticket
     }
+
+    /** The hold from the latest [stopForZap], or 0 when none was taken. */
+    fun streamHoldTicket(): Int = clientFactory.streamHoldTicket()
 
     fun allowPlayback() {
         playbackEnabled = true
@@ -300,12 +309,30 @@ class LivePlaybackController @Inject constructor(
         start(url, authorization, checkStart, internet)
     }
 
+    /**
+     * Starts [url] only when [ticket] is still the latest [stopForZap].
+     * A newer zap owns the closed socket and this call does not open a second one.
+     */
+    fun playAfterRelease(
+        ticket: Int,
+        url: String,
+        force: Boolean = false,
+        authorization: String? = null,
+        checkStart: Boolean = false,
+        internet: Boolean = false,
+    ) {
+        if (clientFactory.streamHoldTicket() != ticket) return
+        if (!clientFactory.releaseStream(ticket)) return
+        play(url, force, authorization, checkStart, internet)
+    }
+
     private fun start(url: String, authorization: String?, checkStart: Boolean, internet: Boolean) {
         val exo = ensurePlayer()
         reconnectJob?.cancel()
         reconnectJob = null
-        // Drop the previous stream socket before the new request. A blocked read survives
-        // ExoPlayer's stop, and the receiver holds that tuner until the socket is cancelled.
+        // The zap hold blocks player retries. Open the gate only now, then drop any socket
+        // that is still listed, and only then ask the receiver for the new stream.
+        clientFactory.releaseStream(clientFactory.streamHoldTicket())
         clientFactory.cancelStream()
         currentUrl = url
         streamAuthorization = authorization
@@ -501,9 +528,13 @@ class LivePlaybackController @Inject constructor(
     }
 
     fun reconnect() {
-        val url = currentUrl ?: return
-        if (!settings.autoReconnect && failures > 0) return
-        start(url, streamAuthorization, checkStart, internet)
+        // ConnectivityManager delivers onAvailable on its own thread. ExoPlayer only
+        // accepts calls from the main thread, so the restart is posted there.
+        ownScope.launch {
+            val url = currentUrl ?: return@launch
+            if (!settings.autoReconnect && failures > 0) return@launch
+            start(url, streamAuthorization, checkStart, internet)
+        }
     }
 
     fun release() {

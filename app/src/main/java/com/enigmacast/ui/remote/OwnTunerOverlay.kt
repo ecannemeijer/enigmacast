@@ -70,6 +70,7 @@ import com.enigmacast.ui.osd.OsdInfoPresenter
 import com.enigmacast.ui.osd.OsdSkins
 import com.enigmacast.ui.recording.RecordingDot
 import com.enigmacast.ui.recording.isRecording
+import com.enigmacast.ui.theme.ChannelsLoadingDialog
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.StatusPill
@@ -104,7 +105,9 @@ fun OwnTunerOverlay(
     val tuner = own.tuner
     Box(modifier = Modifier.fillMaxSize()) {
         val channel = own.channel
-        if ((tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING)) {
+        if (own.loadingChannels) {
+            ChannelsLoadingDialog(stringResource(R.string.channels_please_wait))
+        } else if (tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING) {
             StatusPill(
                 text = tuner.message.asString().ifBlank { stringResource(R.string.loading) },
                 color = EnigmaColors.Accent,

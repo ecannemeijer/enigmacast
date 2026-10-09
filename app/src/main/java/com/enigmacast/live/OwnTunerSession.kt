@@ -63,6 +63,8 @@ data class OwnTunerState(
     val tuner: TunerState = TunerState(),
     /** Bumped on every zap so screens can show the channel banner. */
     val zapCount: Int = 0,
+    /** The first channel list is still being fetched. Later zaps do not set this. */
+    val loadingChannels: Boolean = false,
 )
 
 /**
@@ -143,42 +145,58 @@ class OwnTunerSession @Inject constructor(
     private fun loadInitial(startPlayback: Boolean) {
         startAfterLoad = startPlayback
         startJob = scope.launch {
-            val settings = settingsRepository.current()
-            val receiver = settings.activeReceiver() ?: return@launch
-            val last = settings.lastChannel
-            _state.update { it.copy(tuner = TunerState(TunerStatus.CHECKING, UiText.res(R.string.tuner_loading_channels))) }
-            val list = runCatching {
-                if (last.bouquetReference.isNotBlank()) {
-                    val channels = serviceSource.channelsInBouquet(receiver, last.bouquetReference)
-                    val name = runCatching { serviceSource.televisionBouquets(receiver) }.getOrDefault(emptyList())
-                        .firstOrNull { it.reference == last.bouquetReference }?.name.orEmpty()
-                    Triple(name, last.bouquetReference, channels)
-                } else {
-                    val current = serviceSource.currentBouquetChannels(receiver)
-                    Triple(current.bouquetName, current.bouquetReference, current.channels)
+            _state.update {
+                it.copy(
+                    loadingChannels = true,
+                    tuner = TunerState(TunerStatus.CHECKING, UiText.res(R.string.tuner_loading_channels)),
+                )
+            }
+            try {
+                val settings = settingsRepository.current()
+                val receiver = settings.activeReceiver() ?: return@launch
+                val last = settings.lastChannel
+                val list = runCatching {
+                    if (last.bouquetReference.isNotBlank()) {
+                        val channels = serviceSource.channelsInBouquet(receiver, last.bouquetReference)
+                        val name = runCatching { serviceSource.televisionBouquets(receiver) }.getOrDefault(emptyList())
+                            .firstOrNull { it.reference == last.bouquetReference }?.name.orEmpty()
+                        Triple(name, last.bouquetReference, channels)
+                    } else {
+                        val current = serviceSource.currentBouquetChannels(receiver)
+                        Triple(current.bouquetName, current.bouquetReference, current.channels)
+                    }
+                }.getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, error.uiMessage(UiText.res(R.string.tuner_channels_failed)))) }
+                    return@launch
                 }
-            }.getOrElse { error ->
-                if (error is CancellationException) throw error
-                _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, error.uiMessage(UiText.res(R.string.tuner_channels_failed)))) }
-                return@launch
+                val (bouquetName, bouquetReference, channels) = list
+                val receiverChannel = if (last.reference.isBlank()) {
+                    runCatching { serviceSource.currentService(receiver).reference }.getOrNull().orEmpty()
+                } else {
+                    ""
+                }
+                val target = channels.firstOrNull { BouquetChannels.sameService(it.reference, last.reference) }
+                    ?: channels.firstOrNull { BouquetChannels.sameService(it.reference, receiverChannel) }
+                    ?: last.reference.takeIf { it.isNotBlank() }?.let { BouquetEntry(last.name, it) }
+                    ?: channels.firstOrNull()
+                _state.update {
+                    it.copy(
+                        channels = channels,
+                        bouquetName = bouquetName,
+                        bouquetReference = bouquetReference,
+                        loadingChannels = false,
+                    )
+                }
+                if (!startAfterLoad || playback.isFilePlayback()) return@launch
+                if (target == null) {
+                    _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
+                    return@launch
+                }
+                startNow(receiver, target)
+            } finally {
+                if (_state.value.loadingChannels) _state.update { it.copy(loadingChannels = false) }
             }
-            val (bouquetName, bouquetReference, channels) = list
-            val receiverChannel = if (last.reference.isBlank()) {
-                runCatching { serviceSource.currentService(receiver).reference }.getOrNull().orEmpty()
-            } else {
-                ""
-            }
-            val target = channels.firstOrNull { BouquetChannels.sameService(it.reference, last.reference) }
-                ?: channels.firstOrNull { BouquetChannels.sameService(it.reference, receiverChannel) }
-                ?: last.reference.takeIf { it.isNotBlank() }?.let { BouquetEntry(last.name, it) }
-                ?: channels.firstOrNull()
-            _state.update { it.copy(channels = channels, bouquetName = bouquetName, bouquetReference = bouquetReference) }
-            if (!startAfterLoad || playback.isFilePlayback()) return@launch
-            if (target == null) {
-                _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
-                return@launch
-            }
-            startNow(receiver, target)
         }
     }
 
@@ -343,7 +361,7 @@ class OwnTunerSession @Inject constructor(
 
     private suspend fun startNow(receiver: ReceiverConfig, channel: BouquetEntry) {
         val myToken = ++token
-        val hadStream = streaming
+        val hadStream = streaming || playback.hasOpenStream()
         guideJob?.cancel()
         _state.update {
             it.copy(
@@ -353,7 +371,7 @@ class OwnTunerSession @Inject constructor(
                 zapCount = it.zapCount + 1,
             )
         }
-        playback.stopForZap()
+        val ticket = playback.stopForZap()
         streaming = false
         loadGuide(channel, myToken)
         val internet = ServiceStreams.isInternet(channel.reference)
@@ -362,23 +380,24 @@ class OwnTunerSession @Inject constructor(
             EnigmaLog.service("internet stream ${channel.name}: skipping tuner check")
             _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
             val target = streamTargets.target(receiver, channel.reference)
-            if (myToken != token) return
-            playback.play(target.url, force = true, authorization = target.authorization, checkStart = false, internet = true)
+            if (myToken != token || playback.streamHoldTicket() != ticket) return
+            playback.playAfterRelease(ticket, target.url, force = true, authorization = target.authorization, checkStart = false, internet = true)
             streaming = true
             saveLastChannel(channel)
             return
         }
         // Give the receiver a moment to notice the closed stream and free its tuner.
+        // Retries stay blocked until playAfterRelease, so the old channel cannot grab the tuner again.
         if (hadStream) delay(STREAM_RELEASE_MS)
         val snapshot = runCatching { tunerSource.snapshot(receiver) }.getOrElse { error ->
             if (error is CancellationException) throw error
             EnigmaLog.service("tuner check unavailable: ${error.javaClass.simpleName}")
             null
         }
-        if (myToken != token) return
+        if (myToken != token || playback.streamHoldTicket() != ticket) return
         lastSnapshot = snapshot
         lastOwnAddresses = ownAddresses(receiver)
-        if (myToken != token) return
+        if (myToken != token || playback.streamHoldTicket() != ticket) return
         val verdict = snapshot?.let {
             TunerAvailability.evaluate(it, channel.reference, lastOwnAddresses)
         } ?: TunerVerdict.Unknown
@@ -392,7 +411,7 @@ class OwnTunerSession @Inject constructor(
         _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
         val target = streamTargets.target(receiver, channel.reference)
         if (myToken != token) return
-        playback.play(target.url, force = true, authorization = target.authorization, checkStart = true)
+        playback.playAfterRelease(ticket, target.url, force = true, authorization = target.authorization, checkStart = true)
         streaming = true
         saveLastChannel(channel)
     }

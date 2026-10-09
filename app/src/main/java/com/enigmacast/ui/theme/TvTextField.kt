@@ -88,7 +88,7 @@ fun TvTextField(
     large: Boolean = false,
     visualTransformation: VisualTransformation? = null,
     monospace: Boolean = false,
-    canFocus: Boolean = true,
+    browsable: Boolean = true,
     fieldFocus: FocusRequester? = null,
     leftFocus: FocusRequester? = null,
     rightFocus: FocusRequester? = null,
@@ -205,7 +205,7 @@ fun TvTextField(
                 .then(if (fieldFocus != null) Modifier.focusRequester(fieldFocus) else Modifier)
                 .focusRequester(shell)
                 .focusProperties {
-                    this.canFocus = canFocus
+                    canFocus = browsable
                     if (leftFocus != null) left = leftFocus
                     if (rightFocus != null) right = rightFocus
                 }

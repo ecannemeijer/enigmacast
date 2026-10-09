@@ -2,6 +2,7 @@ package com.enigmacast.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -380,6 +382,40 @@ fun ActionTile(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Blocks the screen while the first channel list is fetched. Back and clicks outside do nothing;
+ * the caller removes it when the list is in.
+ */
+@Composable
+fun ChannelsLoadingDialog(message: String) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+        ),
+    ) {
+        NavigationSoundsForWindow()
+        val hold = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { hold.requestFocus() } }
+        Row(
+            modifier = Modifier
+                .widthIn(min = 320.dp, max = 480.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .padding(20.dp)
+                .focusRequester(hold)
+                .focusable(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
+            Text(message, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

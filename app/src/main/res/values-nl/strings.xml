@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="tuner_loading_channels">Zenders laden…</string>
+    <string name="channels_please_wait">Even geduld... Zenders laden</string>
     <string name="tuner_channels_failed">Zenders laden mislukt</string>
     <string name="tuner_no_channels">Geen zenders gevonden</string>
     <string name="tuner_checking">Tuner controleren…</string>
