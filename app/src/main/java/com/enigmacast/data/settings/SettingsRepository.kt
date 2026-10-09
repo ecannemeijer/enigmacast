@@ -10,7 +10,9 @@ import com.enigmacast.data.openwebif.openWebifJson
 import com.enigmacast.data.security.SecretFields
 import com.enigmacast.data.security.SecretStore
 import com.enigmacast.domain.model.AppSettings
+import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.ReceiverList
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -44,6 +46,22 @@ class SettingsRepository @Inject constructor(
         return saved
     }
 
+    suspend fun selectReceiver(id: String) {
+        update { ReceiverList.select(it, id) }
+    }
+
+    suspend fun removeReceiver(id: String) {
+        update { ReceiverList.remove(it, id) }
+    }
+
+    /** Writes per-receiver channel memory when older settings still keep a single last channel. */
+    suspend fun migrateChannelMemory() {
+        val raw = dataStore.data.first()[key] ?: return
+        val stored = runCatching { openWebifJson.decodeFromString<AppSettings>(raw) }.getOrNull() ?: return
+        if (!ChannelMemory.needsMigration(stored)) return
+        update { ChannelMemory.migrate(it) }
+    }
+
     suspend fun update(transform: (AppSettings) -> AppSettings) {
         dataStore.edit { preferences ->
             val current = decode(preferences[key])
@@ -62,6 +80,6 @@ class SettingsRepository @Inject constructor(
 
     private fun decode(raw: String?): AppSettings {
         val parsed = raw?.let { runCatching { openWebifJson.decodeFromString<AppSettings>(it) }.getOrDefault(AppSettings()) } ?: AppSettings()
-        return SecretFields.fill(parsed, secrets::read)
+        return ChannelMemory.migrate(SecretFields.fill(parsed, secrets::read))
     }
 }

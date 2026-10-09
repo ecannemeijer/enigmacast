@@ -7,18 +7,31 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.R
+import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.recording.Recording
+import com.enigmacast.domain.recording.forReceiver
 import com.enigmacast.live.RecordingBook
 import com.enigmacast.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class MyItemsViewModel @Inject constructor(
     private val book: RecordingBook,
+    settingsRepository: SettingsRepository,
 ) : ViewModel() {
-    val items = book.items
+    val items: StateFlow<List<Recording>> = combine(
+        book.items,
+        settingsRepository.settings.map { it.activeReceiver()?.id.orEmpty() }.distinctUntilChanged(),
+    ) { list, receiverId -> list.forReceiver(receiverId) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     var selected by mutableStateOf<Recording?>(null)
         private set
     var pendingDelete by mutableStateOf<Recording?>(null)

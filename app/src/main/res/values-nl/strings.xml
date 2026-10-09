@@ -147,6 +147,8 @@
     <string name="autodetect_no_network">Deze tv heeft geen lokaal netwerkadres (wifi of ethernet) om vanaf te zoeken. Controleer de netwerkverbinding, of vul het IP-adres van de ontvanger zelf in.</string>
     <string name="autodetect_login_required">inloggen vereist</string>
     <string name="autodetect_in_use">in gebruik</string>
+    <string name="autodetect_already">Deze ontvangers staan al in de lijst.</string>
+    <string name="autodetect_already_detail">Autodetect toont alleen boxen die nog niet bij Ontvangers staan, zodat dezelfde box niet twee keer wordt opgeslagen.</string>
     <string name="autodetect_chosen">%s ingevuld. Druk op Opslaan om deze te gebruiken.</string>
     <string name="autodetect_try_again">Opnieuw proberen</string>
     <string name="autodetect_search_again">Opnieuw zoeken</string>
@@ -249,6 +251,15 @@
     <string name="rc_digits_desc">Cijfers</string>
     <string name="rc_play_desc">Afspelen, pauze, stop</string>
     <string name="settings_title">Instellingen</string>
+    <string name="settings_receivers">Ontvangers</string>
+    <string name="receivers_intro">Kies van welke Enigma2-box tunerstatus, bouquets en opnames komen.</string>
+    <string name="receivers_add">Ontvanger toevoegen</string>
+    <string name="receivers_edit">Bewerken</string>
+    <string name="receivers_empty">Nog geen ontvangers. Voeg er een toe om de zenders te kijken.</string>
+    <string name="receivers_in_use">In gebruik</string>
+    <string name="receivers_delete">Verwijderen</string>
+    <string name="receivers_delete_title">Ontvanger verwijderen</string>
+    <string name="receivers_delete_message">%1$s verwijderen? De app gebruikt die box dan niet meer.</string>
     <string name="settings_receiver">Ontvanger</string>
     <string name="settings_playback">Weergave</string>
     <string name="settings_osd">OSD</string>

@@ -12,6 +12,7 @@ import com.enigmacast.R
 import com.enigmacast.data.discovery.AutodetectResult
 import com.enigmacast.data.discovery.DiscoveredHost
 import com.enigmacast.data.discovery.DiscoveredReceiver
+import com.enigmacast.data.discovery.withoutSaved
 import com.enigmacast.data.discovery.ReceiverAutodetect
 import com.enigmacast.data.network.ReceiverRouter
 import com.enigmacast.data.network.TunnelState
@@ -87,6 +88,10 @@ class ConnectionViewModel @Inject constructor(
     var status by mutableStateOf(UiText.Empty)
     var busy by mutableStateOf(false)
     private var receiverId: String = ""
+    /** The receiver currently shown in the form. A different active id reloads the fields. */
+    private var loadedId: String? = null
+    /** True while adding a box, so a settings update does not refill the blank form. */
+    private var adding = false
 
     /** True once a receiver has been saved, so the setup screen can name the current one. */
     var hasSavedReceiver by mutableStateOf(false)
@@ -101,34 +106,100 @@ class ConnectionViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            settingsRepository.current().activeReceiver()?.let { saved ->
-                receiverId = saved.id
-                hasSavedReceiver = true
-                name = saved.name
-                host = saved.host
-                httpPort = saved.httpPort.toString()
-                streamPort = saved.streamingPort.toString()
-                useHttps = saved.useHttps
-                username = saved.username
-                password = saved.password
-                allowInsecureCertificates = saved.allowInsecureCertificates
-                remoteHost = saved.remoteHost
-                remoteHttpPort = saved.remoteHttpPort.portText()
-                remoteStreamPort = saved.remoteStreamingPort.portText()
-                remoteUseHttps = saved.remoteUseHttps || saved.remoteHost.isBlank()
-                accessMode = saved.accessMode
-                streamProfile = saved.streamProfile
-                transcodePreset = saved.transcodePreset
-                transcodingPort = saved.transcodingPort.toString()
-                remoteTranscodingPort = saved.remoteTranscodingPort.portText()
-                wireGuard = saved.wireGuard
-                wireGuardSaved = saved.wireGuardConfig.isNotBlank()
-                // The VPN permission is only looked at when the tunnel is switched on.
-                if (saved.wireGuard) refreshVpnConsent()
-                this@ConnectionViewModel.saved = saved
+            settingsRepository.settings.collect { settings ->
+                if (adding) return@collect
+                val active = settings.activeReceiver()
+                if (active == null) {
+                    if (loadedId != null || hasSavedReceiver) clearForm()
+                    return@collect
+                }
+                if (active.id == loadedId) return@collect
+                applyReceiver(active)
             }
         }
         viewModelScope.launch { tunnel.status.collect { tunnelStatus = it } }
+    }
+
+    /** Blank form for a new box. Saving creates it and makes it the active one. */
+    fun beginNew() {
+        adding = true
+        clearForm()
+    }
+
+    /** Show an existing box in the form so its address and login can be changed. */
+    fun editReceiver(config: ReceiverConfig) {
+        adding = false
+        applyReceiver(config)
+    }
+
+    /** Leave the blank form and show the active box again. */
+    fun abandonNewReceiver() {
+        if (!adding) return
+        adding = false
+        loadedId = null
+        viewModelScope.launch {
+            val active = settingsRepository.current().activeReceiver()
+            if (active == null) clearForm() else applyReceiver(active)
+        }
+    }
+
+    private fun applyReceiver(config: ReceiverConfig) {
+        receiverId = config.id
+        loadedId = config.id
+        hasSavedReceiver = true
+        name = config.name
+        host = config.host
+        httpPort = config.httpPort.toString()
+        streamPort = config.streamingPort.toString()
+        useHttps = config.useHttps
+        username = config.username
+        password = config.password
+        allowInsecureCertificates = config.allowInsecureCertificates
+        remoteHost = config.remoteHost
+        remoteHttpPort = config.remoteHttpPort.portText()
+        remoteStreamPort = config.remoteStreamingPort.portText()
+        remoteUseHttps = config.remoteUseHttps || config.remoteHost.isBlank()
+        accessMode = config.accessMode
+        streamProfile = config.streamProfile
+        transcodePreset = config.transcodePreset
+        transcodingPort = config.transcodingPort.toString()
+        remoteTranscodingPort = config.remoteTranscodingPort.portText()
+        wireGuard = config.wireGuard
+        wireGuardText = ""
+        wireGuardRemoved = false
+        wireGuardSaved = config.wireGuardConfig.isNotBlank()
+        saved = config
+        status = UiText.Empty
+        if (config.wireGuard) refreshVpnConsent()
+    }
+
+    private fun clearForm() {
+        receiverId = ""
+        loadedId = null
+        hasSavedReceiver = false
+        name = AppLanguageStore.wrap(context).getString(R.string.default_receiver_name)
+        host = ""
+        httpPort = "80"
+        streamPort = "8001"
+        useHttps = false
+        username = ""
+        password = ""
+        allowInsecureCertificates = false
+        remoteHost = ""
+        remoteHttpPort = ""
+        remoteStreamPort = ""
+        remoteUseHttps = true
+        accessMode = AccessMode.AUTO
+        streamProfile = StreamProfile.AUTO
+        transcodePreset = TranscodePreset.MEDIUM
+        transcodingPort = "8002"
+        remoteTranscodingPort = ""
+        wireGuard = false
+        wireGuardText = ""
+        wireGuardRemoved = false
+        wireGuardSaved = false
+        saved = ReceiverConfig()
+        status = UiText.Empty
     }
 
     /** What the config in use (new, else saved) contains, for hints and warnings. */
@@ -312,11 +383,10 @@ class ConnectionViewModel @Inject constructor(
     }
 
     fun save(onSaved: () -> Unit = {}) = launchAction { config ->
-        settingsRepository.upsertReceiver(config)
-        saved = config
-        hasSavedReceiver = true
+        val stored = settingsRepository.upsertReceiver(config)
+        rememberStored(stored)
         quality.settingsChanged()
-        status = UiText.res(R.string.conn_saved, config.name)
+        status = UiText.res(R.string.conn_saved, stored.name)
         onSaved()
     }
 
@@ -324,10 +394,17 @@ class ConnectionViewModel @Inject constructor(
         val result = api.testConnection(config)
         status = result.message
         if (result.success) {
-            settingsRepository.upsertReceiver(config)
-            hasSavedReceiver = true
+            rememberStored(settingsRepository.upsertReceiver(config))
             onConnected()
         }
+    }
+
+    private fun rememberStored(stored: ReceiverConfig) {
+        receiverId = stored.id
+        loadedId = stored.id
+        adding = false
+        saved = stored
+        hasSavedReceiver = true
     }
 
     /** The AutoDetect dialog; [AutodetectState.Hidden] when it is closed. */
@@ -348,8 +425,10 @@ class ConnectionViewModel @Inject constructor(
                 EnigmaLog.discoveryError("autodetect failed: ${error.javaClass.simpleName} ${error.message.orEmpty()}")
                 AutodetectResult(emptyList(), emptyList(), 0, 0)
             }
+            val fresh = result.receivers.withoutSaved(settingsRepository.current().receivers)
             autodetectState = when {
-                result.receivers.isNotEmpty() -> AutodetectState.Results(result.receivers)
+                fresh.isNotEmpty() -> AutodetectState.Results(fresh)
+                result.receivers.isNotEmpty() -> AutodetectState.AlreadyAdded
                 result.subnets.isEmpty() -> AutodetectState.NoNetwork
                 else -> AutodetectState.NothingFound(result.subnets.joinToString(), result.scannedAddresses)
             }

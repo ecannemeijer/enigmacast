@@ -17,6 +17,7 @@ import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.ReceiverPowerFlow
+import com.enigmacast.domain.recording.forReceiver
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.LiveZapFlow
 import com.enigmacast.domain.source.ReceiverInfoSource
@@ -44,6 +45,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -120,6 +122,8 @@ class StreamGuideViewModel @Inject constructor(
     private var leaveOff = false
     private var mode: StreamMode? = null
     private var standbyJob: Job? = null
+    private var watchedReceiverId: String? = null
+    private var receiverWatchStarted = false
 
     /** True while the guide drives this device's own stream instead of the receiver. */
     val ownTuner: Boolean get() = mode == StreamMode.OWN_TUNER
@@ -127,6 +131,18 @@ class StreamGuideViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             settingsRepository.settings.map { it.streamMode }.distinctUntilChanged().collect(::onModeChanged)
+        }
+        viewModelScope.launch {
+            settingsRepository.settings.map { it.activeReceiver()?.id }.distinctUntilChanged().collect { id ->
+                if (!receiverWatchStarted) {
+                    receiverWatchStarted = true
+                    watchedReceiverId = id
+                    return@collect
+                }
+                if (id == watchedReceiverId) return@collect
+                watchedReceiverId = id
+                onReceiverChanged(id)
+            }
         }
         viewModelScope.launch {
             session.state.collect(::mirror)
@@ -146,12 +162,15 @@ class StreamGuideViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            recordings.items.collect { list ->
-                recordingReferences = list
+            combine(
+                recordings.items,
+                settingsRepository.settings.map { it.activeReceiver()?.id.orEmpty() }.distinctUntilChanged(),
+            ) { list, id ->
+                list.forReceiver(id)
                     .filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
                     .map { it.reference }
                     .toSet()
-            }
+            }.collect { recordingReferences = it }
         }
     }
 
@@ -241,6 +260,33 @@ class StreamGuideViewModel @Inject constructor(
     fun cachedPicon(entry: BouquetEntry): ImageBitmap? = picons.cached(entry)
 
     fun numberOf(entry: BouquetEntry): Int = ChannelNavigator.numberOf(channels, entry)
+
+    /** Another box was chosen: drop this box's bouquet and load the new one. */
+    private fun onReceiverChanged(id: String?) {
+        tuneJob?.cancel()
+        previewJob?.cancel()
+        bouquetJob?.cancel()
+        bouquetToken += 1
+        guideToken += 1
+        bouquetLoaded = false
+        bouquetPinned = false
+        bouquets = emptyList()
+        channels = emptyList()
+        bouquetName = ""
+        selectedBouquetReference = ""
+        tunedReference = ""
+        displayName = ""
+        guide = null
+        shownReference = ""
+        status = UiText.Empty
+        askWake = false
+        leaveOff = false
+        powerCheckStarted = false
+        powerKnown = false
+        lastPressedReference = ""
+        session.bind(id)
+        if (id != null) refresh()
+    }
 
     /**
      * Switching modes drops the running stream: the follow mode streams what the receiver

@@ -18,6 +18,7 @@ import com.enigmacast.domain.recording.RecordAsk
 import com.enigmacast.domain.recording.Recording
 import com.enigmacast.domain.recording.RecordingPlace
 import com.enigmacast.domain.recording.RecordingStatus
+import com.enigmacast.domain.recording.receiverTimers
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
@@ -203,7 +204,7 @@ class RecordingBook @Inject constructor(
     suspend fun refreshReceiver() {
         awaitLoaded()
         val receiver = settingsRepository.current().activeReceiver() ?: return
-        val ours = _items.value.filter { it.place == RecordingPlace.RECEIVER }
+        val ours = _items.value.receiverTimers(receiver.id)
         if (ours.isEmpty()) return
         val timers = runCatching { api.timers(receiver) }.getOrDefault(emptyList())
         val movies = runCatching { api.movies(receiver) }.getOrDefault(emptyList())

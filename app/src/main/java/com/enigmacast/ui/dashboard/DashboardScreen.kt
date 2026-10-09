@@ -1,6 +1,5 @@
 package com.enigmacast.ui.dashboard
 
-import com.enigmacast.ui.connection.ReceiverSetup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -80,6 +79,7 @@ import com.enigmacast.domain.power.PowerEvent
 import com.enigmacast.locale.AppLanguage
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.playback.AudioSync
+import com.enigmacast.ui.connection.AutodetectState
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.osd.OsdInfoSettings
 import com.enigmacast.ui.power.ReceiverPowerPanel
@@ -132,7 +132,7 @@ private enum class DashSection {
 }
 
 private enum class SettingPage {
-    Receiver,
+    Receivers,
     Remote,
     Playback,
     Osd,
@@ -193,6 +193,8 @@ fun DashboardScreen(
     val receiverPageFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
+    /** Address form is open; focus landing on the main menu must not leave Settings. */
+    var settingsFormOpen by remember { mutableStateOf(false) }
     val bouquetFocus = remember { FocusRequester() }
     val myItemsModel: MyItemsViewModel = hiltViewModel()
     DisposableEffect(contentFocused, section, guideModel.askWake) {
@@ -263,7 +265,8 @@ fun DashboardScreen(
     }
     val openSection = { target: DashSection ->
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
-        if (!keepList) section = target
+        val keepSettings = settingsFormOpen && target != DashSection.Settings
+        if (!keepList && !keepSettings) section = target
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -445,7 +448,8 @@ fun DashboardScreen(
                             focusLanguageSetting,
                             onLanguageSettingFocused,
                             onChooseLanguage,
-                            Modifier.fillMaxSize(),
+                            onFormActive = { settingsFormOpen = it },
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
@@ -859,12 +863,23 @@ private fun SettingsHub(
     focusLanguage: Boolean,
     onLanguageFocused: () -> Unit,
     onChooseLanguage: (AppLanguage) -> Unit,
+    onFormActive: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
+    connection: ConnectionViewModel = hiltViewModel(),
 ) {
-    var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Language else SettingPage.Receiver) }
+    var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Language else SettingPage.Receivers) }
+    var formActive by remember { mutableStateOf(false) }
+    val formFocus = remember { FocusRequester() }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    Column(modifier) {
+    Column(
+        modifier.onFocusChanged { state ->
+            val dialogOpen = connection.autodetectState !is AutodetectState.Hidden
+            if (formActive && !state.hasFocus && !dialogOpen) {
+                runCatching { formFocus.requestFocus() }
+            }
+        },
+    ) {
         PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(
@@ -873,7 +888,7 @@ private fun SettingsHub(
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receiver), page == SettingPage.Receiver, pageFocus, menuFocus) { page = SettingPage.Receiver }
+                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, pageFocus, menuFocus) { page = SettingPage.Receivers }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { page = SettingPage.Remote }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
@@ -890,7 +905,18 @@ private fun SettingsHub(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (page) {
-                    SettingPage.Receiver -> ReceiverSettingsPanel()
+                    SettingPage.Receivers -> ReceiversSettingsPanel(
+                        receivers = settings.receivers,
+                        activeId = settings.activeReceiver()?.id,
+                        onSelect = viewModel::selectReceiver,
+                        onDelete = viewModel::removeReceiver,
+                        menuAnchor = pageFocus,
+                        onFormActive = { active ->
+                            formActive = active
+                            onFormActive(active)
+                        },
+                        formFocus = formFocus,
+                    )
                     SettingPage.Remote -> RemoteAccessSettingsPanel()
                     SettingPage.Playback -> PlaybackSettingsPanel(
                         settings.streamMode,
@@ -1201,18 +1227,6 @@ private fun InfoSettingsPanel(
         ToggleRow(stringResource(R.string.verbose_logging), settings.debug.verboseLogging, viewModel::setVerboseLogging)
         ToggleRow(stringResource(R.string.osd_border), settings.osd.debugBorders, viewModel::setDebugBorders)
     }
-}
-
-@Composable
-private fun ReceiverSettingsPanel(
-    viewModel: ConnectionViewModel = hiltViewModel(),
-) {
-    val autodetectFocus = remember { FocusRequester() }
-    ReceiverSetup(
-        viewModel = viewModel,
-        autodetectFocus = autodetectFocus,
-        showConnect = false,
-    )
 }
 
 @Composable

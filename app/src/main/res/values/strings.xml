@@ -150,6 +150,8 @@
     <string name="autodetect_no_network">This TV has no local network address (Wi-Fi or Ethernet) to search from. Check the network connection, or enter the receiver\'s IP address yourself.</string>
     <string name="autodetect_login_required">login required</string>
     <string name="autodetect_in_use">in use</string>
+    <string name="autodetect_already">These receivers are already added.</string>
+    <string name="autodetect_already_detail">Autodetect only lists boxes that are not in Receivers yet, so the same box is not saved twice.</string>
     <string name="autodetect_chosen">%s filled in. Press Save to use it.</string>
     <string name="autodetect_try_again">Try again</string>
     <string name="autodetect_search_again">Search again</string>
@@ -252,6 +254,15 @@
     <string name="rc_digits_desc">Digits</string>
     <string name="rc_play_desc">Play, pause, stop</string>
     <string name="settings_title">Settings</string>
+    <string name="settings_receivers">Receivers</string>
+    <string name="receivers_intro">Choose which Enigma2 box tuner status, bouquets and recordings come from.</string>
+    <string name="receivers_add">Add receiver</string>
+    <string name="receivers_edit">Edit</string>
+    <string name="receivers_empty">No receivers yet. Add one to watch its channels.</string>
+    <string name="receivers_in_use">In use</string>
+    <string name="receivers_delete">Remove</string>
+    <string name="receivers_delete_title">Remove receiver</string>
+    <string name="receivers_delete_message">Remove %1$s? This app will no longer use that box.</string>
     <string name="settings_receiver">Receiver</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_osd">OSD</string>

@@ -37,6 +37,14 @@ data class Recording(
     }
 }
 
+/** Recordings stored against one box, on the TV or on that box. */
+fun List<Recording>.forReceiver(receiverId: String): List<Recording> =
+    if (receiverId.isBlank()) emptyList() else filter { it.receiverId == receiverId }
+
+/** Timers on the receiver that should be refreshed from that box only. */
+fun List<Recording>.receiverTimers(receiverId: String): List<Recording> =
+    forReceiver(receiverId).filter { it.place == RecordingPlace.RECEIVER }
+
 /** What the confirm dialog shows before a recording is stored. */
 data class RecordAsk(
     val event: GuideEvent,

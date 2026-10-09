@@ -23,6 +23,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -67,6 +70,16 @@ class ReceiverPowerViewModel @Inject constructor(
         private set
     private var feedbackId = 0L
 
+    init {
+        viewModelScope.launch {
+            settingsRepository.settings
+                .map { it.activeReceiver()?.id }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { onActiveReceiverChanged() }
+        }
+    }
+
     /** Faster while a restart is under way, so the dashboard notices the receiver coming back. */
     val pollIntervalMs: Long get() = if (restarting != null) 5_000L else 10_000L
 
@@ -97,6 +110,25 @@ class ReceiverPowerViewModel @Inject constructor(
 
     fun refreshNow() {
         viewModelScope.launch { poll() }
+    }
+
+    private fun onActiveReceiverChanged() {
+        tracker.reset()
+        powerState = ReceiverPowerState.UNKNOWN
+        restarting = null
+        details = null
+        detailsError = UiText.Empty
+        sleepTimer = null
+        sleepTimerError = UiText.Empty
+        pendingConfirmation = null
+        viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver()
+            receiverName = receiver?.name.orEmpty()
+            receiverHost = receiver?.host.orEmpty()
+            if (receiver == null) return@launch
+            poll()
+            loadDetails()
+        }
     }
 
     /** Receiver details and the sleep timer, loaded when the Receiver section opens. */

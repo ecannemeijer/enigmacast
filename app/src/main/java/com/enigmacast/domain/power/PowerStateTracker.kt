@@ -40,6 +40,14 @@ internal class PowerStateTracker(
     private var sawOffline = false
     private var sentAt = 0L
 
+    /** Forget the previous box so the next poll is not read as that box waking or sleeping. */
+    fun reset() {
+        state = ReceiverPowerState.UNKNOWN
+        restarting = null
+        sawOffline = false
+        sentAt = 0L
+    }
+
     val knownStandby: Boolean?
         get() = when (state) {
             ReceiverPowerState.ON -> false

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.OsdInfoFields
+import com.enigmacast.domain.model.ReceiverList
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.model.RecordingTarget
 import com.enigmacast.domain.network.TranscodePreset
@@ -58,6 +59,8 @@ class SettingsViewModel @Inject constructor(
     fun setDebugBorders(enabled: Boolean) = update { it.copy(osd = it.osd.copy(debugBorders = enabled)) }
     fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
     fun setOsdInfoFields(fields: OsdInfoFields) = update { it.copy(osdInfo = fields) }
+    fun selectReceiver(id: String) = update { ReceiverList.select(it, id) }
+    fun removeReceiver(id: String) = update { ReceiverList.remove(it, id) }
     fun setInsecureCertificates(enabled: Boolean) = update { current ->
         val active = current.activeReceiver() ?: return@update current
         val updated = active.copy(allowInsecureCertificates = enabled)

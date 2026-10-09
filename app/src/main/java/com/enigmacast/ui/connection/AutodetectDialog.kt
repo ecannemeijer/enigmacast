@@ -161,6 +161,16 @@ private fun AutodetectDialog(
                     Text(stringResource(R.string.autodetect_no_network), color = EnigmaColors.Text, fontSize = 14.sp, lineHeight = 19.sp)
                     RetryClose(primary, onRetry, onClose)
                 }
+                AutodetectState.AlreadyAdded -> {
+                    Text(stringResource(R.string.autodetect_already), color = EnigmaColors.Text, fontSize = 15.sp)
+                    Text(
+                        stringResource(R.string.autodetect_already_detail),
+                        color = EnigmaColors.Muted,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                    )
+                    RetryClose(primary, onRetry, onClose)
+                }
                 AutodetectState.Hidden -> Unit
             }
         }

@@ -16,4 +16,7 @@ sealed interface AutodetectState {
 
     /** The TV has no private IPv4 address on Wi-Fi or Ethernet to search from. */
     data object NoNetwork : AutodetectState
+
+    /** Every receiver that answered is already in the saved list. */
+    data object AlreadyAdded : AutodetectState
 }

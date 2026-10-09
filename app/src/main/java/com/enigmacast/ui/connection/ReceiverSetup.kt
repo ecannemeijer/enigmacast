@@ -42,6 +42,7 @@ fun ReceiverSetup(
     autodetectFocus: FocusRequester,
     showConnect: Boolean,
     onConnected: () -> Unit = {},
+    onSaved: () -> Unit = {},
     onSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -99,7 +100,7 @@ fun ReceiverSetup(
                 )
                 HttpWarning(viewModel)
                 LoginFields(viewModel)
-                SetupActions(viewModel, showConnect, onConnected)
+                SetupActions(viewModel, showConnect, onConnected, onSaved)
             }
             ReceiverSetupStep.Manual -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -118,7 +119,7 @@ fun ReceiverSetup(
                     onCheckedChange = { viewModel.useHttps = it },
                 )
                 HttpWarning(viewModel)
-                SetupActions(viewModel, showConnect, onConnected)
+                SetupActions(viewModel, showConnect, onConnected, onSaved)
             }
         }
     }
@@ -165,6 +166,7 @@ private fun SetupActions(
     viewModel: ConnectionViewModel,
     showConnect: Boolean,
     onConnected: () -> Unit,
+    onSaved: () -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -174,7 +176,7 @@ private fun SetupActions(
         if (showConnect) {
             CompactButton(stringResource(R.string.action_test_connection), viewModel::test)
         }
-        CompactButton(stringResource(R.string.action_save), { viewModel.save() })
+        CompactButton(stringResource(R.string.action_save), { viewModel.save(onSaved) })
         if (showConnect) {
             CompactButton(stringResource(R.string.action_connect), { viewModel.connect(onConnected) })
         }

@@ -5,9 +5,9 @@ import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
+import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.ReceiverConfig
-import com.enigmacast.domain.player.RecentChannels
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.domain.source.ServiceStateSource
@@ -33,6 +33,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,6 +93,8 @@ class OwnTunerSession @Inject constructor(
     private var startJob: Job? = null
     private var guideJob: Job? = null
     private var token = 0
+    /** The box whose channel list is in [state]. A different id clears that list. */
+    private var boundReceiverId: String? = null
     private var lastSnapshot: TunerSnapshot? = null
     private var lastOwnAddresses: Set<String> = emptySet()
     private var streaming = false
@@ -105,6 +109,12 @@ class OwnTunerSession @Inject constructor(
         // A new quality reopens the channel: at once when the user chose it, otherwise
         // (stalls, stable stretch, transcoder fallback) within the automatic restart budget.
         scope.launch {
+            settingsRepository.settings
+                .map { it.activeReceiver()?.id }
+                .distinctUntilChanged()
+                .collect { bind(it) }
+        }
+        scope.launch {
             quality.restarts.collect { restart ->
                 if (!active || playback.isFilePlayback() || _state.value.channel == null) return@collect
                 if (restart.manual) retry() else restartAutomatically("quality")
@@ -114,21 +124,52 @@ class OwnTunerSession @Inject constructor(
 
     private var startAfterLoad = true
 
-    /** Starts the last watched channel, or the receiver's last channel, once per app run. */
+    /**
+     * The active box changed. Drop the previous channel list so the next start
+     * loads this box's bouquet instead of zapping the old service reference.
+     */
+    fun bind(receiverId: String?) {
+        if (receiverId == boundReceiverId) return
+        val switching = boundReceiverId != null
+        boundReceiverId = receiverId
+        if (!switching) return
+        abandonCurrent()
+        if (receiverId != null && active) loadInitial(startPlayback = !playback.isFilePlayback())
+    }
+
+    private fun abandonCurrent() {
+        token += 1
+        restarts.reset()
+        gaveUp = false
+        startJob?.cancel()
+        guideJob?.cancel()
+        if (streaming) playback.stopForZap()
+        streaming = false
+        _state.value = OwnTunerState()
+    }
+
+    /** Starts the last watched channel of the active box, or that box's current channel. */
     fun ensureStarted() {
         active = true
-        val current = _state.value
-        // A recording uses the player. Still load the bouquet, so Back can show the channels.
-        if (playback.isFilePlayback()) {
-            if (current.channels.isEmpty() && startJob?.isActive != true) loadInitial(startPlayback = false)
-            return
-        }
-        if (current.channel != null) {
-            if (current.tuner.status == TunerStatus.IDLE) start(current.channel)
-            return
-        }
         if (startJob?.isActive == true) return
-        if (current.channels.isEmpty()) loadInitial(startPlayback = true) else current.channels.firstOrNull()?.let(::start)
+        scope.launch {
+            val id = settingsRepository.current().activeReceiver()?.id
+            if (id != boundReceiverId) {
+                val switching = boundReceiverId != null
+                bind(id)
+                if (switching) return@launch
+            }
+            if (playback.isFilePlayback()) {
+                if (_state.value.channels.isEmpty()) loadInitial(startPlayback = false)
+                return@launch
+            }
+            val current = _state.value
+            if (current.channel != null) {
+                if (current.tuner.status == TunerStatus.IDLE) start(current.channel)
+                return@launch
+            }
+            if (current.channels.isEmpty()) loadInitial(startPlayback = true) else current.channels.firstOrNull()?.let(::start)
+        }
     }
 
     /** The recording stopped: play the channel that was on, or load the list and start one. */
@@ -154,7 +195,8 @@ class OwnTunerSession @Inject constructor(
             try {
                 val settings = settingsRepository.current()
                 val receiver = settings.activeReceiver() ?: return@launch
-                val last = settings.lastChannel
+                boundReceiverId = receiver.id
+                val last = ChannelMemory.lastFor(settings, receiver.id)
                 val list = runCatching {
                     if (last.bouquetReference.isNotBlank()) {
                         val channels = serviceSource.channelsInBouquet(receiver, last.bouquetReference)
@@ -240,7 +282,7 @@ class OwnTunerSession @Inject constructor(
         }
         _state.update { it.copy(channels = channels, bouquetName = bouquet.name, bouquetReference = bouquet.reference) }
         settingsRepository.update { settings ->
-            settings.copy(lastChannel = settings.lastChannel.copy(bouquetReference = bouquet.reference))
+            ChannelMemory.rememberBouquet(settings, receiver.id, bouquet.reference)
         }
         EnigmaLog.service("bouquet ${bouquet.name} channels=${channels.size}")
         return true
@@ -383,7 +425,7 @@ class OwnTunerSession @Inject constructor(
             if (myToken != token || playback.streamHoldTicket() != ticket) return
             playback.playAfterRelease(ticket, target.url, force = true, authorization = target.authorization, checkStart = false, internet = true)
             streaming = true
-            saveLastChannel(channel)
+            saveLastChannel(receiver.id, channel)
             return
         }
         // Give the receiver a moment to notice the closed stream and free its tuner.
@@ -413,7 +455,7 @@ class OwnTunerSession @Inject constructor(
         if (myToken != token) return
         playback.playAfterRelease(ticket, target.url, force = true, authorization = target.authorization, checkStart = true)
         streaming = true
-        saveLastChannel(channel)
+        saveLastChannel(receiver.id, channel)
     }
 
     private fun loadGuide(channel: BouquetEntry, myToken: Int) {
@@ -479,12 +521,12 @@ class OwnTunerSession @Inject constructor(
         _state.update { it.copy(tuner = tuner) }
     }
 
-    private fun saveLastChannel(channel: BouquetEntry) {
+    private fun saveLastChannel(receiverId: String, channel: BouquetEntry) {
         val bouquet = _state.value.bouquetReference
         scope.launch {
             settingsRepository.update { settings ->
                 val last = LastChannel(channel.reference, channel.name, bouquet)
-                settings.copy(lastChannel = last, recentChannels = RecentChannels.push(settings.recentChannels, last))
+                ChannelMemory.remember(settings, receiverId, last)
             }
         }
     }

@@ -153,14 +153,22 @@ data class AppSettings(
     val remote: RemoteSettings = RemoteSettings(),
     val debug: DebugSettings = DebugSettings(),
     val streamMode: StreamMode = StreamMode.OWN_TUNER,
+    /**
+     * Last channel of the active receiver, from before channels were remembered per box.
+     * [ChannelMemory] copies this onto [lastChannels] and then clears it.
+     */
     val lastChannel: LastChannel = LastChannel(),
+    /** Last channel per receiver id. */
+    val lastChannels: Map<String, LastChannel> = emptyMap(),
     val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
     /** Extra info in the channel banner; missing in older settings, so the defaults apply. */
     val osdInfo: OsdInfoFields = OsdInfoFields(),
     /** Picture mode per channel (key: `NowEvents.key` of the service); channels without one use AUTO. */
     val pictureModes: Map<String, PictureMode> = emptyMap(),
-    /** Channels last watched with an own tuner, newest first (see `RecentChannels`). */
+    /** Channels last watched with an own tuner, newest first. Legacy single list; see [recentByReceiver]. */
     val recentChannels: List<LastChannel> = emptyList(),
+    /** Recent channels per receiver id, newest first. */
+    val recentByReceiver: Map<String, List<LastChannel>> = emptyMap(),
     /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */
     val navigationSounds: Boolean = true,
 ) {

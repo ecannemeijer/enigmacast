@@ -20,6 +20,7 @@ import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.epg.ProgrammePrompt
 import com.enigmacast.domain.model.AppSettings
+import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ConnectionState
 import com.enigmacast.domain.model.DebugInfo
@@ -41,6 +42,7 @@ import com.enigmacast.domain.osdinfo.OsdInfoBuilder
 import com.enigmacast.domain.osdinfo.OsdInfoInput
 import com.enigmacast.domain.osdinfo.PlayerFacts
 import com.enigmacast.domain.player.PictureMode
+import com.enigmacast.domain.recording.forReceiver
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.EnigmaKeyMapper
 import com.enigmacast.domain.service.BouquetChannels
@@ -252,15 +254,8 @@ class RemoteDisplayViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            recordings.items.collect { list ->
-                val running = list.filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
-                _ui.update {
-                    it.copy(
-                        recordingTitle = running.firstOrNull()?.title.orEmpty(),
-                        recordingChannel = running.joinToString(" · ") { item -> item.channelName.ifBlank { item.title } },
-                        recordingReferences = running.map { item -> item.reference }.toSet(),
-                    )
-                }
+            recordings.items.collect {
+                publishRunningRecordings()
             }
         }
         viewModelScope.launch {
@@ -275,11 +270,12 @@ class RemoteDisplayViewModel @Inject constructor(
                         osdSkin = settings.osdSkin,
                         osdInfoFields = settings.osdInfo,
                         hdmiPassthrough = settings.playback.hdmiPassthrough,
-                        recent = settings.recentChannels,
+                        recent = ChannelMemory.recentFor(settings, settings.activeReceiver()?.id.orEmpty()),
                         receiverAddress = settings.activeReceiver()?.let { receiver -> "${receiver.host}:${receiver.streamingPort}" }.orEmpty(),
                     )
                 }
                 refreshPlaybackOptions()
+                publishRunningRecordings()
                 val signature = listOf(
                     settings.activeReceiver(),
                     settings.osd.copy(debugBorders = false),
@@ -534,9 +530,23 @@ class RemoteDisplayViewModel @Inject constructor(
         _ui.update { it.copy(showExitDialog = false) }
     }
 
+    private fun publishRunningRecordings() {
+        val running = recordings.items.value
+            .forReceiver(settingsSnapshot.activeReceiver()?.id.orEmpty())
+            .filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
+        _ui.update {
+            it.copy(
+                recordingTitle = running.firstOrNull()?.title.orEmpty(),
+                recordingChannel = running.joinToString(" · ") { item -> item.channelName.ifBlank { item.title } },
+                recordingReferences = running.map { item -> item.reference }.toSet(),
+            )
+        }
+    }
+
     private fun restart(settings: AppSettings) {
         session?.cancel()
         val receiver = settings.activeReceiver()
+        ownSession.bind(receiver?.id)
         if (receiver == null) {
             _ui.update { it.copy(connectionState = ConnectionState.NotConfigured) }
             return
