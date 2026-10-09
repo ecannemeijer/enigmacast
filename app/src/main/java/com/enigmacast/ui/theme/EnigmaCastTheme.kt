@@ -34,6 +34,12 @@ object EnigmaColors {
     val Danger = Color(0xFFFF7A70)
     val DangerFocus = Color(0xFFB3261E)
     val Scrim = Color(0xE0101010)
+
+    /** [transparencyPercent] 0 is this colour solid; 100 has no fill. */
+    fun scrim(transparencyPercent: Int): Color {
+        val solid = (100 - transparencyPercent.coerceIn(0, 100)) / 100f
+        return Color(0xFF101010).copy(alpha = solid)
+    }
 }
 
 private val Colors = darkColorScheme(

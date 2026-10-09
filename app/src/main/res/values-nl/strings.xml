@@ -300,6 +300,8 @@
     <string name="audio_sync_desc">Loopt het geluid achter op het beeld? Zet de waarde hoger tot lippen en stem gelijk lopen.</string>
     <string name="hdmi_passthrough">HDMI-passthrough</string>
     <string name="active_now">nu actief</string>
+    <string name="osd_transparency">Transparantie</string>
+    <string name="osd_transparency_desc" formatted="false">Hoe doorzichtig de zenderbanner, de kanalenlijst en het OSD van de ontvanger zijn. 0% is dicht, 100% is helemaal doorzichtig.</string>
     <string name="receiver_osd">OSD van de ontvanger</string>
     <string name="osd_format">Formaat</string>
     <string name="osd_format_desc">PNG is scherper, JPG is sneller op een trage verbinding.</string>

@@ -966,7 +966,13 @@ private fun SettingsHub(
                         settings.playback.recordingPreset,
                         viewModel,
                     )
-                    SettingPage.Osd -> OsdSettingsPanel(settings.osd.format, settings.osd.fastPolling, settings.osdInfo, viewModel)
+                    SettingPage.Osd -> OsdSettingsPanel(
+                        settings.osd.format,
+                        settings.osd.fastPolling,
+                        settings.osd.transparencyPercent,
+                        settings.osdInfo,
+                        viewModel,
+                    )
                     SettingPage.RcInfo -> RcInfoPanel(Modifier.fillMaxWidth())
                     SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, viewModel)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
@@ -1197,9 +1203,21 @@ private fun LanguageSettingsPanel(
 private fun OsdSettingsPanel(
     format: String,
     fastPolling: Boolean,
+    transparencyPercent: Int,
     info: OsdInfoFields,
     viewModel: SettingsViewModel,
 ) {
+    SettingsCard(stringResource(R.string.osd_transparency)) {
+        StepperRow(
+            title = stringResource(R.string.osd_transparency),
+            description = stringResource(R.string.osd_transparency_desc),
+            value = "$transparencyPercent%",
+            decreaseLabel = "−10",
+            increaseLabel = "+10",
+            onDecrease = { viewModel.setOsdTransparency(transparencyPercent - 10) },
+            onIncrease = { viewModel.setOsdTransparency(transparencyPercent + 10) },
+        )
+    }
     OsdInfoSettings(info, viewModel::setOsdInfoFields)
     SettingsCard(stringResource(R.string.nav_osd_skins)) {
         Text(

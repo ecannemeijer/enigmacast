@@ -27,6 +27,7 @@ import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
+import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 
@@ -61,6 +62,15 @@ fun SettingsScreen(
                 ToggleRow(stringResource(R.string.auto_reconnect), settings.playback.autoReconnect, viewModel::setAutoReconnect)
             }
             SettingsCard(stringResource(R.string.osd)) {
+                StepperRow(
+                    title = stringResource(R.string.osd_transparency),
+                    description = stringResource(R.string.osd_transparency_desc),
+                    value = "${settings.osd.transparencyPercent}%",
+                    decreaseLabel = "−10",
+                    increaseLabel = "+10",
+                    onDecrease = { viewModel.setOsdTransparency(settings.osd.transparencyPercent - 10) },
+                    onIncrease = { viewModel.setOsdTransparency(settings.osd.transparencyPercent + 10) },
+                )
                 ChoiceRow(
                     title = stringResource(R.string.osd_format_long),
                     options = listOf("PNG", "JPG"),

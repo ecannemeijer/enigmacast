@@ -303,6 +303,8 @@
     <string name="audio_sync_desc">Is the sound behind the picture? Raise the value until lips and voice match.</string>
     <string name="hdmi_passthrough">HDMI passthrough</string>
     <string name="active_now">active now</string>
+    <string name="osd_transparency">Transparency</string>
+    <string name="osd_transparency_desc" formatted="false">How see-through the channel banner, channel list and the receiver OSD are. 0% is solid, 100% is fully clear.</string>
     <string name="receiver_osd">Receiver OSD</string>
     <string name="osd_format">Format</string>
     <string name="osd_format_desc">PNG is sharper, JPG is faster on a slow connection.</string>

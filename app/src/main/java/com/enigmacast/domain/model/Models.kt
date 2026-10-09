@@ -81,6 +81,11 @@ data class OsdSettings(
     val unchangedToSlowMs: Long = 750,
     val slowPollMs: Long = 400,
     val debugBorders: Boolean = false,
+    /**
+     * How see-through the channel banner, channel list and receiver OSD are.
+     * 0 is solid, 100 is fully clear. Missing in older settings, so 10 applies (close to the old scrim).
+     */
+    val transparencyPercent: Int = 10,
 )
 
 @Serializable

@@ -129,31 +129,35 @@ class OpenWebifApi @Inject constructor(
         val service = OpenWebifJson.parseService(currentBody)
         val hinted = OpenWebifJson.bouquetReference(currentBody)
         val television = televisionBouquets(config)
-        bouquetContaining(config, television, hinted, service.reference)?.let { return it }
         val radio = radioBouquets(config)
-        return bouquetContaining(config, radio, hinted, service.reference)
-            ?: BouquetChannelList("", "", emptyList())
+        return bouquetContaining(config, television + radio, hinted, service.reference)
     }
 
-    /** The bouquet in [bouquets] that contains [serviceReference], if one does. */
+    /**
+     * The bouquet in [bouquets] that contains [serviceReference].
+     * When the receiver has no current channel (standby, first connect), the hinted bouquet
+     * is used if it has channels, otherwise the first bouquet that does. Television bouquets
+     * come before radio, so that fallback is a TV bouquet unless only radio has channels.
+     */
     private suspend fun bouquetContaining(
         config: ReceiverConfig,
         bouquets: List<BouquetEntry>,
         hinted: String?,
         serviceReference: String,
-    ): BouquetChannelList? {
+    ): BouquetChannelList {
         val hintedBouquet = bouquets.firstOrNull { bouquet ->
             hinted != null && bouquetIdentity(bouquet.reference) == bouquetIdentity(hinted)
         }
         val ordered = listOfNotNull(hintedBouquet) + bouquets.filter { it.reference != hintedBouquet?.reference }
+        var fallback: BouquetChannelList? = null
         for (bouquet in ordered) {
             val channels = numbered(config, bouquet.reference, services(config, bouquet.reference))
                 .filter { BouquetChannels.isPlayableChannel(it.reference) }
-            if (channels.any { BouquetChannels.sameService(it.reference, serviceReference) }) {
-                return BouquetChannelList(bouquet.name, bouquet.reference, channels)
-            }
+            val list = BouquetChannelList(bouquet.name, bouquet.reference, channels)
+            if (fallback == null && channels.isNotEmpty()) fallback = list
+            if (channels.any { BouquetChannels.sameService(it.reference, serviceReference) }) return list
         }
-        return null
+        return fallback ?: BouquetChannelList("", "", emptyList())
     }
 
     override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {

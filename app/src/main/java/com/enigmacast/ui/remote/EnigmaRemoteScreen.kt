@@ -84,6 +84,7 @@ fun EnigmaRemoteScreen(
         onAssistantSearchConsumed()
     }
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    val scrim = EnigmaColors.scrim(ui.panelTransparency)
     val player = viewModel.player()
     val quickBarActions = remember(viewModel) {
         QuickBarActions(
@@ -117,6 +118,7 @@ fun EnigmaRemoteScreen(
             debugBorders = ui.osdDebugBorders,
             cues = ui.cues,
             picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
+            osdAlpha = (100 - ui.panelTransparency.coerceIn(0, 100)) / 100f,
             modifier = Modifier.fillMaxSize(),
         )
         val radioChannel = ui.own.channel
@@ -157,7 +159,7 @@ fun EnigmaRemoteScreen(
                         actions = quickBarActions,
                         modifier = Modifier
                             .padding(horizontal = 36.dp, vertical = 12.dp)
-                            .background(EnigmaColors.Scrim, RoundedCornerShape(14.dp))
+                            .background(scrim, RoundedCornerShape(14.dp))
                             .padding(8.dp),
                     )
                 }
@@ -180,7 +182,7 @@ fun EnigmaRemoteScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 44.dp, vertical = 32.dp)
-                    .background(EnigmaColors.Scrim, RoundedCornerShape(14.dp))
+                    .background(scrim, RoundedCornerShape(14.dp))
                     .padding(8.dp),
             )
         }
@@ -195,7 +197,7 @@ fun EnigmaRemoteScreen(
                     .align(Alignment.CenterStart)
                     .fillMaxHeight()
                     .width(600.dp)
-                    .background(EnigmaColors.Scrim)
+                    .background(scrim)
                     .padding(horizontal = 12.dp, vertical = 20.dp),
             )
         }
@@ -250,6 +252,7 @@ private fun EnigmaVideoPlayer(
     debugBorders: Boolean,
     cues: List<Cue>,
     picture: VideoShape,
+    osdAlpha: Float = 1f,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     // Compose draws into the parent canvas. An Android child such as TextureView is
@@ -301,6 +304,7 @@ private fun EnigmaVideoPlayer(
                 layer.shownHash = frame?.hash
                 layer.osd.setImageBitmap(frame?.bitmap)
             }
+            layer.osd.imageAlpha = (osdAlpha.coerceIn(0f, 1f) * 255).toInt()
             layer.osd.setBackgroundColor(if (debugBorders) 0x66FF0000 else 0)
         },
         onRelease = { layout ->

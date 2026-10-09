@@ -59,6 +59,9 @@ class SettingsViewModel @Inject constructor(
     fun setDebugBorders(enabled: Boolean) = update { it.copy(osd = it.osd.copy(debugBorders = enabled)) }
     fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
     fun setOsdInfoFields(fields: OsdInfoFields) = update { it.copy(osdInfo = fields) }
+    fun setOsdTransparency(percent: Int) = update {
+        it.copy(osd = it.osd.copy(transparencyPercent = percent.coerceIn(0, 100)))
+    }
     fun selectReceiver(id: String) = update { ReceiverList.select(it, id) }
     fun removeReceiver(id: String) = update { ReceiverList.remove(it, id) }
     fun setInsecureCertificates(enabled: Boolean) = update { current ->

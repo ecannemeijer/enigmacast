@@ -103,6 +103,7 @@ fun OwnTunerOverlay(
 ) {
     val own = ui.own
     val tuner = own.tuner
+    val scrim = EnigmaColors.scrim(ui.panelTransparency)
     Box(modifier = Modifier.fillMaxSize()) {
         val channel = own.channel
         if (own.loadingChannels) {
@@ -119,6 +120,7 @@ fun OwnTunerOverlay(
             TunerNotice(
                 tuner = tuner,
                 channelName = channel?.name.orEmpty(),
+                scrim = scrim,
                 modifier = Modifier.align(Alignment.Center),
             )
         }
@@ -131,7 +133,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(32.dp)
-                    .background(EnigmaColors.Scrim, RoundedCornerShape(12.dp))
+                    .background(scrim, RoundedCornerShape(12.dp))
                     .padding(horizontal = 24.dp, vertical = 8.dp),
             )
         }
@@ -143,7 +145,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(32.dp)
-                    .background(EnigmaColors.Scrim, RoundedCornerShape(10.dp))
+                    .background(scrim, RoundedCornerShape(10.dp))
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
@@ -154,7 +156,9 @@ fun OwnTunerOverlay(
                 actions = quickBarActions,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 44.dp, end = 44.dp, bottom = 24.dp),
+                    .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
+                    .background(scrim, RoundedCornerShape(14.dp))
+                    .padding(8.dp),
             )
         }
         if (ui.banner && channel != null && !ui.channelList && !radio) {
@@ -173,12 +177,16 @@ fun OwnTunerOverlay(
                     osdSkin = ui.osdSkin,
                     picon = picon,
                     cachedPicon = cachedPicon,
+                    scrim = scrim,
                 )
                 if (ui.quickBar) {
                     QuickOptionsBar(
                         ui = ui,
                         actions = quickBarActions,
-                        modifier = Modifier.padding(start = 44.dp, end = 44.dp, bottom = 24.dp),
+                        modifier = Modifier
+                            .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
+                            .background(scrim, RoundedCornerShape(14.dp))
+                            .padding(8.dp),
                     )
                 }
             }
@@ -192,6 +200,7 @@ fun OwnTunerOverlay(
                 onZap = onZap,
                 onChooseBouquet = onChooseBouquet,
                 guideActions = guideActions,
+                scrim = scrim,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
@@ -214,6 +223,7 @@ private fun ChannelBanner(
     osdSkin: OsdSkinId,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
+    scrim: Color,
     modifier: Modifier = Modifier,
 ) {
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
@@ -231,7 +241,7 @@ private fun ChannelBanner(
         modifier = modifier
             .padding(horizontal = 48.dp, vertical = 32.dp)
             .fillMaxWidth()
-            .background(EnigmaColors.Scrim, RoundedCornerShape(16.dp))
+            .background(scrim, RoundedCornerShape(16.dp))
             .padding(20.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -423,7 +433,7 @@ internal fun Picon(
 }
 
 @Composable
-private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifier = Modifier) {
+private fun TunerNotice(tuner: TunerState, channelName: String, scrim: Color, modifier: Modifier = Modifier) {
     val title = when (tuner.status) {
         TunerStatus.FULL -> stringResource(R.string.osd_no_tuner_free)
         TunerStatus.NO_PICTURE -> stringResource(R.string.osd_no_picture)
@@ -432,7 +442,7 @@ private fun TunerNotice(tuner: TunerState, channelName: String, modifier: Modifi
     Column(
         modifier = modifier
             .widthIn(max = 440.dp)
-            .background(EnigmaColors.Scrim, RoundedCornerShape(12.dp))
+            .background(scrim, RoundedCornerShape(12.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -478,12 +488,13 @@ private fun ChannelListOverlay(
     onZap: (BouquetEntry) -> Unit,
     onChooseBouquet: (BouquetEntry) -> Unit,
     guideActions: GuideActions,
+    scrim: Color,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxHeight()
-            .background(EnigmaColors.Scrim),
+            .background(scrim),
     ) {
         if (ui.bouquetPanel) {
             BouquetPanel(

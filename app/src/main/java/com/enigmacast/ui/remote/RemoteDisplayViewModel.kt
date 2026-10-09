@@ -178,6 +178,8 @@ data class RemoteDisplayUiState(
     val osdInfo: OsdInfo = OsdInfo.Empty,
     val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
     val osdInfoFields: OsdInfoFields = OsdInfoFields(),
+    /** 0 is a solid panel, 100 is a clear one. Channel banner, channel list and receiver OSD. */
+    val panelTransparency: Int = 10,
 )
 
 
@@ -269,6 +271,7 @@ class RemoteDisplayViewModel @Inject constructor(
                         osdDebugBorders = settings.osd.debugBorders,
                         osdSkin = settings.osdSkin,
                         osdInfoFields = settings.osdInfo,
+                        panelTransparency = settings.osd.transparencyPercent.coerceIn(0, 100),
                         hdmiPassthrough = settings.playback.hdmiPassthrough,
                         recent = ChannelMemory.recentFor(settings, settings.activeReceiver()?.id.orEmpty()),
                         receiverAddress = settings.activeReceiver()?.let { receiver -> "${receiver.host}:${receiver.streamingPort}" }.orEmpty(),
@@ -278,7 +281,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 publishRunningRecordings()
                 val signature = listOf(
                     settings.activeReceiver(),
-                    settings.osd.copy(debugBorders = false),
+                    settings.osd.copy(debugBorders = false, transparencyPercent = 0),
                     settings.remote,
                     settings.streamMode,
                 )
