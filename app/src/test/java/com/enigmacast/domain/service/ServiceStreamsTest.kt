@@ -77,6 +77,16 @@ class ServiceStreamsTest {
     }
 
     @Test
+    fun aSchemeWhosePercentSignWasDroppedIsStillADirectUrl() {
+        val ref = "4097:0:1:0:0:0:0:0:0:0:https3a//redebrasil.nuvemplay.live/hls/stream.m3u8:Rede Brasil"
+        assertEquals("https://redebrasil.nuvemplay.live/hls/stream.m3u8", ServiceStreams.internetUrl(ref))
+        assertEquals(
+            "http://cdn.example.com/live.ts",
+            ServiceStreams.internetUrl("4097:0:1:0:0:0:0:0:0:0:http3a//cdn.example.com/live.ts:Name"),
+        )
+    }
+
+    @Test
     fun anUnencodedUrlIsRebuiltIncludingItsPort() {
         assertEquals("http://plain.example/a.ts", ServiceStreams.internetUrl("5002:0:1:0:0:0:0:0:0:0:http://plain.example/a.ts:Name"))
         assertEquals("http://plain.example:8000/a.ts", ServiceStreams.internetUrl("5002:0:1:0:0:0:0:0:0:0:http://plain.example:8000/a.ts:Name"))

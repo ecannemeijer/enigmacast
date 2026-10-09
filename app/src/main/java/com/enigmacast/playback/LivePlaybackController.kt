@@ -107,6 +107,8 @@ class LivePlaybackController @Inject constructor(
 
     /** The stream that plays is an internet / IPTV URL, not the receiver's 8001/8002 stream. */
     private var internet = false
+    /** False until the new item reports its own metadata, so the previous song is not shown. */
+    private var metadataReady = false
     private var internetMime: String? = null
     private var hlsTried = false
     private var internetAttempts = 0
@@ -335,6 +337,7 @@ class LivePlaybackController @Inject constructor(
         clientFactory.releaseStream(clientFactory.streamHoldTicket())
         clientFactory.cancelStream()
         currentUrl = url
+        metadataReady = false
         streamAuthorization = authorization
         this.checkStart = checkStart
         this.internet = internet
@@ -725,8 +728,21 @@ class LivePlaybackController @Inject constructor(
             durationMs = exo.duration.takeIf { it > 0 } ?: fileDurationMs,
             playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED,
             filePlayback = filePlayback,
+            streamTitle = streamTitle(exo),
+            streamArtist = streamArtist(exo),
         )
         _tracks.value = TrackMenus.build(exo.currentTracks, settings.subtitlesEnabled)
+    }
+
+    private fun streamTitle(exo: Player): String {
+        if (!metadataReady) return ""
+        return exo.mediaMetadata.title?.toString()?.trim().orEmpty()
+    }
+
+    private fun streamArtist(exo: Player): String {
+        if (!metadataReady) return ""
+        val meta = exo.mediaMetadata
+        return (meta.artist ?: meta.albumArtist)?.toString()?.trim().orEmpty()
     }
 
     private fun resetStats() {
@@ -899,6 +915,16 @@ class LivePlaybackController @Inject constructor(
         }
 
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+            publish()
+        }
+
+        override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+            metadataReady = false
+            publish()
+        }
+
+        override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+            metadataReady = true
             publish()
         }
 

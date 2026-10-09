@@ -200,8 +200,9 @@ class OwnTunerSession @Inject constructor(
                 val list = runCatching {
                     if (last.bouquetReference.isNotBlank()) {
                         val channels = serviceSource.channelsInBouquet(receiver, last.bouquetReference)
-                        val name = runCatching { serviceSource.televisionBouquets(receiver) }.getOrDefault(emptyList())
-                            .firstOrNull { it.reference == last.bouquetReference }?.name.orEmpty()
+                        val name = runCatching {
+                            serviceSource.televisionBouquets(receiver) + serviceSource.radioBouquets(receiver)
+                        }.getOrDefault(emptyList()).firstOrNull { it.reference == last.bouquetReference }?.name.orEmpty()
                         Triple(name, last.bouquetReference, channels)
                     } else {
                         val current = serviceSource.currentBouquetChannels(receiver)

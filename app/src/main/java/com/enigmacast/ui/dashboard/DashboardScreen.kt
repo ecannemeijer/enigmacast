@@ -70,6 +70,7 @@ import com.enigmacast.BuildConfig
 import com.enigmacast.R
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
+import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.RecordingTarget
@@ -105,6 +106,7 @@ import com.enigmacast.ui.theme.NavItem
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.recording.RecordConfirmDialog
+import com.enigmacast.ui.remote.RadioNowPlaying
 import com.enigmacast.ui.search.SearchPanel
 import com.enigmacast.ui.search.SearchViewModel
 import com.enigmacast.ui.theme.StatusPill
@@ -125,6 +127,7 @@ private val FocusedButtonText = Color.White
 
 private enum class DashSection {
     Stream,
+    Radio,
     Search,
     MyItems,
     Receiver,
@@ -178,7 +181,9 @@ fun DashboardScreen(
     }
     var contentFocused by remember { mutableStateOf(false) }
     val streamFocus = remember { FocusRequester() }
+    val radioFocus = remember { FocusRequester() }
     var streamItemFocused by remember { mutableStateOf(false) }
+    var radioItemFocused by remember { mutableStateOf(false) }
     val channelFocus = remember { FocusRequester() }
     val searchMenuFocus = remember { FocusRequester() }
     var searchActive by remember { mutableStateOf(false) }
@@ -206,6 +211,7 @@ fun DashboardScreen(
                 runCatching {
                     when (section) {
                         DashSection.Stream -> streamFocus.requestFocus()
+                        DashSection.Radio -> radioFocus.requestFocus()
                         DashSection.Search -> searchMenuFocus.requestFocus()
                         DashSection.MyItems -> myItemsMenuFocus.requestFocus()
                         DashSection.Receiver -> receiverMenuFocus.requestFocus()
@@ -245,7 +251,7 @@ fun DashboardScreen(
             onPlayed = onStream,
             onBouquet = { bouquet ->
                 guideModel.openBouquet(bouquet)
-                section = DashSection.Stream
+                section = if (BouquetChannels.isRadioBouquet(bouquet.reference)) DashSection.Radio else DashSection.Stream
             },
             prepare = guideModel::releaseBouquetPin,
         )
@@ -319,6 +325,17 @@ fun DashboardScreen(
                         .focusProperties { right = channelFocus },
                     onFocus = { openSection(DashSection.Stream) },
                     onClick = onStream,
+                )
+                NavItem(
+                    icon = EnigmaIcons.Radio,
+                    label = stringResource(R.string.nav_radio),
+                    selected = section == DashSection.Radio,
+                    modifier = Modifier
+                        .focusRequester(radioFocus)
+                        .onFocusChanged { radioItemFocused = it.isFocused }
+                        .focusProperties { right = channelFocus },
+                    onFocus = { openSection(DashSection.Radio) },
+                    onClick = { section = DashSection.Radio },
                 )
                 NavItem(
                     icon = Icons.Filled.Search,
@@ -415,6 +432,21 @@ fun DashboardScreen(
                             settingsMenuFocus,
                             onMiniPlayer,
                             onStream,
+                            GuideMedium.Television,
+                            guideModel,
+                        )
+                        DashSection.Radio -> StreamPanel(
+                            showMiniPlayer,
+                            channelFocus,
+                            bouquetFocus,
+                            { radioItemFocused },
+                            focusPlayingChannel,
+                            onPlayingChannelFocused,
+                            settingsMenuFocus,
+                            onMiniPlayer,
+                            onStream,
+                            GuideMedium.Radio,
+                            guideModel,
                         )
                         DashSection.Search -> SearchPanel(
                             rowsFocusable = searchActive,
@@ -424,7 +456,7 @@ fun DashboardScreen(
                             onPlayed = onStream,
                             onBouquet = { bouquet ->
                                 guideModel.openBouquet(bouquet)
-                                section = DashSection.Stream
+                                section = if (BouquetChannels.isRadioBouquet(bouquet.reference)) DashSection.Radio else DashSection.Stream
                             },
                             viewModel = searchModel,
                             modifier = Modifier.fillMaxSize(),
@@ -505,8 +537,12 @@ private fun StreamPanel(
     settingsFocus: FocusRequester,
     onMiniPlayer: () -> Unit,
     onFullscreen: () -> Unit,
+    medium: GuideMedium,
     guideModel: StreamGuideViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(medium) {
+        guideModel.show(medium)
+    }
     LaunchedEffect(Unit) {
         guideModel.refresh()
         var elapsed = 0
@@ -1246,8 +1282,24 @@ private fun MiniStreamPlayer(
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    val radio = ui.own.channel?.takeIf {
+        !ui.playerState.filePlayback && BouquetChannels.isRadioBouquet(ui.own.bouquetReference)
+    }
     Box(modifier) {
-        EnigmaVideoTexture(viewModel.player(), ui.cues, Modifier.fillMaxSize())
+        if (radio != null) {
+            RadioNowPlaying(
+                channel = radio,
+                guide = ui.own.guide,
+                streamTitle = ui.playerState.streamTitle,
+                streamArtist = ui.playerState.streamArtist,
+                picon = viewModel::picon,
+                cachedPicon = viewModel::cachedPicon,
+                compact = true,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            EnigmaVideoTexture(viewModel.player(), ui.cues, Modifier.fillMaxSize())
+        }
         val error = ui.playerState.error
         if (!error.isNullOrBlank()) {
             Text(

@@ -36,7 +36,7 @@ object ServiceStreams {
             field.isEmpty() -> return null
             // An unencoded URL: its own `:` became separators, so glue scheme, host and port back.
             field.equals("http", true) || field.equals("https", true) -> rawUrl(parts)
-            else -> decodeField(field)
+            else -> decodeField(restoreMissingColon(field))
         } ?: return null
         return clean(url)
     }
@@ -54,6 +54,16 @@ object ServiceStreams {
         if (trimmed.contains(':')) return trimmed
         if (!trimmed.contains("%3a", ignoreCase = true)) return trimmed
         return percentDecode(trimmed)
+    }
+
+    /**
+     * Some lists store the scheme as `https3a//` after the `%` in `%3a` was dropped.
+     * Put the colon back so the rest of the decoder sees a normal URL.
+     */
+    private fun restoreMissingColon(field: String): String = when {
+        field.startsWith("https3a//", ignoreCase = true) -> "https://" + field.substring("https3a//".length)
+        field.startsWith("http3a//", ignoreCase = true) -> "http://" + field.substring("http3a//".length)
+        else -> field
     }
 
     /** `https%3a//h%3a8080/x` → `https://h:8080/x`, also when double-encoded (`https%253a//…`). */

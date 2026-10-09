@@ -325,6 +325,10 @@ data class PlayerState(
     val durationMs: Long = 0,
     val playing: Boolean = false,
     val filePlayback: Boolean = false,
+    /** Song title from the stream (ICY / HLS), empty when the stream does not send one. */
+    val streamTitle: String = "",
+    /** Artist from the stream, empty when the stream does not send one. */
+    val streamArtist: String = "",
 )
 
 data class DebugInfo(

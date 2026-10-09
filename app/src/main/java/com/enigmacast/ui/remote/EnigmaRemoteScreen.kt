@@ -40,6 +40,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.model.ConnectionState
+import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.osd.OsdScale
 import com.enigmacast.domain.osd.OsdScaleMode
 import com.enigmacast.domain.player.PictureMode
@@ -118,6 +119,21 @@ fun EnigmaRemoteScreen(
             picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
             modifier = Modifier.fillMaxSize(),
         )
+        val radioChannel = ui.own.channel
+        if (ui.ownTuner && !ui.playerState.filePlayback && radioChannel != null &&
+            BouquetChannels.isRadioBouquet(ui.own.bouquetReference)
+        ) {
+            RadioNowPlaying(
+                channel = radioChannel,
+                guide = ui.own.guide,
+                streamTitle = ui.playerState.streamTitle,
+                streamArtist = ui.playerState.streamArtist,
+                picon = viewModel::picon,
+                cachedPicon = viewModel::cachedPicon,
+                compact = false,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         if (ui.recordingChannel.isNotBlank() && !ui.playerState.filePlayback) {
             RecordingChip(
                 channel = ui.recordingChannel,

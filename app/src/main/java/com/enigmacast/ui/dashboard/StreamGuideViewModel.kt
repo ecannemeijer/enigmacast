@@ -52,6 +52,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Watch TV and Radio each keep their own bouquet list. */
+enum class GuideMedium { Television, Radio }
+
 @HiltViewModel
 class StreamGuideViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -67,6 +70,9 @@ class StreamGuideViewModel @Inject constructor(
     private val reminders: ReminderScheduler,
     private val recordings: com.enigmacast.live.RecordingBook,
 ) : ViewModel() {
+    private var medium = GuideMedium.Television
+    private val remembered = mutableMapOf<GuideMedium, GuideSide>()
+    private var mediumJob: Job? = null
     var guide by mutableStateOf<ChannelGuide?>(null)
         private set
     var channels by mutableStateOf<List<BouquetEntry>>(emptyList())
@@ -266,8 +272,11 @@ class StreamGuideViewModel @Inject constructor(
         tuneJob?.cancel()
         previewJob?.cancel()
         bouquetJob?.cancel()
+        mediumJob?.cancel()
         bouquetToken += 1
         guideToken += 1
+        remembered.clear()
+        medium = GuideMedium.Television
         bouquetLoaded = false
         bouquetPinned = false
         bouquets = emptyList()
@@ -316,17 +325,125 @@ class StreamGuideViewModel @Inject constructor(
         refresh()
     }
 
+    /**
+     * Shows [next] without zapping. Each side keeps the bouquet it was on, and the playing
+     * list is not copied onto the other side.
+     */
+    fun show(next: GuideMedium) {
+        if (next != medium) {
+            rememberCurrent()
+            medium = next
+            mediumJob?.cancel()
+            val saved = remembered[next]
+            if (saved != null && saved.loaded) {
+                restore(saved)
+                bouquetPinned = !playingOn(next)
+                return
+            }
+            bouquetPinned = true
+            bouquets = emptyList()
+            channels = emptyList()
+            bouquetName = ""
+            selectedBouquetReference = ""
+            bouquetLoaded = false
+        }
+        loadMediumIfNeeded()
+    }
+
+    private fun loadMediumIfNeeded() {
+        if (bouquets.isNotEmpty() || bouquetLoaded || mediumJob?.isActive == true) return
+        val which = medium
+        mediumJob = viewModelScope.launch { ensureMediumLoaded(which) }
+    }
+
+    private suspend fun ensureMediumLoaded(which: GuideMedium) {
+        val receiver = settingsRepository.current().activeReceiver() ?: return
+        val list = runCatching { bouquetsFor(receiver, which) }.getOrDefault(emptyList())
+        if (which != medium) return
+        bouquets = list
+        if (bouquetPinned && selectedBouquetReference.isNotBlank()) {
+            rememberCurrent()
+            return
+        }
+        if (mode != StreamMode.OWN_TUNER) {
+            bouquetPinned = false
+            if (which == GuideMedium.Radio) {
+                list.firstOrNull()?.let { entry ->
+                    bouquetPinned = true
+                    selectedBouquetReference = entry.reference
+                    showBouquet(entry, ++bouquetToken)
+                }
+            }
+            return
+        }
+        if (playingOn(which)) {
+            val state = session.state.value
+            channels = state.channels
+            bouquetName = state.bouquetName
+            selectedBouquetReference = state.bouquetReference
+            bouquetLoaded = state.channels.isNotEmpty()
+            bouquetPinned = false
+            rememberCurrent()
+            return
+        }
+        val state = session.state.value
+        if (state.loadingChannels || state.channels.isEmpty()) {
+            // The last channel is still loading. mirror() fills this side when it settles.
+            bouquetPinned = false
+            return
+        }
+        val entry = list.firstOrNull() ?: return
+        bouquetPinned = true
+        selectedBouquetReference = entry.reference
+        showBouquet(entry, ++bouquetToken)
+        rememberCurrent()
+    }
+
+    private suspend fun bouquetsFor(receiver: ReceiverConfig, which: GuideMedium): List<BouquetEntry> = when (which) {
+        GuideMedium.Television -> serviceSource.televisionBouquets(receiver)
+        GuideMedium.Radio -> serviceSource.radioBouquets(receiver)
+    }
+
+    private fun playingOn(which: GuideMedium): Boolean {
+        val reference = session.state.value.bouquetReference
+        if (reference.isBlank() || session.state.value.channels.isEmpty()) return false
+        return BouquetChannels.isRadioBouquet(reference) == (which == GuideMedium.Radio)
+    }
+
+    private fun rememberCurrent() {
+        if (!bouquetLoaded && bouquets.isEmpty()) return
+        remembered[medium] = GuideSide(bouquets, channels, bouquetName, selectedBouquetReference, bouquetLoaded)
+    }
+
+    private fun restore(saved: GuideSide) {
+        bouquets = saved.bouquets
+        channels = saved.channels
+        bouquetName = saved.bouquetName
+        selectedBouquetReference = saved.selectedBouquetReference
+        bouquetLoaded = saved.loaded
+    }
+
     private fun mirror(state: OwnTunerState) {
         if (mode != StreamMode.OWN_TUNER) return
-        loadingChannels = state.loadingChannels
-        if (!bouquetPinned && state.channels.isNotEmpty()) {
+        val sameSide = playingOn(medium)
+        if (sameSide) loadingChannels = state.loadingChannels
+        if (!bouquetPinned && sameSide && state.channels.isNotEmpty()) {
             channels = state.channels
             bouquetName = state.bouquetName
             selectedBouquetReference = state.bouquetReference
             bouquetLoaded = true
+            rememberCurrent()
+        } else if (!sameSide && !bouquetPinned && channels.isEmpty() && bouquets.isNotEmpty() &&
+            !state.loadingChannels && state.channels.isNotEmpty()
+        ) {
+            bouquets.firstOrNull()?.let { entry ->
+                bouquetPinned = true
+                selectedBouquetReference = entry.reference
+                viewModelScope.launch { showBouquet(entry, ++bouquetToken) }
+            }
         }
         val channel = state.channel
-        if (channel != null) {
+        if (channel != null && sameSide) {
             val browsing = browsingAwayFromTuned()
             tunedReference = channel.reference
             if (!browsing) {
@@ -382,10 +499,7 @@ class StreamGuideViewModel @Inject constructor(
         session.ensureStarted()
         session.retryIfReceiverWasAway()
         session.refreshGuideIfStale()
-        if (bouquets.isEmpty()) {
-            val receiver = settingsRepository.current().activeReceiver() ?: return
-            runCatching { serviceSource.televisionBouquets(receiver) }.onSuccess { bouquets = it }
-        }
+        loadMediumIfNeeded()
         if (browsingAwayFromTuned()) reloadShownGuide()
     }
 
@@ -668,6 +782,13 @@ class StreamGuideViewModel @Inject constructor(
 
     /** Search picked a bouquet: show its channels in the guide without zapping. */
     fun openBouquet(bouquet: BouquetEntry) {
+        val next = if (BouquetChannels.isRadioBouquet(bouquet.reference)) GuideMedium.Radio else GuideMedium.Television
+        if (next != medium) {
+            rememberCurrent()
+            medium = next
+            mediumJob?.cancel()
+            remembered[next]?.let(::restore)
+        }
         bouquetPinned = true
         lastPressedReference = ""
         selectedBouquetReference = bouquet.reference
@@ -706,6 +827,7 @@ class StreamGuideViewModel @Inject constructor(
                 bouquetLoaded = true
                 status = UiText.Empty
                 EnigmaLog.service("bouquet ${bouquet.name} channels=${loaded.size}")
+                rememberCurrent()
             }
             .onFailure { error ->
                 if (token != bouquetToken) return@onFailure
@@ -719,8 +841,17 @@ class StreamGuideViewModel @Inject constructor(
         if (first) loadingChannels = true
         try {
             if (!bouquetPinned) {
-                runCatching { serviceSource.televisionBouquets(receiver) }
-                    .onSuccess { bouquets = it }
+                runCatching { bouquetsFor(receiver, medium) }.onSuccess { bouquets = it }
+            }
+            if (medium == GuideMedium.Radio) {
+                if (!bouquetLoaded) {
+                    bouquets.firstOrNull()?.let { first ->
+                        bouquetPinned = true
+                        selectedBouquetReference = first.reference
+                        showBouquet(first, ++bouquetToken)
+                    }
+                }
+                return
             }
             runCatching { serviceSource.currentBouquetChannels(receiver) }
                 .onSuccess { loaded ->
@@ -745,3 +876,11 @@ class StreamGuideViewModel @Inject constructor(
         const val NOTICE_LONG_MS = 8_000L
     }
 }
+
+private data class GuideSide(
+    val bouquets: List<BouquetEntry>,
+    val channels: List<BouquetEntry>,
+    val bouquetName: String,
+    val selectedBouquetReference: String,
+    val loaded: Boolean,
+)

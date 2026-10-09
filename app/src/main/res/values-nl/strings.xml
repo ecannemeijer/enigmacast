@@ -206,7 +206,8 @@
     <string name="osd_crypt_not_decrypted">Niet ontsleuteld</string>
     <string name="osd_tuner">Tuner %s</string>
     <string name="osd_tuner_type">Tuner %1$s · %2$s</string>
-    <string name="nav_stream">Stream</string>
+    <string name="nav_stream">Tv kijken</string>
+    <string name="nav_radio">Radio</string>
     <string name="nav_search">Zoeken</string>
     <string name="nav_my_items">Mijn items</string>
     <string name="nav_receiver">Ontvanger</string>

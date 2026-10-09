@@ -927,11 +927,15 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun nowSec(): Long = System.currentTimeMillis() / 1000
 
     private fun loadBouquets() {
-        if (_ui.value.bouquets.isNotEmpty()) return
+        val radio = BouquetChannels.isRadioBouquet(ownSession.state.value.bouquetReference)
+        val cached = _ui.value.bouquets
+        if (cached.isNotEmpty() && cached.any { BouquetChannels.isRadioBouquet(it.reference) } == radio) return
         viewModelScope.launch {
             val receiver = settingsSnapshot.activeReceiver() ?: return@launch
-            runCatching { serviceSource.televisionBouquets(receiver) }
-                .onSuccess { list -> _ui.update { it.copy(bouquets = list) } }
+            val loaded = runCatching {
+                if (radio) serviceSource.radioBouquets(receiver) else serviceSource.televisionBouquets(receiver)
+            }
+            loaded.onSuccess { list -> _ui.update { it.copy(bouquets = list) } }
         }
     }
 
@@ -951,7 +955,12 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
+    private fun playingRadio(ui: RemoteDisplayUiState = _ui.value): Boolean =
+        ui.ownTuner && !ui.playerState.filePlayback && ui.own.channel != null &&
+            BouquetChannels.isRadioBouquet(ui.own.bouquetReference)
+
     private fun showBanner(details: Boolean = _ui.value.details, fromZap: Boolean = false) {
+        if (playingRadio()) return
         ownSession.refreshGuideIfStale()
         _ui.update { it.copy(banner = true, details = details, bannerFromZap = fromZap) }
         watchOsdInfo()
@@ -1037,7 +1046,8 @@ class RemoteDisplayViewModel @Inject constructor(
         if (ui.quickBar) return false
         // Down on a banner that OK, Info or Left/Right brought up opens the quick bar;
         // after a zap Down keeps zapping.
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && ui.banner && !ui.bannerFromZap && !ui.channelList) {
+        val radio = playingRadio(ui)
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !ui.channelList && (radio || (ui.banner && !ui.bannerFromZap))) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) openQuickBar()
             return true
         }
@@ -1063,7 +1073,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 val tuner = ui.own.tuner.status
                 when {
                     tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM -> ownSession.retry()
-                    ui.banner -> openChannelList()
+                    radio || ui.banner -> openChannelList()
                     else -> showBanner()
                 }
             }
@@ -1093,7 +1103,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 numberEntry.clear()
                 _ui.update { it.copy(numberEntry = "") }
             }
-            ui.banner -> hideBanner()
+            ui.banner && !playingRadio(ui) -> hideBanner()
             // Back on the bare picture returns to the dashboard (the programme grid, on this channel).
             else -> onLeaveToDashboard?.invoke()
         }

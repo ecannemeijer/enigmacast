@@ -128,28 +128,42 @@ class OpenWebifApi @Inject constructor(
         val currentBody = get(config, endpoints.current(config))
         val service = OpenWebifJson.parseService(currentBody)
         val hinted = OpenWebifJson.bouquetReference(currentBody)
-        val bouquets = televisionBouquets(config)
+        val television = televisionBouquets(config)
+        bouquetContaining(config, television, hinted, service.reference)?.let { return it }
+        val radio = radioBouquets(config)
+        return bouquetContaining(config, radio, hinted, service.reference)
+            ?: BouquetChannelList("", "", emptyList())
+    }
+
+    /** The bouquet in [bouquets] that contains [serviceReference], if one does. */
+    private suspend fun bouquetContaining(
+        config: ReceiverConfig,
+        bouquets: List<BouquetEntry>,
+        hinted: String?,
+        serviceReference: String,
+    ): BouquetChannelList? {
         val hintedBouquet = bouquets.firstOrNull { bouquet ->
             hinted != null && bouquetIdentity(bouquet.reference) == bouquetIdentity(hinted)
         }
         val ordered = listOfNotNull(hintedBouquet) + bouquets.filter { it.reference != hintedBouquet?.reference }
-        var fallback: BouquetChannelList? = null
         for (bouquet in ordered) {
             val channels = numbered(config, bouquet.reference, services(config, bouquet.reference))
                 .filter { BouquetChannels.isPlayableChannel(it.reference) }
-            val list = BouquetChannelList(bouquet.name, bouquet.reference, channels)
-            if (fallback == null && channels.isNotEmpty()) fallback = list
-            if (channels.any { BouquetChannels.sameService(it.reference, service.reference) }) return list
+            if (channels.any { BouquetChannels.sameService(it.reference, serviceReference) }) {
+                return BouquetChannelList(bouquet.name, bouquet.reference, channels)
+            }
         }
-        return fallback ?: BouquetChannelList("", "", emptyList())
+        return null
     }
 
     override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {
-        val television = bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
-        val radio = runCatching {
+        return bouquets(config).filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+    }
+
+    override suspend fun radioBouquets(config: ReceiverConfig): List<BouquetEntry> {
+        return runCatching {
             OpenWebifJson.parseBouquets(get(config, endpoints.radioBouquets(config)))
         }.getOrDefault(emptyList()).filter { BouquetChannels.isRadioBouquet(it.reference) }
-        return television + radio
     }
 
     override suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {

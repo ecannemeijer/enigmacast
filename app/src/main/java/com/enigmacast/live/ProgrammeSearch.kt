@@ -74,7 +74,7 @@ class ProgrammeSearch @Inject constructor(
             val receiver = settings.current().activeReceiver()
             if (receiver == null) return Catalog(nowMs, emptyList(), emptyList()).also { catalog = it }
             val bouquets = try {
-                services.televisionBouquets(receiver)
+                services.televisionBouquets(receiver) + services.radioBouquets(receiver)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {

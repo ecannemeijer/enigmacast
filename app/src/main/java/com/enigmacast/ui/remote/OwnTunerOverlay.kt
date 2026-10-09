@@ -147,7 +147,17 @@ fun OwnTunerOverlay(
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
-        if (ui.banner && channel != null && !ui.channelList) {
+        val radio = channel != null && BouquetChannels.isRadioBouquet(own.bouquetReference)
+        if (radio && ui.quickBar && !ui.channelList) {
+            QuickOptionsBar(
+                ui = ui,
+                actions = quickBarActions,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 44.dp, end = 44.dp, bottom = 24.dp),
+            )
+        }
+        if (ui.banner && channel != null && !ui.channelList && !radio) {
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
                 ChannelBanner(
                     channel = channel,

@@ -209,7 +209,8 @@
     <string name="osd_crypt_not_decrypted">Not decrypted</string>
     <string name="osd_tuner">Tuner %s</string>
     <string name="osd_tuner_type">Tuner %1$s · %2$s</string>
-    <string name="nav_stream">Stream</string>
+    <string name="nav_stream">Watch TV</string>
+    <string name="nav_radio">Radio</string>
     <string name="nav_search">Search</string>
     <string name="nav_my_items">My Items</string>
     <string name="nav_receiver">Receiver</string>

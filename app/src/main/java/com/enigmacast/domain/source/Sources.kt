@@ -41,6 +41,7 @@ interface ServiceStateSource {
     suspend fun zap(config: ReceiverConfig, serviceReference: String)
     suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList
     suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry>
+    suspend fun radioBouquets(config: ReceiverConfig): List<BouquetEntry>
     suspend fun channelsInBouquet(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry>
 }
 
