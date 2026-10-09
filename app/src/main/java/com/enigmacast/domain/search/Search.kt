@@ -5,6 +5,9 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.recording.Recording
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.tuner.NowEvents
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** One programme from `/api/epgsearch`, with the channel name OpenWebif puts in `sname`. */
 data class EpgSearchEvent(
@@ -51,6 +54,38 @@ data class SearchResults(
 ) {
     val isEmpty: Boolean
         get() = now.isEmpty() && later.isEmpty() && recordings.isEmpty() && stations.isEmpty()
+
+    /** Exact channel name, else a live programme, else the first remaining row. */
+    fun playHit(query: String): SearchHit? {
+        val wanted = query.trim()
+        val channels = stations.filter { it.kind == SearchKind.CHANNEL }
+        return channels.firstOrNull { it.channelName.equals(wanted, ignoreCase = true) || it.title.equals(wanted, ignoreCase = true) }
+            ?: now.firstOrNull()
+            ?: (now + later + recordings + stations).firstOrNull()
+    }
+}
+
+/** Visible first line: channel before the programme, bouquet before the channel. */
+object SearchRows {
+    fun headline(hit: SearchHit): String = when (hit.kind) {
+        SearchKind.NOW, SearchKind.LATER, SearchKind.RECORDING -> join(hit.channelName, hit.title)
+        SearchKind.CHANNEL -> join(hit.bouquetName, hit.channelName.ifBlank { hit.title })
+        SearchKind.BOUQUET, SearchKind.TMDB -> hit.title
+    }
+
+    fun detail(hit: SearchHit, whenText: String, bouquetLabel: String): String = when (hit.kind) {
+        SearchKind.LATER, SearchKind.RECORDING -> whenText
+        SearchKind.BOUQUET -> bouquetLabel
+        SearchKind.NOW, SearchKind.CHANNEL, SearchKind.TMDB -> ""
+    }
+
+    private fun join(prefix: String, name: String): String {
+        val head = prefix.trim()
+        val rest = name.trim()
+        if (head.isBlank()) return rest
+        if (rest.isBlank() || head.equals(rest, ignoreCase = true)) return head
+        return "$head  ·  $rest"
+    }
 }
 
 /**
@@ -69,28 +104,44 @@ object SearchGrouping {
         recordings: List<Recording>,
         bouquets: List<BouquetEntry>,
         channels: List<ListedChannel>,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): SearchResults = group(SearchQuery.parse(query, nowSec, zone), nowSec, programmes, recordings, bouquets, channels, zone)
+
+    fun group(
+        parsed: ParsedSearch,
+        nowSec: Long,
+        programmes: List<EpgSearchEvent>,
+        recordings: List<Recording>,
+        bouquets: List<BouquetEntry>,
+        channels: List<ListedChannel>,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): SearchResults {
-        val text = query.trim()
-        if (text.length < MIN_QUERY) return SearchResults()
+        if (!parsed.isSearchable) return SearchResults()
+        val text = parsed.text
+        val titles = text.length >= MIN_QUERY
         val seen = HashSet<String>()
         val now = ArrayList<SearchHit>()
         val later = ArrayList<SearchHit>()
-        programmes.forEach { found ->
-            if (!contains(found.event.title, text)) return@forEach
-            val key = found.event.programmeKey
-            if (!seen.add(key)) return@forEach
-            val hit = SearchHit(
-                kind = if (found.event.isAiring(nowSec)) SearchKind.NOW else SearchKind.LATER,
-                title = found.event.title,
-                serviceReference = found.event.reference,
-                channelName = found.channelName,
-                beginEpochSec = found.event.beginEpochSec,
-                endEpochSec = found.event.endEpochSec,
-            )
-            if (hit.kind == SearchKind.NOW) now += hit else later += hit
+        if (titles) {
+            programmes.forEach { found ->
+                if (!contains(found.event.title, text)) return@forEach
+                val key = found.event.programmeKey
+                if (!seen.add(key)) return@forEach
+                val hit = SearchHit(
+                    kind = if (found.event.isAiring(nowSec)) SearchKind.NOW else SearchKind.LATER,
+                    title = found.event.title,
+                    serviceReference = found.event.reference,
+                    channelName = found.channelName,
+                    beginEpochSec = found.event.beginEpochSec,
+                    endEpochSec = found.event.endEpochSec,
+                )
+                if (hit.kind == SearchKind.NOW) now += hit else later += hit
+            }
         }
         val recorded = recordings.filter { item ->
-            contains(item.title, text) || contains(item.channelName, text)
+            val dayOk = parsed.recordingDay == null || item.startedOn(parsed.recordingDay, zone)
+            val textOk = !titles || contains(item.title, text) || contains(item.channelName, text)
+            dayOk && textOk
         }.sortedByDescending { it.beginEpochSec }.take(MAX_PER_GROUP).map { item ->
             SearchHit(
                 kind = SearchKind.RECORDING,
@@ -102,31 +153,39 @@ object SearchGrouping {
                 endEpochSec = item.endEpochSec,
             )
         }
-        val bouquetHits = bouquets.filter { contains(it.name, text) }
-            .sortedBy { it.name.lowercase() }
-            .take(MAX_PER_GROUP)
-            .map { bouquet ->
-                SearchHit(
-                    kind = SearchKind.BOUQUET,
-                    title = bouquet.name,
-                    bouquetReference = bouquet.reference,
-                    bouquetName = bouquet.name,
-                )
-            }
-        val channelHits = channels.filter { contains(it.channel.name, text) }
-            .distinctBy { NowEvents.key(it.channel.reference) }
-            .sortedBy { it.channel.name.lowercase() }
-            .take(MAX_PER_GROUP)
-            .map { listed ->
-                SearchHit(
-                    kind = SearchKind.CHANNEL,
-                    title = listed.channel.name,
-                    serviceReference = listed.channel.reference,
-                    channelName = listed.channel.name,
-                    bouquetReference = listed.bouquet.reference,
-                    bouquetName = listed.bouquet.name,
-                )
-            }
+        val bouquetHits = if (titles) {
+            bouquets.filter { contains(it.name, text) }
+                .sortedBy { it.name.lowercase() }
+                .take(MAX_PER_GROUP)
+                .map { bouquet ->
+                    SearchHit(
+                        kind = SearchKind.BOUQUET,
+                        title = bouquet.name,
+                        bouquetReference = bouquet.reference,
+                        bouquetName = bouquet.name,
+                    )
+                }
+        } else {
+            emptyList()
+        }
+        val channelHits = if (titles) {
+            channels.filter { contains(it.channel.name, text) }
+                .distinctBy { NowEvents.key(it.channel.reference) }
+                .sortedBy { it.channel.name.lowercase() }
+                .take(MAX_PER_GROUP)
+                .map { listed ->
+                    SearchHit(
+                        kind = SearchKind.CHANNEL,
+                        title = listed.channel.name,
+                        serviceReference = listed.channel.reference,
+                        channelName = listed.channel.name,
+                        bouquetReference = listed.bouquet.reference,
+                        bouquetName = listed.bouquet.name,
+                    )
+                }
+        } else {
+            emptyList()
+        }
         return SearchResults(
             now = now.sortedBy { it.title.lowercase() }.take(MAX_PER_GROUP),
             later = later.sortedWith(compareBy<SearchHit> { it.beginEpochSec }.thenBy { it.title.lowercase() }).take(MAX_PER_GROUP),
@@ -141,4 +200,8 @@ object SearchGrouping {
     }
 
     private fun contains(value: String, query: String): Boolean = value.contains(query, ignoreCase = true)
+
+    private fun Recording.startedOn(day: LocalDate, zone: ZoneId): Boolean {
+        return Instant.ofEpochSecond(beginEpochSec).atZone(zone).toLocalDate() == day
+    }
 }

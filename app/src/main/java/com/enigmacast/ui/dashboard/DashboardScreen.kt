@@ -106,6 +106,7 @@ import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.recording.RecordConfirmDialog
 import com.enigmacast.ui.search.SearchPanel
+import com.enigmacast.ui.search.SearchViewModel
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.StepperRow
 import com.enigmacast.ui.theme.ToggleRow
@@ -156,8 +157,13 @@ fun DashboardScreen(
     focusLanguageSetting: Boolean = false,
     onLanguageSettingFocused: () -> Unit = {},
     onChooseLanguage: (AppLanguage) -> Unit = {},
+    pendingSearchQuery: String? = null,
+    pendingSearchPlay: Boolean = false,
+    pendingSearchToken: Int = 0,
+    onAssistantSearchConsumed: () -> Unit = {},
     guideModel: StreamGuideViewModel = hiltViewModel(),
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
+    searchModel: SearchViewModel = hiltViewModel(),
 ) {
     // After a language change the activity is recreated; reopen Settings › Language then.
     // Back from a recording opens My Items on that row.
@@ -224,6 +230,24 @@ fun DashboardScreen(
     LaunchedEffect(searchEnterToken) {
         if (searchEnterToken == 0) return@LaunchedEffect
         searchActive = true
+    }
+    LaunchedEffect(pendingSearchToken) {
+        val q = pendingSearchQuery ?: return@LaunchedEffect
+        if (pendingSearchToken == 0) return@LaunchedEffect
+        section = DashSection.Search
+        searchActive = true
+        searchEnterToken += 1
+        searchModel.applyExternalQuery(
+            value = q,
+            playFirst = pendingSearchPlay,
+            onPlayed = onStream,
+            onBouquet = { bouquet ->
+                guideModel.openBouquet(bouquet)
+                section = DashSection.Stream
+            },
+            prepare = guideModel::releaseBouquetPin,
+        )
+        onAssistantSearchConsumed()
     }
     LaunchedEffect(myItemsEnterToken) {
         if (myItemsEnterToken == 0) return@LaunchedEffect
@@ -399,6 +423,7 @@ fun DashboardScreen(
                                 guideModel.openBouquet(bouquet)
                                 section = DashSection.Stream
                             },
+                            viewModel = searchModel,
                             modifier = Modifier.fillMaxSize(),
                         )
                         DashSection.MyItems -> MyItemsPanel(

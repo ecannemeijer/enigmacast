@@ -1,9 +1,12 @@
 package com.enigmacast
 
 import android.app.Activity
+import android.app.SearchManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -84,6 +87,23 @@ class MainActivity : ComponentActivity() {
             }
         })
         setContent { EnigmaCastAppContent(appViewModel, ::chooseLanguage) }
+        handleSearchIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSearchIntent(intent)
+    }
+
+    /** Assistant and the TV search orb send SEARCH or MEDIA_PLAY_FROM_SEARCH with a query extra. */
+    private fun handleSearchIntent(intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action != Intent.ACTION_SEARCH && action != MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
+        val query = intent.getStringExtra(SearchManager.QUERY)
+            ?: intent.getStringExtra(Intent.EXTRA_TEXT)
+            ?: return
+        appViewModel.openAssistantSearch(query, playFirst = action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
     }
 
     override fun onStart() {
@@ -186,10 +206,18 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 focusLanguageSetting = appViewModel.focusLanguageSetting,
                 onLanguageSettingFocused = appViewModel::languageSettingFocused,
                 onChooseLanguage = onChooseLanguage,
+                pendingSearchQuery = appViewModel.pendingSearchQuery,
+                pendingSearchPlay = appViewModel.pendingSearchPlay,
+                pendingSearchToken = appViewModel.pendingSearchToken,
+                onAssistantSearchConsumed = appViewModel::assistantSearchConsumed,
             )
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,
                 onLeaveToMyItems = appViewModel::showDashboardFromRecording,
+                pendingSearchQuery = appViewModel.pendingSearchQuery,
+                pendingSearchPlay = appViewModel.pendingSearchPlay,
+                pendingSearchToken = appViewModel.pendingSearchToken,
+                onAssistantSearchConsumed = appViewModel::assistantSearchConsumed,
             )
             AppScreen.Settings -> SettingsScreen(
                 onBack = appViewModel::back,

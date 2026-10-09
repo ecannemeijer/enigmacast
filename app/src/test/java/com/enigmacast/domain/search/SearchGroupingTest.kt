@@ -8,6 +8,8 @@ import com.enigmacast.domain.recording.RecordingStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
+import java.time.ZoneOffset
 
 class SearchGroupingTest {
     private val now = 1_700_000_000L
@@ -72,6 +74,59 @@ class SearchGroupingTest {
     }
 
     @Test
+    fun searchForFillerStillFindsFormula1() {
+        val live = programme("Formula 1", sport1, now - 600, 2 * 3600, "Formula 1 HD")
+        val results = SearchGrouping.group("search for Formula 1", now, listOf(live), emptyList(), emptyList(), emptyList())
+        assertEquals(listOf("Formula 1"), results.now.map { it.title })
+    }
+
+    @Test
+    fun yesterdaysRecordingsAreOnlyFromThePreviousDay() {
+        val zone = ZoneOffset.UTC
+        val yesterday = Instant.ofEpochSecond(now).atZone(zone).toLocalDate().minusDays(1)
+        val yestSec = yesterday.atStartOfDay(zone).toEpochSecond() + 3_600
+        val old = recording("rec-old", "News", yestSec)
+        val today = recording("rec-today", "News today", now)
+        val results = SearchGrouping.group(
+            query = "yesterday's recordings",
+            nowSec = now,
+            programmes = emptyList(),
+            recordings = listOf(old, today),
+            bouquets = emptyList(),
+            channels = emptyList(),
+            zone = zone,
+        )
+        assertEquals(listOf("News"), results.recordings.map { it.title })
+        assertTrue(results.now.isEmpty())
+        assertTrue(results.stations.isEmpty())
+        val dutch = SearchGrouping.group("opnames van gisteren", now, emptyList(), listOf(old, today), emptyList(), emptyList(), zone)
+        assertEquals(listOf("News"), dutch.recordings.map { it.title })
+        val spoken = SearchQuery.parse("zoek naar gisteren", now, zone)
+        assertEquals("", spoken.text)
+        assertEquals(yesterday, spoken.recordingDay)
+    }
+
+    @Test
+    fun headlinePutsChannelThenProgrammeAndBouquetThenChannel() {
+        val nowHit = SearchHit(SearchKind.NOW, title = "Formula 1", channelName = "BBC One")
+        assertEquals("BBC One  ·  Formula 1", SearchRows.headline(nowHit))
+        val same = SearchHit(SearchKind.NOW, title = "BBC One", channelName = "BBC One")
+        assertEquals("BBC One", SearchRows.headline(same))
+        val channel = SearchHit(SearchKind.CHANNEL, title = "Rai 1", channelName = "Rai 1", bouquetName = "Favourites")
+        assertEquals("Favourites  ·  Rai 1", SearchRows.headline(channel))
+        assertEquals("", SearchRows.detail(nowHit, "Mon", "Bouquet"))
+    }
+
+    @Test
+    fun playHitPrefersAnExactChannelName() {
+        val channel = SearchHit(SearchKind.CHANNEL, title = "BBC One", channelName = "BBC One")
+        val live = SearchHit(SearchKind.NOW, title = "News", channelName = "BBC One")
+        val results = SearchResults(now = listOf(live), stations = listOf(channel))
+        assertEquals(channel, results.playHit("BBC One"))
+        assertEquals(live, results.playHit("News"))
+    }
+
+    @Test
     fun placeOfFindsTheBouquetThatContainsTheChannel() {
         val channels = listOf(ListedChannel(film, race), ListedChannel(ziggo, sport1))
         val place = SearchGrouping.placeOf("1:0:19:1:0:0:0:0:0:0:", channels)
@@ -81,4 +136,17 @@ class SearchGroupingTest {
 
     private fun programme(title: String, channel: BouquetEntry, begin: Long, duration: Long, name: String) =
         EpgSearchEvent(GuideEvent(1, channel.reference, title, "", "", begin, duration), name)
+
+    private fun recording(id: String, title: String, begin: Long) = Recording(
+        id = id,
+        title = title,
+        channelName = "BBC One",
+        reference = sport1.reference,
+        eventId = 1,
+        beginEpochSec = begin,
+        endEpochSec = begin + 60,
+        place = RecordingPlace.TV,
+        status = RecordingStatus.READY,
+        receiverId = "box",
+    )
 }

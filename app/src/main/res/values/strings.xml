@@ -398,6 +398,8 @@
     <string name="epg_hint_record">OK: AutoSwitch or record</string>
     <string name="epg_record">Record</string>
     <string name="search_hint">Type at least 2 characters</string>
+    <string name="search_mic">Speak</string>
+    <string name="search_speak">Search for a channel, programme or recording</string>
     <string name="search_searching">Searching…</string>
     <string name="search_empty">No results</string>
     <string name="search_now">Now</string>

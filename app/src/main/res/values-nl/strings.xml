@@ -395,6 +395,8 @@
     <string name="epg_hint_record">OK: AutoSwitch of opnemen</string>
     <string name="epg_record">Opnemen</string>
     <string name="search_hint">Typ minstens 2 tekens</string>
+    <string name="search_mic">Spreken</string>
+    <string name="search_speak">Zoek een zender, programma of opname</string>
     <string name="search_searching">Zoeken…</string>
     <string name="search_empty">Geen resultaten</string>
     <string name="search_now">Nu</string>

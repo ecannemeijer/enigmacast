@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.search.SearchHit
 import com.enigmacast.domain.search.SearchKind
+import com.enigmacast.domain.search.SearchQuery
 import com.enigmacast.domain.search.SearchResults
 import com.enigmacast.live.ProgrammeSearch
 import com.enigmacast.live.RecordingBook
@@ -36,21 +37,39 @@ class SearchViewModel @Inject constructor(
         private set
     private var searchJob: Job? = null
 
-    fun onQuery(value: String) {
+    fun onQuery(value: String, immediate: Boolean = false) {
         query = value
         message = UiText.Empty
         searchJob?.cancel()
-        if (value.trim().length < 2) {
+        val nowSec = System.currentTimeMillis() / 1000
+        if (!SearchQuery.parse(value, nowSec).isSearchable) {
             results = SearchResults()
             searching = false
             return
         }
         searching = true
         searchJob = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+            if (!immediate) delay(DEBOUNCE_MS)
             val found = programmeSearch.search(value, recordings.items.value, System.currentTimeMillis() / 1000)
             results = found
             searching = false
+        }
+    }
+
+    fun applyExternalQuery(
+        value: String,
+        playFirst: Boolean,
+        onPlayed: () -> Unit,
+        onBouquet: (BouquetEntry) -> Unit,
+        prepare: () -> Unit = {},
+    ) {
+        onQuery(value, immediate = true)
+        if (!playFirst) return
+        viewModelScope.launch {
+            searchJob?.join()
+            val hit = results.playHit(SearchQuery.parse(value, System.currentTimeMillis() / 1000).text.ifBlank { value })
+                ?: return@launch
+            choose(hit, onPlayed, onBouquet, prepare)
         }
     }
 

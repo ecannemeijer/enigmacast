@@ -165,6 +165,30 @@ class AppViewModel @Inject constructor(
         screen = AppScreen.Dashboard
     }
 
+    /**
+     * Google Assistant / SEARCH: open Unified Search with [query].
+     * [playFirst] is MEDIA_PLAY_FROM_SEARCH: tune the first strong hit after results arrive.
+     * Stays on the player when already full screen so the OSD search overlay opens.
+     * On Connection or Loading the query is kept until the dashboard is shown.
+     */
+    fun openAssistantSearch(query: String, playFirst: Boolean = false) {
+        val text = query.trim()
+        if (text.isEmpty()) return
+        decided = true
+        pendingSearchQuery = text
+        pendingSearchPlay = playFirst
+        pendingSearchToken += 1
+        if (screen == AppScreen.Remote) return
+        if (screen != AppScreen.Connection && screen != AppScreen.Loading) {
+            screen = AppScreen.Dashboard
+        }
+    }
+
+    fun assistantSearchConsumed() {
+        pendingSearchQuery = null
+        pendingSearchPlay = false
+    }
+
     fun openStream() {
         decided = true
         focusPlayingChannel = false
@@ -185,6 +209,14 @@ class AppViewModel @Inject constructor(
 
     /** Back from a recording: open My Items on this row instead of the programme grid. */
     var returnToMyItemsId by mutableStateOf<String?>(null)
+        private set
+
+    /** Assistant or SEARCH intent waiting to fill Unified Search. */
+    var pendingSearchQuery by mutableStateOf<String?>(null)
+        private set
+    var pendingSearchPlay by mutableStateOf(false)
+        private set
+    var pendingSearchToken by mutableStateOf(0)
         private set
 
     fun showDashboard() {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.player.VideoScaling
 import com.enigmacast.ui.recording.RecordConfirmDialog
 import com.enigmacast.ui.search.SearchPanel
+import com.enigmacast.ui.search.SearchViewModel
 import com.enigmacast.ui.recording.RecordingChip
 import com.enigmacast.ui.theme.EnigmaColors
 
@@ -53,7 +55,12 @@ import com.enigmacast.ui.theme.EnigmaColors
 fun EnigmaRemoteScreen(
     onLeaveToDashboard: () -> Unit,
     onLeaveToMyItems: (String) -> Unit,
+    pendingSearchQuery: String? = null,
+    pendingSearchPlay: Boolean = false,
+    pendingSearchToken: Int = 0,
+    onAssistantSearchConsumed: () -> Unit = {},
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
+    searchModel: SearchViewModel = hiltViewModel(),
 ) {
     DisposableEffect(onLeaveToDashboard, onLeaveToMyItems) {
         viewModel.onLeaveToDashboard = onLeaveToDashboard
@@ -62,6 +69,18 @@ fun EnigmaRemoteScreen(
             viewModel.onLeaveToDashboard = null
             viewModel.onLeaveToMyItems = null
         }
+    }
+    LaunchedEffect(pendingSearchToken) {
+        val q = pendingSearchQuery ?: return@LaunchedEffect
+        if (pendingSearchToken == 0) return@LaunchedEffect
+        viewModel.openSearch()
+        searchModel.applyExternalQuery(
+            value = q,
+            playFirst = pendingSearchPlay,
+            onPlayed = viewModel::finishSearchPlayback,
+            onBouquet = { viewModel.noteBouquet(it.name) },
+        )
+        onAssistantSearchConsumed()
     }
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val player = viewModel.player()
@@ -155,6 +174,7 @@ fun EnigmaRemoteScreen(
                 focusToken = ui.searchToken,
                 onPlayed = viewModel::finishSearchPlayback,
                 onBouquet = { viewModel.noteBouquet(it.name) },
+                viewModel = searchModel,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .fillMaxHeight()

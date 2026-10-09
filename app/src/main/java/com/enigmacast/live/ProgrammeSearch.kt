@@ -5,6 +5,7 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.recording.Recording
 import com.enigmacast.domain.search.ListedChannel
 import com.enigmacast.domain.search.SearchGrouping
+import com.enigmacast.domain.search.SearchQuery
 import com.enigmacast.domain.search.SearchResults
 import com.enigmacast.domain.source.EpgSource
 import com.enigmacast.domain.source.ServiceStateSource
@@ -36,18 +37,23 @@ class ProgrammeSearch @Inject constructor(
     private var catalog: Catalog? = null
 
     suspend fun search(query: String, recordings: List<Recording>, nowSec: Long): SearchResults {
-        if (query.trim().length < SearchGrouping.MIN_QUERY) return SearchResults()
+        val parsed = SearchQuery.parse(query, nowSec)
+        if (!parsed.isSearchable) return SearchResults()
         val receiver = settings.current().activeReceiver() ?: return SearchResults()
-        val programmes = try {
-            epg.search(receiver, query.trim())
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            EnigmaLog.service("epg search failed: ${error.javaClass.simpleName}")
+        val programmes = if (parsed.text.length < SearchGrouping.MIN_QUERY) {
             emptyList()
+        } else {
+            try {
+                epg.search(receiver, parsed.text)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                EnigmaLog.service("epg search failed: ${error.javaClass.simpleName}")
+                emptyList()
+            }
         }
         val lists = catalog(nowSec * 1000)
-        return SearchGrouping.group(query, nowSec, programmes, recordings, lists.bouquets, lists.channels)
+        return SearchGrouping.group(parsed, nowSec, programmes, recordings, lists.bouquets, lists.channels)
     }
 
     /** The bouquet and its channels that contain [serviceReference], or null when none does. */
