@@ -32,6 +32,7 @@ import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
 import com.enigmacast.domain.source.ServiceStateSource
+import com.enigmacast.domain.tuner.ChannelNavigator
 import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
 import com.enigmacast.util.EnigmaLog
@@ -200,8 +201,12 @@ class OpenWebifApi @Inject constructor(
             loaded
         }
         val start = starts[bouquetIdentity(bouquetReference)] ?: 0
-        if (start == 0) return channels
-        return channels.map { entry -> if (entry.number > 0) entry.copy(number = entry.number + start) else entry }
+        val shifted = if (start == 0) {
+            channels
+        } else {
+            channels.map { entry -> if (entry.number > 0) entry.copy(number = entry.number + start) else entry }
+        }
+        return ChannelNavigator.increasingNumbers(shifted)
     }
 
     override suspend fun currentService(config: ReceiverConfig): EnigmaService {

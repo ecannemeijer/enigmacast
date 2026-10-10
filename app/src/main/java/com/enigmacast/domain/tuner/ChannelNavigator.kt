@@ -7,8 +7,25 @@ import com.enigmacast.domain.service.BouquetChannels
 object ChannelNavigator {
     fun numberOf(channels: List<BouquetEntry>, entry: BouquetEntry): Int {
         if (entry.number > 0) return entry.number
+        val exact = channels.indexOfFirst { it.reference == entry.reference }
+        if (exact >= 0) return exact + 1
         val index = channels.indexOfFirst { BouquetChannels.sameService(it.reference, entry.reference) }
         return if (index >= 0) index + 1 else 0
+    }
+
+    /**
+     * OpenWebif repeats one `pos` for a run of internet streams after a numbered marker.
+     * A higher number is kept, including a gap. A number that does not rise continues
+     * from the previous channel. Entries without a number, such as markers, are left alone.
+     */
+    fun increasingNumbers(channels: List<BouquetEntry>): List<BouquetEntry> {
+        var last = 0
+        return channels.map { entry ->
+            if (entry.number <= 0) return@map entry
+            val number = if (entry.number > last) entry.number else last + 1
+            last = number
+            if (number == entry.number) entry else entry.copy(number = number)
+        }
     }
 
     /** Next ([delta] > 0) or previous channel, wrapping at the ends of the list. */

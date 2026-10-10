@@ -24,6 +24,27 @@ class ChannelNavigatorTest {
     }
 
     @Test
+    fun repeatedStreamNumbersContinueAndAGapStays() {
+        val numbers = listOf(1241, 1242, 1243, 1244, 1245, 1246, 1248, 1248, 1248, 1249, 1249)
+        val streams = numbers.mapIndexed { index, number ->
+            BouquetEntry("Stream $index", "4097:0:1:0:0:0:0:0:0:0:http://cdn/$index", number = number)
+        }
+        assertEquals(
+            listOf(1241, 1242, 1243, 1244, 1245, 1246, 1248, 1249, 1250, 1251, 1252),
+            ChannelNavigator.increasingNumbers(streams).map { it.number },
+        )
+    }
+
+    @Test
+    fun streamsThatShareTheServiceFieldsKeepTheirOwnPlace() {
+        val first = BouquetEntry("One", "4097:0:1:0:0:0:0:0:0:0:http://cdn/one")
+        val second = BouquetEntry("Two", "4097:0:1:0:0:0:0:0:0:0:http://cdn/two")
+        val streams = listOf(first, second)
+        assertEquals(1, ChannelNavigator.numberOf(streams, first))
+        assertEquals(2, ChannelNavigator.numberOf(streams, second))
+    }
+
+    @Test
     fun numbersComeFromTheReceiverOrThePosition() {
         assertEquals("RTL 4", ChannelNavigator.byNumber(channels, 4)?.name)
         assertNull(ChannelNavigator.byNumber(channels, 3))
