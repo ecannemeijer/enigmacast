@@ -35,4 +35,21 @@ class BouquetChannelsTest {
             ),
         )
     }
+
+    @Test
+    fun internetStreamsWithTheSameServiceFieldsStayDistinct() {
+        val prefix = "4097:0:1:1641:CDCB:EC:0:0:0:0:"
+        assertFalse(
+            BouquetChannels.sameService(
+                "${prefix}https3a//cdn.example/dmax.m3u8:DMax (Italia)",
+                "${prefix}https3a//cdn.example/nove.m3u8:Nove",
+            ),
+        )
+        assertTrue(
+            BouquetChannels.sameService(
+                "${prefix}https3a//cdn.example/nove.m3u8:Nove",
+                "${prefix}https%3a//cdn.example/nove.m3u8:NOVE",
+            ),
+        )
+    }
 }

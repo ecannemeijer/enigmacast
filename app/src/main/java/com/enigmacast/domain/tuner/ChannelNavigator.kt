@@ -31,7 +31,12 @@ object ChannelNavigator {
     /** Next ([delta] > 0) or previous channel, wrapping at the ends of the list. */
     fun step(channels: List<BouquetEntry>, currentReference: String, delta: Int): BouquetEntry? {
         if (channels.isEmpty()) return null
-        val index = channels.indexOfFirst { BouquetChannels.sameService(it.reference, currentReference) }
+        val exact = channels.indexOfFirst { it.reference == currentReference }
+        val index = if (exact >= 0) {
+            exact
+        } else {
+            channels.indexOfFirst { BouquetChannels.sameService(it.reference, currentReference) }
+        }
         if (index < 0) return channels.first()
         val size = channels.size
         return channels[((index + delta) % size + size) % size]

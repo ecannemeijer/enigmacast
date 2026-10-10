@@ -36,6 +36,30 @@ class ChannelNavigatorTest {
     }
 
     @Test
+    fun channelUpWalksInternetStreamsThatShareServiceFields() {
+        val prefix = "4097:0:1:1641:CDCB:EC:0:0:0:0:"
+        val streams = listOf("One", "Two", "Three").map { name ->
+            BouquetEntry(name, "${prefix}https3a//cdn.example/${name.lowercase()}.m3u8:$name")
+        }
+        assertEquals("Two", ChannelNavigator.step(streams, streams[0].reference, 1)?.name)
+        assertEquals("Three", ChannelNavigator.step(streams, streams[1].reference, 1)?.name)
+        assertEquals("One", ChannelNavigator.step(streams, streams[2].reference, 1)?.name)
+    }
+
+    @Test
+    fun duplicateUrlsStepFromTheCurrentRow() {
+        val prefix = "4097:0:1:1641:CDCB:EC:0:0:0:0:"
+        val shared = "https%3a//cdn.example/same.m3u8"
+        val streams = listOf(
+            BouquetEntry("First", "$prefix$shared:First"),
+            BouquetEntry("Second", "$prefix$shared:Second"),
+            BouquetEntry("Third", "${prefix}https3a//cdn.example/other.m3u8:Third"),
+        )
+        assertEquals("Second", ChannelNavigator.step(streams, streams[0].reference, 1)?.name)
+        assertEquals("Third", ChannelNavigator.step(streams, streams[1].reference, 1)?.name)
+    }
+
+    @Test
     fun streamsThatShareTheServiceFieldsKeepTheirOwnPlace() {
         val first = BouquetEntry("One", "4097:0:1:0:0:0:0:0:0:0:http://cdn/one")
         val second = BouquetEntry("Two", "4097:0:1:0:0:0:0:0:0:0:http://cdn/two")

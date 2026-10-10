@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "1.0.0-beta.15",
+  "versionCode": 19,
+  "versionName": "1.0.0-beta.16",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "EPG matches HD and linked channels. Internet bouquet numbers keep counting. Radio, direct internet streams and OSD transparency stay in this build."
+  "notes": "Channel up and down keep moving through internet channels that share one service id."
 }
