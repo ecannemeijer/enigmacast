@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "1.0.0-beta.14",
+  "versionCode": 18,
+  "versionName": "1.0.0-beta.15",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Radio has its own menu and a now-playing page. Internet channels play directly. OSD and channel list transparency can be set in Settings."
+  "notes": "EPG matches HD and linked channels. Internet bouquet numbers keep counting. Radio, direct internet streams and OSD transparency stay in this build."
 }
