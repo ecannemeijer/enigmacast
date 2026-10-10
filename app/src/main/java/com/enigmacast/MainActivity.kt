@@ -191,7 +191,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
     EnigmaCastTheme {
         Box(Modifier.fillMaxSize()) {
         when (appViewModel.screen) {
-            AppScreen.Loading -> Box(Modifier.fillMaxSize().background(Color.Black))
+            AppScreen.Loading -> com.enigmacast.ui.components.EnigmaCastBootLogo()
             AppScreen.Connection -> ConnectionScreen(
                 onConnected = appViewModel::openDashboard,
                 onSettings = appViewModel::openSettings,

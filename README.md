@@ -66,9 +66,11 @@ The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Dashboard
 
-The left menu is Watch TV, Radio, Search, My Items, Receiver, Settings, and Exit. Watch TV and Radio each keep their own bouquet list; opening one does not zap or copy the other side's channels. Radio lists only radio bouquets (`/api/bouquets?stype=radio`). Watch TV lists only television bouquets. The open section stays marked while focus is in its panel, and a pill under the logo shows the receiver power state (On, Standby, Not reachable, Restarting…). With a saved receiver, startup stays on the dashboard and the current service starts in the mini player. The first time the channel list is fetched after a connection, a dialog with a spinner says "Please wait... Loading Channels" (no Cancel; Back does not close it) and goes away when the list is in.
+The left menu is Home, Live TV, TV Guide, Radio, Search, My Items, Receivers, Settings, and Exit. Up and Down only move the highlight; OK opens that item. Home is the landing page. Live TV is a three-column browser (bouquets, channels, preview); moving the highlight does not zap, OK does. TV Guide is the programme grid. Radio and Live TV each keep their own bouquet list; opening one does not zap or copy the other side's channels. Radio lists only radio bouquets (`/api/bouquets?stype=radio`). Live TV and TV Guide list only television bouquets. The open section stays marked while focus is in its panel. With a saved receiver, startup stays on Home.
 
-The Watch TV page has the mini player at the top with the details of the highlighted programme next to it, and below it the TV guide of the current bouquet (see TV guide). Right from Watch TV enters the guide. Radio uses the same page for radio bouquets. While a radio station plays, the mini player and the full-screen player show a now-playing card (picon, station, programme, artist when the stream or the EPG has one) instead of a black picture. The card drifts slowly so it does not burn in. OK on a programme on air starts that channel in the mini player, and OK again on the same channel opens the full-screen player. Back returns to the menu.
+After a box is connected, nothing is played until that box's channel list is in. A dialog blocks the screen while the list loads (no Cancel; Back does not close it). It names the step in progress — bouquets, channels, or programme information — and shows how far those steps are, as a percentage. The receiver does not report a finer figure, so the percentage moves when a step finishes. A missing programme guide is shown as no programme information; an HTTP 500 from an EPG route is an empty guide, not an error. If `/api/getservices` with `picon=1` returns HTTP 500, the same bouquet is requested again without picons. A bouquet that still fails is skipped and another bouquet is used. The dialog then closes and the stream starts.
+
+The TV Guide page has the mini player at the top with the details of the highlighted programme next to it, and below it the guide of the current bouquet (see TV guide). Right from TV Guide enters the grid. Radio uses the live browser for radio bouquets. While a radio station plays, the mini player and the full-screen player show a now-playing card (picon, station, programme, artist when the stream or the EPG has one) instead of a black picture. The card drifts slowly so it does not burn in. OK on a programme on air starts that channel in the mini player, and OK again on the same channel opens the full-screen player. Back returns to the menu.
 
 Search sits under Radio. Focus stays on the Search menu item until Right, which enters the field; Back returns to the menu. See [Search](#search). My Items (recordings) works the same way: the highlight stays on the menu item until Right enters the list, so opening it does not jump to the first recording.
 
@@ -139,7 +141,7 @@ Down on the channel banner (own tuner), or holding Info while following the rece
 
 ## TV guide
 
-The guide is the dashboard's Stream page, below the mini player: channels of the current bouquet on the left, programmes on a time line on the right in half-hour columns, two hours at a time, with a line at the current time. The channel that plays is marked. Next to the mini player are the details of the highlighted programme. It works in both viewing modes.
+The guide is the dashboard's TV Guide page, below the mini player: channels of the current bouquet on the left, programmes on a time line on the right in half-hour columns, two hours at a time, with a line at the current time. The channel that plays is marked. Next to the mini player are the details of the highlighted programme. It works in both viewing modes.
 
 - Up/Down move a channel (wrap at both ends); CH+/CH− (or page keys) six channels without wrapping; Left/Right move a programme and scroll the time line, up to seven days ahead
 - OK on a programme on air starts that channel in the mini player, OK again opens the full-screen player; OK on a coming programme opens a dialog with AutoSwitch, Record and Cancel (see AutoSwitch), and a small clock marks programmes with AutoSwitch set
@@ -281,7 +283,7 @@ All paths are built in `OpenWebifEndpoints`.
 - Playlist: `/web/stream.m3u?ref=…&device=phone`, only to find the transcoding port
 - OSD: `/grab?format=png|jpg&mode=osd|all|video`
 - Stream: `http://HOST:8001/<percent-encoded service reference>`, with `Authorization: Basic` from the receiver's username and password when a username is set
-- Own-tuner mode also reads `/api/getservices` without `sRef` (bouquet start numbers), `/api/getservices?…&picon=1`, and picons from `/picon/`
+- Own-tuner mode also reads `/api/getservices` without `sRef` (bouquet start numbers), `/api/getservices?…&picon=1` (and the same URL without `picon=1` when the receiver answers HTTP 500), and picons from `/picon/`
 
 `/api/` is JSON. The older `/web/` routes return XML and are not used. `/grab` is on the web root, not under `/api`. The stream port stays HTTP even when OpenWebif itself is HTTPS.
 

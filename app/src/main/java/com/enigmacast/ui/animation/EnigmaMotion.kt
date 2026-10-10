@@ -1,5 +1,9 @@
 package com.enigmacast.ui.animation
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.compositionLocalOf
 import com.enigmacast.domain.model.MotionQuality
 
@@ -71,3 +75,11 @@ object EnigmaMotion {
 }
 
 val LocalMotionSpec = compositionLocalOf { EnigmaMotion.spec(MotionQuality.PREMIUM, 1f) }
+
+/** Focus colour and size. Snaps when motion is off. */
+fun MotionSpec.focusTween(): AnimationSpec<Float> =
+    if (animate) tween(durationMillis = focusMs, easing = FastOutSlowInEasing) else snap()
+
+/** The menu highlight glides to the next row. A bit slower than a colour change. */
+fun MotionSpec.travelTween(): AnimationSpec<Float> =
+    if (animate) tween(durationMillis = (focusMs * 1.8f).toInt().coerceAtLeast(1), easing = FastOutSlowInEasing) else snap()

@@ -40,6 +40,7 @@ import com.enigmacast.ui.remote.internetProblem
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.isEmpty
+import com.enigmacast.util.isNotEmpty
 import com.enigmacast.util.uiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -80,6 +81,13 @@ class StreamGuideViewModel @Inject constructor(
     /** True only while the first channel list is fetched. The wait dialog uses this. */
     var loadingChannels by mutableStateOf(false)
         private set
+    /** Which step the wait dialog is on: bouquets, channels or programme information. */
+    var loadingLabel by mutableStateOf(UiText.Empty)
+        private set
+    /** Finished share of the load steps, from 0 to 1. */
+    var loadingProgress by mutableStateOf(0f)
+        private set
+    private var sideLoading = false
     var bouquetName by mutableStateOf("")
         private set
     var bouquets by mutableStateOf<List<BouquetEntry>>(emptyList())
@@ -425,8 +433,16 @@ class StreamGuideViewModel @Inject constructor(
 
     private fun mirror(state: OwnTunerState) {
         if (mode != StreamMode.OWN_TUNER) return
+        if (state.loadingChannels) {
+            loadingChannels = true
+            if (state.loadingLabel.isNotEmpty()) loadingLabel = state.loadingLabel
+            loadingProgress = state.loadingProgress
+        } else if (!sideLoading) {
+            loadingChannels = false
+            loadingLabel = UiText.Empty
+            loadingProgress = 0f
+        }
         val sameSide = playingOn(medium)
-        if (sameSide) loadingChannels = state.loadingChannels
         if (!bouquetPinned && sameSide && state.channels.isNotEmpty()) {
             channels = state.channels
             bouquetName = state.bouquetName
@@ -520,12 +536,7 @@ class StreamGuideViewModel @Inject constructor(
                 powerKnown = true
             }
             if (askWake || leaveOff || waking || !powerKnown) return@launch
-            if (browsingAwayFromTuned()) {
-                reloadShownGuide()
-            } else {
-                loadGuide()
-            }
-            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
+            loadFollowing()
         }
     }
 
@@ -557,8 +568,7 @@ class StreamGuideViewModel @Inject constructor(
             leaveOff = false
             powerKnown = true
             status = UiText.Empty
-            loadGuide()
-            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
+            loadFollowing()
         }
     }
 
@@ -604,10 +614,7 @@ class StreamGuideViewModel @Inject constructor(
         leaveOff = false
         powerKnown = true
         status = UiText.Empty
-        viewModelScope.launch {
-            loadGuide()
-            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
-        }
+        viewModelScope.launch { loadFollowing() }
     }
 
     fun refreshIfServiceChanged() {
@@ -713,7 +720,7 @@ class StreamGuideViewModel @Inject constructor(
                         throw cancelled
                     } catch (error: Exception) {
                         if (token != guideToken) return@launch
-                        status = error.uiMessage(UiText.res(R.string.guide_epg_unavailable))
+                        EnigmaLog.service("programme load failed: ${error.javaClass.simpleName}")
                     }
                 }
                 is LiveZapFlow.Outcome.ZapFailed -> {
@@ -748,15 +755,46 @@ class StreamGuideViewModel @Inject constructor(
                 if (tuneJob?.isActive != true) {
                     tunedReference = loaded.serviceReference
                     shownReference = loaded.serviceReference
-                    if (loaded.serviceReference.isNotBlank()) {
+                    if (loaded.serviceReference.isNotBlank() && channels.isNotEmpty()) {
                         startPlayback(receiver, loaded.serviceReference)
                     }
                 }
                 status = UiText.Empty
             }
             .onFailure { error ->
-                status = error.uiMessage(UiText.res(R.string.guide_epg_unavailable))
+                if (error is CancellationException) throw error
+                EnigmaLog.service("programme load failed: ${error.javaClass.simpleName}")
             }
+    }
+
+    /** First follow-mode load keeps the wait dialog up and names each step. Later refreshes stay quiet. */
+    private suspend fun loadFollowing() {
+        val initial = mode != StreamMode.OWN_TUNER && (!bouquetLoaded || channels.isEmpty())
+        if (initial) {
+            sideLoading = true
+            loadingChannels = true
+            loadingLabel = UiText.res(R.string.load_bouquets)
+            loadingProgress = 0.15f
+        }
+        try {
+            if (!bouquetLoaded || channels.isEmpty()) loadBouquet()
+            if (browsingAwayFromTuned()) {
+                reloadShownGuide()
+            } else {
+                if (initial) {
+                    loadingLabel = UiText.res(R.string.load_programme)
+                    loadingProgress = 0.75f
+                }
+                loadGuide()
+            }
+        } finally {
+            if (initial) {
+                sideLoading = false
+                loadingChannels = false
+                loadingLabel = UiText.Empty
+                loadingProgress = 0f
+            }
+        }
     }
 
     private fun browsingAwayFromTuned(): Boolean {
@@ -831,16 +869,19 @@ class StreamGuideViewModel @Inject constructor(
             }
             .onFailure { error ->
                 if (token != bouquetToken) return@onFailure
-                status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
+                if (error is CancellationException) throw error
+                EnigmaLog.service("bouquet ${bouquet.name} failed: ${error.javaClass.simpleName}")
+                status = UiText.res(R.string.guide_channels_unavailable)
             }
     }
 
     private suspend fun loadBouquet() {
         val receiver = settingsRepository.current().activeReceiver() ?: return
-        val first = !bouquetLoaded && channels.isEmpty() && mode != StreamMode.OWN_TUNER
-        if (first) loadingChannels = true
-        try {
-            if (!bouquetPinned) {
+        if (!bouquetPinned) {
+                if (sideLoading) {
+                    loadingLabel = UiText.res(R.string.load_bouquets)
+                    loadingProgress = 0.15f
+                }
                 runCatching { bouquetsFor(receiver, medium) }.onSuccess { bouquets = it }
             }
             if (medium == GuideMedium.Radio) {
@@ -853,6 +894,10 @@ class StreamGuideViewModel @Inject constructor(
                 }
                 return
             }
+            if (sideLoading) {
+                loadingLabel = UiText.res(R.string.load_channels)
+                loadingProgress = 0.45f
+            }
             runCatching { serviceSource.currentBouquetChannels(receiver) }
                 .onSuccess { loaded ->
                     if (bouquetPinned) return@onSuccess
@@ -864,11 +909,10 @@ class StreamGuideViewModel @Inject constructor(
                     EnigmaLog.service("bouquet ${loaded.bouquetName} channels=${loaded.channels.size}")
                 }
                 .onFailure { error ->
-                    if (status.isEmpty()) status = error.uiMessage(UiText.res(R.string.guide_channels_unavailable))
+                    if (error is CancellationException) throw error
+                    EnigmaLog.service("channel list failed: ${error.javaClass.simpleName}")
+                    if (status.isEmpty()) status = UiText.res(R.string.guide_channels_unavailable)
                 }
-        } finally {
-            if (first) loadingChannels = false
-        }
     }
 
     private companion object {

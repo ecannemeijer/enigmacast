@@ -1,8 +1,11 @@
 package com.enigmacast.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,6 +61,29 @@ fun EnigmaCastLogo(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.3.sp,
             )
+        }
+    }
+}
+
+/** Startup mark, same lockup as the sidebar, on the midnight canvas. */
+@Composable
+fun EnigmaCastBootLogo(modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .fillMaxSize()
+            .background(EnigmaColors.Canvas),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_enigmacast_mark),
+            contentDescription = "EnigmaCast",
+            tint = Color.Unspecified,
+            modifier = Modifier.size(96.dp),
+        )
+        Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Enigma", color = EnigmaColors.Text, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+            Text("Cast", color = EnigmaColors.Cyan, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.ui.animation.LocalMotionSpec
+import com.enigmacast.ui.animation.focusTween
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 
@@ -85,8 +86,8 @@ fun EnigmaGlassButton(
     val focused by interaction.collectIsFocusedAsState()
     val spec = LocalMotionSpec.current
     val scale by animateFloatAsState(
-        targetValue = if (focused && spec.animate) 1.04f else 1f,
-        animationSpec = tween(spec.focusMs),
+        targetValue = if (focused && spec.animate) 1.08f else 1f,
+        animationSpec = spec.focusTween(),
         label = "glassButton",
     )
     val shape = RoundedCornerShape(12.dp)

@@ -39,6 +39,7 @@ import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.HasUiText
 import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -98,7 +99,7 @@ class OpenWebifApi @Inject constructor(
         val currentBody = get(config, endpoints.current(config))
         val reference = OpenWebifJson.parseService(currentBody).reference
         if (reference.isBlank()) return OpenWebifJson.parseGuide(currentBody, """{"events":[]}""")
-        val epgBody = get(config, endpoints.epgService(config, reference))
+        val epgBody = programmeBody(config, endpoints.epgService(config, reference))
         return OpenWebifJson.parseGuide(currentBody, epgBody)
     }
 
@@ -107,7 +108,7 @@ class OpenWebifApi @Inject constructor(
         serviceReference: String,
         channelName: String,
     ): ChannelGuide {
-        val epgBody = get(config, endpoints.epgService(config, serviceReference))
+        val epgBody = programmeBody(config, endpoints.epgService(config, serviceReference))
         val currentBody = buildJsonObject {
             put("info", buildJsonObject {
                 put("name", channelName)
@@ -152,8 +153,13 @@ class OpenWebifApi @Inject constructor(
         val ordered = listOfNotNull(hintedBouquet) + bouquets.filter { it.reference != hintedBouquet?.reference }
         var fallback: BouquetChannelList? = null
         for (bouquet in ordered) {
-            val channels = numbered(config, bouquet.reference, services(config, bouquet.reference))
-                .filter { BouquetChannels.isPlayableChannel(it.reference) }
+            val channels = runCatching {
+                numbered(config, bouquet.reference, services(config, bouquet.reference))
+            }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                EnigmaLog.service("skip bouquet ${bouquet.name}: ${error.javaClass.simpleName}")
+                emptyList()
+            }.filter { BouquetChannels.isPlayableChannel(it.reference) }
             val list = BouquetChannelList(bouquet.name, bouquet.reference, channels)
             if (fallback == null && channels.isNotEmpty()) fallback = list
             if (channels.any { BouquetChannels.sameService(it.reference, serviceReference) }) return list
@@ -264,7 +270,13 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
-        return OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference)))
+        return try {
+            OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference)))
+        } catch (error: OpenWebifException) {
+            if (error.statusCode != 500) throw error
+            EnigmaLog.service("channel list HTTP 500 with picons, retrying without")
+            OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference, picons = false)))
+        }
     }
 
     /**
@@ -292,7 +304,7 @@ class OpenWebifApi @Inject constructor(
     }
 
     suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent> {
-        return OpenWebifJson.parseNowEvents(get(config, endpoints.epgNow(config, bouquetReference)))
+        return OpenWebifJson.parseNowEvents(programmeBody(config, endpoints.epgNow(config, bouquetReference)))
     }
 
     /** `/api/about` alone (model, image, transcoding), without the grab and stream port probes. */
@@ -319,11 +331,11 @@ class OpenWebifApi @Inject constructor(
     }
 
     suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> {
-        return OpenWebifJson.parseGuideEvents(get(config, endpoints.epgService(config, serviceReference)), serviceReference)
+        return OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgService(config, serviceReference)), serviceReference)
     }
 
     suspend fun bouquetEvents(config: ReceiverConfig, bouquetReference: String, startSec: Long, minutes: Int): List<GuideEvent> {
-        return OpenWebifJson.parseGuideEvents(get(config, endpoints.epgMulti(config, bouquetReference, startSec, minutes)))
+        return OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgMulti(config, bouquetReference, startSec, minutes)))
     }
 
     suspend fun addTimer(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult {
@@ -428,6 +440,18 @@ class OpenWebifApi @Inject constructor(
 
     /** JSON body of [url]; throws [OpenWebifException] with the status code for non-2xx answers. */
     internal suspend fun body(config: ReceiverConfig, url: String): String = get(config, url)
+
+    /**
+     * Programme endpoints answer HTTP 500 when the receiver has no EPG for that service.
+     * That is an empty guide, not a failure to show on screen.
+     */
+    private suspend fun programmeBody(config: ReceiverConfig, url: String): String = try {
+        get(config, url)
+    } catch (error: OpenWebifException) {
+        if (error.statusCode != 404 && error.statusCode != 500) throw error
+        EnigmaLog.service("no programme data (HTTP ${error.statusCode})")
+        """{"events":[]}"""
+    }
 
     private suspend fun get(config: ReceiverConfig, url: String): String {
         val response = execute(config, url, accept = "application/json")

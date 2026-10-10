@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -28,8 +30,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.enigmacast.ui.animation.focusTween
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -89,6 +94,8 @@ fun NavItem(
     staggerIndex: Int = 0,
 ) {
     val spec = com.enigmacast.ui.animation.LocalMotionSpec.current
+    val cursor = com.enigmacast.ui.components.LocalNavCursor.current
+    val token = remember { Any() }
     val labelAlpha by animateFloatAsState(
         targetValue = if (showLabel) 1f else 0f,
         animationSpec = tween(
@@ -97,17 +104,33 @@ fun NavItem(
         ),
         label = "navLabel",
     )
-    val iconScale by animateFloatAsState(
-        targetValue = if (selected && spec.animate) 1.12f else 1f,
-        animationSpec = tween(if (spec.animate) spec.focusMs else 0),
-        label = "navIcon",
-    )
     CompactListRow(
         onClick = onClick,
         selected = selected,
-        modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
+        drawFocus = cursor == null,
+        modifier = modifier.onFocusChanged {
+            if (it.isFocused) onFocus()
+            else if (cursor?.owner == token) cursor.visible = false
+        },
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+        onPlaced = { coords ->
+            val rail = cursor ?: return@CompactListRow
+            rail.owner = token
+            rail.topPx = coords.positionInRoot().y - rail.originY
+            rail.heightPx = coords.size.height.toFloat()
+            rail.visible = true
+        },
     ) { focused ->
+        val iconScale by animateFloatAsState(
+            targetValue = if (focused && spec.animate) 1.14f else 1f,
+            animationSpec = spec.focusTween(),
+            label = "navIcon",
+        )
+        val labelScale by animateFloatAsState(
+            targetValue = if (focused && spec.animate) 1.16f else 1f,
+            animationSpec = spec.focusTween(),
+            label = "navLabelScale",
+        )
         Icon(
             icon,
             contentDescription = if (showLabel) null else label,
@@ -126,10 +149,15 @@ fun NavItem(
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+                modifier = Modifier.graphicsLayer {
+                    alpha = labelAlpha
+                    scaleX = labelScale
+                    scaleY = labelScale
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                },
             )
         }
-        if (selected && focused && spec.glow) {
+        if (selected && focused && spec.glow && cursor == null) {
             Spacer(Modifier.width(6.dp))
             Box(
                 Modifier
@@ -232,7 +260,7 @@ fun ToggleRow(
         },
         colors = rowColors(),
         shape = ListItemDefaults.shape(shape = RowShape),
-        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.01f),
+        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.06f),
     )
 }
 
@@ -289,6 +317,7 @@ fun ChoiceChip(
         modifier = modifier,
         enabled = enabled,
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
             containerColor = if (selected) EnigmaColors.Selected else EnigmaColors.Raised,
             contentColor = if (selected) EnigmaColors.Accent else EnigmaColors.Text,
@@ -397,7 +426,7 @@ fun ActionTile(
         enabled = enabled,
         shape = ButtonDefaults.shape(shape = TileShape),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.04f),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
             containerColor = container,
             contentColor = content,
@@ -431,7 +460,7 @@ fun ActionTile(
  * the caller removes it when the list is in.
  */
 @Composable
-fun ChannelsLoadingDialog(message: String) {
+fun ChannelsLoadingDialog(message: String, progress: Float = 0f) {
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(
@@ -442,20 +471,41 @@ fun ChannelsLoadingDialog(message: String) {
     ) {
         NavigationSoundsForWindow()
         val hold = remember { FocusRequester() }
+        val fraction = progress.coerceIn(0f, 1f)
+        val animated by animateFloatAsState(fraction, tween(280), label = "channelLoad")
+        val percent = (animated * 100).toInt()
         LaunchedEffect(Unit) { runCatching { hold.requestFocus() } }
-        Row(
+        Column(
             modifier = Modifier
-                .widthIn(min = 320.dp, max = 480.dp)
+                .widthIn(min = 360.dp, max = 520.dp)
                 .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
                 .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
                 .padding(20.dp)
                 .focusRequester(hold)
                 .focusable(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
-            Text(message, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
+                Text(
+                    message,
+                    color = EnigmaColors.Text,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("$percent%", color = EnigmaColors.Cyan, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
+            LinearProgressIndicator(
+                progress = { animated },
+                modifier = Modifier.fillMaxWidth().height(6.dp),
+                color = EnigmaColors.Cyan,
+                trackColor = EnigmaColors.Raised,
+            )
         }
     }
 }
@@ -601,6 +651,7 @@ internal fun DialogButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         contentPadding = PaddingValues(
             horizontal = if (compact) 12.dp else 24.dp,
             vertical = if (compact) 4.dp else 10.dp,
@@ -631,7 +682,7 @@ fun CompactButton(
         modifier = modifier,
         shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.03f),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
             containerColor = EnigmaColors.Raised,
             contentColor = EnigmaColors.Text,

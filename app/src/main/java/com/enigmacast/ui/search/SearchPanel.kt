@@ -152,7 +152,7 @@ fun SearchPanel(
                     },
                 enabled = rowsFocusable,
                 contentPadding = PaddingValues(0.dp),
-                scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.06f),
+                scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
                 colors = ButtonDefaults.colors(
                     containerColor = EnigmaColors.Raised,
                     contentColor = EnigmaColors.Text,

@@ -54,7 +54,6 @@ import com.enigmacast.ui.components.EnigmaGlassPanel
 import com.enigmacast.ui.components.EnigmaProgramProgress
 import com.enigmacast.ui.remote.Picon
 import com.enigmacast.ui.remote.rememberGuideClock
-import com.enigmacast.ui.theme.ChannelsLoadingDialog
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
@@ -205,7 +204,7 @@ internal fun LiveBrowser(
         ) { reference ->
             val channel = channels.firstOrNull { it.reference == reference }
             PreviewPane(
-                showMiniPlayer = showMiniPlayer,
+                showMiniPlayer = showMiniPlayer && !guideModel.loadingChannels,
                 channel = channel,
                 events = channel?.let(grid::eventsOf).orEmpty(),
                 nowSec = nowSec,
@@ -214,9 +213,6 @@ internal fun LiveBrowser(
                 cachedPicon = guideModel::cachedPicon,
             )
         }
-    }
-    if (guideModel.loadingChannels) {
-        ChannelsLoadingDialog(stringResource(R.string.channels_please_wait))
     }
 }
 

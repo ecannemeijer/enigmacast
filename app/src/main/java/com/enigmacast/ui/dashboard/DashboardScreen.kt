@@ -283,7 +283,7 @@ fun DashboardScreen(
         section = DashSection.MyItems
         myItemsListFocus.requestWhenReady()
     }
-    val openSection = { target: DashSection ->
+    fun openSection(target: DashSection) {
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
         val keepSettings = settingsFormOpen && target != DashSection.Settings
         if (!keepList && !keepSettings) section = target
@@ -328,9 +328,8 @@ fun DashboardScreen(
                     staggerIndex = 0,
                     modifier = Modifier
                         .focusRequester(homeFocus)
-                        .focusProperties { right = homeContentFocus },
-                    onFocus = { openSection(DashSection.Home) },
-                    onClick = { section = DashSection.Home },
+                        .focusProperties { right = if (section == DashSection.Home) homeContentFocus else FocusRequester.Cancel },
+                    onClick = { openSection(DashSection.Home) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Tv,
@@ -341,9 +340,8 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(streamFocus)
                         .onFocusChanged { streamItemFocused = it.isFocused }
-                        .focusProperties { right = channelFocus },
-                    onFocus = { openSection(DashSection.Stream) },
-                    onClick = onStream,
+                        .focusProperties { right = if (section == DashSection.Stream) channelFocus else FocusRequester.Cancel },
+                    onClick = { openSection(DashSection.Stream) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Guide,
@@ -354,9 +352,8 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(guideFocus)
                         .onFocusChanged { guideItemFocused = it.isFocused }
-                        .focusProperties { right = guideGridFocus },
-                    onFocus = { openSection(DashSection.Guide) },
-                    onClick = { section = DashSection.Guide },
+                        .focusProperties { right = if (section == DashSection.Guide) guideGridFocus else FocusRequester.Cancel },
+                    onClick = { openSection(DashSection.Guide) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Radio,
@@ -367,9 +364,8 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(radioFocus)
                         .onFocusChanged { radioItemFocused = it.isFocused }
-                        .focusProperties { right = radioListFocus },
-                    onFocus = { openSection(DashSection.Radio) },
-                    onClick = { section = DashSection.Radio },
+                        .focusProperties { right = if (section == DashSection.Radio) radioListFocus else FocusRequester.Cancel },
+                    onClick = { openSection(DashSection.Radio) },
                 )
                 NavItem(
                     icon = Icons.Filled.Search,
@@ -380,14 +376,15 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(searchMenuFocus)
                         .onFocusChanged { if (it.isFocused) searchActive = false }
+                        .focusProperties { right = FocusRequester.Cancel }
                         .onPreviewKeyEvent { event ->
+                            if (section != DashSection.Search) return@onPreviewKeyEvent false
                             if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
                             searchActive = true
                             searchEnterToken += 1
                             true
                         },
-                    onFocus = { openSection(DashSection.Search) },
-                    onClick = { section = DashSection.Search },
+                    onClick = { openSection(DashSection.Search) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Record,
@@ -402,15 +399,15 @@ fun DashboardScreen(
                                 myItemsListActive = false
                             }
                         }
-                        .focusProperties { right = myItemsListFocus }
+                        .focusProperties { right = FocusRequester.Cancel }
                         .onPreviewKeyEvent { event ->
+                            if (section != DashSection.MyItems) return@onPreviewKeyEvent false
                             if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
                             myItemsListActive = true
                             myItemsEnterToken += 1
                             true
                         },
-                    onFocus = { section = DashSection.MyItems },
-                    onClick = { section = DashSection.MyItems },
+                    onClick = { openSection(DashSection.MyItems) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Power,
@@ -420,9 +417,8 @@ fun DashboardScreen(
                     staggerIndex = 6,
                     modifier = Modifier
                         .focusRequester(receiverMenuFocus)
-                        .focusProperties { right = receiverPageFocus },
-                    onFocus = { openSection(DashSection.Receiver) },
-                    onClick = { section = DashSection.Receiver },
+                        .focusProperties { right = if (section == DashSection.Receiver) receiverPageFocus else FocusRequester.Cancel },
+                    onClick = { openSection(DashSection.Receiver) },
                 )
                 NavItem(
                     icon = Icons.Filled.Settings,
@@ -432,9 +428,8 @@ fun DashboardScreen(
                     staggerIndex = 7,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
-                        .focusProperties { right = settingsPageFocus },
-                    onFocus = { openSection(DashSection.Settings) },
-                    onClick = { section = DashSection.Settings },
+                        .focusProperties { right = if (section == DashSection.Settings) settingsPageFocus else FocusRequester.Cancel },
+                    onClick = { openSection(DashSection.Settings) },
                 )
                 Spacer(Modifier.height(8.dp))
                 NavItem(
@@ -573,6 +568,12 @@ fun DashboardScreen(
                 }
             }
         }
+        if (guideModel.loadingChannels) {
+            ChannelsLoadingDialog(
+                guideModel.loadingLabel.asString().ifBlank { stringResource(R.string.load_channels) },
+                guideModel.loadingProgress,
+            )
+        }
         guideModel.recordAsk?.let { ask ->
             RecordConfirmDialog(ask, onConfirm = guideModel::confirmRecord, onDismiss = guideModel::dismissRecord)
         }
@@ -673,7 +674,7 @@ private fun GuidePanel(
                     .aspectRatio(16f / 9f)
                     .background(Color.Black),
             ) {
-                if (showMiniPlayer) MiniStreamPlayer(Modifier.fillMaxSize())
+                if (showMiniPlayer && !guideModel.loadingChannels) MiniStreamPlayer(Modifier.fillMaxSize())
             }
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 GuideDetails(
@@ -765,9 +766,6 @@ private fun GuidePanel(
         )
     }
     prompt?.let { ProgrammeDialog(it, programmeActions) }
-    if (guideModel.loadingChannels) {
-        ChannelsLoadingDialog(stringResource(R.string.channels_please_wait))
-    }
 }
 
 private val MiniPlayerHeight = 158.dp
@@ -1063,7 +1061,6 @@ private fun SettingNav(
         label = label,
         selected = selected,
         onClick = onSelect,
-        onFocus = onSelect,
         modifier = Modifier
             .then(if (pageFocus != null) Modifier.focusRequester(pageFocus) else Modifier)
             .focusProperties { left = menuFocus },

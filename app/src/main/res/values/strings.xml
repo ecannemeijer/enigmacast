@@ -4,6 +4,9 @@
     <string name="bullet_item" translatable="false">• %s</string>
     <string name="coming_soon" translatable="false">Coming soon</string>
     <string name="tuner_loading_channels">Loading channels…</string>
+    <string name="load_bouquets">Loading bouquets…</string>
+    <string name="load_channels">Loading channels…</string>
+    <string name="load_programme">Loading programme information…</string>
     <string name="channels_please_wait">Please wait... Loading Channels</string>
     <string name="tuner_channels_failed">Could not load the channels</string>
     <string name="tuner_no_channels">No channels found</string>

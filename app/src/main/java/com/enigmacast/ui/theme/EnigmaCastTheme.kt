@@ -85,6 +85,7 @@ fun TvButton(
         enabled = enabled,
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
             containerColor = Surface,
             contentColor = Color.White,

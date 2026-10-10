@@ -67,10 +67,14 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
 
     fun radioBouquets(config: ReceiverConfig): String = api(config, "/api/bouquets?stype=radio")
 
-    /** `picon=1` makes OpenWebif add each channel's picon path (or its default picon). */
-    fun services(config: ReceiverConfig, bouquetReference: String): String {
+    /**
+     * `picon=1` makes OpenWebif add each channel's picon path. Some images answer HTTP 500
+     * for that flag on stream bouquets; [picons] false asks for the same list without it.
+     */
+    fun services(config: ReceiverConfig, bouquetReference: String, picons: Boolean = true): String {
         val encoded = encode(bouquetReference)
-        return api(config, "/api/getservices?sRef=$encoded&picon=1")
+        val picon = if (picons) "&picon=1" else ""
+        return api(config, "/api/getservices?sRef=$encoded$picon")
     }
 
     /** Without `sRef` OpenWebif lists the TV bouquets with `startpos`, the number before each bouquet's first channel. */

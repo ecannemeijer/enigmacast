@@ -1,5 +1,10 @@
 package com.enigmacast.ui.theme
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -28,6 +37,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
+import com.enigmacast.ui.animation.LocalMotionSpec
+import com.enigmacast.ui.animation.focusTween
 
 private val CompactShape = RoundedCornerShape(6.dp)
 
@@ -41,16 +52,28 @@ fun CompactListRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    drawFocus: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 3.dp),
+    onPlaced: (LayoutCoordinates) -> Unit = {},
     content: @Composable RowScope.(focused: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val background = when {
-        focused -> EnigmaColors.Focus
-        selected -> EnigmaColors.Selected
-        else -> Color.Transparent
-    }
+    val spec = LocalMotionSpec.current
+    val background by animateColorAsState(
+        targetValue = when {
+            focused && drawFocus -> EnigmaColors.Focus
+            selected -> EnigmaColors.Selected
+            else -> Color.Transparent
+        },
+        animationSpec = if (spec.animate) tween(spec.focusMs, easing = FastOutSlowInEasing) else snap(),
+        label = "rowBackground",
+    )
+    val grow by animateFloatAsState(
+        targetValue = if (focused && drawFocus && spec.animate) 1.06f else 1f,
+        animationSpec = spec.focusTween(),
+        label = "rowGrow",
+    )
     val contentColor = when {
         focused -> EnigmaColors.OnFocus
         selected -> EnigmaColors.Accent
@@ -59,6 +82,12 @@ fun CompactListRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = grow
+                scaleY = grow
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            }
+            .onGloballyPositioned { if (focused) onPlaced(it) }
             .background(background, CompactShape)
             .onKeyEvent { event ->
                 val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter

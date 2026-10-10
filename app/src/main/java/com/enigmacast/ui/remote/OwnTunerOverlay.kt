@@ -111,7 +111,10 @@ fun OwnTunerOverlay(
     Box(modifier = Modifier.fillMaxSize()) {
         val channel = own.channel
         if (own.loadingChannels) {
-            ChannelsLoadingDialog(stringResource(R.string.channels_please_wait))
+            ChannelsLoadingDialog(
+                own.loadingLabel.asString().ifBlank { stringResource(R.string.load_channels) },
+                own.loadingProgress,
+            )
         } else if (tuner.status == TunerStatus.CHECKING || tuner.status == TunerStatus.STARTING) {
             StatusPill(
                 text = tuner.message.asString().ifBlank { stringResource(R.string.loading) },

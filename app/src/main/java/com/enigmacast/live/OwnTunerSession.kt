@@ -22,8 +22,8 @@ import com.enigmacast.domain.tuner.TunerVerdict
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
+import com.enigmacast.util.isEmpty
 import com.enigmacast.util.isNotEmpty
-import com.enigmacast.util.uiMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +67,10 @@ data class OwnTunerState(
     val zapCount: Int = 0,
     /** The first channel list is still being fetched. Later zaps do not set this. */
     val loadingChannels: Boolean = false,
+    /** What the wait dialog is fetching: bouquets, channels or programme information. */
+    val loadingLabel: UiText = UiText.Empty,
+    /** Share of those steps already finished, from 0 to 1. The receiver does not report a finer figure. */
+    val loadingProgress: Float = 0f,
 )
 
 /**
@@ -164,11 +168,17 @@ class OwnTunerSession @Inject constructor(
                 return@launch
             }
             val current = _state.value
+            // A remembered service is not playable until this box's channel list is in.
+            // Starting earlier opens a stream the receiver rejects, which shows as an error.
+            if (current.channels.isEmpty()) {
+                loadInitial(startPlayback = true)
+                return@launch
+            }
             if (current.channel != null) {
                 if (current.tuner.status == TunerStatus.IDLE) start(current.channel)
                 return@launch
             }
-            if (current.channels.isEmpty()) loadInitial(startPlayback = true) else current.channels.firstOrNull()?.let(::start)
+            current.channels.firstOrNull()?.let(::start)
         }
     }
 
@@ -183,15 +193,29 @@ class OwnTunerSession @Inject constructor(
         if (channel != null) start(channel) else ensureStarted()
     }
 
+    private var channelLoadFailed = false
+
+    private fun showLoad(label: UiText, progress: Float) {
+        _state.update {
+            it.copy(
+                loadingChannels = true,
+                loadingLabel = label,
+                loadingProgress = progress.coerceIn(0f, 1f),
+                tuner = TunerState(TunerStatus.CHECKING, label),
+            )
+        }
+    }
+
+    private fun hideLoad() {
+        if (!_state.value.loadingChannels && _state.value.loadingLabel.isEmpty()) return
+        _state.update { it.copy(loadingChannels = false, loadingLabel = UiText.Empty, loadingProgress = 0f) }
+    }
+
     private fun loadInitial(startPlayback: Boolean) {
         startAfterLoad = startPlayback
+        val dialog = !channelLoadFailed
         startJob = scope.launch {
-            _state.update {
-                it.copy(
-                    loadingChannels = true,
-                    tuner = TunerState(TunerStatus.CHECKING, UiText.res(R.string.tuner_loading_channels)),
-                )
-            }
+            if (dialog) showLoad(UiText.res(R.string.load_channels), 0.05f)
             try {
                 val settings = settingsRepository.current()
                 val receiver = settings.activeReceiver() ?: return@launch
@@ -199,18 +223,34 @@ class OwnTunerSession @Inject constructor(
                 val last = ChannelMemory.lastFor(settings, receiver.id)
                 val list = runCatching {
                     if (last.bouquetReference.isNotBlank()) {
-                        val channels = serviceSource.channelsInBouquet(receiver, last.bouquetReference)
-                        val name = runCatching {
-                            serviceSource.televisionBouquets(receiver) + serviceSource.radioBouquets(receiver)
-                        }.getOrDefault(emptyList()).firstOrNull { it.reference == last.bouquetReference }?.name.orEmpty()
-                        Triple(name, last.bouquetReference, channels)
+                        if (dialog) showLoad(UiText.res(R.string.load_channels), 0.12f)
+                        val channels = runCatching { serviceSource.channelsInBouquet(receiver, last.bouquetReference) }
+                            .getOrElse { error ->
+                                if (error is CancellationException) throw error
+                                EnigmaLog.service("remembered bouquet failed, loading the current bouquet")
+                                null
+                            }
+                        if (channels != null) {
+                            if (dialog) showLoad(UiText.res(R.string.load_bouquets), 0.45f)
+                            val name = runCatching {
+                                serviceSource.televisionBouquets(receiver) + serviceSource.radioBouquets(receiver)
+                            }.getOrDefault(emptyList()).firstOrNull { it.reference == last.bouquetReference }?.name.orEmpty()
+                            Triple(name, last.bouquetReference, channels)
+                        } else {
+                            if (dialog) showLoad(UiText.res(R.string.load_bouquets), 0.2f)
+                            val current = serviceSource.currentBouquetChannels(receiver)
+                            Triple(current.bouquetName, current.bouquetReference, current.channels)
+                        }
                     } else {
+                        if (dialog) showLoad(UiText.res(R.string.load_bouquets), 0.15f)
                         val current = serviceSource.currentBouquetChannels(receiver)
                         Triple(current.bouquetName, current.bouquetReference, current.channels)
                     }
                 }.getOrElse { error ->
                     if (error is CancellationException) throw error
-                    _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, error.uiMessage(UiText.res(R.string.tuner_channels_failed)))) }
+                    channelLoadFailed = true
+                    EnigmaLog.service("channel list failed: ${error.javaClass.simpleName}")
+                    _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_channels_failed))) }
                     return@launch
                 }
                 val (bouquetName, bouquetReference, channels) = list
@@ -221,16 +261,25 @@ class OwnTunerSession @Inject constructor(
                 }
                 val target = channels.firstOrNull { BouquetChannels.sameService(it.reference, last.reference) }
                     ?: channels.firstOrNull { BouquetChannels.sameService(it.reference, receiverChannel) }
-                    ?: last.reference.takeIf { it.isNotBlank() }?.let { BouquetEntry(last.name, it) }
                     ?: channels.firstOrNull()
+                channelLoadFailed = false
                 _state.update {
                     it.copy(
                         channels = channels,
                         bouquetName = bouquetName,
                         bouquetReference = bouquetReference,
-                        loadingChannels = false,
                     )
                 }
+                if (dialog && target != null) {
+                    showLoad(UiText.res(R.string.load_programme), 0.75f)
+                    runCatching { serviceSource.channelGuide(receiver, target.reference, target.name) }
+                        .onSuccess { guide -> _state.update { it.copy(guide = guide) } }
+                        .onFailure { error ->
+                            if (error is CancellationException) throw error
+                            EnigmaLog.service("programme load failed: ${error.javaClass.simpleName}")
+                        }
+                }
+                hideLoad()
                 if (!startAfterLoad || playback.isFilePlayback()) return@launch
                 if (target == null) {
                     _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
@@ -238,7 +287,7 @@ class OwnTunerSession @Inject constructor(
                 }
                 startNow(receiver, target)
             } finally {
-                if (_state.value.loadingChannels) _state.update { it.copy(loadingChannels = false) }
+                hideLoad()
             }
         }
     }

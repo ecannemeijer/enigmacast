@@ -200,7 +200,7 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
         modifier = modifier.fillMaxWidth(),
         shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.02f),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
             containerColor = EnigmaColors.Raised,
             contentColor = EnigmaColors.Text,
