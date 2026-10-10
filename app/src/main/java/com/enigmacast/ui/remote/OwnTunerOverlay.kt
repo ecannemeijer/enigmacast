@@ -2,6 +2,7 @@ package com.enigmacast.ui.remote
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,6 +67,9 @@ import com.enigmacast.domain.tuner.TunerUserKind
 import com.enigmacast.live.TunerState
 import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
+import com.enigmacast.ui.components.EnigmaAnimatedOsd
+import com.enigmacast.ui.components.EnigmaLoadingIndicator
+import com.enigmacast.ui.components.EnigmaProgramProgress
 import com.enigmacast.ui.osd.OsdInfoPresenter
 import com.enigmacast.ui.osd.OsdSkins
 import com.enigmacast.ui.recording.RecordingDot
@@ -161,8 +165,10 @@ fun OwnTunerOverlay(
                     .padding(8.dp),
             )
         }
-        if (ui.banner && channel != null && !ui.channelList && !radio) {
-            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+        val showBanner = ui.banner && channel != null && !ui.channelList && !radio
+        EnigmaAnimatedOsd(visible = showBanner, modifier = Modifier.align(Alignment.BottomCenter)) {
+            if (channel != null) {
+            Column {
                 ChannelBanner(
                     channel = channel,
                     number = numberOf(channel),
@@ -189,6 +195,7 @@ fun OwnTunerOverlay(
                             .padding(8.dp),
                     )
                 }
+            }
             }
         }
         if (ui.channelList) {
@@ -237,11 +244,15 @@ private fun ChannelBanner(
     val current = events.firstOrNull { it.beginEpochSec <= nowSec && nowSec < it.beginEpochSec + it.durationSec }
         ?: guide?.currentEvent
     val next = current?.let { now -> events.firstOrNull { it.beginEpochSec >= now.beginEpochSec + now.durationSec } }
+    val loading = player.playbackState == "BUFFERING" ||
+        tuner.status == TunerStatus.CHECKING ||
+        tuner.status == TunerStatus.STARTING
     Row(
         modifier = modifier
-            .padding(horizontal = 48.dp, vertical = 32.dp)
+            .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
             .fillMaxWidth()
             .background(scrim, RoundedCornerShape(16.dp))
+            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(16.dp))
             .padding(20.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -267,6 +278,9 @@ private fun ChannelBanner(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (loading) {
+                    EnigmaLoadingIndicator(Modifier.padding(start = 8.dp))
+                }
                 if (recording) {
                     RecordingDot(Modifier.padding(start = 8.dp))
                 }
@@ -276,7 +290,7 @@ private fun ChannelBanner(
             }
             if (current != null) {
                 EventLine(current, emphasised = true)
-                ProgressBar(current, nowSec)
+                EnigmaProgramProgress(progressOf(current, nowSec))
             } else {
                 Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 14.sp)
             }
@@ -356,26 +370,9 @@ private fun EventLine(event: EpgEvent, emphasised: Boolean) {
     }
 }
 
-@Composable
-private fun ProgressBar(event: EpgEvent, nowSec: Long) {
-    val fraction = if (event.durationSec > 0 && event.beginEpochSec > 0) {
-        ((nowSec - event.beginEpochSec).toFloat() / event.durationSec).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(4.dp)
-            .background(EnigmaColors.Raised, RoundedCornerShape(2.dp)),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction)
-                .height(4.dp)
-                .background(EnigmaColors.Accent, RoundedCornerShape(2.dp)),
-        )
-    }
+private fun progressOf(event: EpgEvent, nowSec: Long): Float {
+    if (event.durationSec <= 0 || event.beginEpochSec <= 0) return 0f
+    return ((nowSec - event.beginEpochSec).toFloat() / event.durationSec).coerceIn(0f, 1f)
 }
 
 @Composable
@@ -443,6 +440,7 @@ private fun TunerNotice(tuner: TunerState, channelName: String, scrim: Color, mo
         modifier = modifier
             .widthIn(max = 440.dp)
             .background(scrim, RoundedCornerShape(12.dp))
+            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(12.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -731,20 +729,11 @@ private fun RowScope.ChannelRowContent(
             )
         }
         if (event != null) {
-            Box(
-                modifier = Modifier
-                    .padding(start = 36.dp, top = 2.dp)
-                    .fillMaxWidth()
-                    .height(2.dp)
-                    .background(EnigmaColors.Raised, RoundedCornerShape(1.dp)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(event.progress(nowSec))
-                        .height(2.dp)
-                        .background(if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, RoundedCornerShape(1.dp)),
-                )
-            }
+            EnigmaProgramProgress(
+                fraction = event.progress(nowSec),
+                modifier = Modifier.padding(start = 36.dp, top = 2.dp),
+                emphasized = !focused,
+            )
         }
     }
 }

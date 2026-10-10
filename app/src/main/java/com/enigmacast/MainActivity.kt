@@ -37,6 +37,7 @@ import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.remote.RemoteInputBus
 import com.enigmacast.ui.AppScreen
 import com.enigmacast.ui.AppViewModel
+import com.enigmacast.ui.animation.ProvideEnigmaMotion
 import com.enigmacast.ui.connection.ConnectionScreen
 import com.enigmacast.ui.dashboard.DashboardScreen
 import com.enigmacast.ui.diagnostics.OsdDiagnosticsScreen
@@ -169,9 +170,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (AppLanguage) -> Unit) {
     val navigationSounds by appViewModel.navigationSounds.collectAsState()
+    val motionQuality by appViewModel.motionQuality.collectAsState()
     CompositionLocalProvider(LocalNavigationSounds provides navigationSounds) {
-        NavigationSoundsForWindow()
-        EnigmaCastAppBody(appViewModel, onChooseLanguage)
+        ProvideEnigmaMotion(motionQuality) {
+            NavigationSoundsForWindow()
+            EnigmaCastAppBody(appViewModel, onChooseLanguage)
+        }
     }
 }
 

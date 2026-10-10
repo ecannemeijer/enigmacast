@@ -141,6 +141,13 @@ enum class RecordingTarget {
     RECEIVER,
 }
 
+/** Visual motion of the TV interface. [PREMIUM] is the default for settings saved before this existed. */
+@Serializable
+enum class MotionQuality {
+    PREMIUM,
+    PERFORMANCE,
+}
+
 /** The channel this device last watched in [StreamMode.OWN_TUNER]. */
 @Serializable
 data class LastChannel(
@@ -176,6 +183,11 @@ data class AppSettings(
     val recentByReceiver: Map<String, List<LastChannel>> = emptyMap(),
     /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */
     val navigationSounds: Boolean = true,
+    /**
+     * How much motion the TV interface uses. Missing in older settings, so Premium applies.
+     * Performance keeps the same layout with shorter motion and no glow.
+     */
+    val motionQuality: MotionQuality = MotionQuality.PREMIUM,
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()

@@ -6,40 +6,56 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 
-private val Background = Color(0xFF080C12)
-private val Accent = Color(0xFFE8B84A)
-private val Surface = Color(0xFF161C27)
+private val Background = Color(0xFF080D1C)
+private val Accent = Color(0xFF4188FF)
+private val Surface = Color(0xFF10192B)
 
-/** Dashboard palette: black canvas, amber accent and the warm focus colour used by the side menu. */
+/** Dashboard palette: midnight canvas, electric blue accent, cyan and violet highlights. */
 object EnigmaColors {
-    val Canvas = Color.Black
-    val Card = Color(0xFF101010)
-    val CardBorder = Color(0xFF1F1F1F)
-    val Raised = Color(0xFF1B1B1B)
-    val Selected = Color(0xFF161616)
-    val Focus = Color(0xFF8A5610)
+    val Canvas = Color(0xFF080D1C)
+    val Navy = Color(0xFF10192B)
+    val Card = Color(0xFF10192B)
+    val CardBorder = Color(0xFF243049)
+    val Raised = Color(0xFF162033)
+    val Selected = Color(0xFF1A2740)
+    val Focus = Color(0xFF4188FF)
     val OnFocus = Color.White
-    val Accent = Color(0xFFE8B84A)
-    val OnAccent = Color(0xFF1A1404)
+    val Accent = Color(0xFF4188FF)
+    val Cyan = Color(0xFF24D9FF)
+    val Violet = Color(0xFF916BFF)
+    val OnAccent = Color.White
     val Text = Color.White
     val Muted = Color(0xFFB7C0D0)
     val Subtle = Color(0xFF7D8696)
     val Success = Color(0xFF6FCF97)
     val Danger = Color(0xFFFF7A70)
     val DangerFocus = Color(0xFFB3261E)
-    val Scrim = Color(0xE0101010)
+    val Scrim = Color(0xE010192B)
+    val GlassEdge = Color(0x4024D9FF)
+
+    val SafeHorizontal = 48.dp
+    val SafeVertical = 27.dp
 
     /** [transparencyPercent] 0 is this colour solid; 100 has no fill. */
     fun scrim(transparencyPercent: Int): Color {
         val solid = (100 - transparencyPercent.coerceIn(0, 100)) / 100f
-        return Color(0xFF101010).copy(alpha = solid)
+        return Color(0xFF10192B).copy(alpha = solid)
     }
+}
+
+object EnigmaType {
+    val Hero = 32.sp
+    val Title = 22.sp
+    val Body = 16.sp
+    val Label = 13.sp
+    val Caption = 11.sp
 }
 
 private val Colors = darkColorScheme(
@@ -48,7 +64,7 @@ private val Colors = darkColorScheme(
     surface = Surface,
     onSurface = Color.White,
     primary = Accent,
-    onPrimary = Color(0xFF1A1404),
+    onPrimary = Color.White,
     border = Accent,
 )
 
@@ -73,9 +89,9 @@ fun TvButton(
             containerColor = Surface,
             contentColor = Color.White,
             focusedContainerColor = Accent,
-            focusedContentColor = Color(0xFF1A1404),
+            focusedContentColor = Color.White,
         ),
     ) {
-        Text(text = text, fontSize = 20.sp)
+        Text(text = text, fontSize = 20.sp, fontWeight = FontWeight.Medium)
     }
 }

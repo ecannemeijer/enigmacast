@@ -1,6 +1,5 @@
 package com.enigmacast.ui.dashboard
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -53,9 +53,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,6 +78,9 @@ import com.enigmacast.domain.power.PowerEvent
 import com.enigmacast.locale.AppLanguage
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.playback.AudioSync
+import com.enigmacast.ui.components.EnigmaCastLogo
+import com.enigmacast.ui.components.EnigmaNavigationDrawer
+import com.enigmacast.ui.components.EnigmaScreenTransition
 import com.enigmacast.ui.connection.AutodetectState
 import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.osd.OsdInfoSettings
@@ -122,11 +123,10 @@ import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val FocusedButton = Color(0xFF8A5610)
-private val FocusedButtonText = Color.White
-
 private enum class DashSection {
+    Home,
     Stream,
+    Guide,
     Radio,
     Search,
     MyItems,
@@ -175,14 +175,22 @@ fun DashboardScreen(
             when {
                 focusLanguageSetting -> DashSection.Settings
                 returnToMyItemsId != null -> DashSection.MyItems
-                else -> DashSection.Stream
+                focusPlayingChannel -> DashSection.Stream
+                else -> DashSection.Home
             },
         )
     }
+    var navFocused by remember { mutableStateOf(false) }
     var contentFocused by remember { mutableStateOf(false) }
+    val homeFocus = remember { FocusRequester() }
+    val homeContentFocus = remember { FocusRequester() }
     val streamFocus = remember { FocusRequester() }
+    val guideFocus = remember { FocusRequester() }
+    val guideGridFocus = remember { FocusRequester() }
     val radioFocus = remember { FocusRequester() }
+    val radioListFocus = remember { FocusRequester() }
     var streamItemFocused by remember { mutableStateOf(false) }
+    var guideItemFocused by remember { mutableStateOf(false) }
     var radioItemFocused by remember { mutableStateOf(false) }
     val channelFocus = remember { FocusRequester() }
     val searchMenuFocus = remember { FocusRequester() }
@@ -210,7 +218,9 @@ fun DashboardScreen(
             } else if (contentFocused) {
                 runCatching {
                     when (section) {
+                        DashSection.Home -> homeFocus.requestFocus()
                         DashSection.Stream -> streamFocus.requestFocus()
+                        DashSection.Guide -> guideFocus.requestFocus()
                         DashSection.Radio -> radioFocus.requestFocus()
                         DashSection.Search -> searchMenuFocus.requestFocus()
                         DashSection.MyItems -> myItemsMenuFocus.requestFocus()
@@ -226,7 +236,11 @@ fun DashboardScreen(
         onDispose { onBindBack(null) }
     }
     LaunchedEffect(Unit) {
-        if (!focusLanguageSetting && returnToMyItemsId == null) streamFocus.requestFocus()
+        when {
+            focusLanguageSetting || returnToMyItemsId != null -> Unit
+            focusPlayingChannel -> streamFocus.requestFocus()
+            else -> homeFocus.requestFocus()
+        }
     }
     LaunchedEffect(returnToMyItemsId) {
         val id = returnToMyItemsId ?: return@LaunchedEffect
@@ -292,33 +306,38 @@ fun DashboardScreen(
         }
     }
     Box(modifier = Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+        val drawerExpanded = navFocused || !contentFocused
         Row(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .width(168.dp)
-                    .fillMaxHeight()
-                    .background(EnigmaColors.Canvas)
-                    .padding(horizontal = 10.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+            EnigmaNavigationDrawer(
+                expanded = drawerExpanded,
+                modifier = Modifier.onFocusChanged { navFocused = it.hasFocus },
             ) {
-                Image(
-                    painter = painterResource(R.drawable.enigmacast_logo),
-                    contentDescription = "EnigmaCast",
+                EnigmaCastLogo(expanded = drawerExpanded)
+                if (drawerExpanded) {
+                    StatusPill(
+                        text = powerModel.stateLabel.asString(),
+                        color = powerStateColor(powerModel.powerState, powerModel.restarting),
+                        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
+                    )
+                }
+                NavItem(
+                    icon = Icons.Filled.Home,
+                    label = stringResource(R.string.nav_home),
+                    selected = section == DashSection.Home,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 0,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp)
-                        .padding(bottom = 14.dp),
-                    contentScale = ContentScale.FillWidth,
-                )
-                StatusPill(
-                    text = powerModel.stateLabel.asString(),
-                    color = powerStateColor(powerModel.powerState, powerModel.restarting),
-                    modifier = Modifier.padding(start = 8.dp, bottom = 10.dp),
+                        .focusRequester(homeFocus)
+                        .focusProperties { right = homeContentFocus },
+                    onFocus = { openSection(DashSection.Home) },
+                    onClick = { section = DashSection.Home },
                 )
                 NavItem(
-                    icon = Icons.Filled.PlayArrow,
-                    label = stringResource(R.string.nav_stream),
+                    icon = EnigmaIcons.Tv,
+                    label = stringResource(R.string.nav_live),
                     selected = section == DashSection.Stream,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 1,
                     modifier = Modifier
                         .focusRequester(streamFocus)
                         .onFocusChanged { streamItemFocused = it.isFocused }
@@ -327,13 +346,28 @@ fun DashboardScreen(
                     onClick = onStream,
                 )
                 NavItem(
+                    icon = EnigmaIcons.Guide,
+                    label = stringResource(R.string.nav_guide),
+                    selected = section == DashSection.Guide,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 2,
+                    modifier = Modifier
+                        .focusRequester(guideFocus)
+                        .onFocusChanged { guideItemFocused = it.isFocused }
+                        .focusProperties { right = guideGridFocus },
+                    onFocus = { openSection(DashSection.Guide) },
+                    onClick = { section = DashSection.Guide },
+                )
+                NavItem(
                     icon = EnigmaIcons.Radio,
                     label = stringResource(R.string.nav_radio),
                     selected = section == DashSection.Radio,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 3,
                     modifier = Modifier
                         .focusRequester(radioFocus)
                         .onFocusChanged { radioItemFocused = it.isFocused }
-                        .focusProperties { right = channelFocus },
+                        .focusProperties { right = radioListFocus },
                     onFocus = { openSection(DashSection.Radio) },
                     onClick = { section = DashSection.Radio },
                 )
@@ -341,6 +375,8 @@ fun DashboardScreen(
                     icon = Icons.Filled.Search,
                     label = stringResource(R.string.nav_search),
                     selected = section == DashSection.Search,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 4,
                     modifier = Modifier
                         .focusRequester(searchMenuFocus)
                         .onFocusChanged { if (it.isFocused) searchActive = false }
@@ -357,6 +393,8 @@ fun DashboardScreen(
                     icon = EnigmaIcons.Record,
                     label = stringResource(R.string.nav_my_items),
                     selected = section == DashSection.MyItems,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 5,
                     modifier = Modifier
                         .focusRequester(myItemsMenuFocus)
                         .onFocusChanged {
@@ -378,6 +416,8 @@ fun DashboardScreen(
                     icon = EnigmaIcons.Power,
                     label = stringResource(R.string.nav_receiver),
                     selected = section == DashSection.Receiver,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 6,
                     modifier = Modifier
                         .focusRequester(receiverMenuFocus)
                         .focusProperties { right = receiverPageFocus },
@@ -388,6 +428,8 @@ fun DashboardScreen(
                     icon = Icons.Filled.Settings,
                     label = stringResource(R.string.nav_settings),
                     selected = section == DashSection.Settings,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 7,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .focusProperties { right = settingsPageFocus },
@@ -399,15 +441,21 @@ fun DashboardScreen(
                     icon = Icons.Filled.Close,
                     label = stringResource(R.string.nav_exit),
                     selected = false,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 8,
                     onClick = onExit,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    "${BuildConfig.VERSION_NAME}  ·  build ${BuildConfig.VERSION_CODE}",
-                    color = EnigmaColors.Subtle,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 12.dp, bottom = 4.dp),
-                )
+                if (drawerExpanded) {
+                    Text(
+                        "${BuildConfig.VERSION_NAME}  ·  build ${BuildConfig.VERSION_CODE}",
+                        color = EnigmaColors.Subtle,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                    )
+                }
             }
             Box(
                 modifier = Modifier
@@ -421,32 +469,69 @@ fun DashboardScreen(
                         .fillMaxSize()
                         .onFocusChanged { contentFocused = it.hasFocus },
                 ) {
-                    when (section) {
-                        DashSection.Stream -> StreamPanel(
+                    EnigmaScreenTransition(targetState = section, modifier = Modifier.fillMaxSize()) { shown ->
+                    when (shown) {
+                        DashSection.Home -> HomePanel(
+                            contentFocus = homeContentFocus,
+                            menuFocus = homeFocus,
+                            onOpenLive = { section = DashSection.Stream },
+                            onContinue = { last ->
+                                val entry = guideModel.channels.firstOrNull {
+                                    BouquetChannels.sameService(it.reference, last.reference)
+                                } ?: BouquetEntry(name = last.name, reference = last.reference)
+                                guideModel.tune(entry, onStream, onStream)
+                            },
+                            onPlayChannel = { entry -> guideModel.tune(entry, onStream, onStream) },
+                            onOpenBouquet = { bouquet ->
+                                guideModel.previewBouquet(bouquet)
+                                section = DashSection.Stream
+                            },
+                            onOpenRecording = { item ->
+                                myItemsModel.open(item)
+                                myItemsListActive = true
+                                section = DashSection.MyItems
+                            },
+                            guideModel = guideModel,
+                            powerModel = powerModel,
+                            myItemsModel = myItemsModel,
+                        )
+                        DashSection.Stream -> LiveBrowser(
+                            showMiniPlayer = showMiniPlayer,
+                            listFocus = channelFocus,
+                            bouquetFocus = bouquetFocus,
+                            menuFocus = streamFocus,
+                            menuFocused = { streamItemFocused },
+                            focusPlayingChannel = focusPlayingChannel,
+                            onPlayingChannelFocused = onPlayingChannelFocused,
+                            onMiniPlayer = onMiniPlayer,
+                            onFullscreen = onStream,
+                            medium = GuideMedium.Television,
+                            guideModel = guideModel,
+                        )
+                        DashSection.Guide -> GuidePanel(
                             showMiniPlayer,
-                            channelFocus,
+                            guideGridFocus,
                             bouquetFocus,
-                            { streamItemFocused },
+                            { guideItemFocused },
                             focusPlayingChannel,
                             onPlayingChannelFocused,
-                            settingsMenuFocus,
+                            guideFocus,
                             onMiniPlayer,
                             onStream,
-                            GuideMedium.Television,
                             guideModel,
                         )
-                        DashSection.Radio -> StreamPanel(
-                            showMiniPlayer,
-                            channelFocus,
-                            bouquetFocus,
-                            { radioItemFocused },
-                            focusPlayingChannel,
-                            onPlayingChannelFocused,
-                            settingsMenuFocus,
-                            onMiniPlayer,
-                            onStream,
-                            GuideMedium.Radio,
-                            guideModel,
+                        DashSection.Radio -> LiveBrowser(
+                            showMiniPlayer = showMiniPlayer,
+                            listFocus = radioListFocus,
+                            bouquetFocus = bouquetFocus,
+                            menuFocus = radioFocus,
+                            menuFocused = { radioItemFocused },
+                            focusPlayingChannel = false,
+                            onPlayingChannelFocused = {},
+                            onMiniPlayer = onMiniPlayer,
+                            onFullscreen = onStream,
+                            medium = GuideMedium.Radio,
+                            guideModel = guideModel,
                         )
                         DashSection.Search -> SearchPanel(
                             rowsFocusable = searchActive,
@@ -484,6 +569,7 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    }
                 }
             }
         }
@@ -519,15 +605,12 @@ fun DashboardScreen(
 }
 
 /**
- * The Stream page: the mini player with the highlighted programme next to it on top, and
- * below it the programme grid of the bouquet (channels left, programmes on a time axis right).
- * The grid is one focus target; the view model moves its highlight, so long bouquets and a
- * week of programmes stay cheap. OK on a programme on air starts it in the mini player (a
- * second OK goes full screen), OK on a later programme asks to record it, Left on the
- * programme on air opens the bouquets and Back goes to the menu.
+ * TV Guide: the mini player with the highlighted programme next to it, and the programme
+ * grid below. The view model moves the highlight. OK on air starts playback; a later
+ * programme asks to record. Left on the programme on air opens the bouquets.
  */
 @Composable
-private fun StreamPanel(
+private fun GuidePanel(
     showMiniPlayer: Boolean,
     channelFocus: FocusRequester,
     bouquetFocus: FocusRequester,
@@ -537,27 +620,9 @@ private fun StreamPanel(
     settingsFocus: FocusRequester,
     onMiniPlayer: () -> Unit,
     onFullscreen: () -> Unit,
-    medium: GuideMedium,
-    guideModel: StreamGuideViewModel = hiltViewModel(),
+    guideModel: StreamGuideViewModel,
 ) {
-    LaunchedEffect(medium) {
-        guideModel.show(medium)
-    }
-    LaunchedEffect(Unit) {
-        guideModel.refresh()
-        var elapsed = 0
-        while (true) {
-            delay(2_000)
-            elapsed += 2_000
-            if (elapsed >= 30_000) {
-                elapsed = 0
-                guideModel.refresh()
-                guideModel.grid.refresh()
-            } else {
-                guideModel.refreshIfServiceChanged()
-            }
-        }
-    }
+    BindGuide(GuideMedium.Television, guideModel)
     val grid by guideModel.grid.state.collectAsState()
     val channels = guideModel.channels
     val bouquets = guideModel.bouquets
@@ -626,7 +691,7 @@ private fun StreamPanel(
                 if (message.isNotEmpty()) {
                     Text(
                         message.asString(),
-                        color = Color(0xFFE8B84A),
+                        color = EnigmaColors.Accent,
                         fontSize = 13.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -745,7 +810,7 @@ private fun gridKey(
 private const val GRID_PAGE_ROWS = 6
 
 @Composable
-private fun BouquetColumn(
+internal fun BouquetColumn(
     bouquets: List<BouquetEntry>,
     selectedReference: String,
     bouquetFocus: FocusRequester,
@@ -754,6 +819,7 @@ private fun BouquetColumn(
     onPreview: (BouquetEntry) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    requestFocus: Boolean = true,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -766,7 +832,7 @@ private fun BouquetColumn(
     LaunchedEffect(openToken) {
         if (openToken == 0) return@LaunchedEffect
         if (bouquets.isNotEmpty()) listState.scrollToItem(focusIndex)
-        runCatching { bouquetFocus.requestFocus() }
+        if (requestFocus) runCatching { bouquetFocus.requestFocus() }
     }
     Column(modifier) {
         Text(
@@ -839,10 +905,10 @@ private fun BouquetRow(
             .onFocusChanged { if (it.isFocused) onFocus() },
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
         colors = ButtonDefaults.colors(
-            containerColor = if (selected) Color(0xFF161616) else Color.Black,
-            contentColor = if (selected) Color(0xFFE8B84A) else Color.White,
-            focusedContainerColor = FocusedButton,
-            focusedContentColor = FocusedButtonText,
+            containerColor = if (selected) EnigmaColors.Selected else EnigmaColors.Canvas,
+            contentColor = if (selected) EnigmaColors.Cyan else Color.White,
+            focusedContainerColor = EnigmaColors.Focus,
+            focusedContentColor = EnigmaColors.OnFocus,
         ),
     ) {
         Text(
@@ -974,7 +1040,7 @@ private fun SettingsHub(
                         viewModel,
                     )
                     SettingPage.RcInfo -> RcInfoPanel(Modifier.fillMaxWidth())
-                    SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, viewModel)
+                    SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
                     SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus)
                 }
@@ -1255,6 +1321,7 @@ private fun OsdSettingsPanel(
 @Composable
 private fun GeneralSettingsPanel(
     navigationSounds: Boolean,
+    motionQuality: com.enigmacast.domain.model.MotionQuality,
     viewModel: SettingsViewModel,
 ) {
     SettingsCard(stringResource(R.string.settings_interface)) {
@@ -1263,6 +1330,18 @@ private fun GeneralSettingsPanel(
             description = stringResource(R.string.navigation_sounds_desc),
             checked = navigationSounds,
             onCheckedChange = viewModel::setNavigationSounds,
+        )
+        ChoiceRow(
+            title = stringResource(R.string.motion_quality),
+            description = stringResource(R.string.motion_quality_desc),
+            options = listOf(stringResource(R.string.motion_premium), stringResource(R.string.motion_performance)),
+            selectedIndex = if (motionQuality == com.enigmacast.domain.model.MotionQuality.PERFORMANCE) 1 else 0,
+            onSelect = { index ->
+                viewModel.setMotionQuality(
+                    if (index == 1) com.enigmacast.domain.model.MotionQuality.PERFORMANCE
+                    else com.enigmacast.domain.model.MotionQuality.PREMIUM,
+                )
+            },
         )
     }
 }
@@ -1295,7 +1374,7 @@ internal fun CompactField(
 }
 
 @Composable
-private fun MiniStreamPlayer(
+internal fun MiniStreamPlayer(
     modifier: Modifier = Modifier,
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
 ) {
@@ -1322,7 +1401,7 @@ private fun MiniStreamPlayer(
         if (!error.isNullOrBlank()) {
             Text(
                 error,
-                color = Color(0xFFE8B84A),
+                color = EnigmaColors.Accent,
                 fontSize = 11.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

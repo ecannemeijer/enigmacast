@@ -1,5 +1,7 @@
 package com.enigmacast.ui.theme
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -24,9 +26,11 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -81,22 +85,58 @@ fun NavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
+    showLabel: Boolean = true,
+    staggerIndex: Int = 0,
 ) {
+    val spec = com.enigmacast.ui.animation.LocalMotionSpec.current
+    val labelAlpha by animateFloatAsState(
+        targetValue = if (showLabel) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (spec.animate) spec.sidebarMs else 0,
+            delayMillis = if (showLabel && spec.animate) staggerIndex * 28 else 0,
+        ),
+        label = "navLabel",
+    )
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected && spec.animate) 1.12f else 1f,
+        animationSpec = tween(if (spec.animate) spec.focusMs else 0),
+        label = "navIcon",
+    )
     CompactListRow(
         onClick = onClick,
         selected = selected,
         modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 9.dp),
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(
-            label,
-            color = LocalContentColor.current,
-            fontSize = 13.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+    ) { focused ->
+        Icon(
+            icon,
+            contentDescription = if (showLabel) null else label,
+            modifier = Modifier
+                .size(18.dp)
+                .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                },
         )
+        if (labelAlpha > 0.02f) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                label,
+                color = LocalContentColor.current,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+            )
+        }
+        if (selected && focused && spec.glow) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .size(6.dp)
+                    .background(EnigmaColors.Cyan, CircleShape),
+            )
+        }
     }
 }
 

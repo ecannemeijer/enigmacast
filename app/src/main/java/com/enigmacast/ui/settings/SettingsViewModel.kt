@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.AppSettings
+import com.enigmacast.domain.model.MotionQuality
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.ReceiverList
 import com.enigmacast.domain.model.StreamMode
@@ -58,6 +59,7 @@ class SettingsViewModel @Inject constructor(
     fun setVerboseLogging(enabled: Boolean) = update { it.copy(debug = it.debug.copy(verboseLogging = enabled)) }
     fun setDebugBorders(enabled: Boolean) = update { it.copy(osd = it.osd.copy(debugBorders = enabled)) }
     fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
+    fun setMotionQuality(quality: MotionQuality) = update { it.copy(motionQuality = quality) }
     fun setOsdInfoFields(fields: OsdInfoFields) = update { it.copy(osdInfo = fields) }
     fun setOsdTransparency(percent: Int) = update {
         it.copy(osd = it.osd.copy(transparencyPercent = percent.coerceIn(0, 100)))

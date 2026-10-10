@@ -1,6 +1,9 @@
 package com.enigmacast.ui.remote
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +37,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +50,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.epg.GuideCell
+import com.enigmacast.ui.animation.LocalMotionSpec
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.ui.recording.RecordingDot
@@ -78,8 +84,8 @@ data class GuideActions(
 private val ChannelColumn = 200.dp
 private val RowHeight = 38.dp
 private val CellShape = RoundedCornerShape(4.dp)
-private val Airing = Color(0xFF262626)
-private val Empty = Color(0xFF121212)
+private val Airing = Color(0xFF1A2744)
+private val Empty = Color(0xFF0C1220)
 
 /** The current time in seconds, refreshed every 30 s so now-lines and progress move. */
 @Composable
@@ -379,7 +385,12 @@ private fun GuideRow(
                 .width(ChannelColumn)
                 .fillMaxHeight()
                 .padding(end = 2.dp)
-                .background(if (focusSec != null && active) EnigmaColors.Raised else Color.Transparent, CellShape)
+                .background(if (focusSec != null && active) EnigmaColors.Selected else Color.Transparent, CellShape)
+                .border(
+                    width = if (focusSec != null && active) 1.dp else 0.dp,
+                    color = EnigmaColors.Cyan,
+                    shape = CellShape,
+                )
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -415,6 +426,7 @@ private fun GuideRow(
                     autoSwitch = cell.event?.programmeKey?.let { it in autoSwitchKeys } == true,
                     x = ((cell.startSec - windowStartSec) * dpPerSec).dp,
                     width = ((cell.endSec - cell.startSec) * dpPerSec).dp,
+                    nowSec = nowSec,
                 )
             }
         }
@@ -422,8 +434,14 @@ private fun GuideRow(
 }
 
 @Composable
-private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, x: Dp, width: Dp) {
+private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, x: Dp, width: Dp, nowSec: Long) {
     val event = cell.event
+    val spec = LocalMotionSpec.current
+    val scale by animateFloatAsState(
+        targetValue = if (focused && spec.animate) 1.04f else 1f,
+        animationSpec = tween(spec.focusMs),
+        label = "epgCell",
+    )
     val background = when {
         focused -> EnigmaColors.Focus
         marked -> EnigmaColors.Raised
@@ -431,16 +449,24 @@ private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, air
         airing -> Airing
         else -> EnigmaColors.Card
     }
-    Row(
+    Box(
         modifier = Modifier
             .offset(x = x)
             .width(width)
             .fillMaxHeight()
             .padding(end = 2.dp)
+            .zIndex(if (focused) 1f else 0f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .background(background, CellShape)
-            .padding(horizontal = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .border(if (focused) 1.dp else 0.dp, if (focused) EnigmaColors.Cyan else Color.Transparent, CellShape),
     ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         if (autoSwitch) {
             AutoSwitchMark(if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, 12.dp)
             Spacer(Modifier.width(4.dp))
@@ -456,6 +482,13 @@ private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, air
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        }
+        if (airing && event != null && !focused) {
+            GuideProgress(
+                event.progress(nowSec),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
     }
 }
 

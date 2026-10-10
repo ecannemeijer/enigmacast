@@ -9,6 +9,7 @@ import com.enigmacast.BuildConfig
 import com.enigmacast.R
 import com.enigmacast.data.network.WireGuardTunnel
 import com.enigmacast.data.settings.SettingsRepository
+import com.enigmacast.domain.model.MotionQuality
 import com.enigmacast.domain.reminder.Reminder
 import com.enigmacast.domain.reminder.ReminderNotice
 import com.enigmacast.live.AutoSwitcher
@@ -63,6 +64,12 @@ class AppViewModel @Inject constructor(
         .map { it.navigationSounds }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Settings › General › Motion. Premium unless the user picks Performance. */
+    val motionQuality: StateFlow<MotionQuality> = settingsRepository.settings
+        .map { it.motionQuality }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, MotionQuality.PREMIUM)
     var streamRunning by mutableStateOf(false)
         private set
     var updatePrompt by mutableStateOf<UpdatePrompt?>(null)
