@@ -10,6 +10,8 @@ data class NowEvent(
     val durationSec: Long,
     /** OpenWebif event id, for a receiver timer. -1 when the answer had none. */
     val eventId: Int = -1,
+    /** Other service references OpenWebif listed for this same programme (`asrefs`). */
+    val alternatives: List<String> = emptyList(),
 ) {
     val endEpochSec: Long get() = beginEpochSec + durationSec
 
@@ -23,6 +25,11 @@ data class NowEvent(
  * Matches now-events to channels. OpenWebif returns one list per bouquet; channels are
  * matched on the first ten fields of the service reference, ignoring hex case and
  * leading zeros, so `1:0:19:0A:…` and `1:0:19:a:…` are the same channel.
+ *
+ * DVB references (`1:…`) also ignore the service type, so HD (`19`), H.264 (`22`) and
+ * HEVC (`25`) match the SD (`1`) entry the EPG cache often stores. A linked subservice
+ * is matched on its parent: OpenWebif looks the programme up there and returns that
+ * reference. IPTV references keep every field, because the stream identity is not a SID.
  */
 object NowEvents {
     /** Re-read a bouquet after this long, even when nothing has ended. */
@@ -32,12 +39,31 @@ object NowEvents {
     const val MIN_AGE_SEC = 30L
 
     fun key(reference: String): String {
-        return reference.trim().split(':').take(10).joinToString(":") { field ->
+        val fields = reference.trim().split(':').take(10).map { field ->
             field.uppercase().trimStart('0').ifEmpty { "0" }
+        }.toMutableList()
+        if (fields.firstOrNull() == "1") {
+            while (fields.size < 10) fields += "0"
+            val parentTsid = fields[8]
+            if (parentTsid != "0") {
+                fields[3] = fields[7]
+                fields[4] = parentTsid
+                fields[7] = "0"
+                fields[8] = "0"
+            }
+            fields[2] = "0"
         }
+        return fields.joinToString(":")
     }
 
-    fun index(events: List<NowEvent>): Map<String, NowEvent> = events.associateBy { key(it.reference) }
+    fun index(events: List<NowEvent>): Map<String, NowEvent> {
+        val map = LinkedHashMap<String, NowEvent>()
+        for (event in events) map[key(event.reference)] = event
+        for (event in events) {
+            for (alternative in event.alternatives) map.putIfAbsent(key(alternative), event)
+        }
+        return map
+    }
 
     /** The programme on [reference] at [nowSec], or null when unknown or already over. */
     fun lookup(index: Map<String, NowEvent>, reference: String, nowSec: Long): NowEvent? {

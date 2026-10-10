@@ -258,6 +258,16 @@ class OpenWebifJsonTest {
         assertEquals("NOS Journaal & Weer", events[0].title)
         assertEquals(2800L, events[0].endEpochSec)
         assertEquals(0, OpenWebifJson.parseNowEvents("not json").size)
+        val withAlternatives = """
+            {"events":[
+              {"id":1,"begin_timestamp":1000,"duration_sec":1800,"title":"Journaal","sref":"1:0:1:4651:3FC:1:C00000:0:0:0:",
+               "asrefs":["1:0:19:99:3FC:1:C00000:0:0:0:","1:0:22:100:3FC:1:C00000:0:0:0:"]}
+            ]}
+        """.trimIndent()
+        assertEquals(
+            listOf("1:0:19:99:3FC:1:C00000:0:0:0:", "1:0:22:100:3FC:1:C00000:0:0:0:"),
+            OpenWebifJson.parseNowEvents(withAlternatives).single().alternatives,
+        )
     }
 
     @Test

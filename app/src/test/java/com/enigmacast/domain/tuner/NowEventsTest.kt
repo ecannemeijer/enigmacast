@@ -15,6 +15,31 @@ class NowEventsTest {
     )
 
     @Test
+    fun hdAndTheParentServiceShareTheEpgKey() {
+        val hd = "1:0:19:4651:3FC:1:C00000:0:0:0:"
+        val sd = "1:0:1:4651:3FC:1:C00000:0:0:0:"
+        assertEquals(NowEvents.key(hd), NowEvents.key(sd))
+        val child = "1:0:19:111:222:1:C00000:4651:3FC:0:"
+        val parent = "1:0:1:4651:3FC:1:C00000:0:0:0:"
+        assertEquals(NowEvents.key(parent), NowEvents.key(child))
+        assertFalse(NowEvents.key(hd) == NowEvents.key("1:0:19:4652:3FC:1:C00000:0:0:0:"))
+        assertFalse(
+            NowEvents.key("4097:0:1:0:0:0:0:0:0:0:http://a") ==
+                NowEvents.key("4097:0:19:0:0:0:0:0:0:0:http://b"),
+        )
+    }
+
+    @Test
+    fun alternativeReferencesShowTheSameProgramme() {
+        val main = "1:0:1:4651:3FC:1:C00000:0:0:0:"
+        val alternative = "1:0:19:99:3FC:1:C00000:0:0:0:"
+        val index = NowEvents.index(
+            listOf(NowEvent(main, "NOS Journaal", beginEpochSec = 1_000, durationSec = 1_800, alternatives = listOf(alternative))),
+        )
+        assertEquals("NOS Journaal", NowEvents.lookup(index, alternative, 1_500)?.title)
+    }
+
+    @Test
     fun matchesChannelsIgnoringCaseAndLeadingZeros() {
         val index = NowEvents.index(events)
         assertEquals("NOS Journaal", NowEvents.lookup(index, "1:0:19:4651:03fc:0001:00c00000:0:0:0:", 1_500)?.title)

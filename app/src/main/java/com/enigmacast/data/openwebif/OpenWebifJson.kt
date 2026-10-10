@@ -238,8 +238,34 @@ internal object OpenWebifJson {
             val duration = event.primitive("duration_sec")?.toLongOrNull() ?: 0L
             val title = unescape(event.primitive("title").orEmpty()).trim()
             if (begin <= 0L || duration <= 0L || title.isBlank() || title == "N/A") return@mapNotNull null
-            NowEvent(reference, title, begin, duration, event.primitive("id")?.toIntOrNull() ?: -1)
+            NowEvent(
+                reference = reference,
+                title = title,
+                beginEpochSec = begin,
+                durationSec = duration,
+                eventId = event.primitive("id")?.toIntOrNull() ?: -1,
+                alternatives = alternativeRefs(event),
+            )
         }
+    }
+
+    /** `asrefs` is a list of service references, or one string with several references. */
+    private fun alternativeRefs(event: JsonObject): List<String> {
+        val element = event["asrefs"] ?: return emptyList()
+        val raw = when (element) {
+            is JsonArray -> element.mapNotNull { item ->
+                when (item) {
+                    is JsonPrimitive -> item.contentOrNull
+                    is JsonObject -> item.primitive("sref") ?: item.primitive("servicereference")
+                    else -> null
+                }
+            }
+            is JsonPrimitive -> listOfNotNull(element.contentOrNull)
+            else -> emptyList()
+        }
+        return raw.flatMap { text -> text.split(Regex("[\\s,]+")) }
+            .map { it.trim() }
+            .filter { it.count { char -> char == ':' } >= 8 }
     }
 
     /**
