@@ -39,13 +39,20 @@ data class ReceiverConfig(
     val wireGuard: Boolean = false,
     /** The wg-quick text of the tunnel; kept in the Keystore-backed secret store, never in the settings file. */
     val wireGuardConfig: String = "",
+    /** Oscam web interface port on this receiver. The web interface is separate from OpenWebif. */
+    val oscamPort: Int = 8888,
+    val oscamUsername: String = "",
+    /** Kept in the Keystore-backed secret store, never in the settings file. */
+    val oscamPassword: String = "",
 ) {
-    /** Never prints the password or the tunnel keys, so a config that ends up in a log or crash report stays safe. */
+    /** Never prints passwords or tunnel keys, so a config that ends up in a log or crash report stays safe. */
     override fun toString(): String =
         "ReceiverConfig(id=$id, name=$name, host=$host, httpPort=$httpPort, useHttps=$useHttps, " +
             "user=${if (username.isEmpty()) "-" else "set"}, password=${if (password.isEmpty()) "-" else "***"}, " +
             "streamingPort=$streamingPort, remote=${if (remoteHost.isBlank()) "-" else "set"}, accessMode=$accessMode, " +
-            "wireGuard=$wireGuard, wireGuardConfig=${if (wireGuardConfig.isEmpty()) "-" else "***"})"
+            "wireGuard=$wireGuard, wireGuardConfig=${if (wireGuardConfig.isEmpty()) "-" else "***"}, " +
+            "oscamPort=$oscamPort, oscamUser=${if (oscamUsername.isEmpty()) "-" else "set"}, " +
+            "oscamPassword=${if (oscamPassword.isEmpty()) "-" else "***"})"
 }
 
 @Serializable

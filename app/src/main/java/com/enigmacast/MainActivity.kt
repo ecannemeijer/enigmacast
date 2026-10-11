@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -46,6 +47,7 @@ import com.enigmacast.ui.reminder.AutoSwitchNotice
 import com.enigmacast.ui.remote.EnigmaRemoteScreen
 import com.enigmacast.ui.settings.SettingsScreen
 import com.enigmacast.ui.theme.EnigmaCastTheme
+import com.enigmacast.ui.theme.TvConfirmDialog
 import com.enigmacast.ui.theme.LocalNavigationSounds
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.update.AppUpdateDialog
@@ -70,19 +72,23 @@ class MainActivity : ComponentActivity() {
         appViewModel.requestFinish = { finish() }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (appViewModel.exitPrompt) {
+                    appViewModel.dismissExit()
+                    return
+                }
                 if (appViewModel.updatePrompt != null) {
                     appViewModel.dismissUpdate()
                     return
                 }
                 when (appViewModel.screen) {
-                    AppScreen.Settings, AppScreen.Diagnostics -> appViewModel.back()
-                    AppScreen.Connection -> finish()
+                    AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam -> appViewModel.back()
+                    AppScreen.Connection -> appViewModel.askExit()
                     AppScreen.Remote -> {
                         remoteInputBus.handler?.invoke(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
                     }
                     AppScreen.Loading -> Unit
                     AppScreen.Dashboard -> {
-                        if (appViewModel.onDashboardBack?.invoke() != true) appViewModel.exit()
+                        if (appViewModel.onDashboardBack?.invoke() != true) appViewModel.askExit()
                     }
                 }
             }
@@ -209,6 +215,10 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 updatePromptShown = appViewModel.updatePrompt != null,
                 focusLanguageSetting = appViewModel.focusLanguageSetting,
                 onLanguageSettingFocused = appViewModel::languageSettingFocused,
+                returnToSettingsHub = appViewModel.returnToSettingsHub,
+                onSettingsHubShown = appViewModel::settingsHubShown,
+                onSignalMeter = appViewModel::openSignalMeter,
+                onOscam = appViewModel::openOscam,
                 onChooseLanguage = onChooseLanguage,
                 pendingSearchQuery = appViewModel.pendingSearchQuery,
                 pendingSearchPlay = appViewModel.pendingSearchPlay,
@@ -227,8 +237,12 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onBack = appViewModel::back,
                 onEditReceiver = appViewModel::openConnection,
                 onDiagnostics = appViewModel::openDiagnostics,
+                onSignalMeter = appViewModel::openSignalMeter,
+                onOscam = appViewModel::openOscam,
             )
             AppScreen.Diagnostics -> OsdDiagnosticsScreen(onBack = appViewModel::back)
+            AppScreen.SignalMeter -> com.enigmacast.ui.settings.SignalMeterScreen(onBack = appViewModel::back)
+            AppScreen.Oscam -> com.enigmacast.ui.settings.OscamScreen(onBack = appViewModel::back)
         }
         val reminderNotice by appViewModel.reminderNotice.collectAsState()
         Column(
@@ -238,6 +252,17 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
         ) {
             reminderNotice?.let { AutoSwitchNotice(it) }
             appViewModel.reminderMessage?.let { AutoSwitchMessage(it.asString()) }
+        }
+        if (appViewModel.exitPrompt) {
+            TvConfirmDialog(
+                title = stringResource(R.string.exit_app_title),
+                message = stringResource(R.string.exit_app_message),
+                confirmLabel = stringResource(R.string.exit_app_confirm),
+                dismissLabel = stringResource(R.string.cancel),
+                onConfirm = appViewModel::confirmExit,
+                onDismiss = appViewModel::dismissExit,
+                destructive = true,
+            )
         }
         appViewModel.updatePrompt?.let { prompt ->
             // Its own window: the screen behind keeps its focus requests to itself.

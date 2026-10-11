@@ -159,6 +159,10 @@ fun DashboardScreen(
     updatePromptShown: Boolean = false,
     focusLanguageSetting: Boolean = false,
     onLanguageSettingFocused: () -> Unit = {},
+    returnToSettingsHub: Boolean = false,
+    onSettingsHubShown: () -> Unit = {},
+    onSignalMeter: () -> Unit = {},
+    onOscam: () -> Unit = {},
     onChooseLanguage: (AppLanguage) -> Unit = {},
     pendingSearchQuery: String? = null,
     pendingSearchPlay: Boolean = false,
@@ -173,7 +177,7 @@ fun DashboardScreen(
     var section by remember {
         mutableStateOf(
             when {
-                focusLanguageSetting -> DashSection.Settings
+                focusLanguageSetting || returnToSettingsHub -> DashSection.Settings
                 returnToMyItemsId != null -> DashSection.MyItems
                 focusPlayingChannel -> DashSection.Stream
                 else -> DashSection.Home
@@ -237,6 +241,10 @@ fun DashboardScreen(
     }
     LaunchedEffect(Unit) {
         when {
+            returnToSettingsHub -> {
+                settingsMenuFocus.requestWhenReady()
+                onSettingsHubShown()
+            }
             focusLanguageSetting || returnToMyItemsId != null -> Unit
             focusPlayingChannel -> streamFocus.requestFocus()
             else -> homeFocus.requestFocus()
@@ -559,6 +567,8 @@ fun DashboardScreen(
                             focusLanguageSetting,
                             onLanguageSettingFocused,
                             onChooseLanguage,
+                            onSignalMeter = onSignalMeter,
+                            onOscam = onOscam,
                             onFormActive = { settingsFormOpen = it },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -962,6 +972,8 @@ private fun SettingsHub(
     focusLanguage: Boolean,
     onLanguageFocused: () -> Unit,
     onChooseLanguage: (AppLanguage) -> Unit,
+    onSignalMeter: () -> Unit,
+    onOscam: () -> Unit,
     onFormActive: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -983,14 +995,17 @@ private fun SettingsHub(
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             Column(
                 modifier = Modifier
-                    .width(190.dp)
-                    .fillMaxHeight(),
+                    .width(220.dp)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, pageFocus, menuFocus) { page = SettingPage.Receivers }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { page = SettingPage.Remote }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+                SettingNav(EnigmaIcons.Speed, stringResource(R.string.signal_meter), false, null, menuFocus, onSignalMeter)
+                SettingNav(EnigmaIcons.Sync, stringResource(R.string.oscam), false, null, menuFocus, onOscam)
                 SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, null, menuFocus) { page = SettingPage.RcInfo }
                 SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, null, menuFocus) { page = SettingPage.General }
                 SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }

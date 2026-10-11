@@ -257,6 +257,30 @@ class OpenWebifOsdInfoSource @Inject constructor(
         return if (missing) ProcFile.Missing else ProcFile.Unavailable
     }
 
+    override suspend fun enigmaSettings(config: ReceiverConfig): String? {
+        val key = "${config.id}@${config.host}:${config.httpPort}"
+        if (frontendFiles[key] == false) return null
+        for (url in endpoints.fileDownload(config, ENIGMA_SETTINGS)) {
+            try {
+                val body = api.body(config, url)
+                frontendFiles.putIfAbsent(key, true)
+                return body
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: OpenWebifException) {
+                if (error.statusCode == 403) {
+                    frontendFiles[key] = false
+                    EnigmaLog.osdInfo("frontend files forbidden")
+                    return null
+                }
+            } catch (error: Exception) {
+                EnigmaLog.osdInfo("enigma settings failed: ${error.javaClass.simpleName}")
+                return null
+            }
+        }
+        return null
+    }
+
     private sealed interface ProcFile {
         data class Text(val body: String) : ProcFile
         data object Missing : ProcFile
@@ -265,5 +289,6 @@ class OpenWebifOsdInfoSource @Inject constructor(
 
     private companion object {
         const val MAX_FRONTENDS = 8
+        const val ENIGMA_SETTINGS = "/etc/enigma2/settings"
     }
 }

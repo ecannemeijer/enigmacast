@@ -1,6 +1,6 @@
 {
-  "versionCode": 23,
-  "versionName": "1.0.0-beta.20",
+  "versionCode": 24,
+  "versionName": "1.0.0-beta.21",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "A narrower side menu. Focus glides to the next item and the label grows."
+  "notes": "Signal meter and Oscam status. Back asks before the app closes."
 }

@@ -76,6 +76,10 @@ class AppViewModel @Inject constructor(
         private set
     var onDashboardBack: (() -> Boolean)? = null
     var requestFinish: (() -> Unit)? = null
+
+    /** Back would leave the app; the activity asks before closing. */
+    var exitPrompt by mutableStateOf(false)
+        private set
     private var downloadJob: Job? = null
 
     /** The AutoSwitch countdown on screen, if any. */
@@ -254,6 +258,12 @@ class AppViewModel @Inject constructor(
     var focusLanguageSetting by mutableStateOf(false)
         private set
 
+    /** Signal meter or Oscam was opened from the dashboard settings list; Back returns there. */
+    var returnToSettingsHub by mutableStateOf(false)
+        private set
+
+    private var toolReturn = AppScreen.Settings
+
     fun requestLanguageFocus() {
         focusLanguageSetting = true
     }
@@ -274,12 +284,32 @@ class AppViewModel @Inject constructor(
     }
 
     fun openDiagnostics() {
-        returnScreen = screen
         screen = AppScreen.Diagnostics
     }
 
+    fun openSignalMeter() {
+        toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
+        screen = AppScreen.SignalMeter
+    }
+
+    fun openOscam() {
+        toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
+        screen = AppScreen.Oscam
+    }
+
+    fun settingsHubShown() {
+        returnToSettingsHub = false
+    }
+
     fun back() {
-        screen = returnScreen
+        screen = when (screen) {
+            AppScreen.SignalMeter, AppScreen.Oscam -> {
+                if (toolReturn == AppScreen.Dashboard) returnToSettingsHub = true
+                toolReturn
+            }
+            AppScreen.Diagnostics -> AppScreen.Settings
+            else -> returnScreen
+        }
     }
 
     fun switchToReminderNow() = reminders.switchNow()
@@ -320,6 +350,19 @@ class AppViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun askExit() {
+        exitPrompt = true
+    }
+
+    fun dismissExit() {
+        exitPrompt = false
+    }
+
+    fun confirmExit() {
+        exitPrompt = false
+        exit()
     }
 
     fun exit() {

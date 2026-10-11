@@ -7,4 +7,6 @@ enum class AppScreen {
     Remote,
     Settings,
     Diagnostics,
+    SignalMeter,
+    Oscam,
 }

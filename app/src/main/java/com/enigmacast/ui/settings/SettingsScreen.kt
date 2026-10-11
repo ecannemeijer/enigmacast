@@ -36,6 +36,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onEditReceiver: () -> Unit,
     onDiagnostics: () -> Unit,
+    onSignalMeter: () -> Unit,
+    onOscam: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -52,6 +54,8 @@ fun SettingsScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ActionTile(EnigmaIcons.Tv, stringResource(R.string.edit_receiver), onEditReceiver, tone = TileTone.Primary)
             ActionTile(Icons.Filled.Search, stringResource(R.string.osd_diagnostics), onDiagnostics)
+            ActionTile(EnigmaIcons.Speed, stringResource(R.string.signal_meter), onSignalMeter)
+            ActionTile(EnigmaIcons.Lock, stringResource(R.string.oscam), onOscam)
             ActionTile(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), onBack)
         }
         Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

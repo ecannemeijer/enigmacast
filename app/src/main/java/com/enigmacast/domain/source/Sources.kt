@@ -108,4 +108,10 @@ interface OsdInfoSource {
      * or more than one frontend is locked and the tuner is unknown.
      */
     suspend fun streamTunerSignal(config: ReceiverConfig, tunerNumber: Int?): SignalReading?
+
+    /**
+     * `/etc/enigma2/settings` via OpenWebif's file download.
+     * Null when the image forbids file download or the file is missing.
+     */
+    suspend fun enigmaSettings(config: ReceiverConfig): String?
 }

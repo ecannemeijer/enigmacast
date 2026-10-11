@@ -20,6 +20,7 @@ class SecretFieldsTest {
         assertTrue(secrets.containsKey(SecretFields.passwordName("b")))
         assertNull(secrets[SecretFields.passwordName("b")])
         assertNull(secrets[SecretFields.wireGuardName("b")])
+        assertNull(secrets[SecretFields.oscamPasswordName("b")])
     }
 
     @Test
@@ -54,5 +55,19 @@ class SecretFieldsTest {
         val filled = SecretFields.fill(stripped, secrets::get)
         assertEquals(tunnel.wireGuardConfig, filled.receivers.single().wireGuardConfig)
         assertTrue(!tunnel.toString().contains("topsecretkey"))
+    }
+
+    @Test
+    fun oscamPasswordIsStoredAsASecretAndNeverPrinted() {
+        val boxWithOscam = box.copy(oscamPort = 8081, oscamUsername = "card", oscamPassword = "oscam-secret")
+        val (stripped, secrets) = SecretFields.strip(AppSettings(), AppSettings(receivers = listOf(boxWithOscam)))
+        assertEquals("", stripped.receivers.single().oscamPassword)
+        assertEquals(8081, stripped.receivers.single().oscamPort)
+        assertEquals("card", stripped.receivers.single().oscamUsername)
+        assertEquals("oscam-secret", secrets[SecretFields.oscamPasswordName("a")])
+        val filled = SecretFields.fill(stripped, secrets::get)
+        assertEquals("oscam-secret", filled.receivers.single().oscamPassword)
+        assertTrue(!boxWithOscam.toString().contains("oscam-secret"))
+        assertTrue(boxWithOscam.toString().contains("oscamPassword=***"))
     }
 }

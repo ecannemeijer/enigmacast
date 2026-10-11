@@ -100,12 +100,15 @@ object SecretFields {
 
     fun wireGuardName(receiverId: String) = "receiver:$receiverId:wireguard"
 
+    fun oscamPasswordName(receiverId: String) = "receiver:$receiverId:oscam"
+
     fun fill(settings: AppSettings, read: (String) -> String?): AppSettings = settings.copy(
         receivers = settings.receivers.map { receiver ->
             if (receiver.id.isBlank()) return@map receiver
             receiver.copy(
                 password = read(passwordName(receiver.id)) ?: receiver.password,
                 wireGuardConfig = read(wireGuardName(receiver.id)) ?: receiver.wireGuardConfig,
+                oscamPassword = read(oscamPasswordName(receiver.id)) ?: receiver.oscamPassword,
             )
         },
     )
@@ -116,14 +119,18 @@ object SecretFields {
         next.receivers.filter { it.id.isNotBlank() }.forEach {
             secrets[passwordName(it.id)] = it.password.ifEmpty { null }
             secrets[wireGuardName(it.id)] = it.wireGuardConfig.ifBlank { null }
+            secrets[oscamPasswordName(it.id)] = it.oscamPassword.ifEmpty { null }
         }
         val kept = next.receivers.map { it.id }.toSet()
         previous.receivers.filter { it.id.isNotBlank() && it.id !in kept }.forEach {
             secrets[passwordName(it.id)] = null
             secrets[wireGuardName(it.id)] = null
+            secrets[oscamPasswordName(it.id)] = null
         }
         val stripped = next.copy(
-            receivers = next.receivers.map { if (it.id.isBlank()) it else it.copy(password = "", wireGuardConfig = "") },
+            receivers = next.receivers.map {
+                if (it.id.isBlank()) it else it.copy(password = "", wireGuardConfig = "", oscamPassword = "")
+            },
         )
         return stripped to secrets
     }
