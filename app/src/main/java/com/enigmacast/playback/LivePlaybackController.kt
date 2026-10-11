@@ -1,6 +1,7 @@
 package com.enigmacast.playback
 
 import android.content.Context
+import android.os.Handler
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -30,7 +31,10 @@ import androidx.media3.exoplayer.audio.AudioOutputProvider
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
@@ -40,6 +44,7 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
 import com.enigmacast.domain.osdinfo.TsStreamFacts
 import com.enigmacast.domain.model.PlaybackSettings
 import com.enigmacast.domain.model.PlayerState
@@ -59,6 +64,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -651,13 +657,10 @@ class LivePlaybackController @Inject constructor(
     private fun buildPlayer(): ExoPlayer {
         val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync)
             .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setVideoRendererEarlySchedulingThresholdUs(TEXTURE_VIEW_EARLY_SCHEDULING_US)
         val trackSelector = DefaultTrackSelector(context)
-        val preferredAudio = if (settings.hdmiPassthrough) {
-            arrayOf(MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_AC3, MimeTypes.AUDIO_AAC, MimeTypes.AUDIO_MPEG)
-        } else {
-            arrayOf(MimeTypes.AUDIO_AAC, MimeTypes.AUDIO_MPEG, MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_AC3)
-        }
+        val preferredAudio = if (settings.hdmiPassthrough) PASSTHROUGH_AUDIO else STEREO_AUDIO
         trackSelector.parameters = trackSelector.buildUponParameters()
             .setPreferredAudioMimeTypes(*preferredAudio)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !settings.subtitlesEnabled)
@@ -955,6 +958,35 @@ private class LiveRenderersFactory(
     private val passthrough: Boolean,
     private val audioSync: AudioSyncOffsets,
 ) : DefaultRenderersFactory(context) {
+    override fun buildAudioRenderers(
+        context: Context,
+        extensionRendererMode: Int,
+        mediaCodecSelector: MediaCodecSelector,
+        enableDecoderFallback: Boolean,
+        audioSink: AudioSink,
+        eventHandler: Handler,
+        eventListener: AudioRendererEventListener,
+        out: ArrayList<androidx.media3.exoplayer.Renderer>,
+    ) {
+        super.buildAudioRenderers(
+            context,
+            extensionRendererMode,
+            mediaCodecSelector,
+            enableDecoderFallback,
+            audioSink,
+            eventHandler,
+            eventListener,
+            out,
+        )
+        if (extensionRendererMode == EXTENSION_RENDERER_MODE_OFF) return
+        try {
+            // After the MediaCodec renderer, so hardware decode and HDMI passthrough stay first.
+            out.add(FfmpegAudioRenderer(eventHandler, eventListener, audioSink))
+        } catch (error: Exception) {
+            EnigmaLog.player("ffmpeg audio unavailable: ${error.javaClass.simpleName}")
+        }
+    }
+
     override fun buildAudioSink(
         context: Context,
         enableFloatOutput: Boolean,
@@ -977,12 +1009,40 @@ private class PcmAudioOutputProvider(
 ) : ForwardingAudioOutputProvider(delegate) {
     override fun getFormatSupport(formatConfig: AudioOutputProvider.FormatConfig): AudioOutputProvider.FormatSupport {
         val mime = formatConfig.format.sampleMimeType
-        if (mime != null && mime != MimeTypes.AUDIO_RAW) {
+        // A codec the device can decode is downmixed to PCM. One it cannot (AC3, E-AC3, DTS
+        // on many Google TV devices) is left to HDMI passthrough when the sink reports it.
+        if (mime != null && mime != MimeTypes.AUDIO_RAW && hasDecoder(mime)) {
             return AudioOutputProvider.FormatSupport.UNSUPPORTED
         }
         return super.getFormatSupport(formatConfig)
     }
+
+    private fun hasDecoder(mime: String): Boolean = try {
+        MediaCodecUtil.getDecoderInfos(mime, false, false).isNotEmpty()
+    } catch (_: MediaCodecUtil.DecoderQueryException) {
+        false
+    }
 }
+
+private val PASSTHROUGH_AUDIO = arrayOf(
+    MimeTypes.AUDIO_E_AC3_JOC,
+    MimeTypes.AUDIO_E_AC3,
+    MimeTypes.AUDIO_AC3,
+    MimeTypes.AUDIO_DTS_HD,
+    MimeTypes.AUDIO_DTS,
+    MimeTypes.AUDIO_AAC,
+    MimeTypes.AUDIO_MPEG,
+)
+
+private val STEREO_AUDIO = arrayOf(
+    MimeTypes.AUDIO_AAC,
+    MimeTypes.AUDIO_MPEG,
+    MimeTypes.AUDIO_E_AC3_JOC,
+    MimeTypes.AUDIO_E_AC3,
+    MimeTypes.AUDIO_AC3,
+    MimeTypes.AUDIO_DTS_HD,
+    MimeTypes.AUDIO_DTS,
+)
 
 /** Settings that can change while a stream plays, without building a new player. */
 private fun PlaybackSettings.withoutInPlaceOptions() = copy(audioDelayPcmMs = 0, audioDelayPassthroughMs = 0, subtitlesEnabled = true)

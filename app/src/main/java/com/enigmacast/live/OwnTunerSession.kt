@@ -8,8 +8,10 @@ import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.ReceiverList
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.ServiceStreams
+import com.enigmacast.domain.service.StreamReuse
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.tuner.ChannelNavigator
@@ -105,6 +107,9 @@ class OwnTunerSession @Inject constructor(
     private var active = false
     private val restarts = RestartBudget()
     private var gaveUp = false
+    /** The box the user zapped on. Failover walks the others and comes back here when every box is full. */
+    private var failoverOriginId: String? = null
+    private var failoverTried: Set<String> = emptySet()
 
     init {
         scope.launch {
@@ -190,7 +195,7 @@ class OwnTunerSession @Inject constructor(
             return
         }
         val channel = _state.value.channel
-        if (channel != null) start(channel) else ensureStarted()
+        if (channel != null) start(channel, force = true) else ensureStarted()
     }
 
     private var channelLoadFailed = false
@@ -285,6 +290,7 @@ class OwnTunerSession @Inject constructor(
                     _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
                     return@launch
                 }
+                beginFailover(receiver.id)
                 startNow(receiver, target)
             } finally {
                 hideLoad()
@@ -292,12 +298,16 @@ class OwnTunerSession @Inject constructor(
         }
     }
 
-    /** Zap this device's stream to [channel]; [channels] becomes the list for CH+/CH−. */
+    /**
+     * Zap this device's stream to [channel]; [channels] becomes the list for CH+/CH−.
+     * The same channel, already playing, is left alone. [force] rebuilds it (retry, resume after a file).
+     */
     fun start(
         channel: BouquetEntry,
         channels: List<BouquetEntry>? = null,
         bouquetName: String? = null,
         bouquetReference: String? = null,
+        force: Boolean = false,
     ) {
         active = true
         if (channels != null && channels.isNotEmpty()) {
@@ -309,11 +319,21 @@ class OwnTunerSession @Inject constructor(
                 )
             }
         }
+        val playing = streaming &&
+            playback.health.value == StreamHealth.PLAYING &&
+            !playback.isFilePlayback()
+        if (StreamReuse.alreadyPlaying(_state.value.channel?.reference, channel.reference, playing, force)) {
+            EnigmaLog.service("same channel, stream kept: ${channel.name}")
+            return
+        }
         restarts.reset()
         gaveUp = false
+        failoverOriginId = null
+        failoverTried = emptySet()
         startJob?.cancel()
         startJob = scope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            beginFailover(receiver.id)
             startNow(receiver, channel)
         }
     }
@@ -353,7 +373,7 @@ class OwnTunerSession @Inject constructor(
 
     fun retry() {
         val channel = _state.value.channel ?: return ensureStarted()
-        start(channel)
+        start(channel, force = true)
     }
 
     fun numberOf(entry: BouquetEntry): Int = ChannelNavigator.numberOf(_state.value.channels, entry)
@@ -422,9 +442,12 @@ class OwnTunerSession @Inject constructor(
                 ),
             )
         }
+        failoverOriginId = null
+        failoverTried = emptySet()
         startJob = scope.launch {
             delay(wait)
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            beginFailover(receiver.id)
             startNow(receiver, channel)
         }
     }
@@ -495,6 +518,8 @@ class OwnTunerSession @Inject constructor(
         } ?: TunerVerdict.Unknown
         EnigmaLog.service("tuner check ${channel.name}: $verdict")
         if (verdict is TunerVerdict.Full) {
+            if (tryNextBox(channel)) return
+            restoreOrigin()
             _state.update {
                 it.copy(tuner = TunerState(TunerStatus.FULL, fullMessage(verdict.used, verdict.total), verdict.used, verdict.total, verdict.users))
             }
@@ -531,6 +556,20 @@ class OwnTunerSession @Inject constructor(
                 TunerState(TunerStatus.PLAYING)
             }
             StreamHealth.NO_TUNER -> {
+                val channel = _state.value.channel
+                if (channel != null && !ServiceStreams.isInternet(channel.reference)) {
+                    streaming = false
+                    startJob?.cancel()
+                    startJob = scope.launch {
+                        if (tryNextBox(channel)) return@launch
+                        restoreOrigin()
+                        val refused = TunerAvailability.refused(lastSnapshot, channel.reference, lastOwnAddresses)
+                        _state.update {
+                            it.copy(tuner = TunerState(TunerStatus.FULL, fullMessage(refused.used, refused.total), refused.used, refused.total, refused.users))
+                        }
+                    }
+                    return
+                }
                 val refused = TunerAvailability.refused(lastSnapshot, _state.value.channel?.reference.orEmpty(), lastOwnAddresses)
                 TunerState(TunerStatus.FULL, fullMessage(refused.used, refused.total), refused.used, refused.total, refused.users)
             }
@@ -569,6 +608,37 @@ class OwnTunerSession @Inject constructor(
             return
         }
         _state.update { it.copy(tuner = tuner) }
+    }
+
+    private fun beginFailover(receiverId: String) {
+        failoverOriginId = receiverId
+        failoverTried = setOf(receiverId)
+    }
+
+    /**
+     * The active box has no free tuner. Try the next saved box, in list order after the one
+     * the user started on, wrapping around. Returns false when every box has been tried.
+     */
+    private suspend fun tryNextBox(channel: BouquetEntry): Boolean {
+        val settings = settingsRepository.current()
+        val next = ReceiverList.nextAfter(settings.receivers, failoverOriginId, failoverTried) ?: return false
+        failoverTried = failoverTried + next.id
+        EnigmaLog.service("tuners full, trying ${next.name}")
+        boundReceiverId = next.id
+        settingsRepository.selectReceiver(next.id)
+        _state.update { it.copy(tuner = TunerState(TunerStatus.CHECKING, UiText.res(R.string.tuner_checking))) }
+        startNow(next, channel)
+        return true
+    }
+
+    /** Every box was full: the box the user had selected stays the active one. */
+    private suspend fun restoreOrigin() {
+        val originId = failoverOriginId ?: return
+        val settings = settingsRepository.current()
+        if (settings.activeReceiver()?.id == originId) return
+        val origin = settings.receivers.firstOrNull { it.id == originId } ?: return
+        boundReceiverId = origin.id
+        settingsRepository.selectReceiver(origin.id)
     }
 
     private fun saveLastChannel(receiverId: String, channel: BouquetEntry) {

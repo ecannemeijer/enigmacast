@@ -86,4 +86,9 @@ data class ReceiverOsdData(
     val streams: List<StreamClientInfo>? = null,
     /** Whether `/api/statusinfo`/`getcurrent` said the receiver is in standby. */
     val inStandby: Boolean? = null,
+    /**
+     * [signal] was read from the tuner of this stream (the frontend files), not from the
+     * receiver's HDMI service. It stays valid while the box is in standby.
+     */
+    val streamTunerSignal: Boolean = false,
 )

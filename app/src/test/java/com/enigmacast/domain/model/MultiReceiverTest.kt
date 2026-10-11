@@ -55,6 +55,20 @@ class ReceiverListTest {
     }
 
     @Test
+    fun nextBoxFollowsTheListAndWraps() {
+        val boxes = listOf(living, bed, vacation)
+        assertEquals("bed", ReceiverList.nextAfter(boxes, "living", setOf("living"))?.id)
+        assertEquals("vacation", ReceiverList.nextAfter(boxes, "living", setOf("living", "bed"))?.id)
+        assertNull(ReceiverList.nextAfter(boxes, "living", setOf("living", "bed", "vacation")))
+        assertEquals("living", ReceiverList.nextAfter(boxes, "vacation", emptySet())?.id)
+    }
+
+    @Test
+    fun aSingleBoxHasNoFailover() {
+        assertNull(ReceiverList.nextAfter(listOf(living), "living", emptySet()))
+    }
+
+    @Test
     fun removeAnotherBoxKeepsTheChoice() {
         val settings = AppSettings(receivers = listOf(living, bed), activeReceiverId = "living")
         val next = ReceiverList.remove(settings, "bed")

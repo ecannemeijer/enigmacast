@@ -20,6 +20,8 @@ import com.enigmacast.domain.power.ReceiverPowerFlow
 import com.enigmacast.domain.recording.forReceiver
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.LiveZapFlow
+import com.enigmacast.domain.service.StreamReuse
+import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.tuner.ChannelNavigator
@@ -664,6 +666,20 @@ class StreamGuideViewModel @Inject constructor(
                     return@launch
                 }
                 status = UiText.res(R.string.guide_no_receiver)
+                return@launch
+            }
+            val playing = playback.health.value == StreamHealth.PLAYING &&
+                playback.hasOpenStream() &&
+                !playback.isFilePlayback()
+            if (StreamReuse.alreadyPlaying(previous, channel.reference, playing)) {
+                EnigmaLog.service("same channel, stream kept: ${channel.name}")
+                if (token != guideToken) return@launch
+                onStarted()
+                bouquetPinned = false
+                tunedReference = channel.reference
+                shownReference = channel.reference
+                displayName = channel.name
+                status = UiText.Empty
                 return@launch
             }
             val target = streamTargets.target(receiver, channel.reference)

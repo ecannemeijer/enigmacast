@@ -469,7 +469,6 @@ fun DashboardScreen(
                         DashSection.Home -> HomePanel(
                             contentFocus = homeContentFocus,
                             menuFocus = homeFocus,
-                            onOpenLive = { section = DashSection.Stream },
                             onContinue = { last ->
                                 val entry = guideModel.channels.firstOrNull {
                                     BouquetChannels.sameService(it.reference, last.reference)

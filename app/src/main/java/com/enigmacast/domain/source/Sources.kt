@@ -101,4 +101,11 @@ interface OsdInfoSource {
 
     /** Stream clients from `/api/about`, with tuner and transponder on openATV. */
     suspend fun streamClients(config: ReceiverConfig): List<StreamClientInfo>
+
+    /**
+     * Signal of the tuner that serves this stream, from the receiver's frontend files.
+     * [tunerNumber] null asks for the only locked frontend. Null when the files are missing
+     * or more than one frontend is locked and the tuner is unknown.
+     */
+    suspend fun streamTunerSignal(config: ReceiverConfig, tunerNumber: Int?): SignalReading?
 }

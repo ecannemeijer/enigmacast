@@ -605,7 +605,6 @@
     <string name="motion_quality_desc">Premium uses glow and full animation. Performance keeps the same layout with shorter motion and no glow.</string>
     <string name="motion_premium">Premium</string>
     <string name="motion_performance">Performance</string>
-    <string name="home_live">Live TV</string>
     <string name="home_continue">Continue</string>
     <string name="home_no_programme">No programme information</string>
     <string name="home_recent">Recently watched</string>

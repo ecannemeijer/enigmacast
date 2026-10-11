@@ -101,7 +101,11 @@ object OsdInfoBuilder {
     ): SignalInfo {
         val reading = receiver.signal?.takeIf { it.hasValues } ?: receiver.current?.signal?.takeIf { it.hasValues }
         val readingTuner = receiver.signal?.tunerNumber ?: receiver.current?.tunerNumber
+        val ours = belongsToStream(reading, readingTuner, client, receiver.streamTunerSignal)
         return when {
+            reading != null && ours -> SignalInfo.Measured(reading)
+            reading != null && client?.tunerNumber != null && readingTuner != null && readingTuner != client.tunerNumber ->
+                SignalInfo.Missing(Unavailable.OTHER_TUNER)
             standby -> SignalInfo.Missing(Unavailable.STANDBY)
             reading == null -> when {
                 receiver.signalUnsupported -> SignalInfo.Missing(Unavailable.UNSUPPORTED)
@@ -116,6 +120,22 @@ object OsdInfoBuilder {
             liveOnOurTransponder -> SignalInfo.Measured(reading)
             else -> SignalInfo.Missing(Unavailable.OTHER_TUNER)
         }
+    }
+
+    /**
+     * True when [reading] is the tuner of this stream. A matching tuner number is enough,
+     * including while the box is in standby. Without a tuner number, only a reading taken
+     * from the single locked frontend counts.
+     */
+    private fun belongsToStream(
+        reading: SignalReading?,
+        readingTuner: Int?,
+        client: StreamClientInfo?,
+        streamTunerSignal: Boolean,
+    ): Boolean {
+        if (reading == null || !reading.hasValues) return false
+        if (client?.tunerNumber != null && readingTuner != null) return readingTuner == client.tunerNumber
+        return streamTunerSignal && client?.tunerNumber == null
     }
 
     private fun crypt(stream: TsStreamFacts, live: ReceiverCurrent?): CryptInfo {

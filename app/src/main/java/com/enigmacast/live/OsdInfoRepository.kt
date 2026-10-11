@@ -65,6 +65,7 @@ class OsdInfoRepository @Inject constructor(
                 }
                 current?.await()?.onSuccess { result = result.copy(current = it) }
                 streams?.await()?.onSuccess { result = result.copy(streams = it) }
+                result = withStreamTunerSignal(config, reference, result)
                 result
             }
             if (refreshStatic) {
@@ -77,6 +78,25 @@ class OsdInfoRepository @Inject constructor(
             emit(data)
             delay(SIGNAL_INTERVAL_MS)
         }
+    }
+
+    /**
+     * `tunersignal` is the HDMI frontend and is empty in standby. The frontend files of the
+     * stream's tuner still have strength and quality; use those when the HDMI reading does not.
+     */
+    private suspend fun withStreamTunerSignal(
+        config: ReceiverConfig,
+        reference: String,
+        data: ReceiverOsdData,
+    ): ReceiverOsdData {
+        val standby = data.inStandby == true || data.signal?.inStandby == true
+        if (!standby && data.signal?.hasValues == true) return data.copy(streamTunerSignal = false)
+        val client = data.streams?.firstOrNull { BouquetChannels.sameService(it.reference, reference) && it.tunerNumber != null }
+            ?: data.streams?.firstOrNull { BouquetChannels.sameService(it.reference, reference) }
+        val reading = attempt { source.streamTunerSignal(config, client?.tunerNumber) }.getOrNull()
+        if (reading == null || !reading.hasValues) return data
+        if (client?.tunerNumber != null && reading.tunerNumber != client.tunerNumber) return data
+        return data.copy(signal = reading.copy(inStandby = data.inStandby ?: data.signal?.inStandby), streamTunerSignal = true)
     }
 
     private suspend fun <T> attempt(block: suspend () -> T): Result<T> = try {

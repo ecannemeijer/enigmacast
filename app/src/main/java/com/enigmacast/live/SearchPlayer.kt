@@ -7,6 +7,8 @@ import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.search.SearchHit
 import com.enigmacast.domain.search.SearchKind
 import com.enigmacast.domain.service.LiveZapFlow
+import com.enigmacast.domain.service.StreamReuse
+import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
@@ -66,6 +68,13 @@ class SearchPlayer @Inject constructor(
         }
         val receiver = settings.current().activeReceiver()
             ?: return SearchOutcome.Failed(UiText.res(R.string.guide_no_receiver))
+        val playing = playback.health.value == StreamHealth.PLAYING &&
+            playback.hasOpenStream() &&
+            !playback.isFilePlayback()
+        val current = runCatching { serviceSource.currentService(receiver).reference }.getOrNull()
+        if (StreamReuse.alreadyPlaying(current, place.channel.reference, playing)) {
+            return SearchOutcome.Played
+        }
         val target = streamTargets.target(receiver, place.channel.reference)
         if (target.internet) {
             playback.stopForZap()

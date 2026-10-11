@@ -41,6 +41,18 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
     /** Signal of the receiver's current frontend: `tunersignal` on openATV and OpenPLi, `signal` on some images. */
     fun signalPaths(config: ReceiverConfig): List<String> = listOf(api(config, "/api/tunersignal"), api(config, "/api/signal"))
 
+    /**
+     * One frontend file (`snr`, `signal`, `snr_db`, `lock`) via OpenWebif's file download.
+     * `/file` is the usual route; `/api/file` is the same controller on some images.
+     */
+    fun frontendFiles(config: ReceiverConfig, tuner: Int, name: String): List<String> {
+        val path = encode("/proc/stb/frontend/$tuner/$name")
+        return listOf(
+            api(config, "/file?action=download&file=$path"),
+            api(config, "/api/file?action=download&file=$path"),
+        )
+    }
+
     fun epgService(config: ReceiverConfig, serviceReference: String): String {
         return api(config, "/api/epgservice?sRef=${encode(serviceReference)}")
     }

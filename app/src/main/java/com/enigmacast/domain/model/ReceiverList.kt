@@ -29,4 +29,14 @@ object ReceiverList {
             recentByReceiver = settings.recentByReceiver - id,
         )
     }
+
+    /**
+     * The next box to try when [originId]'s tuners are full: the rest of the list after that
+     * box, then the ones before it. Boxes in [tried] are skipped. Null when none remain.
+     */
+    fun nextAfter(receivers: List<ReceiverConfig>, originId: String?, tried: Set<String>): ReceiverConfig? {
+        if (receivers.size < 2) return null
+        val start = receivers.indexOfFirst { it.id == originId }.let { if (it < 0) 0 else it }
+        return (receivers.drop(start + 1) + receivers.take(start)).firstOrNull { it.id !in tried }
+    }
 }

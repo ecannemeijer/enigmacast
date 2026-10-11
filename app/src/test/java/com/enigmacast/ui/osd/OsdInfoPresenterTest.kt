@@ -65,6 +65,38 @@ class OsdInfoPresenterTest {
     }
 
     @Test
+    fun standbyStillShowsTheStreamTunersSignal() {
+        val view = present(
+            OsdInfoInput(
+                reference = astra1,
+                receiver = ReceiverOsdData(
+                    inStandby = true,
+                    streamTunerSignal = true,
+                    signal = SignalReading(agcPercent = 70, snrPercent = 84, tunerNumber = 1, inStandby = true),
+                    streams = listOf(StreamClientInfo(astra1, "10.0.0.8", tunerNumber = 1)),
+                ),
+            ),
+        )
+        assertEquals(70, view.signal?.strengthPercent)
+        assertEquals(84, view.signal?.qualityPercent)
+    }
+
+    @Test
+    fun standbyHidesAnotherTunersSignal() {
+        val view = present(
+            OsdInfoInput(
+                reference = astra1,
+                receiver = ReceiverOsdData(
+                    inStandby = true,
+                    signal = SignalReading(agcPercent = 70, snrPercent = 84, tunerNumber = 0, inStandby = true),
+                    streams = listOf(StreamClientInfo(astra1, "10.0.0.8", tunerNumber = 1)),
+                ),
+            ),
+        )
+        assertNull(view.signal)
+    }
+
+    @Test
     fun anotherTunersSignalIsNotShown() {
         val view = present(
             OsdInfoInput(

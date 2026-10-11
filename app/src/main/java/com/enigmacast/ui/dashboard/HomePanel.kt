@@ -1,13 +1,16 @@
 package com.enigmacast.ui.dashboard
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,7 +57,6 @@ import androidx.compose.ui.res.stringResource
 internal fun HomePanel(
     contentFocus: FocusRequester,
     menuFocus: FocusRequester,
-    onOpenLive: () -> Unit,
     onContinue: (LastChannel) -> Unit,
     onPlayChannel: (BouquetEntry) -> Unit,
     onOpenBouquet: (BouquetEntry) -> Unit,
@@ -84,6 +87,17 @@ internal fun HomePanel(
         entry to event
     }.take(12)
     val left = Modifier.focusProperties { left = menuFocus }
+    val continueVisible = last.reference.isNotBlank()
+    val focusRecents = !continueVisible && recents.isNotEmpty()
+    val focusNow = !focusRecents && !continueVisible && onNow.isNotEmpty()
+    val focusGroups = !continueVisible && !focusRecents && !focusNow && guideModel.bouquets.isNotEmpty()
+    val focusRecordings = !continueVisible && !focusRecents && !focusNow && !focusGroups && recordings.isNotEmpty()
+    val focusEmpty = !continueVisible && !focusRecents && !focusNow && !focusGroups && !focusRecordings
+    fun cardFocus(index: Int, anchor: Boolean, width: Dp): Modifier {
+        val focus = if (index == 0 && anchor) Modifier.focusRequester(contentFocus) else Modifier
+        val toMenu = if (index == 0) left else Modifier
+        return Modifier.width(width).then(focus).then(toMenu)
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -133,22 +147,19 @@ internal fun HomePanel(
                 } else if (channelName.isNotBlank()) {
                     Text(stringResource(R.string.home_no_programme), color = EnigmaColors.Muted, fontSize = EnigmaType.Body)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
-                    val continueVisible = last.reference.isNotBlank()
-                    if (continueVisible) {
+                if (continueVisible) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
                         EnigmaGlassButton(
                             text = stringResource(R.string.home_continue),
                             onClick = { onContinue(last) },
                             modifier = Modifier.focusRequester(contentFocus).then(left),
                         )
                     }
-                    EnigmaGlassButton(
-                        text = stringResource(R.string.home_live),
-                        onClick = onOpenLive,
-                        modifier = (if (continueVisible) Modifier else Modifier.focusRequester(contentFocus)).then(left),
-                    )
                 }
             }
+        }
+        if (focusEmpty) {
+            Spacer(Modifier.size(1.dp).focusRequester(contentFocus).then(left).focusable())
         }
         if (recents.isNotEmpty()) {
             HomeRow(stringResource(R.string.home_recent), recents) { index, item ->
@@ -156,7 +167,7 @@ internal fun HomePanel(
                     title = item.name.ifBlank { item.reference },
                     subtitle = "",
                     onClick = { onContinue(item) },
-                    modifier = Modifier.width(240.dp).then(if (index == 0) left else Modifier),
+                    modifier = cardFocus(index, focusRecents, 240.dp),
                 )
             }
         }
@@ -168,7 +179,7 @@ internal fun HomePanel(
                     subtitle = event.title,
                     progress = event.progress(nowSec),
                     onClick = { onPlayChannel(entry) },
-                    modifier = Modifier.width(260.dp).then(if (index == 0) left else Modifier),
+                    modifier = cardFocus(index, focusNow, 260.dp),
                 )
             }
         }
@@ -178,7 +189,7 @@ internal fun HomePanel(
                     title = bouquet.name,
                     subtitle = "",
                     onClick = { onOpenBouquet(bouquet) },
-                    modifier = Modifier.width(220.dp).then(if (index == 0) left else Modifier),
+                    modifier = cardFocus(index, focusGroups, 220.dp),
                 )
             }
         }
@@ -188,7 +199,7 @@ internal fun HomePanel(
                     title = item.title,
                     subtitle = item.channelName,
                     onClick = { onOpenRecording(item) },
-                    modifier = Modifier.width(240.dp).then(if (index == 0) left else Modifier),
+                    modifier = cardFocus(index, focusRecordings, 240.dp),
                 )
             }
         }

@@ -19,6 +19,7 @@ import com.enigmacast.domain.osd.GrabMode
 import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.domain.osdinfo.FrontendSignal
 import com.enigmacast.domain.osdinfo.ReceiverCurrent
 import com.enigmacast.domain.osdinfo.SignalReading
 import com.enigmacast.domain.osdinfo.StreamClientInfo
@@ -32,6 +33,7 @@ import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.tuner.NowEvent
 import com.enigmacast.domain.tuner.TunerSnapshot
 import com.enigmacast.util.EnigmaLog
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -157,6 +159,12 @@ class OpenWebifOsdInfoSource @Inject constructor(
     /** Per receiver: the signal URL that answered, or "" when neither exists. */
     private val signalUrl = ConcurrentHashMap<String, String>()
 
+    /** Per receiver: false once the frontend files are forbidden. */
+    private val frontendFiles = ConcurrentHashMap<String, Boolean>()
+
+    /** `receiver/tuner/name` keys that answered 404, so the banner poll does not ask again. */
+    private val missingProc = ConcurrentHashMap.newKeySet<String>()
+
     override suspend fun signal(config: ReceiverConfig): SignalReading? {
         val key = "${config.id}@${config.host}:${config.httpPort}"
         val known = signalUrl[key]
@@ -184,4 +192,78 @@ class OpenWebifOsdInfoSource @Inject constructor(
 
     override suspend fun streamClients(config: ReceiverConfig): List<StreamClientInfo> =
         OsdInfoJson.parseStreamClients(api.body(config, endpoints.about(config)))
+
+    override suspend fun streamTunerSignal(config: ReceiverConfig, tunerNumber: Int?): SignalReading? {
+        val key = "${config.id}@${config.host}:${config.httpPort}"
+        if (frontendFiles[key] == false) return null
+        if (tunerNumber != null) {
+            val reading = readFrontend(config, tunerNumber) ?: return null
+            return reading.takeIf { it.hasValues }
+        }
+        val locked = mutableListOf<SignalReading>()
+        for (index in 0 until MAX_FRONTENDS) {
+            val snr = readProc(config, index, "snr")
+            if (snr is ProcFile.Unavailable) return null
+            if (snr is ProcFile.Missing) return locked.singleOrNull()
+            val reading = readingOf(config, index, (snr as ProcFile.Text).body) ?: continue
+            val lock = readProc(config, index, "lock")
+            val lockText = (lock as? ProcFile.Text)?.body
+            if (FrontendSignal.locked(lockText, reading)) locked += reading
+        }
+        return locked.singleOrNull()
+    }
+
+    private suspend fun readFrontend(config: ReceiverConfig, tuner: Int): SignalReading? {
+        val snr = readProc(config, tuner, "snr")
+        if (snr !is ProcFile.Text) return null
+        return readingOf(config, tuner, snr.body)
+    }
+
+    private suspend fun readingOf(config: ReceiverConfig, tuner: Int, snrBody: String): SignalReading? {
+        val agc = (readProc(config, tuner, "signal") as? ProcFile.Text)?.body
+        val db = (readProc(config, tuner, "snr_db") as? ProcFile.Text)?.body
+        return FrontendSignal.parse(snrBody, agc, db, tuner)
+    }
+
+    private suspend fun readProc(config: ReceiverConfig, tuner: Int, name: String): ProcFile {
+        val key = "${config.id}@${config.host}:${config.httpPort}"
+        if (frontendFiles[key] == false) return ProcFile.Unavailable
+        val cacheKey = "$key/$tuner/$name"
+        if (cacheKey in missingProc) return ProcFile.Missing
+        var missing = false
+        for (url in endpoints.frontendFiles(config, tuner, name)) {
+            try {
+                val body = api.body(config, url)
+                frontendFiles.putIfAbsent(key, true)
+                return ProcFile.Text(body)
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: OpenWebifException) {
+                when (error.statusCode) {
+                    404 -> missing = true
+                    401, 403 -> {
+                        frontendFiles[key] = false
+                        EnigmaLog.osdInfo("frontend files forbidden")
+                        return ProcFile.Unavailable
+                    }
+                    else -> return ProcFile.Missing
+                }
+            } catch (error: Exception) {
+                EnigmaLog.osdInfo("frontend $tuner/$name failed: ${error.javaClass.simpleName}")
+                return ProcFile.Missing
+            }
+        }
+        if (missing) missingProc.add(cacheKey)
+        return if (missing) ProcFile.Missing else ProcFile.Unavailable
+    }
+
+    private sealed interface ProcFile {
+        data class Text(val body: String) : ProcFile
+        data object Missing : ProcFile
+        data object Unavailable : ProcFile
+    }
+
+    private companion object {
+        const val MAX_FRONTENDS = 8
+    }
 }
