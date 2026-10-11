@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,9 @@ import com.enigmacast.ui.remote.EnigmaRemoteScreen
 import com.enigmacast.ui.settings.SettingsScreen
 import com.enigmacast.ui.theme.EnigmaCastTheme
 import com.enigmacast.ui.theme.TvConfirmDialog
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.enigmacast.ui.theme.LocalNavigationSounds
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.update.AppUpdateDialog
@@ -60,6 +64,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var remoteInputBus: RemoteInputBus
     private val appViewModel: AppViewModel by viewModels()
     private var reminderKeyDown = NO_KEY
+    private var backHoldJob: Job? = null
+    private var backHoldOpened = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -166,10 +172,45 @@ class MainActivity : ComponentActivity() {
             return super.dispatchKeyEvent(event)
         }
         if (handleReminderKey(event)) return true
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && canHoldBackToStream()) {
+            if (event.action == KeyEvent.ACTION_UP && backHoldOpened) {
+                backHoldOpened = false
+                backHoldJob = null
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0 && backHoldJob != null) {
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                backHoldOpened = false
+                val consumed = super.dispatchKeyEvent(event)
+                if (!consumed) {
+                    backHoldJob?.cancel()
+                    backHoldJob = lifecycleScope.launch {
+                        delay(BACK_HOLD_MS)
+                        backHoldOpened = true
+                        appViewModel.openStream()
+                    }
+                }
+                return consumed
+            }
+            if (event.action == KeyEvent.ACTION_UP) {
+                backHoldJob?.cancel()
+                backHoldJob = null
+            }
+        }
         if (appViewModel.screen == AppScreen.Remote && remoteInputBus.handler?.invoke(event) == true) {
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun canHoldBackToStream(): Boolean {
+        if (!appViewModel.streamRunning || appViewModel.exitPrompt || appViewModel.updatePrompt != null) return false
+        return when (appViewModel.screen) {
+            AppScreen.Remote, AppScreen.Loading, AppScreen.Connection -> false
+            else -> true
+        }
     }
 }
 
@@ -288,5 +329,6 @@ private fun Context.findActivity(): Activity? {
 }
 
 private const val NO_KEY = -1
+private const val BACK_HOLD_MS = 500L
 private val REMINDER_SWITCH_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 private val REMINDER_CANCEL_KEYS = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE)

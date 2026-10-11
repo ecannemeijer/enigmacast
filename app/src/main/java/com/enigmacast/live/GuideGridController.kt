@@ -74,6 +74,14 @@ class GuideGridController(
         ensureData()
     }
 
+    /** Puts the highlight on the first channel at the current time. */
+    fun focusFirst() {
+        val now = clock()
+        val channels = _state.value.channels
+        _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(0, now, GuideTimeline.slotFloor(now)), now, channels.size)) }
+        ensureData()
+    }
+
     /** Puts the highlight on [reference] at the current time, e.g. after Back from the player. */
     fun focusChannel(reference: String) {
         val now = clock()

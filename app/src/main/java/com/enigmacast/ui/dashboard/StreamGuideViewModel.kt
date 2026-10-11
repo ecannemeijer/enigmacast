@@ -202,6 +202,12 @@ class StreamGuideViewModel @Inject constructor(
     /** Left/Right in the grid; false when Left is already on the programme on air (the bouquets open then). */
     fun moveGridTime(direction: Int): Boolean = grid.moveTime(direction)
 
+    /** OK on TV Guide: the highlight on the first channel, at the current time. */
+    fun focusFirstInGrid() {
+        grid.focusFirst()
+        lastPressedReference = ""
+    }
+
     /** Back from the player: the highlight on the channel that is playing, at the current time. */
     fun focusTunedInGrid() {
         if (tunedReference.isNotBlank()) grid.focusChannel(tunedReference)

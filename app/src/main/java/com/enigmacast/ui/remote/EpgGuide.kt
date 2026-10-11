@@ -386,11 +386,6 @@ private fun GuideRow(
                 .fillMaxHeight()
                 .padding(end = 2.dp)
                 .background(if (focusSec != null && active) EnigmaColors.Selected else Color.Transparent, CellShape)
-                .border(
-                    width = if (focusSec != null && active) 1.dp else 0.dp,
-                    color = EnigmaColors.Cyan,
-                    shape = CellShape,
-                )
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

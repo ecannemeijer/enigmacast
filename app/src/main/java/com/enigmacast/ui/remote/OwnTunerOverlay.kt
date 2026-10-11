@@ -131,6 +131,17 @@ fun OwnTunerOverlay(
                 modifier = Modifier.align(Alignment.Center),
             )
         }
+        if (ui.playerState.timeshiftPaused && !ui.channelList && !tunerProblem) {
+            Text(
+                "❚❚",
+                color = Color.White,
+                fontSize = 28.sp,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(scrim, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 22.dp, vertical = 12.dp),
+            )
+        }
         if (ui.numberEntry.isNotEmpty()) {
             Text(
                 ui.numberEntry,
@@ -338,8 +349,14 @@ private fun ChannelBanner(
                 player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()), Modifier.widthIn(max = 220.dp))
                 player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available), Modifier.widthIn(max = 220.dp))
             }
+            val hint = when {
+                player.timeshiftPaused && optionsHint -> R.string.osd_banner_hint_options_paused
+                player.timeshiftPaused -> R.string.osd_banner_hint_paused
+                optionsHint -> R.string.osd_banner_hint_options
+                else -> R.string.osd_banner_hint
+            }
             Text(
-                stringResource(if (optionsHint) R.string.osd_banner_hint_options else R.string.osd_banner_hint),
+                stringResource(hint),
                 color = EnigmaColors.Subtle,
                 fontSize = 11.sp,
                 maxLines = 1,

@@ -20,8 +20,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -35,6 +42,7 @@ import com.enigmacast.domain.osdinfo.SignalReading
 import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.PanelHeader
+import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.util.asString
 import java.util.Locale
 
@@ -48,6 +56,15 @@ fun SignalMeterScreen(
         onDispose { viewModel.onLeave() }
     }
     val state = viewModel.state
+    val backFocus = remember { FocusRequester() }
+    val firstSatelliteFocus = remember { FocusRequester() }
+    var openedFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(state.loading, state.noReceiver, state.satellites.size) {
+        if (openedFocus || state.loading) return@LaunchedEffect
+        if (state.noReceiver || state.satellites.isEmpty()) backFocus.requestWhenReady()
+        else firstSatelliteFocus.requestWhenReady()
+        openedFocus = true
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -56,7 +73,12 @@ fun SignalMeterScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         PanelHeader(stringResource(R.string.signal_meter), stringResource(R.string.signal_meter_hint))
-        ActionTile(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), onBack)
+        ActionTile(
+            Icons.AutoMirrored.Filled.ArrowBack,
+            stringResource(R.string.back),
+            onBack,
+            modifier = Modifier.focusRequester(backFocus),
+        )
         when {
             state.noReceiver -> Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = 18.sp)
             state.loading -> Column(
@@ -85,6 +107,7 @@ fun SignalMeterScreen(
                         Button(
                             onClick = { viewModel.select(index) },
                             enabled = !state.busy,
+                            modifier = if (index == 0) Modifier.focusRequester(firstSatelliteFocus) else Modifier,
                             colors = ButtonDefaults.colors(
                                 containerColor = if (selected) EnigmaColors.Accent else EnigmaColors.Raised,
                                 contentColor = EnigmaColors.Text,

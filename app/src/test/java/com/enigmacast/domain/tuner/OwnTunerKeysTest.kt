@@ -20,6 +20,8 @@ class OwnTunerKeysTest {
         assertEquals(OwnKeyAction.DETAILS, OwnTunerKeys.action(KeyEvent.KEYCODE_INFO))
         assertEquals(OwnKeyAction.DETAILS, OwnTunerKeys.action(KeyEvent.KEYCODE_GUIDE))
         assertEquals(OwnKeyAction.LIST, OwnTunerKeys.action(KeyEvent.KEYCODE_MENU))
+        assertEquals(OwnKeyAction.LIST, OwnTunerKeys.action(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(OwnKeyAction.BANNER, OwnTunerKeys.action(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertEquals(OwnKeyAction.CONSUME, OwnTunerKeys.action(KeyEvent.KEYCODE_PROG_RED))
         assertEquals(OwnKeyAction.PASS, OwnTunerKeys.action(KeyEvent.KEYCODE_VOLUME_UP))
     }

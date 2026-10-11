@@ -58,6 +58,8 @@ fun ReceiversSettingsPanel(
     onFormActive: (Boolean) -> Unit,
     /** Where to put focus again when it escapes the form. */
     formFocus: FocusRequester,
+    /** OK on the Receivers menu item lands here. */
+    contentFocus: FocusRequester,
     connection: ConnectionViewModel = hiltViewModel(),
 ) {
     var form by remember { mutableStateOf<ReceiverForm?>(null) }
@@ -111,7 +113,7 @@ fun ReceiversSettingsPanel(
                 connection.beginNew()
                 form = ReceiverForm.Add
             },
-            modifier = Modifier.focusRequester(addFocus),
+            modifier = Modifier.focusRequester(addFocus).focusRequester(contentFocus),
         )
         if (receivers.isEmpty()) {
             Text(stringResource(R.string.receivers_empty), color = EnigmaColors.Muted, fontSize = 14.sp)

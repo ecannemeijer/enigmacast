@@ -15,8 +15,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -31,6 +34,7 @@ import com.enigmacast.R
 import com.enigmacast.domain.oscam.OscamReader
 import com.enigmacast.domain.oscam.OscamUser
 import com.enigmacast.ui.theme.ActionTile
+import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
 import com.enigmacast.ui.theme.PanelHeader
@@ -56,6 +60,8 @@ fun OscamScreen(
     viewModel: OscamViewModel = hiltViewModel(),
 ) {
     val state = viewModel.state
+    val connectFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { connectFocus.requestWhenReady() }
     val logScroll = rememberScrollState()
     LaunchedEffect(state.log) {
         if (!state.logPaused) logScroll.scrollTo(logScroll.maxValue)
@@ -83,7 +89,7 @@ fun OscamScreen(
                 EnigmaIcons.Sync,
                 stringResource(R.string.oscam_connect),
                 viewModel::connect,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).focusRequester(connectFocus),
                 enabled = !state.noReceiver && !state.busy,
             )
             ActionTile(

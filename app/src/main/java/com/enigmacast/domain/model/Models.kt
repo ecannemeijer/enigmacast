@@ -353,6 +353,8 @@ data class PlayerState(
     val streamTitle: String = "",
     /** Artist from the stream, empty when the stream does not send one. */
     val streamArtist: String = "",
+    /** Live TV is paused; the stream keeps buffering so resume continues from this moment. */
+    val timeshiftPaused: Boolean = false,
 )
 
 data class DebugInfo(

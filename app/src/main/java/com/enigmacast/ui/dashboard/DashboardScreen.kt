@@ -174,6 +174,7 @@ fun DashboardScreen(
 ) {
     // After a language change the activity is recreated; reopen Settings › Language then.
     // Back from a recording opens My Items on that row.
+    var sectionEnter by remember { mutableIntStateOf(0) }
     var section by remember {
         mutableStateOf(
             when {
@@ -296,6 +297,14 @@ fun DashboardScreen(
         val keepSettings = settingsFormOpen && target != DashSection.Settings
         if (!keepList && !keepSettings) section = target
     }
+    /** OK on a side-menu item opens that section and moves focus to its first entry. */
+    fun enterSection(target: DashSection) {
+        val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
+        if (keepList || settingsFormOpen) return
+        if (target == DashSection.Guide) guideModel.focusFirstInGrid()
+        openSection(target)
+        sectionEnter += 1
+    }
     LaunchedEffect(Unit) {
         while (true) {
             powerModel.poll()
@@ -337,7 +346,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(homeFocus)
                         .focusProperties { right = if (section == DashSection.Home) homeContentFocus else FocusRequester.Cancel },
-                    onClick = { openSection(DashSection.Home) },
+                    onClick = { enterSection(DashSection.Home) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Tv,
@@ -349,7 +358,7 @@ fun DashboardScreen(
                         .focusRequester(streamFocus)
                         .onFocusChanged { streamItemFocused = it.isFocused }
                         .focusProperties { right = if (section == DashSection.Stream) channelFocus else FocusRequester.Cancel },
-                    onClick = { openSection(DashSection.Stream) },
+                    onClick = { enterSection(DashSection.Stream) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Guide,
@@ -361,7 +370,7 @@ fun DashboardScreen(
                         .focusRequester(guideFocus)
                         .onFocusChanged { guideItemFocused = it.isFocused }
                         .focusProperties { right = if (section == DashSection.Guide) guideGridFocus else FocusRequester.Cancel },
-                    onClick = { openSection(DashSection.Guide) },
+                    onClick = { enterSection(DashSection.Guide) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Radio,
@@ -373,7 +382,7 @@ fun DashboardScreen(
                         .focusRequester(radioFocus)
                         .onFocusChanged { radioItemFocused = it.isFocused }
                         .focusProperties { right = if (section == DashSection.Radio) radioListFocus else FocusRequester.Cancel },
-                    onClick = { openSection(DashSection.Radio) },
+                    onClick = { enterSection(DashSection.Radio) },
                 )
                 NavItem(
                     icon = Icons.Filled.Search,
@@ -392,7 +401,7 @@ fun DashboardScreen(
                             searchEnterToken += 1
                             true
                         },
-                    onClick = { openSection(DashSection.Search) },
+                    onClick = { enterSection(DashSection.Search) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Record,
@@ -415,7 +424,7 @@ fun DashboardScreen(
                             myItemsEnterToken += 1
                             true
                         },
-                    onClick = { openSection(DashSection.MyItems) },
+                    onClick = { enterSection(DashSection.MyItems) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Power,
@@ -426,7 +435,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(receiverMenuFocus)
                         .focusProperties { right = if (section == DashSection.Receiver) receiverPageFocus else FocusRequester.Cancel },
-                    onClick = { openSection(DashSection.Receiver) },
+                    onClick = { enterSection(DashSection.Receiver) },
                 )
                 NavItem(
                     icon = Icons.Filled.Settings,
@@ -437,7 +446,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .focusProperties { right = if (section == DashSection.Settings) settingsPageFocus else FocusRequester.Cancel },
-                    onClick = { openSection(DashSection.Settings) },
+                    onClick = { enterSection(DashSection.Settings) },
                 )
                 Spacer(Modifier.height(8.dp))
                 NavItem(
@@ -474,7 +483,12 @@ fun DashboardScreen(
                 ) {
                     EnigmaScreenTransition(targetState = section, modifier = Modifier.fillMaxSize()) { shown ->
                     when (shown) {
-                        DashSection.Home -> HomePanel(
+                        DashSection.Home -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            homeContentFocus.requestWhenReady()
+                        }
+                        HomePanel(
                             contentFocus = homeContentFocus,
                             menuFocus = homeFocus,
                             onContinue = { last ->
@@ -497,6 +511,7 @@ fun DashboardScreen(
                             powerModel = powerModel,
                             myItemsModel = myItemsModel,
                         )
+                        }
                         DashSection.Stream -> LiveBrowser(
                             showMiniPlayer = showMiniPlayer,
                             listFocus = channelFocus,
@@ -509,8 +524,15 @@ fun DashboardScreen(
                             onFullscreen = onStream,
                             medium = GuideMedium.Television,
                             guideModel = guideModel,
+                            enterToken = sectionEnter,
                         )
-                        DashSection.Guide -> GuidePanel(
+                        DashSection.Guide -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            guideModel.focusFirstInGrid()
+                            guideGridFocus.requestWhenReady()
+                        }
+                        GuidePanel(
                             showMiniPlayer,
                             guideGridFocus,
                             bouquetFocus,
@@ -522,6 +544,7 @@ fun DashboardScreen(
                             onStream,
                             guideModel,
                         )
+                        }
                         DashSection.Radio -> LiveBrowser(
                             showMiniPlayer = showMiniPlayer,
                             listFocus = radioListFocus,
@@ -534,8 +557,15 @@ fun DashboardScreen(
                             onFullscreen = onStream,
                             medium = GuideMedium.Radio,
                             guideModel = guideModel,
+                            enterToken = sectionEnter,
                         )
-                        DashSection.Search -> SearchPanel(
+                        DashSection.Search -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            searchActive = true
+                            searchEnterToken += 1
+                        }
+                        SearchPanel(
                             rowsFocusable = searchActive,
                             focusToken = searchEnterToken,
                             menuFocus = searchMenuFocus,
@@ -548,20 +578,39 @@ fun DashboardScreen(
                             viewModel = searchModel,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        DashSection.MyItems -> MyItemsPanel(
+                        }
+                        DashSection.MyItems -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            myItemsListActive = true
+                            myItemsEnterToken += 1
+                        }
+                        MyItemsPanel(
                             listFocus = myItemsListFocus,
                             menuFocus = myItemsMenuFocus,
                             rowsFocusable = myItemsListActive,
                             onPlay = onStream,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        DashSection.Receiver -> ReceiverPowerPanel(
+                        }
+                        DashSection.Receiver -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            receiverPageFocus.requestWhenReady()
+                        }
+                        ReceiverPowerPanel(
                             pageFocus = receiverPageFocus,
                             menuFocus = receiverMenuFocus,
                             viewModel = powerModel,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        DashSection.Settings -> SettingsHub(
+                        }
+                        DashSection.Settings -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            settingsPageFocus.requestWhenReady()
+                        }
+                        SettingsHub(
                             settingsPageFocus,
                             settingsMenuFocus,
                             focusLanguageSetting,
@@ -572,6 +621,7 @@ fun DashboardScreen(
                             onFormActive = { settingsFormOpen = it },
                             modifier = Modifier.fillMaxSize(),
                         )
+                        }
                     }
                     }
                 }
@@ -874,6 +924,7 @@ internal fun BouquetColumn(
                     BouquetRow(
                         name = bouquet.name,
                         selected = bouquet.reference == selectedReference,
+                        onClick = onClose,
                         onFocus = { onPreview(bouquet) },
                         modifier = Modifier
                             .then(if (index == focusIndex) Modifier.focusRequester(bouquetFocus) else Modifier)
@@ -902,11 +953,12 @@ internal fun BouquetColumn(
 private fun BouquetRow(
     name: String,
     selected: Boolean,
+    onClick: () -> Unit,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Button(
-        onClick = {},
+        onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { if (it.isFocused) onFocus() },
@@ -929,8 +981,8 @@ private fun BouquetRow(
 }
 
 @Composable
-private fun RcInfoPanel(modifier: Modifier = Modifier) {
-    Column(modifier) {
+private fun RcInfoPanel(contentFocus: FocusRequester, modifier: Modifier = Modifier) {
+    Column(modifier.focusRequester(contentFocus).focusable()) {
         PanelHeader(stringResource(R.string.rc_title), stringResource(R.string.rc_subtitle))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
             SettingsCard(stringResource(R.string.rc_navigation), Modifier.weight(1f)) {
@@ -980,7 +1032,13 @@ private fun SettingsHub(
     connection: ConnectionViewModel = hiltViewModel(),
 ) {
     var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Language else SettingPage.Receivers) }
+    var pageEnter by remember { mutableIntStateOf(0) }
+    val pageContentFocus = remember { FocusRequester() }
     var formActive by remember { mutableStateOf(false) }
+    fun openPage(target: SettingPage) {
+        page = target
+        pageEnter += 1
+    }
     val formFocus = remember { FocusRequester() }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     Column(
@@ -1000,16 +1058,16 @@ private fun SettingsHub(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, pageFocus, menuFocus) { page = SettingPage.Receivers }
-                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { page = SettingPage.Remote }
-                SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { page = SettingPage.Playback }
-                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { page = SettingPage.Osd }
+                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, pageFocus, menuFocus) { openPage(SettingPage.Receivers) }
+                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { openPage(SettingPage.Remote) }
+                SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { openPage(SettingPage.Playback) }
+                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { openPage(SettingPage.Osd) }
                 SettingNav(EnigmaIcons.Speed, stringResource(R.string.signal_meter), false, null, menuFocus, onSignalMeter)
                 SettingNav(EnigmaIcons.Sync, stringResource(R.string.oscam), false, null, menuFocus, onOscam)
-                SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, null, menuFocus) { page = SettingPage.RcInfo }
-                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, null, menuFocus) { page = SettingPage.General }
-                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { page = SettingPage.Info }
-                SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, null, menuFocus) { page = SettingPage.Language }
+                SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, null, menuFocus) { openPage(SettingPage.RcInfo) }
+                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, null, menuFocus) { openPage(SettingPage.General) }
+                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { openPage(SettingPage.Info) }
+                SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, null, menuFocus) { openPage(SettingPage.Language) }
             }
             Column(
                 modifier = Modifier
@@ -1018,6 +1076,10 @@ private fun SettingsHub(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                LaunchedEffect(pageEnter) {
+                    if (pageEnter == 0) return@LaunchedEffect
+                    pageContentFocus.requestWhenReady()
+                }
                 when (page) {
                     SettingPage.Receivers -> ReceiversSettingsPanel(
                         receivers = settings.receivers,
@@ -1025,13 +1087,14 @@ private fun SettingsHub(
                         onSelect = viewModel::selectReceiver,
                         onDelete = viewModel::removeReceiver,
                         menuAnchor = pageFocus,
+                        contentFocus = pageContentFocus,
                         onFormActive = { active ->
                             formActive = active
                             onFormActive(active)
                         },
                         formFocus = formFocus,
                     )
-                    SettingPage.Remote -> RemoteAccessSettingsPanel()
+                    SettingPage.Remote -> RemoteAccessSettingsPanel(contentFocus = pageContentFocus)
                     SettingPage.Playback -> PlaybackSettingsPanel(
                         settings.streamMode,
                         settings.playback.lowLatency,
@@ -1043,6 +1106,7 @@ private fun SettingsHub(
                         settings.playback.recordingTarget,
                         settings.playback.recordingPreset,
                         viewModel,
+                        contentFocus = pageContentFocus,
                     )
                     SettingPage.Osd -> OsdSettingsPanel(
                         settings.osd.format,
@@ -1050,11 +1114,12 @@ private fun SettingsHub(
                         settings.osd.transparencyPercent,
                         settings.osdInfo,
                         viewModel,
+                        contentFocus = pageContentFocus,
                     )
-                    SettingPage.RcInfo -> RcInfoPanel(Modifier.fillMaxWidth())
-                    SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel)
-                    SettingPage.Info -> InfoSettingsPanel(settings, viewModel)
-                    SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus)
+                    SettingPage.RcInfo -> RcInfoPanel(pageContentFocus, Modifier.fillMaxWidth())
+                    SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel, pageContentFocus)
+                    SettingPage.Info -> InfoSettingsPanel(settings, viewModel, pageContentFocus)
+                    SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus, pageContentFocus)
                 }
             }
         }
@@ -1093,6 +1158,7 @@ private fun PlaybackSettingsPanel(
     recordingTarget: RecordingTarget,
     recordingPreset: TranscodePreset?,
     viewModel: SettingsViewModel,
+    contentFocus: FocusRequester,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
@@ -1104,6 +1170,7 @@ private fun PlaybackSettingsPanel(
             options = listOf(stringResource(R.string.record_target_tv), stringResource(R.string.record_target_receiver)),
             selectedIndex = if (recordingTarget == RecordingTarget.RECEIVER) 1 else 0,
             onSelect = { viewModel.setRecordingTarget(if (it == 1) RecordingTarget.RECEIVER else RecordingTarget.TV) },
+            firstOptionModifier = Modifier.focusRequester(contentFocus),
         )
         val presets = TranscodePreset.entries
         ChoiceRow(
@@ -1254,6 +1321,7 @@ private fun LanguageSettingsPanel(
     onFocusRestored: () -> Unit,
     onChoose: (AppLanguage) -> Unit,
     menuFocus: FocusRequester,
+    contentFocus: FocusRequester,
 ) {
     val context = LocalContext.current
     val current = remember { AppLanguageStore.current(context) }
@@ -1270,7 +1338,7 @@ private fun LanguageSettingsPanel(
             options = AppLanguage.entries.map { it.nativeName },
             selectedIndex = AppLanguage.entries.indexOf(current),
             onSelect = { onChoose(AppLanguage.entries[it]) },
-            firstOptionModifier = Modifier.focusProperties { left = menuFocus },
+            firstOptionModifier = Modifier.focusRequester(contentFocus).focusProperties { left = menuFocus },
             selectedOptionModifier = Modifier.focusRequester(focus),
         )
     }
@@ -1283,6 +1351,7 @@ private fun OsdSettingsPanel(
     transparencyPercent: Int,
     info: OsdInfoFields,
     viewModel: SettingsViewModel,
+    contentFocus: FocusRequester,
 ) {
     SettingsCard(stringResource(R.string.osd_transparency)) {
         StepperRow(
@@ -1291,6 +1360,7 @@ private fun OsdSettingsPanel(
             value = "$transparencyPercent%",
             decreaseLabel = "−10",
             increaseLabel = "+10",
+            decreaseModifier = Modifier.focusRequester(contentFocus),
             onDecrease = { viewModel.setOsdTransparency(transparencyPercent - 10) },
             onIncrease = { viewModel.setOsdTransparency(transparencyPercent + 10) },
         )
@@ -1334,6 +1404,7 @@ private fun GeneralSettingsPanel(
     navigationSounds: Boolean,
     motionQuality: com.enigmacast.domain.model.MotionQuality,
     viewModel: SettingsViewModel,
+    contentFocus: FocusRequester,
 ) {
     SettingsCard(stringResource(R.string.settings_interface)) {
         ToggleRow(
@@ -1341,6 +1412,7 @@ private fun GeneralSettingsPanel(
             description = stringResource(R.string.navigation_sounds_desc),
             checked = navigationSounds,
             onCheckedChange = viewModel::setNavigationSounds,
+            modifier = Modifier.focusRequester(contentFocus),
         )
         ChoiceRow(
             title = stringResource(R.string.motion_quality),
@@ -1361,13 +1433,14 @@ private fun GeneralSettingsPanel(
 private fun InfoSettingsPanel(
     settings: AppSettings,
     viewModel: SettingsViewModel,
+    contentFocus: FocusRequester,
 ) {
     SettingsCard(stringResource(R.string.app)) {
         InfoRow(stringResource(R.string.version), BuildConfig.VERSION_NAME)
         InfoRow(stringResource(R.string.build), BuildConfig.VERSION_CODE.toString())
     }
     SettingsCard(stringResource(R.string.diagnostics)) {
-        ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay)
+        ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay, modifier = Modifier.focusRequester(contentFocus))
         ToggleRow(stringResource(R.string.verbose_logging), settings.debug.verboseLogging, viewModel::setVerboseLogging)
         ToggleRow(stringResource(R.string.osd_border), settings.osd.debugBorders, viewModel::setDebugBorders)
     }

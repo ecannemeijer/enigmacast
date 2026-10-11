@@ -106,6 +106,8 @@ internal fun LiveBrowser(
     onFullscreen: () -> Unit,
     medium: GuideMedium,
     guideModel: StreamGuideViewModel,
+    /** Bumped when OK on the side menu should land on the first channel. */
+    enterToken: Int = 0,
 ) {
     BindGuide(medium, guideModel)
     val channels = guideModel.channels
@@ -119,9 +121,17 @@ internal fun LiveBrowser(
     val tunedIndex = channels.indexOfFirst { BouquetChannels.sameService(it.reference, guideModel.tunedReference) }
         .let { if (it >= 0) it else 0 }
     var focusedIndex by remember(bouquet) { mutableIntStateOf(tunedIndex) }
+    var handledEnter by remember { mutableIntStateOf(0) }
     LaunchedEffect(channels.size, bouquet) {
         if (channels.isEmpty()) return@LaunchedEffect
         if (focusedIndex !in channels.indices) focusedIndex = tunedIndex.coerceIn(0, channels.lastIndex)
+    }
+    LaunchedEffect(enterToken, channels.size) {
+        if (enterToken == 0 || enterToken == handledEnter || channels.isEmpty()) return@LaunchedEffect
+        handledEnter = enterToken
+        focusedIndex = 0
+        listState.scrollToItem(0)
+        firstFocus.requestWhenReady()
     }
     LaunchedEffect(focusPlayingChannel, channels.isNotEmpty()) {
         if (!focusPlayingChannel || channels.isEmpty()) return@LaunchedEffect
@@ -143,7 +153,14 @@ internal fun LiveBrowser(
             openToken = if (guideModel.bouquets.isEmpty()) 0 else 1,
             requestFocus = false,
             onPreview = guideModel::previewBouquet,
-            onClose = { runCatching { listFocus.requestFocus() } },
+            onClose = {
+                scope.launch {
+                    if (channels.isEmpty()) return@launch
+                    focusedIndex = 0
+                    listState.scrollToItem(0)
+                    firstFocus.requestWhenReady()
+                }
+            },
             modifier = Modifier.width(210.dp).fillMaxHeight(),
         )
         Column(Modifier.weight(1.2f).fillMaxHeight()) {

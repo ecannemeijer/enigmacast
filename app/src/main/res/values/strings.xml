@@ -188,7 +188,8 @@
     <string name="osd_audio">Audio: %s</string>
     <string name="osd_subtitles">Subtitles: %s</string>
     <string name="osd_subtitles_available">Subtitles available</string>
-    <string name="osd_banner_hint">OK: channel list · Info: details</string>
+    <string name="osd_banner_hint">OK: pause · Left: channel list · Info: details</string>
+    <string name="osd_banner_hint_paused">OK: resume · Left: channel list · Info: details</string>
     <string name="osd_unknown_programme">Unknown programme</string>
     <string name="osd_no_tuner_free">No tuner free</string>
     <string name="osd_no_picture">No picture</string>
@@ -372,7 +373,9 @@
     <string name="conn_receiver_offline">Receiver not reachable: %s</string>
     <string name="conn_receiver_offline_plain">Receiver not reachable</string>
     <string name="skin_standard">Standard</string>
-    <string name="osd_banner_hint_options">OK: channel list · ▼ options · Info: details</string>
+    <string name="osd_banner_hint_options">OK: pause · Left: channel list · ▼ options · Info: details</string>
+    <string name="osd_banner_hint_options_paused">OK: resume · Left: channel list · ▼ options · Info: details</string>
+    <string name="timeshift_full">Timeshift is full. Back to live.</string>
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Picture</string>
     <string name="quick_audio_delay">Audio delay</string>

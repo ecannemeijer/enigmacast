@@ -59,10 +59,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.IOException
 import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -118,6 +122,21 @@ class LivePlaybackController @Inject constructor(
     private var internetMime: String? = null
     private var hlsTried = false
     private var internetAttempts = 0
+
+    /**
+     * Enigma2 MPEG-TS is read by [TimeshiftPump] into [store], and ExoPlayer reads that
+     * buffer. Pausing the player then freezes the picture without letting the tuner socket go.
+     */
+    @Volatile
+    private var store: TimeshiftStore? = null
+    private var pump: TimeshiftPump? = null
+    private var timeshiftGeneration = 0
+    @Volatile
+    private var timeshiftPaused = false
+    private val _timeshiftFull = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Fires when the pause buffer is full and playback has jumped back to live. */
+    val timeshiftFull: SharedFlow<Unit> = _timeshiftFull.asSharedFlow()
 
     /** True while an internet / IPTV URL is the current stream (quality logic ignores it). */
     val playingInternet: Boolean get() = internet && currentUrl != null
@@ -212,6 +231,11 @@ class LivePlaybackController @Inject constructor(
         currentUrl = null
         reconnectJob?.cancel()
         stopWatchdog(StreamHealth.IDLE)
+        player?.let { exo ->
+            exo.playWhenReady = false
+            exo.stop()
+        }
+        retireTimeshift()
         clientFactory.cancelStream()
         releasePlayer()
         tsInspector.reset()
@@ -238,13 +262,14 @@ class LivePlaybackController @Inject constructor(
         internet = false
         stopWatchdog(StreamHealth.IDLE)
         tsInspector.reset()
-        // Cancel the socket first. ExoPlayer's stop does not always close a blocked read,
-        // and the receiver keeps that tuner until the TCP connection is gone.
+        // Stop the player before hanging up. Its read is on the timeshift buffer, and the
+        // pump is what holds the tuner socket until that socket is cancelled.
+        val exo = player
+        exo?.playWhenReady = false
+        exo?.stop()
+        exo?.clearMediaItems()
+        retireTimeshift()
         val ticket = clientFactory.holdStreamClosed()
-        val exo = player ?: return ticket
-        exo.playWhenReady = false
-        exo.stop()
-        exo.clearMediaItems()
         EnigmaLog.player("live stream released for zap")
         return ticket
     }
@@ -270,12 +295,13 @@ class LivePlaybackController @Inject constructor(
         currentUrl = null
         failures = 0
         stopWatchdog(StreamHealth.IDLE)
-        clientFactory.cancelStream()
         player?.let { exo ->
             exo.playWhenReady = false
             exo.stop()
             exo.clearMediaItems()
         }
+        retireTimeshift()
+        clientFactory.cancelStream()
         _cues.value = emptyList()
         EnigmaLog.player("live stream stopped for app update")
     }
@@ -338,6 +364,13 @@ class LivePlaybackController @Inject constructor(
         val exo = ensurePlayer()
         reconnectJob?.cancel()
         reconnectJob = null
+        // Release the previous loader before the buffer is swapped, so it cannot open a
+        // second Enigma2 socket while the new pump is taking the tuner. Retire first so
+        // cancelling the socket is not reported as a stream that failed.
+        exo.playWhenReady = false
+        exo.stop()
+        exo.clearMediaItems()
+        retireTimeshift()
         // The zap hold blocks player retries. Open the gate only now, then drop any socket
         // that is still listed, and only then ask the receiver for the new stream.
         clientFactory.releaseStream(clientFactory.streamHoldTicket())
@@ -357,24 +390,46 @@ class LivePlaybackController @Inject constructor(
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .build()
-        val builder = MediaItem.Builder().setUri(url)
+        val builder = MediaItem.Builder()
         val mime: String?
         if (internet) {
             // HLS / DASH / TS by URL; unknown → Media3 sniffs it (and HLS is tried once after a parse error).
             mime = internetMime ?: InternetMedia.mimeTypeFor(url)
+            builder.setUri(url)
             if (mime != null) builder.setMimeType(mime)
             // No forced offset: live HLS starts at the playlist's live edge (its own hold-back).
         } else {
+            // No live offset: that would pull a paused stream back to the live edge.
+            beginTimeshift(url, authorization)
             mime = MimeTypes.VIDEO_MP2T
-            builder.setMimeType(mime).setLiveConfiguration(liveConfiguration())
+            builder.setUri(TIMESHIFT_URI).setMimeType(mime)
         }
         exo.setMediaItem(builder.build(), true)
         exo.prepare()
         exo.playWhenReady = true
         EnigmaLog.player(
             "switching live stream ${EnigmaLog.sanitizeUrl(url)} auth=${if (authorization == null) "none" else "basic"}" +
-                if (internet) " kind=internet type=${mime ?: "auto"}" else "",
+                if (internet) " kind=internet type=${mime ?: "auto"}" else " timeshift",
         )
+    }
+
+    /**
+     * Pauses or resumes the Enigma2 stream in place. Returns false when this playback
+     * is a file, an internet stream, or nothing is loaded; the caller can do something else.
+     */
+    fun toggleTimeshiftPause(): Boolean {
+        val exo = player ?: return false
+        if (filePlayback || internet || store == null || currentUrl == null) return false
+        if (exo.playerError != null || exo.playbackState == Player.STATE_IDLE) return false
+        if (exo.playWhenReady) {
+            timeshiftPaused = true
+            exo.pause()
+        } else {
+            timeshiftPaused = false
+            exo.play()
+        }
+        publish()
+        return true
     }
 
     /** True while a recording file is what the player shows, so a live zap does not replace it. */
@@ -391,6 +446,10 @@ class LivePlaybackController @Inject constructor(
         fileDurationMs = durationMs.coerceAtLeast(0L)
         reconnectJob?.cancel()
         reconnectJob = null
+        exo.playWhenReady = false
+        exo.stop()
+        exo.clearMediaItems()
+        retireTimeshift()
         clientFactory.cancelStream()
         currentUrl = url
         streamAuthorization = authorization
@@ -549,6 +608,11 @@ class LivePlaybackController @Inject constructor(
     fun release() {
         reconnectJob?.cancel()
         stopWatchdog(StreamHealth.IDLE)
+        player?.let { exo ->
+            exo.playWhenReady = false
+            exo.stop()
+        }
+        retireTimeshift()
         clientFactory.cancelStream()
         releasePlayer()
     }
@@ -622,12 +686,59 @@ class LivePlaybackController @Inject constructor(
         return buildPlayer().also { player = it }
     }
 
-    private fun liveConfiguration(): MediaItem.LiveConfiguration {
-        val builder = MediaItem.LiveConfiguration.Builder()
-        return if (settings.lowLatency) {
-            builder.setTargetOffsetMs(1_000).setMinOffsetMs(500).setMaxOffsetMs(5_000).build()
-        } else {
-            builder.setTargetOffsetMs(4_000).setMinOffsetMs(2_000).setMaxOffsetMs(15_000).build()
+    /**
+     * Drops the pause buffer and ignores callbacks from the pump that was just stopped.
+     * The player should already be stopped, so its loader is not opening a new socket.
+     */
+    private fun retireTimeshift() {
+        timeshiftGeneration += 1
+        timeshiftPaused = false
+        val ending = pump
+        val endingStore = store
+        pump = null
+        store = null
+        ending?.stop()
+        endingStore?.delete()
+    }
+
+    /** Receiver MPEG-TS: one pump owns the tuner socket and ExoPlayer reads the buffer. */
+    private fun beginTimeshift(url: String, authorization: String?) {
+        retireTimeshift()
+        val generation = timeshiftGeneration
+        val root = File(context.cacheDir, "timeshift")
+        val created = TimeshiftStore(File(root, generation.toString()))
+        store = created
+        root.listFiles()?.forEach { child ->
+            if (child.name != generation.toString()) child.deleteRecursively()
+        }
+        val started = TimeshiftPump(
+            calls = clientFactory.streamCalls(),
+            store = created,
+            url = url,
+            authorization = authorization,
+            onFull = { onTimeshiftFull(generation) },
+            onEnded = { onTimeshiftEnded(generation) },
+        )
+        pump = started
+        started.start()
+    }
+
+    private fun onTimeshiftFull(generation: Int) {
+        ownScope.launch {
+            if (generation != timeshiftGeneration) return@launch
+            _timeshiftFull.tryEmit(Unit)
+            val url = currentUrl ?: return@launch
+            EnigmaLog.player("timeshift full, back to live")
+            start(url, streamAuthorization, checkStart, internet)
+        }
+    }
+
+    /** A dropped socket while paused never reaches the player, so reconnect from here. */
+    private fun onTimeshiftEnded(generation: Int) {
+        ownScope.launch {
+            if (generation != timeshiftGeneration || !timeshiftPaused) return@launch
+            EnigmaLog.player("timeshift stream ended while paused")
+            scheduleReconnect()
         }
     }
 
@@ -677,7 +788,13 @@ class LivePlaybackController @Inject constructor(
         // A recording on this TV is a file. OkHttp only accepts http(s), so local files go through a file source.
         val localOrHttp = DefaultDataSource.Factory(context, withAuthorization)
         val inspected = DataSource.Factory {
-            InspectingDataSource(localOrHttp.createDataSource(), tsInspector) { inspectStream }
+            val buffered = store
+            val upstream = if (buffered != null) {
+                TimeshiftDataSource(buffered, byteCounter)
+            } else {
+                localOrHttp.createDataSource()
+            }
+            InspectingDataSource(upstream, tsInspector) { inspectStream }
         }
         val mediaSourceFactory = DefaultMediaSourceFactory(inspected, extractors)
             .setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy())
@@ -733,6 +850,7 @@ class LivePlaybackController @Inject constructor(
             filePlayback = filePlayback,
             streamTitle = streamTitle(exo),
             streamArtist = streamArtist(exo),
+            timeshiftPaused = timeshiftPaused,
         )
         _tracks.value = TrackMenus.build(exo.currentTracks, settings.subtitlesEnabled)
     }
@@ -949,6 +1067,9 @@ class LivePlaybackController @Inject constructor(
  * milliseconds. 20 ms is about one refresh at 50 Hz, the rate DVB channels use.
  */
 private const val TEXTURE_VIEW_EARLY_SCHEDULING_US = 20_000L
+
+/** Media item the player opens while a [TimeshiftPump] is filling [TimeshiftStore]. */
+private const val TIMESHIFT_URI = "timeshift://live"
 
 private val FINAL_REFUSALS = setOf(StreamHealth.NO_TUNER, StreamHealth.AUTH_REQUIRED, StreamHealth.UNREACHABLE)
 

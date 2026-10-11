@@ -26,8 +26,8 @@ object OwnTunerKeys {
             EnigmaKey.OK -> OwnKeyAction.OK
             EnigmaKey.EXIT -> OwnKeyAction.BACK
             EnigmaKey.INFO, EnigmaKey.EPG -> OwnKeyAction.DETAILS
-            EnigmaKey.MENU, EnigmaKey.TV -> OwnKeyAction.LIST
-            EnigmaKey.LEFT, EnigmaKey.RIGHT -> OwnKeyAction.BANNER
+            EnigmaKey.MENU, EnigmaKey.TV, EnigmaKey.LEFT -> OwnKeyAction.LIST
+            EnigmaKey.RIGHT -> OwnKeyAction.BANNER
             EnigmaKey.DIGIT_0, EnigmaKey.DIGIT_1, EnigmaKey.DIGIT_2, EnigmaKey.DIGIT_3, EnigmaKey.DIGIT_4,
             EnigmaKey.DIGIT_5, EnigmaKey.DIGIT_6, EnigmaKey.DIGIT_7, EnigmaKey.DIGIT_8, EnigmaKey.DIGIT_9,
             -> OwnKeyAction.DIGIT

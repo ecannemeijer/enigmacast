@@ -352,6 +352,7 @@ fun StepperRow(
     description: String? = null,
     decreaseLabel: String = "−",
     increaseLabel: String = "+",
+    decreaseModifier: Modifier = Modifier,
     onReset: (() -> Unit)? = null,
     badge: String? = null,
 ) {
@@ -377,7 +378,7 @@ fun StepperRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = 8.dp),
         ) {
-            ChoiceChip(label = decreaseLabel, selected = false, onClick = onDecrease)
+            ChoiceChip(label = decreaseLabel, selected = false, onClick = onDecrease, modifier = decreaseModifier)
             Text(
                 value,
                 color = EnigmaColors.Accent,

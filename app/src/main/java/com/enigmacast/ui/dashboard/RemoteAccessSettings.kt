@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -43,7 +45,10 @@ import com.enigmacast.util.isNotEmpty
  * With the tunnel switched off nothing of WireGuard runs: no VPN, no changed routes.
  */
 @Composable
-internal fun RemoteAccessSettingsPanel(viewModel: ConnectionViewModel = hiltViewModel()) {
+internal fun RemoteAccessSettingsPanel(
+    contentFocus: FocusRequester,
+    viewModel: ConnectionViewModel = hiltViewModel(),
+) {
     val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         viewModel.onVpnConsent(result.resultCode == Activity.RESULT_OK)
     }
@@ -61,8 +66,13 @@ internal fun RemoteAccessSettingsPanel(viewModel: ConnectionViewModel = hiltView
                 AccessMode.AUTO to R.string.access_auto,
                 AccessMode.HOME to R.string.access_home,
                 AccessMode.REMOTE to R.string.access_remote,
-            ).forEach { (mode, label) ->
-                ChoiceChip(stringResource(label), selected = viewModel.accessMode == mode, onClick = { viewModel.accessMode = mode })
+            ).forEachIndexed { index, (mode, label) ->
+                ChoiceChip(
+                    stringResource(label),
+                    selected = viewModel.accessMode == mode,
+                    onClick = { viewModel.accessMode = mode },
+                    modifier = if (index == 0) Modifier.focusRequester(contentFocus) else Modifier,
+                )
             }
         }
         Hint(stringResource(R.string.conn_access_hint))

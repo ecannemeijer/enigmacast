@@ -185,7 +185,8 @@
     <string name="osd_audio">Audio: %s</string>
     <string name="osd_subtitles">Ondertitels: %s</string>
     <string name="osd_subtitles_available">Ondertitels beschikbaar</string>
-    <string name="osd_banner_hint">OK: zenderlijst · Info: details</string>
+    <string name="osd_banner_hint">OK: pauze · Links: zenderlijst · Info: details</string>
+    <string name="osd_banner_hint_paused">OK: verder · Links: zenderlijst · Info: details</string>
     <string name="osd_unknown_programme">Onbekend programma</string>
     <string name="osd_no_tuner_free">Geen tuner vrij</string>
     <string name="osd_no_picture">Geen beeld</string>
@@ -369,7 +370,9 @@
     <string name="conn_receiver_offline">Ontvanger niet bereikbaar: %s</string>
     <string name="conn_receiver_offline_plain">Ontvanger niet bereikbaar</string>
     <string name="skin_standard">Standaard</string>
-    <string name="osd_banner_hint_options">OK: zenderlijst · ▼ opties · Info: details</string>
+    <string name="osd_banner_hint_options">OK: pauze · Links: zenderlijst · ▼ opties · Info: details</string>
+    <string name="osd_banner_hint_options_paused">OK: verder · Links: zenderlijst · ▼ opties · Info: details</string>
+    <string name="timeshift_full">Timeshift is vol. Terug naar live.</string>
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Beeld</string>
     <string name="quick_audio_delay">Geluidsvertraging</string>

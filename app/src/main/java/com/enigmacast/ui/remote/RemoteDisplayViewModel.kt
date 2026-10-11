@@ -317,6 +317,11 @@ class RemoteDisplayViewModel @Inject constructor(
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
         }
         viewModelScope.launch {
+            playback.timeshiftFull.collect {
+                if (_ui.value.ownTuner) showNotice(UiText.res(R.string.timeshift_full), NOTICE_LONG_MS)
+            }
+        }
+        viewModelScope.launch {
             // Following the receiver there is no tuner overlay; say it when an internet stream gave up.
             playback.health.collect { health ->
                 if (_ui.value.ownTuner) return@collect
@@ -1047,7 +1052,7 @@ class RemoteDisplayViewModel @Inject constructor(
         }
         // The quick bar is plain Compose focus (Left/Right between tiles, OK opens a picker).
         if (ui.quickBar) return false
-        // Down on a banner that OK, Info or Left/Right brought up opens the quick bar;
+        // Down on a banner that OK, Info or Right brought up opens the quick bar;
         // after a zap Down keeps zapping.
         val radio = playingRadio(ui)
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && !ui.channelList && (radio || (ui.banner && !ui.bannerFromZap))) {
@@ -1076,7 +1081,9 @@ class RemoteDisplayViewModel @Inject constructor(
                 val tuner = ui.own.tuner.status
                 when {
                     tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM -> ownSession.retry()
-                    radio || ui.banner -> openChannelList()
+                    // Banner up, or radio (no banner): pause or resume. Left opens the list.
+                    // An internet stream cannot pause, so OK still opens the list there.
+                    radio || ui.banner -> if (!playback.toggleTimeshiftPause()) openChannelList()
                     else -> showBanner()
                 }
             }

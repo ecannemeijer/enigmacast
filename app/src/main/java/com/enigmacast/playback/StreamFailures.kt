@@ -27,6 +27,8 @@ internal object StreamFailures {
         var depth = 0
         while (current != null && depth < 8) {
             when (current) {
+                is TimeshiftHttpException ->
+                    return if (current.code == 401) StreamFailure.HTTP_401 else StreamFailure.HTTP_OTHER
                 is HttpDataSource.InvalidResponseCodeException ->
                     return if (current.responseCode == 401) StreamFailure.HTTP_401 else StreamFailure.HTTP_OTHER
                 is ConnectException, is NoRouteToHostException, is UnknownHostException, is SocketTimeoutException ->
