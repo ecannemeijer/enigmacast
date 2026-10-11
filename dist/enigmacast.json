@@ -1,6 +1,6 @@
 {
-  "versionCode": 24,
-  "versionName": "1.0.0-beta.21",
+  "versionCode": 25,
+  "versionName": "1.0.0-beta.22",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Signal meter and Oscam status. Back asks before the app closes."
+  "notes": "Pause and resume live TV with timeshift. OK opens the next menu on its first item. Hold Back for the full-screen stream."
 }
