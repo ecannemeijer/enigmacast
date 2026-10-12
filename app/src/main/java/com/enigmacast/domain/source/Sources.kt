@@ -114,4 +114,10 @@ interface OsdInfoSource {
      * Null when the image forbids file download or the file is missing.
      */
     suspend fun enigmaSettings(config: ReceiverConfig): String?
+
+    /**
+     * The receiver channel database (`lamedb`, or `lamedb5` when that is the only copy).
+     * Null when file download is forbidden or both files are missing.
+     */
+    suspend fun lamedb(config: ReceiverConfig): String?
 }

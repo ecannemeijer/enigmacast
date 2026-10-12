@@ -635,7 +635,7 @@
     <string name="signal_meter_hint">Een satelliet kiezen stopt het afspelen en stemt de ontvanger af. Terug gaat naar de vorige zender.</string>
     <string name="signal_loading">Satellieten laden…</string>
     <string name="signal_no_satellites">Geen satellieten gevonden</string>
-    <string name="signal_no_channel">Geen zender op deze satelliet om op af te stemmen</string>
+    <string name="signal_no_channel">Geen zender op deze transponder om op af te stemmen</string>
     <string name="signal_tuning">Afstemmen op %s…</string>
     <string name="signal_zap_failed">Afstemmen mislukt</string>
     <string name="signal_load_failed">Satellieten laden mislukt</string>

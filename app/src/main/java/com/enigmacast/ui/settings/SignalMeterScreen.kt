@@ -57,12 +57,16 @@ fun SignalMeterScreen(
     }
     val state = viewModel.state
     val backFocus = remember { FocusRequester() }
+    val firstTunerFocus = remember { FocusRequester() }
     val firstSatelliteFocus = remember { FocusRequester() }
     var openedFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(state.loading, state.noReceiver, state.satellites.size) {
+    LaunchedEffect(state.loading, state.noReceiver, state.tuners.size, state.satellites.size) {
         if (openedFocus || state.loading) return@LaunchedEffect
-        if (state.noReceiver || state.satellites.isEmpty()) backFocus.requestWhenReady()
-        else firstSatelliteFocus.requestWhenReady()
+        val target = when {
+            state.noReceiver || state.tuners.isEmpty() -> backFocus
+            else -> firstTunerFocus
+        }
+        target.requestWhenReady()
         openedFocus = true
     }
     Column(
@@ -102,7 +106,23 @@ fun SignalMeterScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    state.satellites.forEachIndexed { index, satellite ->
+                    state.tuners.forEachIndexed { index, tuner ->
+                        val selected = tuner.index == state.tunerIndex
+                        Button(
+                            onClick = { viewModel.selectTuner(tuner.index) },
+                            enabled = !state.busy,
+                            modifier = if (index == 0) Modifier.focusRequester(firstTunerFocus) else Modifier,
+                            colors = ButtonDefaults.colors(
+                                containerColor = if (selected) EnigmaColors.Accent else EnigmaColors.Raised,
+                                contentColor = EnigmaColors.Text,
+                                focusedContainerColor = EnigmaColors.Focus,
+                                focusedContentColor = EnigmaColors.OnFocus,
+                            ),
+                        ) {
+                            Text(tuner.label, fontSize = 16.sp)
+                        }
+                    }
+                    if (state.tunerIndex != null) state.satellites.forEachIndexed { index, satellite ->
                         val selected = index == state.selectedIndex
                         Button(
                             onClick = { viewModel.select(index) },

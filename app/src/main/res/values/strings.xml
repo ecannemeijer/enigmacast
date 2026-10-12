@@ -638,7 +638,7 @@
     <string name="signal_meter_hint">Choosing a satellite stops playback and tunes the receiver. Back returns to the previous channel.</string>
     <string name="signal_loading">Loading satellites…</string>
     <string name="signal_no_satellites">No satellites found</string>
-    <string name="signal_no_channel">No channel on this satellite to tune</string>
+    <string name="signal_no_channel">No channel on this transponder to tune</string>
     <string name="signal_tuning">Tuning %s…</string>
     <string name="signal_zap_failed">Tuning failed</string>
     <string name="signal_load_failed">Could not load satellites</string>

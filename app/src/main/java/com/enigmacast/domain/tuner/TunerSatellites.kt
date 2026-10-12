@@ -12,6 +12,13 @@ data class TunerSatellite(
     val serviceReference: String?,
 )
 
+/** A tuner that has its own satellite positions in the receiver setup. */
+data class ConfiguredTuner(
+    /** Frontend index: 0 is `/proc/stb/frontend/0`. */
+    val index: Int,
+    val positions: List<OrbitalPosition>,
+)
+
 /**
  * Satellites configured on the receiver's tuners, from `/etc/enigma2/settings`.
  * Simple mode uses `config.Nims.N.diseqcA`–`D` according to `diseqcMode`.
@@ -20,14 +27,7 @@ data class TunerSatellite(
  */
 object TunerSatellites {
     fun positions(settings: String): List<OrbitalPosition> {
-        val values = linkedMapOf<String, String>()
-        for (line in settings.lineSequence()) {
-            val text = line.trim()
-            if (text.isEmpty() || text.startsWith("#")) continue
-            val split = text.indexOf('=')
-            if (split <= 0) continue
-            values[text.substring(0, split).trim()] = text.substring(split + 1).trim()
-        }
+        val values = parse(settings)
         val tuners = values.keys.mapNotNull { key ->
             NIM_INDEX.find(key)?.groupValues?.get(1)?.toIntOrNull()
         }.toSortedSet()
@@ -35,6 +35,20 @@ object TunerSatellites {
         val visiting = mutableSetOf<Int>()
         for (tuner in tuners) found += collect(values, tuner, visiting)
         return found.map(::OrbitalPosition)
+    }
+
+    /** One entry per tuner that has satellites, including a looped tuner that follows another. */
+    fun tuners(settings: String): List<ConfiguredTuner> {
+        val values = parse(settings)
+        val tuners = values.keys.mapNotNull { key ->
+            NIM_INDEX.find(key)?.groupValues?.get(1)?.toIntOrNull()
+        }.toSortedSet()
+        return tuners.mapNotNull { tuner ->
+            val mode = values["config.Nims.$tuner.configMode"]?.lowercase()
+            if (mode == "nothing") return@mapNotNull null
+            val positions = collect(values, tuner, mutableSetOf())
+            if (positions.isEmpty()) null else ConfiguredTuner(tuner, positions.distinct().map(::OrbitalPosition))
+        }
     }
 
     /**
@@ -70,11 +84,11 @@ object TunerSatellites {
 
     private fun collect(values: Map<String, String>, tuner: Int, visiting: MutableSet<Int>): List<Int> {
         if (!visiting.add(tuner)) return emptyList()
-        val mode = values["config.Nims.$tuner.configMode"]?.lowercase()
+        val mode = nim(values, tuner, "configMode")?.lowercase()
         if (mode == "nothing") return emptyList()
         if (mode == "equal" || mode == "loop") {
-            val linked = values["config.Nims.$tuner.connectedTo"]?.toIntOrNull()
-                ?: values["config.Nims.$tuner.connected"]?.toIntOrNull()
+            val linked = nim(values, tuner, "connectedTo")?.toIntOrNull()
+                ?: nim(values, tuner, "connected")?.toIntOrNull()
             return if (linked == null) emptyList() else collect(values, linked, visiting)
         }
         val advanced = advancedOf(values, tuner)
@@ -83,35 +97,54 @@ object TunerSatellites {
             "advanced", "satposdepends", "advanced_satposdepends" -> advanced.ifEmpty { simple }
             "simple", null -> simple.ifEmpty { advanced }
             else -> {
-                val diseqc = values["config.Nims.$tuner.diseqcMode"]?.lowercase()
+                val diseqc = nim(values, tuner, "diseqcMode")?.lowercase()
                 if (diseqc == "positioner") (simple + advanced).distinct() else simple.ifEmpty { advanced }
             }
         }
     }
 
     private fun simpleOf(values: Map<String, String>, tuner: Int): List<Int> {
-        val diseqc = values["config.Nims.$tuner.diseqcMode"]?.lowercase()
+        val diseqc = nim(values, tuner, "diseqcMode")?.lowercase()
         val slots = when (diseqc) {
             "single", null -> listOf("diseqcA")
             "toneburst_a_b", "diseqc_a_b" -> listOf("diseqcA", "diseqcB")
             "diseqc_a_b_c_d", "positioner" -> listOf("diseqcA", "diseqcB", "diseqcC", "diseqcD")
             else -> listOf("diseqcA", "diseqcB", "diseqcC", "diseqcD")
         }
-        return slots.mapNotNull { slot -> values["config.Nims.$tuner.$slot"]?.let(::orbital) }
+        return slots.mapNotNull { slot -> nim(values, tuner, slot)?.let(::orbital) }
     }
 
     private fun advancedOf(values: Map<String, String>, tuner: Int): List<Int> {
-        val prefix = "config.Nims.$tuner.advanced.sat."
+        val prefixes = listOf(
+            "config.Nims.$tuner.advanced.sat.",
+            "config.Nims.$tuner.dvbs.advanced.sat.",
+        )
         val seen = linkedSetOf<Int>()
         for (key in values.keys) {
-            if (!key.startsWith(prefix)) continue
-            val position = key.removePrefix(prefix).substringBefore('.').toIntOrNull() ?: continue
-            if (position in 1..3599) seen += position
+            val prefix = prefixes.firstOrNull { key.startsWith(it) } ?: continue
+            val position = orbital(key.removePrefix(prefix).substringBefore('.')) ?: continue
+            seen += position
         }
         return seen.toList()
     }
 
+    /** OpenATV 7 stores tuner setup under `config.Nims.N.dvbs.*`; older images use `config.Nims.N.*`. */
+    private fun nim(values: Map<String, String>, tuner: Int, name: String): String? =
+        values["config.Nims.$tuner.$name"] ?: values["config.Nims.$tuner.dvbs.$name"]
+
     private fun orbital(raw: String): Int? = raw.trim().toIntOrNull()?.takeIf { it in 1..3599 }
+
+    private fun parse(settings: String): Map<String, String> {
+        val values = linkedMapOf<String, String>()
+        for (line in settings.lineSequence()) {
+            val text = line.trim()
+            if (text.isEmpty() || text.startsWith("#")) continue
+            val split = text.indexOf('=')
+            if (split <= 0) continue
+            values[text.substring(0, split).trim()] = text.substring(split + 1).trim()
+        }
+        return values
+    }
 
     private val NIM_INDEX = Regex("""config\.Nims\.(\d+)\.""")
 }

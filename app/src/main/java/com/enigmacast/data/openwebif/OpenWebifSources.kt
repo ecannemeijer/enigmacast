@@ -165,6 +165,9 @@ class OpenWebifOsdInfoSource @Inject constructor(
     /** `receiver/tuner/name` keys that answered 404, so the banner poll does not ask again. */
     private val missingProc = ConcurrentHashMap.newKeySet<String>()
 
+    /** Tuner whose frontend last had a lock, so the next poll does not walk every frontend. */
+    private val lockedTuner = ConcurrentHashMap<String, Int>()
+
     override suspend fun signal(config: ReceiverConfig): SignalReading? {
         val key = "${config.id}@${config.host}:${config.httpPort}"
         val known = signalUrl[key]
@@ -196,21 +199,46 @@ class OpenWebifOsdInfoSource @Inject constructor(
     override suspend fun streamTunerSignal(config: ReceiverConfig, tunerNumber: Int?): SignalReading? {
         val key = "${config.id}@${config.host}:${config.httpPort}"
         if (frontendFiles[key] == false) return null
-        if (tunerNumber != null) {
-            val reading = readFrontend(config, tunerNumber) ?: return null
-            return reading.takeIf { it.hasValues }
+        if (tunerNumber != null) return readFrontend(config, tunerNumber)
+        val tuner = lockedTuner[key]
+        if (tuner != null) {
+            val reading = readFrontend(config, tuner)?.takeIf { FrontendSignal.locked(null, it) }
+            if (reading != null) {
+                lockedTuner[key] = tuner
+                return reading
+            }
+            lockedTuner.remove(key)
         }
+        val locked = scanLockedFrontends(config)
+        val only = locked.singleOrNull()
+        val number = only?.tunerNumber
+        if (number != null) lockedTuner[key] = number else lockedTuner.remove(key)
+        return only
+    }
+
+    /**
+     * Finds frontends that are actually locked. Idle slots are skipped after the lock file,
+     * or after a zero SNR when that file does not exist, so a poll does not download
+     * strength and quality for every slot on the box.
+     */
+    private suspend fun scanLockedFrontends(config: ReceiverConfig): List<SignalReading> {
         val locked = mutableListOf<SignalReading>()
         for (index in 0 until MAX_FRONTENDS) {
-            val snr = readProc(config, index, "snr")
-            if (snr is ProcFile.Unavailable) return null
-            if (snr is ProcFile.Missing) return locked.singleOrNull()
-            val reading = readingOf(config, index, (snr as ProcFile.Text).body) ?: continue
             val lock = readProc(config, index, "lock")
-            val lockText = (lock as? ProcFile.Text)?.body
-            if (FrontendSignal.locked(lockText, reading)) locked += reading
+            if (lock is ProcFile.Unavailable) return emptyList()
+            if (lock is ProcFile.Text) {
+                if (!FrontendSignal.locked(lock.body, null)) continue
+                readFrontend(config, index)?.let { locked += it }
+                continue
+            }
+            val snr = readProc(config, index, "snr")
+            if (snr is ProcFile.Unavailable) return emptyList()
+            if (snr is ProcFile.Missing) return locked
+            val percent = FrontendSignal.percent((snr as ProcFile.Text).body) ?: 0
+            if (percent == 0) continue
+            readingOf(config, index, snr.body)?.takeIf { FrontendSignal.locked(null, it) }?.let { locked += it }
         }
-        return locked.singleOrNull()
+        return locked
     }
 
     private suspend fun readFrontend(config: ReceiverConfig, tuner: Int): SignalReading? {
@@ -276,6 +304,32 @@ class OpenWebifOsdInfoSource @Inject constructor(
             } catch (error: Exception) {
                 EnigmaLog.osdInfo("enigma settings failed: ${error.javaClass.simpleName}")
                 return null
+            }
+        }
+        return null
+    }
+
+    override suspend fun lamedb(config: ReceiverConfig): String? {
+        val key = "${config.id}@${config.host}:${config.httpPort}"
+        if (frontendFiles[key] == false) return null
+        for (path in listOf("/etc/enigma2/lamedb", "/etc/enigma2/lamedb5")) {
+            for (url in endpoints.fileDownload(config, path)) {
+                try {
+                    val body = api.body(config, url)
+                    frontendFiles.putIfAbsent(key, true)
+                    if (body.isNotBlank()) return body
+                } catch (cancel: CancellationException) {
+                    throw cancel
+                } catch (error: OpenWebifException) {
+                    if (error.statusCode == 403) {
+                        frontendFiles[key] = false
+                        EnigmaLog.osdInfo("frontend files forbidden")
+                        return null
+                    }
+                } catch (error: Exception) {
+                    EnigmaLog.osdInfo("lamedb failed: ${error.javaClass.simpleName}")
+                    return null
+                }
             }
         }
         return null

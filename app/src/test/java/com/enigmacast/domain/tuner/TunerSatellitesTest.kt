@@ -47,6 +47,41 @@ class TunerSatellitesTest {
     }
 
     @Test
+    fun eachTunerKeepsItsOwnSatellites() {
+        val settings = """
+            config.Nims.0.configMode=simple
+            config.Nims.0.diseqcMode=diseqc_a_b
+            config.Nims.0.diseqcA=192
+            config.Nims.0.diseqcB=235
+            config.Nims.1.configMode=simple
+            config.Nims.1.diseqcMode=single
+            config.Nims.1.diseqcA=282
+            config.Nims.2.configMode=nothing
+            config.Nims.2.diseqcA=130
+        """.trimIndent()
+        val tuners = TunerSatellites.tuners(settings)
+        assertEquals(listOf(0, 1), tuners.map { it.index })
+        assertEquals(listOf(192, 235), tuners[0].positions.map { it.tenths })
+        assertEquals(listOf(282), tuners[1].positions.map { it.tenths })
+    }
+
+    @Test
+    fun openAtvStoresDiseqcUnderTheDvbsKey() {
+        val settings = """
+            config.Nims.0.dvbs.diseqcA=192
+            config.Nims.0.dvbs.diseqcB=235
+            config.Nims.0.dvbs.diseqcC=282
+            config.Nims.0.dvbs.diseqcD=130
+            config.Nims.0.dvbs.diseqcMode=diseqc_a_b_c_d
+            config.Nims.1.dvbs.configMode=nothing
+            config.Nims.1.dvbs.diseqcA=192
+        """.trimIndent()
+        val tuners = TunerSatellites.tuners(settings)
+        assertEquals(listOf(0), tuners.map { it.index })
+        assertEquals(listOf(192, 235, 282, 130), tuners[0].positions.map { it.tenths })
+    }
+
+    @Test
     fun zeroAndOutOfRangePositionsAreDropped() {
         val settings = """
             config.Nims.0.configMode=simple

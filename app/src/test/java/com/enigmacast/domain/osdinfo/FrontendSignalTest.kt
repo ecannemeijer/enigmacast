@@ -41,5 +41,6 @@ class FrontendSignalTest {
         assertFalse(FrontendSignal.locked("0", live))
         assertTrue(FrontendSignal.locked(null, live))
         assertFalse(FrontendSignal.locked(null, quiet))
+        assertTrue(FrontendSignal.locked(null, SignalReading(snrDb = 12.5f, tunerNumber = 0)))
     }
 }

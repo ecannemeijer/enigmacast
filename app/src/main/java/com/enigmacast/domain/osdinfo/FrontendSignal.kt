@@ -44,7 +44,8 @@ object FrontendSignal {
         }
         val snr = reading?.snrPercent ?: 0
         val agc = reading?.agcPercent ?: 0
-        return snr > 0 || agc > 0
+        val db = reading?.snrDb ?: 0f
+        return snr > 0 || agc > 0 || db > 0.05f
     }
 
     private fun integer(raw: String?): Long? {
