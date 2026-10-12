@@ -1,7 +1,41 @@
 package com.enigmacast.domain.tuner
 
 /** A recording that needs a tuner: a box timer or this app's own capture. */
-data class PlannedRecording(val reference: String, val channelName: String, val beginEpochSec: Long, val endEpochSec: Long)
+data class PlannedRecording(
+    val reference: String,
+    val channelName: String,
+    val beginEpochSec: Long,
+    val endEpochSec: Long,
+    /** Programme title, for messages. */
+    val title: String = "",
+    /** End of the programme itself (without the box margin), for "until hh:mm". 0: [endEpochSec]. */
+    val programmeEndEpochSec: Long = 0,
+    /** Set for a box timer: its own begin/end, as `/api/timerdelete` needs them. */
+    val timer: Boolean = false,
+    /** Set for this app's own recording (on this device or a box timer it made). */
+    val recordingId: String? = null,
+) {
+    val untilEpochSec: Long get() = if (programmeEndEpochSec > 0) programmeEndEpochSec else endEpochSec
+}
+
+/** Recordings that keep [target] from getting a tuner, and the channel to go to once one is cancelled. */
+data class TunerConflict(val target: com.enigmacast.domain.model.BouquetEntry, val recordings: List<PlannedRecording>)
+
+object RecordingConflicts {
+    /**
+     * The running recordings to offer (Watch / Cancel) when [target] found no free tuner:
+     * every recording on another transponder, one entry per recording. Empty when the
+     * target shares a recording's transponder (it could not be blocked by recordings) or
+     * when nothing records (the tuners are taken by other viewers).
+     */
+    fun blockers(running: List<PlannedRecording>, target: String): List<PlannedRecording> {
+        if (!ServiceRef.needsTuner(target)) return emptyList()
+        if (running.any { ServiceRef.sameTransponder(it.reference, target) }) return emptyList()
+        return running.filter { ServiceRef.needsTuner(it.reference) }
+            .distinctBy { Triple(it.reference, it.beginEpochSec, it.recordingId) }
+            .sortedBy { it.untilEpochSec }
+    }
+}
 
 sealed interface StartAction {
     data object None : StartAction

@@ -246,6 +246,9 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
     }
     EnigmaCastTheme {
         Box(Modifier.fillMaxSize()) {
+        if (appViewModel.screen != AppScreen.Loading && appViewModel.screen != AppScreen.Connection) {
+            com.enigmacast.ui.recording.TunerConflictHost()
+        }
         when (appViewModel.screen) {
             AppScreen.Loading -> com.enigmacast.ui.components.EnigmaCastBootLogo()
             AppScreen.Connection -> ConnectionScreen(

@@ -967,4 +967,8 @@
     <string name="recording_switch_notice">Opname start: overschakelen naar %1$s</string>
     <string name="recording_zap_blocked">Niet mogelijk tijdens de opname op %1$s; alleen zenders op dezelfde transponder</string>
     <string name="record_on_named">Opnemen op %1$s</string>
+    <string name="conflict_title">Geen tuner vrij voor %1$s: er loopt een opname</string>
+    <string name="conflict_running">Opname op %1$s: ‘%2$s’, tot %3$s</string>
+    <string name="conflict_watch">Kijk %1$s</string>
+    <string name="conflict_cancel_then">Daarna start %1$s.</string>
 </resources>

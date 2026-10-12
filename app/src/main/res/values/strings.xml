@@ -970,4 +970,8 @@
     <string name="recording_switch_notice">Recording starts: switching to %1$s</string>
     <string name="recording_zap_blocked">Not possible during the recording on %1$s; only channels on the same transponder</string>
     <string name="record_on_named">Record on %1$s</string>
+    <string name="conflict_title">No tuner free for %1$s: a recording is running</string>
+    <string name="conflict_running">Recording on %1$s: ‘%2$s’, until %3$s</string>
+    <string name="conflict_watch">Watch %1$s</string>
+    <string name="conflict_cancel_then">Afterwards %1$s starts.</string>
 </resources>

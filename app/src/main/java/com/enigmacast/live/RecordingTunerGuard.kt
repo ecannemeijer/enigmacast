@@ -41,6 +41,9 @@ class RecordingTunerGuard @Inject constructor(
     private var timersAt = 0L
     private val handled = mutableSetOf<String>()
 
+    /** Re-read the box timers on the next check (after one was cancelled). */
+    fun invalidate() { timersAt = 0L }
+
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
@@ -58,13 +61,21 @@ class RecordingTunerGuard @Inject constructor(
         if (nowSec - timersAt >= TIMER_REFRESH_SEC) {
             timers = runCatching { api.timers(receiver) }.getOrNull()
                 ?.filter { it.state < 3 && !it.justPlay }
-                ?.map { PlannedRecording(it.reference, session.channelNameFor(it.reference, it.name), it.begin, it.end) }
+                ?.map { t ->
+                    val mine = recordings.get().items.value.firstOrNull { r ->
+                        r.place == RecordingPlace.RECEIVER && com.enigmacast.domain.recording.TimerMatch.same(t.reference, t.begin, t.end, t.eventId, r)
+                    }
+                    PlannedRecording(
+                        t.reference, session.channelNameFor(t.reference, mine?.channelName ?: t.name), t.begin, t.end,
+                        title = t.name, programmeEndEpochSec = t.eventEnd, timer = true, recordingId = mine?.id,
+                    )
+                }
                 ?: timers
             timersAt = nowSec
         }
         val ours = recordings.get().items.value
             .filter { it.receiverId == receiver.id && it.place == RecordingPlace.TV && it.isActive() }
-            .map { PlannedRecording(it.reference, it.channelName, it.beginEpochSec, it.endEpochSec) }
+            .map { PlannedRecording(it.reference, it.channelName, it.beginEpochSec, it.endEpochSec, title = it.title, recordingId = it.id) }
         // Box recordings made by the app are box timers already; app captures stream from the box.
         val all = (timers + ours).distinctBy { it.reference to it.beginEpochSec / 60 }
         session.runningRecordings = RecordingGuard.running(all, nowSec)

@@ -165,6 +165,19 @@ class OwnTunerSession @Inject constructor(
         start(entry)
     }
 
+    private val _conflict = MutableStateFlow<com.enigmacast.domain.tuner.TunerConflict?>(null)
+    /** No tuner for the requested channel because of running recordings: the dialog offers Watch / Cancel. */
+    val conflict: StateFlow<com.enigmacast.domain.tuner.TunerConflict?> = _conflict.asStateFlow()
+
+    fun setConflict(value: com.enigmacast.domain.tuner.TunerConflict?) { _conflict.value = value }
+
+    private fun raiseConflict(channel: BouquetEntry): Boolean {
+        val blockers = com.enigmacast.domain.tuner.RecordingConflicts.blockers(runningRecordings, channel.reference)
+        if (blockers.isEmpty()) return false
+        _conflict.value = com.enigmacast.domain.tuner.TunerConflict(channel, blockers)
+        return true
+    }
+
     private fun blockedMessage(recording: PlannedRecording): UiText =
         UiText.res(R.string.recording_zap_blocked, channelNameFor(recording.reference, recording.channelName))
 
@@ -382,7 +395,7 @@ class OwnTunerSession @Inject constructor(
                 val decision = RecordingGuard.zap(snapshot, channel.reference, running, ownAddresses(receiver))
                 if (decision is ZapDecision.Blocked) {
                     EnigmaLog.service("zap to ${channel.name} blocked by recording ${decision.recording.reference}")
-                    _notices.tryEmit(blockedMessage(decision.recording))
+                    if (!raiseConflict(channel)) _notices.tryEmit(blockedMessage(decision.recording))
                     return@launch
                 }
             }
@@ -575,6 +588,7 @@ class OwnTunerSession @Inject constructor(
             restoreOrigin()
             val recording = runningRecordings.firstOrNull { !RecordingGuard.sameTransponder(it.reference, channel.reference) }
             val message = recording?.let(::blockedMessage) ?: fullMessage(verdict.used, verdict.total)
+            raiseConflict(channel)
             _state.update {
                 it.copy(tuner = TunerState(TunerStatus.FULL, message, verdict.used, verdict.total, verdict.users))
             }
