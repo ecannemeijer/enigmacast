@@ -317,6 +317,9 @@ class RemoteDisplayViewModel @Inject constructor(
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
         }
         viewModelScope.launch {
+            ownSession.notices.collect { showNotice(it, NOTICE_LONG_MS) }
+        }
+        viewModelScope.launch {
             playback.timeshiftFull.collect {
                 if (_ui.value.ownTuner) showNotice(UiText.res(R.string.timeshift_full), NOTICE_LONG_MS)
             }

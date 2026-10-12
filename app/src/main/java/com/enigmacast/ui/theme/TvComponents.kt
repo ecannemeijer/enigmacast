@@ -610,7 +610,13 @@ fun TvChoiceDialog(
     onChoose: (Int) -> Unit,
     onDismiss: () -> Unit,
     compact: Boolean = false,
+    /** Buttons stacked, as wide as the widest label (long labels, several choices). */
+    stacked: Boolean = false,
 ) {
+    if (stacked) {
+        StackedChoiceDialog(title, message, choices, onChoose, onDismiss)
+        return
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -639,6 +645,38 @@ fun TvChoiceDialog(
                         modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** A small dialog sized to its content (max 420dp) with the choices under each other; the first has focus. */
+@Composable
+private fun StackedChoiceDialog(title: String, message: String, choices: List<String>, onChoose: (Int) -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        NavigationSoundsForWindow()
+        val firstFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
+        Column(
+            modifier = Modifier
+                .widthIn(min = 220.dp, max = 420.dp)
+                .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(title, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            if (message.isNotBlank()) Text(message, color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
+            choices.forEachIndexed { index, label ->
+                DialogButton(
+                    label = label,
+                    onClick = { onChoose(index) },
+                    destructive = false,
+                    enabled = true,
+                    compact = true,
+                    modifier = Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier),
+                )
             }
         }
     }

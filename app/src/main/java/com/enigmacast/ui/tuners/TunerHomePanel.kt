@@ -1,5 +1,6 @@
 package com.enigmacast.ui.tuners
 
+import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -98,7 +99,8 @@ fun TunerHomePanel(
                 .fillMaxSize()
                 .clip(RoundedCornerShape(16.dp))
                 .background(Brush.verticalGradient(0f to Color(0xFF0E1C2E), 0.6f to EnigmaColors.Canvas))
-                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
+                .holdPageFocus(contentFocus, model.cards.map { it.index }),
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()

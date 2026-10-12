@@ -168,6 +168,9 @@ class StreamGuideViewModel @Inject constructor(
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
         }
         viewModelScope.launch {
+            session.notices.collect { showNotice(it, NOTICE_LONG_MS) }
+        }
+        viewModelScope.launch {
             playback.health.collect { health ->
                 if (mode != StreamMode.FOLLOW_RECEIVER) return@collect
                 internetProblem(health)?.let { showNotice(it, NOTICE_LONG_MS) }

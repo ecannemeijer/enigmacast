@@ -967,4 +967,7 @@
     <string name="home_cancel_recording_title">Cancel the recording of “%1$s”?</string>
     <string name="home_cancel_autoswitch_title">Cancel AutoSwitch for “%1$s”?</string>
     <string name="home_margins">(box: −%1$d / +%2$d min)</string>
+    <string name="recording_switch_notice">Recording starts: switching to %1$s</string>
+    <string name="recording_zap_blocked">Not possible during the recording on %1$s; only channels on the same transponder</string>
+    <string name="record_on_named">Record on %1$s</string>
 </resources>

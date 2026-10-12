@@ -15,6 +15,9 @@ import com.enigmacast.domain.service.StreamReuse
 import com.enigmacast.domain.source.ServiceStateSource
 import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.tuner.ChannelNavigator
+import com.enigmacast.domain.tuner.PlannedRecording
+import com.enigmacast.domain.tuner.RecordingGuard
+import com.enigmacast.domain.tuner.ZapDecision
 import com.enigmacast.domain.tuner.RestartBudget
 import com.enigmacast.domain.tuner.StreamHealth
 import com.enigmacast.domain.tuner.TunerAvailability
@@ -32,6 +35,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,6 +138,35 @@ class OwnTunerSession @Inject constructor(
     }
 
     private var startAfterLoad = true
+
+    private val _notices = MutableSharedFlow<UiText>(extraBufferCapacity = 4)
+    /** Short messages for the picture (recording switch, blocked zap). */
+    val notices: SharedFlow<UiText> = _notices.asSharedFlow()
+
+    /** Recordings running on the active box now (set by [RecordingTunerGuard]). */
+    @Volatile var runningRecordings: List<PlannedRecording> = emptyList()
+
+    /** The DVB service this device is streaming, or null when it streams nothing from a tuner. */
+    fun streamingReference(): String? =
+        _state.value.channel?.reference?.takeIf { active && streaming && !playback.isFilePlayback() }
+
+    /** Channel name from the loaded list, for messages. */
+    fun channelNameFor(reference: String, fallback: String): String =
+        _state.value.channels.firstOrNull { BouquetChannels.sameService(it.reference, reference) }?.name ?: fallback
+
+    suspend fun addressesFor(receiver: ReceiverConfig): Set<String> = ownAddresses(receiver)
+
+    /** A recording needs this device's tuner: show why, then stream the recording's service. */
+    fun switchForRecording(recording: PlannedRecording) {
+        val entry = _state.value.channels.firstOrNull { BouquetChannels.sameService(it.reference, recording.reference) }
+            ?: BouquetEntry(recording.channelName, recording.reference)
+        EnigmaLog.service("recording needs the tuner: switching to ${entry.name}")
+        _notices.tryEmit(UiText.res(R.string.recording_switch_notice, entry.name))
+        start(entry)
+    }
+
+    private fun blockedMessage(recording: PlannedRecording): UiText =
+        UiText.res(R.string.recording_zap_blocked, channelNameFor(recording.reference, recording.channelName))
 
     /**
      * The active box changed. Drop the previous channel list so the next start
@@ -340,6 +375,17 @@ class OwnTunerSession @Inject constructor(
         startJob?.cancel()
         startJob = scope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            val running = runningRecordings
+            if (running.isNotEmpty() && streamingReference() != null) {
+                // Check before the current stream is closed: a refused zap keeps the picture.
+                val snapshot = runCatching { tunerSource.snapshot(receiver) }.getOrNull()
+                val decision = RecordingGuard.zap(snapshot, channel.reference, running, ownAddresses(receiver))
+                if (decision is ZapDecision.Blocked) {
+                    EnigmaLog.service("zap to ${channel.name} blocked by recording ${decision.recording.reference}")
+                    _notices.tryEmit(blockedMessage(decision.recording))
+                    return@launch
+                }
+            }
             beginFailover(receiver.id)
             startNow(receiver, channel)
         }
@@ -527,8 +573,10 @@ class OwnTunerSession @Inject constructor(
         if (verdict is TunerVerdict.Full) {
             if (tryNextBox(channel)) return
             restoreOrigin()
+            val recording = runningRecordings.firstOrNull { !RecordingGuard.sameTransponder(it.reference, channel.reference) }
+            val message = recording?.let(::blockedMessage) ?: fullMessage(verdict.used, verdict.total)
             _state.update {
-                it.copy(tuner = TunerState(TunerStatus.FULL, fullMessage(verdict.used, verdict.total), verdict.used, verdict.total, verdict.users))
+                it.copy(tuner = TunerState(TunerStatus.FULL, message, verdict.used, verdict.total, verdict.users))
             }
             return
         }

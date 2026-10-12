@@ -345,6 +345,8 @@ internal object OpenWebifJson {
         /** Seconds the box adds before/after the programme (begin/end include them). */
         val marginBefore: Long = 0,
         val marginAfter: Long = 0,
+        /** A zap-only timer: it switches the box but records nothing. */
+        val justPlay: Boolean = false,
     ) {
         val eventBegin: Long get() = begin + marginBefore
         val eventEnd: Long get() = (end - marginAfter).coerceAtLeast(eventBegin)
@@ -381,6 +383,7 @@ internal object OpenWebifJson {
                 eventId = item.primitive("eit")?.toIntOrNull() ?: -1,
                 marginBefore = marginSec(item.primitive("marginbefore")),
                 marginAfter = marginSec(item.primitive("marginafter")),
+                justPlay = item.primitive("justplay")?.let { it == "1" || it.equals("true", true) } == true,
             )
         }
     }

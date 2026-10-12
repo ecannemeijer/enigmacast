@@ -1,5 +1,6 @@
 package com.enigmacast.ui.home
 
+import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -123,7 +124,8 @@ fun FilmHomePanel(
             Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(16.dp))
-                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
+                .holdPageFocus(contentFocus, listOf(model.state::class, hero?.key)),
         ) {
             Backdrop(shown)
             val sections = remember { PivotState() }

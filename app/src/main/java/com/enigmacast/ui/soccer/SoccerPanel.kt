@@ -1,5 +1,6 @@
 package com.enigmacast.ui.soccer
 
+import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -112,7 +113,8 @@ fun SoccerPanel(
                 .fillMaxSize()
                 .clip(RoundedCornerShape(16.dp))
                 .background(Brush.verticalGradient(0f to Color(0xFF0B2A1E), 0.55f to EnigmaColors.Canvas))
-                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
+                .holdPageFocus(contentFocus, listOf(model.loading && model.sections.isEmpty, model.sections.isEmpty, model.sections.hero?.let { it.id })),
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()
