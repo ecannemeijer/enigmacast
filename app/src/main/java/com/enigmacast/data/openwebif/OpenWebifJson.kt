@@ -293,6 +293,8 @@ internal object OpenWebifJson {
                 plot = unescape(event.primitive("longdesc").orEmpty()).trim(),
                 beginEpochSec = begin,
                 durationSec = duration,
+                genreId = event.primitive("genreid")?.toIntOrNull() ?: -1,
+                genre = unescape(event.primitive("genre").orEmpty()).trim(),
             )
         }
     }

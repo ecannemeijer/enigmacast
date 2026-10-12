@@ -11,6 +11,10 @@ data class GuideEvent(
     val plot: String,
     val beginEpochSec: Long,
     val durationSec: Long,
+    /** DVB content byte from OpenWebif's `genreid` (0x10–0x1F is Movie/Drama); -1 when unknown. */
+    val genreId: Int = -1,
+    /** OpenWebif's genre text, for example "Movie/Drama"; blank when the receiver sends none. */
+    val genre: String = "",
 ) {
     val endEpochSec: Long get() = beginEpochSec + durationSec
 
