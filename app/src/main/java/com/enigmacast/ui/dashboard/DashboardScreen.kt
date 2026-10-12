@@ -498,30 +498,22 @@ fun DashboardScreen(
                             if (sectionEnter == 0) return@LaunchedEffect
                             homeContentFocus.requestWhenReady()
                         }
-                        HomePanel(
+                        com.enigmacast.ui.home.FilmHomePanel(
                             contentFocus = homeContentFocus,
                             menuFocus = homeFocus,
                             onRetreatTo = retreat,
-                            showMiniPlayer = showMiniPlayer,
+                            onWatch = { entry ->
+                                val known = guideModel.channels.firstOrNull {
+                                    BouquetChannels.sameService(it.reference, entry.reference)
+                                } ?: entry
+                                guideModel.tune(known, onStream, onStream)
+                            },
                             onContinue = { last ->
                                 val entry = guideModel.channels.firstOrNull {
                                     BouquetChannels.sameService(it.reference, last.reference)
                                 } ?: BouquetEntry(name = last.name, reference = last.reference)
                                 guideModel.tune(entry, onStream, onStream)
                             },
-                            onPlayChannel = { entry -> guideModel.tune(entry, onStream, onStream) },
-                            onOpenBouquet = { bouquet ->
-                                guideModel.previewBouquet(bouquet)
-                                section = DashSection.Stream
-                            },
-                            onOpenRecording = { item ->
-                                myItemsModel.open(item)
-                                myItemsListActive = true
-                                section = DashSection.MyItems
-                            },
-                            guideModel = guideModel,
-                            powerModel = powerModel,
-                            myItemsModel = myItemsModel,
                         )
                         }
                         DashSection.Stream -> LiveBrowser(
@@ -1474,6 +1466,7 @@ private fun GeneralSettingsPanel(
             },
         )
     }
+    com.enigmacast.ui.home.HomeFilmSettingsCard()
 }
 
 @Composable

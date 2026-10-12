@@ -64,9 +64,27 @@ On Linux or macOS use `./gradlew assembleDebug testDebugUnitTest`, with `sdk.dir
 
 The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
 
+The film home page needs a TMDB v3 API key. Put it in `local.properties` (never commit it):
+
+```properties
+TMDB_API_KEY=your_tmdb_v3_key
+```
+
+Gradle copies it into `BuildConfig.TMDB_API_KEY`. Without it the home page says that no key is set; a key typed in Settings › General › Home page replaces the built-in one.
+
 ## Dashboard
 
-The left menu is Home, Live TV, TV Guide, Radio, Search, My Items, Receivers, Settings, and Exit. Up and Down only move the highlight; OK opens that item. Home is the landing page: the programme on the last channel, Continue when there is one, then recently watched, on now, channel groups and recordings. There is no Live TV button on that page; Live TV stays in the left menu. Live TV is a three-column browser (bouquets, channels, preview); moving the highlight does not zap, OK does. TV Guide is the programme grid. Radio and Live TV each keep their own bouquet list; opening one does not zap or copy the other side's channels. Radio lists only radio bouquets (`/api/bouquets?stype=radio`). Live TV and TV Guide list only television bouquets. The open section stays marked while focus is in its panel. With a saved receiver, startup stays on Home.
+### Home: today's films
+
+Home shows the films on TV today, with artwork and data from TMDB. At the top is a hero with the best film still to come (or airing now): backdrop, title or logo, rating, year, genres, plot, channel and time, a LIVE badge when it is on, and Watch / Info / Schedule. Below are rows of poster cards: Now on TV, Tonight (from 20:00), Top rated today, one row per genre with at least three films (Action, Comedy, Drama, Family…), and Later today. Each card shows the channel and start time ("RTL 7 · 20:30"), the rating, the picon, a progress bar when airing, and small marks for AutoSwitch (⏰) and a recording (●). Moving over a card changes the backdrop. Recently watched channels follow, then the TMDB attribution.
+
+OK on a card opens a full-screen info page: backdrop, poster, title or logo, year, runtime, age rating for your country, genres, rating, tagline, plot, director, cast (Down, then Left/Right) and the channel with its time. Buttons: Watch (starts the channel; for a later film it starts the channel now), Schedule (AutoSwitch, the same reminder as in the guide), Record (the same recorder as the guide: on the TV or as a receiver timer, per Settings › Playback), and Close. Focus starts on Watch and Back closes.
+
+How films are found: every TV bouquet of the receiver (up to 12) is read with `/api/epgmulti` from four hours ago until midnight (until 03:00 late in the evening); a bouquet without an answer falls back to `/api/epgservice` for its first 40 channels. A programme counts as a film when it is 70 minutes to 4 hours long, is not news/sport/series-like, and has enough clues: the DVB genre Movie/Drama (`genreid` 0x10–0x1F), a prefix such as "Film:", a year, film words in the description, a typical film length. The title is cleaned ("Film: The Matrix (1999) (HD)" → "The Matrix") and searched on TMDB with the year, the language (nl-NL for Dutch) and the region. A result is accepted when the title (or the original title) is similar enough, the year is within one, and the film fits in the slot. The best film is ranked by a vote-weighted rating plus popularity, with a small bonus for films starting soon.
+
+The country is Settings › General › Home page › Country, or Auto: the network country, then a lookup of your internet address (ipapi.co, 3 s, cached a week), then the TV's region. TMDB answers are cached on the TV for 24 hours; at most 4 requests run at once and 20 per second.
+
+The left menu is Home, Live TV, TV Guide, Radio, Search, My Items, Receivers, Settings, and Exit. Up and Down only move the highlight; OK opens that item. Home is the landing page with today's films (see below); the mini player and the channel list are under Live TV. There is no Live TV button on that page; Live TV stays in the left menu. Live TV is a three-column browser (bouquets, channels, preview); moving the highlight does not zap, OK does. TV Guide is the programme grid. Radio and Live TV each keep their own bouquet list; opening one does not zap or copy the other side's channels. Radio lists only radio bouquets (`/api/bouquets?stype=radio`). Live TV and TV Guide list only television bouquets. The open section stays marked while focus is in its panel. With a saved receiver, startup stays on Home.
 
 Back from a page returns to the left menu. Back again, while the menu has focus, asks whether to stop EnigmaCast. Cancel stays in the app; Stop closes it and stops playback. The same question appears on the connection screen. The Exit item in the menu still closes at once.
 
