@@ -1,11 +1,14 @@
 package com.enigmacast.ui.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,9 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.Dp
@@ -61,6 +66,7 @@ internal fun HomePanel(
     contentFocus: FocusRequester,
     menuFocus: FocusRequester,
     onRetreatTo: (FocusRequester) -> Unit,
+    showMiniPlayer: Boolean,
     onContinue: (LastChannel) -> Unit,
     onPlayChannel: (BouquetEntry) -> Unit,
     onOpenBouquet: (BouquetEntry) -> Unit,
@@ -110,8 +116,13 @@ internal fun HomePanel(
             .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        EnigmaGlassPanel(
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+        EnigmaGlassPanel(
+            modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(22.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,6 +174,17 @@ internal fun HomePanel(
                     }
                 }
             }
+        }
+        if (showMiniPlayer && !guideModel.loadingChannels) {
+            Box(
+                Modifier
+                    .width(320.dp)
+                    .aspectRatio(16f / 9f)
+                    .background(Color.Black),
+            ) {
+                MiniStreamPlayer(Modifier.fillMaxSize())
+            }
+        }
         }
         if (focusEmpty) {
             Spacer(Modifier.size(1.dp).focusRequester(contentFocus).then(left).focusable())

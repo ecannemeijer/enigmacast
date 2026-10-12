@@ -502,6 +502,7 @@ fun DashboardScreen(
                             contentFocus = homeContentFocus,
                             menuFocus = homeFocus,
                             onRetreatTo = retreat,
+                            showMiniPlayer = showMiniPlayer,
                             onContinue = { last ->
                                 val entry = guideModel.channels.firstOrNull {
                                     BouquetChannels.sameService(it.reference, last.reference)

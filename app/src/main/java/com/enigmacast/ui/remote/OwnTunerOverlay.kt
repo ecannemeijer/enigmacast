@@ -43,6 +43,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -86,8 +87,10 @@ import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * The app's own on-screen display for own-tuner mode. Enigma2 draws its OSD on the
@@ -168,6 +171,14 @@ fun OwnTunerOverlay(
             )
         }
         val radio = channel != null && BouquetChannels.isRadioBouquet(own.bouquetReference)
+        if (ui.banner && !ui.bannerFromZap && !ui.channelList && ui.numberEntry.isEmpty() && channel != null && !radio) {
+            OsdClock(
+                scrim = scrim,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = EnigmaColors.SafeHorizontal, top = EnigmaColors.SafeVertical),
+            )
+        }
         if (radio && ui.quickBar && !ui.channelList) {
             QuickOptionsBar(
                 ui = ui,
@@ -183,7 +194,7 @@ fun OwnTunerOverlay(
         EnigmaAnimatedOsd(visible = showBanner, modifier = Modifier.align(Alignment.BottomCenter)) {
             if (channel != null) {
             Column {
-                ChannelBanner(
+                if (!ui.quickBar) ChannelBanner(
                     channel = channel,
                     number = numberOf(channel),
                     guide = own.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) },
@@ -756,6 +767,27 @@ private fun RowScope.ChannelRowContent(
                 emphasized = !focused,
             )
         }
+    }
+}
+
+@Composable
+private fun OsdClock(scrim: Color, modifier: Modifier = Modifier) {
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = LocalDateTime.now()
+            delay((60 - now.second).coerceAtLeast(1) * 1000L)
+        }
+    }
+    Column(
+        modifier = modifier
+            .background(scrim, RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
+        Text(now.format(DateTimeFormatter.ofPattern("HH:mm", locale)), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(now.format(DateTimeFormatter.ofPattern("EEE d MMM", locale)), color = EnigmaColors.Muted, fontSize = 10.sp, maxLines = 1)
     }
 }
 
