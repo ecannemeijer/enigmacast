@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -113,15 +114,20 @@ fun SoccerPanel(
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
         ) {
             val sections = remember { PivotState() }
+            val chain = rememberFocusChain()
+            val order = ArrayList<String>()
+            // Each section joins the vertical chain: Down/Up go to the next/previous section, never the menu.
+            fun sec(index: Int, key: String): Modifier { order += key; return sections.section(index).then(chain.section(key)) }
+            SideEffect { chain.keys = order.toList() }
             val s = model.sections
             PivotColumn(sections, Modifier.fillMaxSize()) {
                 when {
-                    model.loading && s.isEmpty -> Box(sections.section(0)) { Skeleton(contentFocus, left) }
+                    model.loading && s.isEmpty -> Box(sec(0, "top")) { Skeleton(contentFocus, left) }
                     s.isEmpty && model.problem != SoccerViewModel.Problem.NONE ->
-                        Box(sections.section(0)) { ProblemState(model.problem, contentFocus, left) { model.refresh(true) } }
-                    s.isEmpty -> Box(sections.section(0)) { EmptyState(contentFocus, left) { model.refresh(true) } }
+                        Box(sec(0, "top")) { ProblemState(model.problem, contentFocus, left) { model.refresh(true) } }
+                    s.isEmpty -> Box(sec(0, "top")) { EmptyState(contentFocus, left) { model.refresh(true) } }
                     else -> {
-                        Box(sections.section(0)) {
+                        Box(sec(0, "top")) {
                             val hero = s.hero
                             if (hero != null) {
                                 Hero(
@@ -142,21 +148,21 @@ fun SoccerPanel(
                             }
                         }
                         var index = 1
-                        if (s.live.isNotEmpty()) Box(sections.section(index++)) { MatchRow(stringResource(R.string.soccer_row_live), s.live, nowSec, locale, left, model) }
-                        if (s.today.isNotEmpty()) Box(sections.section(index++)) { MatchRow(stringResource(R.string.soccer_row_today), s.today, nowSec, locale, left, model) }
+                        if (s.live.isNotEmpty()) Box(sec(index++, "fd-live")) { MatchRow(stringResource(R.string.soccer_row_live), s.live, nowSec, locale, left, model) }
+                        if (s.today.isNotEmpty()) Box(sec(index++, "fd-today")) { MatchRow(stringResource(R.string.soccer_row_today), s.today, nowSec, locale, left, model) }
                         s.upcoming.take(3).forEach { (matchday, list) ->
                             val title = if (matchday != null) stringResource(R.string.soccer_row_upcoming_md, matchday) else stringResource(R.string.soccer_row_upcoming)
-                            Box(sections.section(index++)) { MatchRow(title, list, nowSec, locale, left, model) }
+                            Box(sec(index++, "fd-up-$matchday")) { MatchRow(title, list, nowSec, locale, left, model) }
                         }
-                        if (s.recent.isNotEmpty()) Box(sections.section(index++)) { MatchRow(stringResource(R.string.soccer_row_recent), s.recent, nowSec, locale, left, model) }
+                        if (s.recent.isNotEmpty()) Box(sec(index++, "fd-recent")) { MatchRow(stringResource(R.string.soccer_row_recent), s.recent, nowSec, locale, left, model) }
                     }
                 }
                 if (model.standings.values.any { t -> t.any { it.rows.isNotEmpty() } }) {
-                    Box(sections.section(STANDINGS_SECTION)) {
-                        Standings(model, standingsFocus, left)
+                    Box(sec(STANDINGS_SECTION, "fd-table")) {
+                        Standings(model, standingsFocus, left) { team -> pitch.findTeam(team.name)?.let { (t, league) -> pitch.openClub(t, league) } }
                     }
                 }
-                PitchSections(pitch, sections, PITCH_SECTIONS, nowSec, locale, left)
+                PitchSections(pitch, PITCH_SECTIONS, nowSec, locale, left, ::sec)
                 Text(
                     stringResource(R.string.soccer_attribution),
                     color = EnigmaColors.Subtle,
@@ -376,13 +382,14 @@ private fun MatchCard(match: SoccerMatch, nowSec: Long, locale: java.util.Locale
 }
 
 @Composable
-private fun Standings(model: SoccerViewModel, firstFocus: FocusRequester, left: Modifier) {
+private fun Standings(model: SoccerViewModel, firstFocus: FocusRequester, left: Modifier, onTeam: (com.enigmacast.domain.soccer.SoccerTeam) -> Unit) {
     val codes = model.country.competitions.filter { code -> model.standings[code]?.any { it.rows.isNotEmpty() } == true }
     val code = model.tableCode?.takeIf { it in codes } ?: codes.firstOrNull() ?: return
     val tables: List<StandingTable> = model.standings[code].orEmpty().filter { it.rows.isNotEmpty() }
     Column(Modifier.padding(start = 24.dp, end = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.soccer_standings), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.pitch_hint_club), color = EnigmaColors.Subtle, fontSize = 12.sp)
             if (codes.size > 1) {
                 codes.forEachIndexed { i, c ->
                     val name = model.matches.firstOrNull { it.competition == c }?.competitionName ?: c
@@ -413,7 +420,7 @@ private fun Standings(model: SoccerViewModel, firstFocus: FocusRequester, left: 
                 }
                 items(table.rows, key = { "$t-${it.position}-${it.team.id}" }) { row ->
                     val first = t == 0 && row == table.rows.first() && codes.size <= 1
-                    StandingLine(code, row, table.rows.size, if (first) Modifier.focusRequester(firstFocus).then(left) else left)
+                    StandingLine(code, row, table.rows.size, if (first) Modifier.focusRequester(firstFocus).then(left) else left) { onTeam(row.team) }
                 }
             }
         }
@@ -426,7 +433,7 @@ private fun HeaderCell(text: String, width: androidx.compose.ui.unit.Dp) {
 }
 
 @Composable
-private fun StandingLine(code: String, row: StandingRow, size: Int, modifier: Modifier) {
+private fun StandingLine(code: String, row: StandingRow, size: Int, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val zone = StandingZones.of(code, row.position, size)
@@ -439,6 +446,11 @@ private fun StandingLine(code: String, row: StandingRow, size: Int, modifier: Mo
     Row(
         modifier
             .fillMaxWidth()
+            .onKeyEvent { e ->
+                val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                if (ok && e.type == KeyEventType.KeyUp) onClick()
+                ok
+            }
             .focusable(interactionSource = interaction)
             .clip(RoundedCornerShape(8.dp))
             .background(if (focused) EnigmaColors.Selected else EnigmaColors.Card.copy(alpha = 0.6f))

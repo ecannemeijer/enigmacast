@@ -74,6 +74,10 @@ class PitchRepository @Inject constructor(
     suspend fun stats(m: PitchMatch, force: Boolean = false): List<StatGroup>? = cached("pitch|st|${m.id}", detailAge(m), force, "/v1/matches/${m.id}/stats")?.let(PitchJson::stats)
     suspend fun h2h(m: PitchMatch): PitchH2H? = cached("pitch|h2h|${m.id}", DAY_MS, false, "/v1/matches/${m.id}/h2h")?.let(PitchJson::h2h)
     suspend fun players(m: PitchMatch, force: Boolean = false): List<PlayerMatchStats>? = cached("pitch|pl|${m.id}", detailAge(m), force, "/v1/matches/${m.id}/players")?.let(PitchJson::playerStats)
+    /** One player's stats in one match (cached a week; finished matches don't change). */
+    suspend fun playerInMatch(matchId: String, playerId: String): PlayerMatchStats? =
+        cached("pitch|pm|$matchId|$playerId", WEEK_MS, false, "/v1/matches/$matchId/players/$playerId")?.let(PitchJson::playerStats)?.firstOrNull()
+
     suspend fun player(id: String): PitchPlayer? = cached("pitch|p|$id", WEEK_MS, false, "/v1/players/$id")?.let(PitchJson::player)
 
     /** Events of finished matches already cached (no network), for club top scorers. */

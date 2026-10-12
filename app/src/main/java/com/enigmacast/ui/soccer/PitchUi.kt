@@ -60,7 +60,6 @@ import com.enigmacast.ui.animation.LocalMotionSpec
 import com.enigmacast.ui.components.EnigmaGlassButton
 import com.enigmacast.ui.home.Badge
 import com.enigmacast.ui.home.LiveRed
-import com.enigmacast.ui.home.PivotState
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import java.util.Locale
@@ -83,21 +82,31 @@ fun PitchImage(url: String, fallback: String, size: Dp, modifier: Modifier = Mod
     }
 }
 
-/** Focus source and whether it is focused, for [tvClick]. */
-class TvFocus(val source: MutableInteractionSource, val focused: Boolean)
+/** Focus source, whether it is focused, and whether OK went down on this element (for [tvClick]). */
+class TvFocus(val source: MutableInteractionSource, private val state: androidx.compose.runtime.State<Boolean>) {
+    val focused: Boolean get() = state.value
+    var pressed = false
+}
 
 @Composable
 fun rememberTvFocus(): TvFocus {
     val source = remember { MutableInteractionSource() }
-    val focused by source.collectIsFocusedAsState()
-    return TvFocus(source, focused)
+    val focused = source.collectIsFocusedAsState()
+    return remember(source) { TvFocus(source, focused) }
 }
 
-/** Focusable, OK / Enter runs [onClick] (as the other TV cards in the app). */
+/**
+ * Focusable; OK / Enter runs [onClick] on key up, but only when the key also went down here, so
+ * the key-up of an OK that closed a dialog never opens the item that gets focus afterwards.
+ */
 fun Modifier.tvClick(focus: TvFocus, onClick: () -> Unit): Modifier = this
     .onKeyEvent { e ->
         val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
-        if (ok && e.type == KeyEventType.KeyUp) onClick()
+        if (ok && e.type == KeyEventType.KeyDown) focus.pressed = true
+        if (ok && e.type == KeyEventType.KeyUp) {
+            if (focus.pressed) onClick()
+            focus.pressed = false
+        }
         ok
     }
     .focusable(interactionSource = focus.source)
@@ -158,7 +167,10 @@ fun PitchMatchCard(m: PitchMatch, nowSec: Long, locale: Locale, modifier: Modifi
 @Composable
 private fun PitchRow(title: String, matches: List<PitchMatch>, nowSec: Long, locale: Locale, left: Modifier, onOpen: (PitchMatch) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 24.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.pitch_hint_match), color = EnigmaColors.Subtle, fontSize = 12.sp)
+        }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = 4.dp, end = 32.dp, top = 6.dp, bottom = 6.dp)) {
             itemsIndexed(matches, key = { _, m -> m.id }) { i, m -> PitchMatchCard(m, nowSec, locale, if (i == 0) left else Modifier) { onOpen(m) } }
         }
@@ -166,23 +178,27 @@ private fun PitchRow(title: String, matches: List<PitchMatch>, nowSec: Long, loc
 }
 
 /**
- * PitchAPI rows on the Soccer page: per league of the followed country live, results and
- * upcoming, then a table calculated from the results (for leagues football-data.org lacks, such
- * as the Eerste Divisie, and as a second view for the others).
+ * PitchAPI sections on the Soccer page. Per league of the followed country: live, results and
+ * upcoming rows, a "Clubs" row of crests (OK → club page), then one table calculated from the
+ * results whose rows open the club page too. [sec] registers each section in the page's
+ * vertical focus chain (see [FocusChain]).
  */
 @Composable
-fun ColumnScope.PitchSections(model: PitchViewModel, sections: PivotState, firstIndex: Int, nowSec: Long, locale: Locale, left: Modifier) {
+fun ColumnScope.PitchSections(model: PitchViewModel, firstIndex: Int, nowSec: Long, locale: Locale, left: Modifier, sec: (Int, String) -> Modifier) {
     var index = firstIndex
     model.blocks.forEach { b ->
         val name = b.league.name
-        if (b.live.isNotEmpty()) Box(sections.section(index++)) { PitchRow(stringResource(R.string.pitch_live, name), b.live, nowSec, locale, left, model::openMatch) }
-        if (b.recent.isNotEmpty()) Box(sections.section(index++)) { PitchRow(stringResource(R.string.pitch_results, name), b.recent, nowSec, locale, left, model::openMatch) }
-        if (b.upcoming.isNotEmpty()) Box(sections.section(index++)) { PitchRow(stringResource(R.string.pitch_upcoming, name), b.upcoming, nowSec, locale, left, model::openMatch) }
+        val id = b.league.id
+        if (b.live.isNotEmpty()) Box(sec(index++, "p-live-$id")) { PitchRow(stringResource(R.string.pitch_live, name), b.live, nowSec, locale, left, model::openMatch) }
+        if (b.recent.isNotEmpty()) Box(sec(index++, "p-res-$id")) { PitchRow(stringResource(R.string.pitch_results, name), b.recent, nowSec, locale, left, model::openMatch) }
+        if (b.upcoming.isNotEmpty()) Box(sec(index++, "p-up-$id")) { PitchRow(stringResource(R.string.pitch_upcoming, name), b.upcoming, nowSec, locale, left, model::openMatch) }
+        val clubs = b.table.map { it.stats.team }.sortedBy { it.name }
+        if (clubs.isNotEmpty()) Box(sec(index++, "p-clubs-$id")) { ClubsRow(name, clubs, left) { model.openClub(it, id) } }
     }
     val tables = model.blocks.filter { it.table.isNotEmpty() }
     if (tables.isNotEmpty()) {
         val current = tables.firstOrNull { it.league.id == model.tableLeague } ?: tables.first()
-        Box(sections.section(index)) {
+        Box(sec(index, "p-table")) {
             Column(Modifier.padding(start = 24.dp, end = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.pitch_table, current.league.name), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
@@ -190,6 +206,7 @@ fun ColumnScope.PitchSections(model: PitchViewModel, sections: PivotState, first
                         EnigmaGlassButton((if (t === current) "● " else "") + t.league.name, { model.tableLeague = t.league.id }, if (i == 0) left else Modifier)
                     }
                 }
+                Text(stringResource(R.string.pitch_hint_club), color = EnigmaColors.Subtle, fontSize = 12.sp)
                 TableHeader()
                 LazyColumn(Modifier.fillMaxWidth().height(330.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(current.table, key = { it.stats.team.id }) { row ->
@@ -201,6 +218,30 @@ fun ColumnScope.PitchSections(model: PitchViewModel, sections: PivotState, first
     }
     if (model.blocks.isNotEmpty()) {
         Text(stringResource(R.string.pitch_attribution), color = EnigmaColors.Subtle, fontSize = EnigmaType.Caption, modifier = Modifier.padding(start = 24.dp, top = 6.dp))
+    }
+}
+
+/** "Clubs · Eredivisie": crest cards, OK opens the club page with statistics and squad. */
+@Composable
+private fun ClubsRow(league: String, clubs: List<com.enigmacast.domain.soccer.pitch.PitchTeam>, left: Modifier, onOpen: (com.enigmacast.domain.soccer.pitch.PitchTeam) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 24.dp)) {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.pitch_clubs, league), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.pitch_hint_club), color = EnigmaColors.Subtle, fontSize = 12.sp)
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(start = 4.dp, end = 32.dp, top = 6.dp, bottom = 6.dp)) {
+            itemsIndexed(clubs, key = { _, t -> t.id }) { i, t ->
+                val focus = rememberTvFocus()
+                Column(
+                    (if (i == 0) left else Modifier).width(104.dp).tvClick(focus) { onOpen(t) }.then(focusLook(focus.focused)).padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    PitchImage(t.image, t.initials, 48.dp)
+                    Text(t.name, color = EnigmaColors.Text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                }
+            }
+        }
     }
 }
 

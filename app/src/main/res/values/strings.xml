@@ -883,4 +883,12 @@
     <string name="pitch_h2h_total">%1$d meetings</string>
     <string name="pitch_unavailable">PitchAPI unavailable</string>
     <string name="pitch_open_club">Club page</string>
+    <string name="pitch_clubs">Clubs · %1$s</string>
+    <string name="pitch_hint_club">OK on a club: statistics and players</string>
+    <string name="pitch_squad">Players</string>
+    <string name="pitch_hint_player">OK on a player: player details</string>
+    <string name="pitch_squad_from">From the lineups of the last %1$d matches</string>
+    <string name="pitch_apps">%1$d× in lineup, %2$d× starter</string>
+    <string name="pitch_hint_match">OK on a match: details</string>
+    <string name="pitch_no_squad">No lineups known yet</string>
 </resources>

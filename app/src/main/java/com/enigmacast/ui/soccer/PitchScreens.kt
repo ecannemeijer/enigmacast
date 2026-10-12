@@ -69,7 +69,7 @@ fun PitchScreenHost(model: PitchViewModel, nowSec: Long) {
     Dialog(onDismissRequest = model::back, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         NavigationSoundsForWindow()
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color(0xFF0B2A1E), 0.6f to EnigmaColors.Canvas))) {
-            Box(Modifier.fillMaxSize().padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)) {
+            Box(Modifier.fillMaxSize().padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical).trapFocus()) {
                 when (top) {
                     is PitchViewModel.Screen.Match -> model.detail?.takeIf { it.match.id == top.match.id }?.let { MatchScreen(model, it, nowSec) }
                     is PitchViewModel.Screen.Club -> model.club?.takeIf { it.team.id == top.team.id }?.let { ClubScreen(model, it) }
@@ -201,6 +201,7 @@ private fun LineupsTab(model: PitchViewModel, d: PitchMatchDetail) {
     }
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.pitch_hint_player), color = EnigmaColors.Subtle, fontSize = 11.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 SideTitle(d.match.home.name, lu.home)
                 SideTitle(d.match.away.name, lu.away, end = true)
@@ -304,6 +305,7 @@ private fun StatLine(title: String, home: String, away: String) {
 private fun PlayersTab(model: PitchViewModel, d: PitchMatchDetail, players: List<com.enigmacast.domain.soccer.pitch.PlayerMatchStats>) {
     if (players.isEmpty()) return Empty(stringResource(R.string.pitch_no_players))
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        item { Text(stringResource(R.string.pitch_hint_player), color = EnigmaColors.Subtle, fontSize = 11.sp) }
         items(players.sortedByDescending { it.rating ?: 0.0 }, key = { it.player.id }) { p ->
             val team = if (p.teamId == d.match.home.id) d.match.home else d.match.away
             Line(onClick = { model.openPlayer(p.player, d.match.id) }) {
@@ -410,6 +412,28 @@ private fun ClubScreen(model: PitchViewModel, c: PitchViewModel.ClubView) {
                     item { Heading(stringResource(R.string.pitch_recent)) }
                     c.recent.forEach { m -> val fm = mod(); item(key = "r${m.id}") { ClubMatchLine(m, c.team, locale, fm) { model.openMatch(m) } } }
                 }
+                item { Heading(stringResource(R.string.pitch_squad) + "  ·  " + stringResource(R.string.pitch_hint_player)) }
+                val squad = c.squad
+                when {
+                    squad == null -> item { EnigmaLoadingIndicator(Modifier.size(18.dp)) }
+                    squad.isEmpty() -> item { Text(stringResource(R.string.pitch_no_squad), color = EnigmaColors.Subtle, fontSize = 13.sp) }
+                    else -> {
+                        item { Text(stringResource(R.string.pitch_squad_from, PitchViewModel.SQUAD_MATCHES), color = EnigmaColors.Subtle, fontSize = 11.sp) }
+                        squad.forEach { sp ->
+                            val fm = mod()
+                            item(key = "sq${sp.person.id}") {
+                                Line(fm, onClick = { model.openPlayer(sp.person, sp.lastMatchId) }) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(sp.shirt, color = EnigmaColors.Cyan, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(30.dp))
+                                        Text(sp.person.name, color = EnigmaColors.Text, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(lineName(sp.line), color = EnigmaColors.Muted, fontSize = 12.sp, modifier = Modifier.width(110.dp))
+                                        Text(stringResource(R.string.pitch_apps, sp.apps, sp.starts), color = EnigmaColors.Subtle, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 item { Heading(stringResource(R.string.pitch_scorers)) }
                 val scorers = c.scorers
                 if (scorers == null) item { EnigmaLoadingIndicator(Modifier.size(18.dp)) }
@@ -425,6 +449,15 @@ private fun ClubScreen(model: PitchViewModel, c: PitchViewModel.ClubView) {
             }
         }
     }
+}
+
+@Composable
+private fun lineName(l: PitchStats.Line): String = when (l) {
+    PitchStats.Line.GK -> stringResource(R.string.pitch_pos_gk)
+    PitchStats.Line.DEF -> stringResource(R.string.pitch_pos_def)
+    PitchStats.Line.MID -> stringResource(R.string.pitch_pos_mid)
+    PitchStats.Line.ATT -> stringResource(R.string.pitch_pos_att)
+    PitchStats.Line.UNKNOWN -> ""
 }
 
 @Composable

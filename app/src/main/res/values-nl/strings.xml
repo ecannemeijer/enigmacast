@@ -880,4 +880,12 @@
     <string name="pitch_h2h_total">%1$d ontmoetingen</string>
     <string name="pitch_unavailable">PitchAPI niet bereikbaar</string>
     <string name="pitch_open_club">Clubpagina</string>
+    <string name="pitch_clubs">Clubs · %1$s</string>
+    <string name="pitch_hint_club">OK op een club: statistieken en spelers</string>
+    <string name="pitch_squad">Spelers</string>
+    <string name="pitch_hint_player">OK op een speler: spelersdetails</string>
+    <string name="pitch_squad_from">Uit de opstellingen van de laatste %1$d wedstrijden</string>
+    <string name="pitch_apps">%1$d× in opstelling, %2$d× basis</string>
+    <string name="pitch_hint_match">OK op een wedstrijd: details</string>
+    <string name="pitch_no_squad">Nog geen opstellingen bekend</string>
 </resources>

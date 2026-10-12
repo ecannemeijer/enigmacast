@@ -80,7 +80,11 @@ class PitchViewModel @Inject constructor(
         val recent: List<PitchMatch>,
         val upcoming: List<PitchMatch>,
         val scorers: List<Pair<PitchPerson, Int>>?,
+        /** Players from the lineups of recent matches; null while loading. */
+        val squad: List<SquadPlayer>? = null,
     )
+
+    data class SquadPlayer(val person: PitchPerson, val shirt: String, val line: PitchStats.Line, val starts: Int, val apps: Int, val lastMatchId: String)
 
     data class PlayerView(val person: PitchPerson, val profile: PitchPlayer?, val match: PlayerMatchStats?, val loading: Boolean)
 
@@ -188,7 +192,32 @@ class PitchViewModel @Inject constructor(
             played.takeLast(SCORER_FETCH).forEach { repository.events(it) }
             val scorers = PitchStats.scorers(repository.cachedEvents(played), team.id)
             club = club?.takeIf { it.team.id == team.id }?.copy(scorers = scorers)
+            club = club?.takeIf { it.team.id == team.id }?.copy(squad = squad(team, played.takeLast(SQUAD_MATCHES)))
         }
+    }
+
+    /** Squad from the lineups of [matches] (newest last): starters and substitutes of [team], most used first. */
+    private suspend fun squad(team: PitchTeam, matches: List<PitchMatch>): List<SquadPlayer> {
+        val seen = LinkedHashMap<String, SquadPlayer>()
+        matches.reversed().forEach { m ->
+            val lu = repository.lineups(m) ?: return@forEach
+            val side = if (m.home.id == team.id) lu.home else lu.away
+            side ?: return@forEach
+            (side.starters.map { it to true } + side.subs.map { it to false }).forEach { (p, start) ->
+                val old = seen[p.id]
+                seen[p.id] = if (old == null) {
+                    SquadPlayer(PitchPerson(p.id, p.name, ""), p.shirt, PitchStats.line(p.positionId), if (start) 1 else 0, 1, m.id)
+                } else {
+                    old.copy(starts = old.starts + if (start) 1 else 0, apps = old.apps + 1, line = if (old.line == PitchStats.Line.UNKNOWN) PitchStats.line(p.positionId) else old.line)
+                }
+            }
+        }
+        return seen.values.sortedWith(compareBy<SquadPlayer> { it.line.ordinal }.thenByDescending { it.starts }.thenBy { it.shirt.toIntOrNull() ?: 99 })
+    }
+
+    /** Club in the loaded leagues by (football-data.org) name, with its league id. */
+    fun findTeam(name: String): Pair<PitchTeam, String>? = blocks.firstNotNullOfOrNull { b ->
+        b.table.firstOrNull { PitchStats.sameTeam(it.stats.team.name, name) }?.let { it.stats.team to b.league.id }
     }
 
     fun openPlayer(person: PitchPerson, matchId: String?) {
@@ -200,7 +229,10 @@ class PitchViewModel @Inject constructor(
         player = PlayerView(person, null, null, loading = true)
         viewModelScope.launch {
             val profile = repository.player(person.id)
-            val line = if (matchId != null) detail?.takeIf { it.match.id == matchId }?.players?.firstOrNull { it.player.id == person.id } else null
+            val line = if (matchId != null) {
+                detail?.takeIf { it.match.id == matchId }?.players?.firstOrNull { it.player.id == person.id }
+                    ?: repository.playerInMatch(matchId, person.id)
+            } else null
             player = PlayerView(person, profile, line, loading = false)
         }
     }
@@ -222,6 +254,7 @@ class PitchViewModel @Inject constructor(
     companion object {
         const val ROW = 12
         const val SCORER_FETCH = 6
+        const val SQUAD_MATCHES = 4
         fun day(sec: Long) = Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()).toLocalDate()
     }
 }
