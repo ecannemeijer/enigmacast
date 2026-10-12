@@ -99,6 +99,7 @@ object EnigmaIcons {
     val Lock: ImageVector by lazy { icon("Lock", LOCK_PATH) }
     val Radio: ImageVector by lazy { icon("Radio", RADIO_PATH) }
     val Mic: ImageVector by lazy { icon("Mic", MIC_PATH) }
+    val Film: ImageVector by lazy { icon("Film", FILM_PATH) }
 
     private fun icon(name: String, path: String): ImageVector {
         return ImageVector.Builder(
@@ -113,3 +114,6 @@ object EnigmaIcons {
         ).build()
     }
 }
+
+/** Material "movie" (clapperboard). */
+private const val FILM_PATH = "M18,4l2,4h-3l-2,-4h-2l2,4h-3l-2,-4H8l2,4H7L5,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V4h-4z"

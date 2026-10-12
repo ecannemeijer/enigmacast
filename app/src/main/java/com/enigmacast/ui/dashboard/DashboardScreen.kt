@@ -128,13 +128,13 @@ import kotlinx.coroutines.launch
 
 private enum class DashSection {
     Home,
+    Movies,
     Soccer,
     Stream,
     Guide,
     Radio,
     Search,
     MyItems,
-    Receiver,
     Settings,
 }
 
@@ -145,6 +145,7 @@ private class DashBack {
 
 private enum class SettingPage {
     Receivers,
+    Receiver,
     Remote,
     Playback,
     Osd,
@@ -189,7 +190,6 @@ fun DashboardScreen(
             when {
                 focusLanguageSetting || returnToSettingsHub -> DashSection.Settings
                 returnToMyItemsId != null -> DashSection.MyItems
-                focusPlayingChannel -> DashSection.Stream
                 else -> DashSection.Home
             },
         )
@@ -198,6 +198,8 @@ fun DashboardScreen(
     var contentFocused by remember { mutableStateOf(false) }
     val homeFocus = remember { FocusRequester() }
     val homeContentFocus = remember { FocusRequester() }
+    val moviesFocus = remember { FocusRequester() }
+    val moviesContentFocus = remember { FocusRequester() }
     val soccerFocus = remember { FocusRequester() }
     val soccerContentFocus = remember { FocusRequester() }
     val streamFocus = remember { FocusRequester() }
@@ -218,8 +220,6 @@ fun DashboardScreen(
     // so opening Mijn Items does not pull the highlight onto the first row.
     var myItemsListActive by remember { mutableStateOf(returnToMyItemsId != null) }
     var myItemsEnterToken by remember { mutableIntStateOf(0) }
-    val receiverMenuFocus = remember { FocusRequester() }
-    val receiverPageFocus = remember { FocusRequester() }
     val settingsMenuFocus = remember { FocusRequester() }
     val settingsPageFocus = remember { FocusRequester() }
     /** Address form is open; focus landing on the main menu must not leave Settings. */
@@ -230,13 +230,13 @@ fun DashboardScreen(
     val myItemsModel: MyItemsViewModel = hiltViewModel()
     fun sectionMenu(): FocusRequester = when (section) {
         DashSection.Home -> homeFocus
+        DashSection.Movies -> moviesFocus
         DashSection.Soccer -> soccerFocus
         DashSection.Stream -> streamFocus
         DashSection.Guide -> guideFocus
         DashSection.Radio -> radioFocus
         DashSection.Search -> searchMenuFocus
         DashSection.MyItems -> myItemsMenuFocus
-        DashSection.Receiver -> receiverMenuFocus
         DashSection.Settings -> settingsMenuFocus
     }
     DisposableEffect(contentFocused, section, guideModel.askWake) {
@@ -261,7 +261,8 @@ fun DashboardScreen(
                 onSettingsHubShown()
             }
             focusLanguageSetting || returnToMyItemsId != null -> Unit
-            focusPlayingChannel -> streamFocus.requestFocus()
+            // Back from the player: Live TV opens the player, so focus its menu item.
+            focusPlayingChannel -> { streamFocus.requestFocus(); onPlayingChannelFocused() }
             else -> homeFocus.requestFocus()
         }
     }
@@ -372,7 +373,8 @@ fun DashboardScreen(
                         .focusRequester(streamFocus)
                         .onFocusChanged { streamItemFocused = it.isFocused }
                         .focusProperties { right = if (section == DashSection.Stream) bouquetFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Stream) },
+                    // Live TV opens the full-screen player: the running stream, else the last channel.
+                    onClick = { guideModel.openLive(onStream) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Guide,
@@ -385,6 +387,17 @@ fun DashboardScreen(
                         .onFocusChanged { guideItemFocused = it.isFocused }
                         .focusProperties { right = if (section == DashSection.Guide) guideGridFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Guide) },
+                )
+                NavItem(
+                    icon = EnigmaIcons.Film,
+                    label = stringResource(R.string.nav_movies),
+                    selected = section == DashSection.Movies,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 3,
+                    modifier = Modifier
+                        .focusRequester(moviesFocus)
+                        .focusProperties { right = if (section == DashSection.Movies) moviesContentFocus else FocusRequester.Cancel },
+                    onClick = { enterSection(DashSection.Movies) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Soccer,
@@ -452,17 +465,6 @@ fun DashboardScreen(
                     onClick = { enterSection(DashSection.MyItems) },
                 )
                 NavItem(
-                    icon = EnigmaIcons.Power,
-                    label = stringResource(R.string.nav_receiver),
-                    selected = section == DashSection.Receiver,
-                    showLabel = drawerExpanded,
-                    staggerIndex = 7,
-                    modifier = Modifier
-                        .focusRequester(receiverMenuFocus)
-                        .focusProperties { right = if (section == DashSection.Receiver) receiverPageFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Receiver) },
-                )
-                NavItem(
                     icon = Icons.Filled.Settings,
                     label = stringResource(R.string.nav_settings),
                     selected = section == DashSection.Settings,
@@ -513,9 +515,21 @@ fun DashboardScreen(
                             if (sectionEnter == 0) return@LaunchedEffect
                             homeContentFocus.requestWhenReady()
                         }
-                        com.enigmacast.ui.home.FilmHomePanel(
+                        com.enigmacast.ui.tuners.TunerHomePanel(
                             contentFocus = homeContentFocus,
                             menuFocus = homeFocus,
+                            onRetreatTo = retreat,
+                            onWatch = { entry -> guideModel.tune(entry, onStream, onStream) },
+                        )
+                        }
+                        DashSection.Movies -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            moviesContentFocus.requestWhenReady()
+                        }
+                        com.enigmacast.ui.home.FilmHomePanel(
+                            contentFocus = moviesContentFocus,
+                            menuFocus = moviesFocus,
                             onRetreatTo = retreat,
                             onWatch = { entry ->
                                 val known = guideModel.channels.firstOrNull {
@@ -634,19 +648,6 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
-                        DashSection.Receiver -> {
-                        LaunchedEffect(sectionEnter) {
-                            if (sectionEnter == 0) return@LaunchedEffect
-                            receiverPageFocus.requestWhenReady()
-                        }
-                        ReceiverPowerPanel(
-                            pageFocus = receiverPageFocus,
-                            menuFocus = receiverMenuFocus,
-                            onRetreatTo = retreat,
-                            viewModel = powerModel,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        }
                         DashSection.Settings -> {
                         LaunchedEffect(sectionEnter) {
                             if (sectionEnter == 0) return@LaunchedEffect
@@ -660,6 +661,7 @@ fun DashboardScreen(
                             onChooseLanguage,
                             onSignalMeter = onSignalMeter,
                             onOscam = onOscam,
+                            powerModel = powerModel,
                             onFormActive = { settingsFormOpen = it },
                             onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
@@ -1077,6 +1079,7 @@ private fun SettingsHub(
     onChooseLanguage: (AppLanguage) -> Unit,
     onSignalMeter: () -> Unit,
     onOscam: () -> Unit,
+    powerModel: com.enigmacast.ui.power.ReceiverPowerViewModel,
     onFormActive: (Boolean) -> Unit,
     onRetreatTo: (FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
@@ -1119,6 +1122,7 @@ private fun SettingsHub(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
+                SettingNav(EnigmaIcons.Power, stringResource(R.string.nav_receiver), page == SettingPage.Receiver, navFocus.getValue(SettingPage.Receiver), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receiver) }) { enterPage(SettingPage.Receiver) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, navFocus.getValue(SettingPage.Playback), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Playback) }) { enterPage(SettingPage.Playback) }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, navFocus.getValue(SettingPage.Osd), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Osd) }) { enterPage(SettingPage.Osd) }
@@ -1130,6 +1134,22 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, navFocus.getValue(SettingPage.Language), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Language) }) { enterPage(SettingPage.Language) }
             }
             }
+            if (page == SettingPage.Receiver) {
+                // Receiver (power, details) scrolls itself, so it sits outside the page's scroll column.
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    LaunchedEffect(pageEnter) {
+                        if (pageEnter == 0) return@LaunchedEffect
+                        pageContentFocus.requestWhenReady()
+                    }
+                    com.enigmacast.ui.power.ReceiverPowerPanel(
+                        pageFocus = pageContentFocus,
+                        menuFocus = navFocus.getValue(SettingPage.Receiver),
+                        onRetreatTo = onRetreatTo,
+                        viewModel = powerModel,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            } else
             CompositionLocalProvider(
                 LocalEdgeLeft provides pageFocus,
                 androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.MinimalBringIntoView,
@@ -1160,6 +1180,7 @@ private fun SettingsHub(
                         },
                         formFocus = formFocus,
                     )
+                    SettingPage.Receiver -> Unit
                     SettingPage.Remote -> RemoteAccessSettingsPanel(contentFocus = pageContentFocus)
                     SettingPage.Playback -> PlaybackSettingsPanel(
                         settings.streamMode,

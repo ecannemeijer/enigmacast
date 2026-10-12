@@ -1,0 +1,281 @@
+package com.enigmacast.ui.tuners
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.Text
+import com.enigmacast.R
+import com.enigmacast.domain.model.BouquetEntry
+import com.enigmacast.domain.tuner.ScheduleItem
+import com.enigmacast.domain.tuner.ScheduleKind
+import com.enigmacast.domain.tuner.StopOption
+import com.enigmacast.domain.tuner.TunerCard
+import com.enigmacast.domain.tuner.TunerUse
+import com.enigmacast.domain.tuner.TunerUseKind
+import com.enigmacast.domain.tuner.stopOption
+import com.enigmacast.ui.home.PivotColumn
+import com.enigmacast.ui.home.PivotState
+import com.enigmacast.ui.soccer.PageSection
+import com.enigmacast.ui.soccer.focusLook
+import com.enigmacast.ui.soccer.rememberFocusChain
+import com.enigmacast.ui.soccer.rememberTvFocus
+import com.enigmacast.ui.soccer.tvClick
+import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.LocalEdgeLeft
+import com.enigmacast.ui.theme.PanelHeader
+import com.enigmacast.ui.theme.TvChoiceDialog
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private val CardShape = RoundedCornerShape(12.dp)
+
+/**
+ * Home: one card per tuner (who uses it, which channel, programme) and what is scheduled
+ * today. OK on a tuner opens Watch along / Stop stream.
+ */
+@Composable
+fun TunerHomePanel(
+    contentFocus: FocusRequester,
+    menuFocus: FocusRequester,
+    onRetreatTo: (FocusRequester) -> Unit,
+    onWatch: (BouquetEntry) -> Unit,
+    model: TunerHomeViewModel = hiltViewModel(),
+) {
+    LaunchedEffect(Unit) { model.whileVisible() }
+    val left = Modifier.focusProperties { left = menuFocus }
+    var chosen by remember { mutableStateOf<TunerCard?>(null) }
+    var info by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var confirmStandby by remember { mutableStateOf(false) }
+
+    CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Brush.verticalGradient(0f to Color(0xFF0E1C2E), 0.6f to EnigmaColors.Canvas))
+                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+        ) {
+            val sections = remember { PivotState() }
+            val chain = rememberFocusChain()
+            val list = buildList {
+                add(PageSection("tuners") { TunersRow(model, left) { chosen = it } })
+                add(PageSection("schedule") { ScheduleBlock(model.schedule, left) })
+            }
+            chain.keys = list.map { it.key }
+            PivotColumn(sections, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
+                PanelHeader(
+                    stringResource(R.string.home_tuners_title),
+                    when {
+                        model.failed && !model.loading -> stringResource(R.string.home_unreachable)
+                        model.inStandby -> stringResource(R.string.home_standby)
+                        else -> stringResource(R.string.home_tuners_subtitle)
+                    },
+                )
+                list.forEachIndexed { i, section ->
+                    key(section.key) {
+                        val entry = if (i == 0) Modifier.focusRequester(contentFocus) else Modifier
+                        Box(sections.section(i).then(entry).then(chain.section(section.key))) { section.content() }
+                    }
+                }
+            }
+        }
+    }
+
+    chosen?.let { card ->
+        val use = card.primary
+        val canWatch = card.uses.any { it.reference.isNotBlank() }
+        val choices = buildList {
+            if (canWatch) add(stringResource(R.string.home_watch_along))
+            if (!card.idle) add(stringResource(R.string.home_stop_stream))
+            add(stringResource(R.string.cancel))
+        }
+        val watch = stringResource(R.string.home_watch_along)
+        val stop = stringResource(R.string.home_stop_stream)
+        val otherTitle = stringResource(R.string.home_stop_other_title)
+        val other = card.uses.firstOrNull { it.kind == TunerUseKind.OTHER_STREAM }
+        val otherMsg = stringResource(R.string.home_stop_other_message, other?.address?.ifBlank { null } ?: stringResource(R.string.home_unknown_client))
+        val recMsg = stringResource(R.string.home_stop_rec_message)
+        val stopped = stringResource(R.string.home_stopped_own)
+        val lines = card.uses.map { useLine(it) }
+        TvChoiceDialog(
+            title = stringResource(R.string.home_tuner_name, card.letter) + (use?.let { " · " + it.channelName } ?: ""),
+            message = lines.joinToString("\n").ifBlank { stringResource(R.string.home_tuner_idle) },
+            choices = choices,
+            onChoose = { i ->
+                chosen = null
+                when (choices[i]) {
+                    watch -> card.uses.firstOrNull { it.reference.isNotBlank() }?.let { onWatch(BouquetEntry(it.channelName, it.reference)) }
+                    stop -> when (card.stopOption()) {
+                        StopOption.STOP_OWN -> { model.stopOwnStream(); info = stop to stopped }
+                        StopOption.STANDBY_RECEIVER -> confirmStandby = true
+                        StopOption.NOT_POSSIBLE_OTHER -> info = otherTitle to otherMsg
+                        StopOption.NOT_POSSIBLE_RECORDING -> info = otherTitle to recMsg
+                        StopOption.NOTHING -> Unit
+                    }
+                }
+            },
+            onDismiss = { chosen = null },
+        )
+    }
+    if (confirmStandby) {
+        TvChoiceDialog(
+            title = stringResource(R.string.home_standby_title),
+            message = stringResource(R.string.home_standby_message),
+            choices = listOf(stringResource(R.string.home_standby_confirm), stringResource(R.string.cancel)),
+            onChoose = { i -> confirmStandby = false; if (i == 0) model.standby() },
+            onDismiss = { confirmStandby = false },
+        )
+    }
+    info?.let { (title, message) ->
+        TvChoiceDialog(title, message, listOf(stringResource(R.string.home_ok)), onChoose = { info = null }, onDismiss = { info = null })
+    }
+}
+
+@Composable
+private fun useLine(use: TunerUse): String = when (use.kind) {
+    TunerUseKind.LIVE -> stringResource(R.string.home_use_live)
+    TunerUseKind.RECORDING -> stringResource(R.string.home_use_recording)
+    TunerUseKind.OWN_STREAM -> stringResource(R.string.home_use_own)
+    TunerUseKind.OTHER_STREAM -> stringResource(R.string.home_use_other, use.address.ifBlank { "?" })
+} + " · " + use.channelName
+
+@Composable
+private fun TunersRow(model: TunerHomeViewModel, left: Modifier, onOpen: (TunerCard) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(vertical = 10.dp)) {
+        model.cards.forEachIndexed { i, card ->
+            TunerCardView(card, model, if (i == 0) left else Modifier) { onOpen(card) }
+        }
+        if (model.cards.isEmpty()) {
+            // Keeps the section focusable (and the menu's Right working) before the first answer.
+            val focus = rememberTvFocus()
+            Box(left.width(300.dp).height(150.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus) { model.message = null }, contentAlignment = Alignment.Center) {
+                Text(
+                    if (model.loading) "…" else stringResource(R.string.home_unreachable),
+                    color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TunerCardView(card: TunerCard, model: TunerHomeViewModel, modifier: Modifier, onClick: () -> Unit) {
+    val focus = rememberTvFocus()
+    val use = card.primary
+    val channel = use?.reference?.let { model.channelInfo[it] }
+    Column(
+        modifier
+            .width(300.dp)
+            .height(170.dp)
+            .then(focusLook(focus.focused, CardShape))
+            .tvClick(focus, onClick)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(8.dp))
+                    .background(if (card.idle) EnigmaColors.CardBorder else EnigmaColors.Cyan),
+                contentAlignment = Alignment.Center,
+            ) { Text(card.letter, color = if (card.idle) EnigmaColors.Text else Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+            Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                Text(card.name.ifBlank { stringResource(R.string.home_tuner_name, card.letter) }, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(card.type, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (use != null && use.reference.isNotBlank()) Picon(model, use)
+        }
+        if (use == null) {
+            Text(stringResource(R.string.home_tuner_idle), color = EnigmaColors.Muted, fontSize = 13.sp)
+        } else {
+            Text(use.channelName, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!channel?.bouquet.isNullOrBlank()) Text(channel!!.bouquet, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1)
+            channel?.now?.let { Text(it.title, color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            card.uses.forEach { u ->
+                Text(useLine(u).substringBefore(" · "), color = if (u.kind == TunerUseKind.OWN_STREAM) EnigmaColors.Cyan else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Picon(model: TunerHomeViewModel, use: TunerUse) {
+    val bitmap by produceState<ImageBitmap?>(model.cachedPicon(use.reference, use.channelName), use.reference) {
+        if (value == null) value = model.picon(use.reference, use.channelName)
+    }
+    bitmap?.let { Image(it, contentDescription = null, modifier = Modifier.width(56.dp).height(34.dp)) }
+}
+
+@Composable
+private fun ScheduleBlock(items: List<ScheduleItem>, left: Modifier) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.home_schedule_title), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        if (items.isEmpty()) {
+            val focus = rememberTvFocus()
+            Box(left.fillMaxWidth().then(focusLook(focus.focused, CardShape)).tvClick(focus) {}.padding(12.dp)) {
+                Text(stringResource(R.string.home_schedule_empty), color = EnigmaColors.Muted, fontSize = 13.sp)
+            }
+        }
+        val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+        items.forEach { item ->
+            val focus = rememberTvFocus()
+            Row(
+                left.fillMaxWidth().then(focusLook(focus.focused, CardShape)).tvClick(focus) {}.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val span = time.format(Date(item.beginEpochSec * 1000)) +
+                    if (item.endEpochSec > item.beginEpochSec) "–" + time.format(Date(item.endEpochSec * 1000)) else ""
+                Text(span, color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.width(110.dp))
+                Text(item.channelName, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(170.dp))
+                Text(item.title, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (item.running) Text(stringResource(R.string.home_now_running), color = Color(0xFFFF5A5A), fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
+                Text(
+                    stringResource(
+                        when (item.kind) {
+                            ScheduleKind.BOX_TIMER -> R.string.home_kind_box_timer
+                            ScheduleKind.BOX_RECORDING -> R.string.home_kind_box_rec
+                            ScheduleKind.TV_RECORDING -> R.string.home_kind_tv_rec
+                            ScheduleKind.AUTOSWITCH -> R.string.home_kind_autoswitch
+                        },
+                    ),
+                    color = EnigmaColors.Subtle, fontSize = 11.sp,
+                )
+            }
+        }
+    }
+}

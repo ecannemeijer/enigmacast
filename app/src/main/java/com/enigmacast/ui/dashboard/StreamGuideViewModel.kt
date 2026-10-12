@@ -643,6 +643,33 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     /**
+     * Live TV in the menu: back to the running stream full screen, else play the last channel
+     * of this receiver (or the first channel of the list) and go full screen.
+     */
+    fun openLive(onFullscreen: () -> Unit) {
+        val running = session.state.value.channel != null &&
+            playback.state.value.playbackState.let { it != "IDLE" && it != "ENDED" }
+        if (running) {
+            onFullscreen()
+            return
+        }
+        viewModelScope.launch {
+            val settings = settingsRepository.current()
+            val receiver = settings.activeReceiver()
+            val last = receiver?.let { com.enigmacast.domain.model.ChannelMemory.lastFor(settings, it.id) }
+            val entry = last?.takeIf { it.reference.isNotBlank() }
+                ?.let { BouquetEntry(name = it.name, reference = it.reference) }
+                ?: channels.firstOrNull()
+            if (entry == null) {
+                onFullscreen()
+                return@launch
+            }
+            lastPressedReference = ""
+            tune(entry, onFullscreen, onFullscreen)
+        }
+    }
+
+    /**
      * Watch from anywhere (Home, guide, Soccer, search): when the channel is not in the list on
      * screen, first switch to the synced bouquet that holds it, so the player's channel list
      * (Left) shows that bouquet with the channel selected.
