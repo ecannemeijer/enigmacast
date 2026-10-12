@@ -12,12 +12,14 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Database(
-    entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class],
-    version = 2,
+    entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
+        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
     abstract fun cache(): CacheDao
+    abstract fun soccer(): SoccerDao
 
     companion object {
         const val NAME = "enigmacast-cache.db"
@@ -37,4 +39,7 @@ object DatabaseModule {
 
     @Provides
     fun cacheDao(db: EnigmaDatabase): CacheDao = db.cache()
+
+    @Provides
+    fun soccerDao(db: EnigmaDatabase): SoccerDao = db.soccer()
 }

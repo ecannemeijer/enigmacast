@@ -17,6 +17,7 @@ android {
         versionCode = 25
         versionName = "1.0.0-beta.22"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey()}\"")
+        buildConfigField("String", "FOOTBALL_DATA_API_KEY", "\"${localProperty("FOOTBALL_DATA_API_KEY")}\"")
     }
 
     buildTypes {
@@ -71,6 +72,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.coil.svg)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -89,9 +91,12 @@ dependencies {
 }
 
 /** TMDB v3 key from local.properties (TMDB_API_KEY=...), never from source control. Blank disables the film home page. */
-fun tmdbApiKey(): String {
+fun tmdbApiKey(): String = localProperty("TMDB_API_KEY")
+
+/** A value from the git-ignored local.properties (NAME=value), or "" when missing. */
+fun localProperty(name: String): String {
     val file = rootProject.file("local.properties")
     if (!file.isFile) return ""
-    return file.readLines().map { it.trim() }.firstOrNull { it.startsWith("TMDB_API_KEY=") }
+    return file.readLines().map { it.trim() }.firstOrNull { it.startsWith("$name=") }
         ?.substringAfter('=')?.trim().orEmpty()
 }

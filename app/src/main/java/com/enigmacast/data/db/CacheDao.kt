@@ -76,6 +76,9 @@ interface CacheDao {
     @Query("SELECT * FROM bouquets WHERE receiverKey = :receiverKey ORDER BY position")
     fun observeBouquets(receiverKey: String): Flow<List<BouquetRow>>
 
+    @Query("SELECT * FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec <= :toSec")
+    suspend fun eventsStarting(receiverKey: String, fromSec: Long, toSec: Long): List<EpgRow>
+
     @Query("SELECT COUNT(*) FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec")
     suspend fun eventCount(receiverKey: String, fromSec: Long, toSec: Long): Int
 
@@ -145,8 +148,16 @@ interface CacheDao {
     @Query("DELETE FROM sync_state")
     suspend fun clearSyncState()
 
+    @Query("DELETE FROM soccer_matches")
+    suspend fun clearSoccerMatches()
+    @Query("DELETE FROM soccer_standings")
+    suspend fun clearSoccerStandings()
+    @Query("DELETE FROM soccer_fetches")
+    suspend fun clearSoccerFetches()
+
     @Transaction
     suspend fun clearAll() {
         clearBouquets(); clearChannels(); clearEvents(); clearMatches(); clearMovies(); clearHomeFilms(); clearSyncState()
+        clearSoccerMatches(); clearSoccerStandings(); clearSoccerFetches()
     }
 }

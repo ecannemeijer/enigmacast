@@ -128,6 +128,7 @@ import kotlinx.coroutines.launch
 
 private enum class DashSection {
     Home,
+    Soccer,
     Stream,
     Guide,
     Radio,
@@ -197,6 +198,8 @@ fun DashboardScreen(
     var contentFocused by remember { mutableStateOf(false) }
     val homeFocus = remember { FocusRequester() }
     val homeContentFocus = remember { FocusRequester() }
+    val soccerFocus = remember { FocusRequester() }
+    val soccerContentFocus = remember { FocusRequester() }
     val streamFocus = remember { FocusRequester() }
     val guideFocus = remember { FocusRequester() }
     val guideGridFocus = remember { FocusRequester() }
@@ -227,6 +230,7 @@ fun DashboardScreen(
     val myItemsModel: MyItemsViewModel = hiltViewModel()
     fun sectionMenu(): FocusRequester = when (section) {
         DashSection.Home -> homeFocus
+        DashSection.Soccer -> soccerFocus
         DashSection.Stream -> streamFocus
         DashSection.Guide -> guideFocus
         DashSection.Radio -> radioFocus
@@ -357,6 +361,17 @@ fun DashboardScreen(
                         .focusRequester(homeFocus)
                         .focusProperties { right = if (section == DashSection.Home) homeContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Home) },
+                )
+                NavItem(
+                    icon = EnigmaIcons.Soccer,
+                    label = stringResource(R.string.nav_soccer),
+                    selected = section == DashSection.Soccer,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 1,
+                    modifier = Modifier
+                        .focusRequester(soccerFocus)
+                        .focusProperties { right = if (section == DashSection.Soccer) soccerContentFocus else FocusRequester.Cancel },
+                    onClick = { enterSection(DashSection.Soccer) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Tv,
@@ -513,6 +528,23 @@ fun DashboardScreen(
                                     BouquetChannels.sameService(it.reference, last.reference)
                                 } ?: BouquetEntry(name = last.name, reference = last.reference)
                                 guideModel.tune(entry, onStream, onStream)
+                            },
+                        )
+                        }
+                        DashSection.Soccer -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            soccerContentFocus.requestWhenReady()
+                        }
+                        com.enigmacast.ui.soccer.SoccerPanel(
+                            contentFocus = soccerContentFocus,
+                            menuFocus = soccerFocus,
+                            onRetreatTo = retreat,
+                            onWatch = { entry ->
+                                val known = guideModel.channels.firstOrNull {
+                                    BouquetChannels.sameService(it.reference, entry.reference)
+                                } ?: entry
+                                guideModel.tune(known, onStream, onStream)
                             },
                         )
                         }
@@ -1472,6 +1504,7 @@ private fun GeneralSettingsPanel(
     }
     com.enigmacast.ui.home.HomeFilmSettingsCard()
     com.enigmacast.ui.home.DataSyncSettingsCard()
+    com.enigmacast.ui.soccer.SoccerSettingsCard()
 }
 
 @Composable

@@ -27,6 +27,13 @@ object EnigmaIcons {
         "M9,1h6v2H9zM19.03,7.39l1.42,-1.42c-0.43,-0.51 -0.9,-0.99 -1.41,-1.41l-1.42,1.42C16.07,4.74 14.12,4 12,4" +
             "c-4.97,0 -9,4.03 -9,9s4.02,9 9,9 9,-4.03 9,-9c0,-2.12 -0.74,-4.07 -1.97,-5.61zM12,20" +
             "c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7zM13,8h-2v6h2z"
+    internal const val SOCCER_PATH =
+        "M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,5.3l1.35,-0.95c1.82,0.56 3.37,1.76 4.38,3.34" +
+            "l-0.39,1.34 -1.35,0.46L13,6.7L13,5.3zM9.65,4.35L11,5.3v1.4L7.01,9.49l-1.35,-0.46 -0.39,-1.34" +
+            "c1.01,-1.57 2.56,-2.77 4.38,-3.34zM7.08,17.11l-1.14,0.1C4.73,15.81 4,13.99 4,12c0,-0.12 0.01,-0.23 0.02,-0.35" +
+            "l1,-0.73 1.38,0.48 1.46,4.34 -0.78,1.37zM14.5,19.59c-0.79,0.26 -1.63,0.41 -2.5,0.41s-1.71,-0.15 -2.5,-0.41" +
+            "l-0.69,-1.49 0.64,-1.1h5.11l0.64,1.11 -0.7,1.48zM14.27,15L9.73,15l-1.35,-4.02L12,8.44l3.63,2.54L14.27,15z" +
+            "M18.06,17.21l-1.14,-0.1 -0.79,-1.37 1.46,-4.34 1.39,-0.47 1,0.73c0.01,0.11 0.02,0.22 0.02,0.34 0,1.99 -0.73,3.81 -1.94,5.21z"
     internal const val TV_PATH =
         "M21,3L3,3c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5" +
             "c0,-1.1 -0.9,-2 -2,-2zM21,17L3,17L3,5h18v12z"
@@ -77,6 +84,7 @@ object EnigmaIcons {
     val Restart: ImageVector by lazy { icon("Restart", RESTART_PATH) }
     val Timer: ImageVector by lazy { icon("Timer", TIMER_PATH) }
     val Tv: ImageVector by lazy { icon("Tv", TV_PATH) }
+    val Soccer: ImageVector by lazy { icon("Soccer", SOCCER_PATH) }
     val Layers: ImageVector by lazy { icon("Layers", LAYERS_PATH) }
     val Palette: ImageVector by lazy { icon("Palette", PALETTE_PATH) }
     val Language: ImageVector by lazy { icon("Language", LANGUAGE_PATH) }
