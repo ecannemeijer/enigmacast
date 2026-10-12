@@ -439,7 +439,8 @@ class LivePlaybackController @Inject constructor(
      * Plays a finished or in-progress recording as a file, not as a live channel.
      * Does not restart when the file ends, and does not take the viewer's tuner slot.
      */
-    fun playRecording(url: String, authorization: String?, durationMs: Long = 0L) {
+    /** Plays a recording file; [startMs] > 0 resumes there (Media3 seeks once the TS duration is known). */
+    fun playRecording(url: String, authorization: String?, durationMs: Long = 0L, startMs: Long = 0L) {
         if (!playbackEnabled) return
         val exo = ensurePlayer()
         filePlayback = true
@@ -462,10 +463,11 @@ class LivePlaybackController @Inject constructor(
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .build()
         val item = MediaItem.Builder().setUri(url).setMimeType(MimeTypes.VIDEO_MP2T).build()
-        exo.setMediaItem(item, true)
+        if (startMs > 0) exo.setMediaItem(item, startMs) else exo.setMediaItem(item, true)
         exo.prepare()
         exo.playWhenReady = true
-        EnigmaLog.player("playing recording ${EnigmaLog.sanitizeUrl(url)}")
+        EnigmaLog.player("playing recording ${EnigmaLog.sanitizeUrl(url)} from ${startMs / 1000}s")
+        seekCheckLogged = false
         watchFileClock()
     }
 
@@ -512,10 +514,18 @@ class LivePlaybackController @Inject constructor(
         publish()
     }
 
+    private var seekCheckLogged = false
+
     private fun watchFileClock() {
         fileClock?.cancel()
         fileClock = ownScope.launch {
             while (filePlayback) {
+                player?.let { exo ->
+                    if (!seekCheckLogged && exo.playbackState == Player.STATE_READY) {
+                        seekCheckLogged = true
+                        EnigmaLog.player("recording seekable=${exo.isCurrentMediaItemSeekable} duration=${exo.duration}")
+                    }
+                }
                 publish()
                 delay(250)
             }
@@ -783,7 +793,13 @@ class LivePlaybackController @Inject constructor(
             .setTransferListener(byteCounter)
         val withAuthorization: DataSource.Factory = ResolvingDataSource.Factory(http) { spec: DataSpec ->
             val header = streamAuthorization
-            if (header == null) spec else spec.withAdditionalHeaders(mapOf("Authorization" to header))
+            val headers = buildMap {
+                if (header != null) put("Authorization", header)
+                // Seeking in a recording needs the file length (Content-Length) and Range requests;
+                // a compressed answer would hide the length and make the file unseekable.
+                if (filePlayback) put("Accept-Encoding", "identity")
+            }
+            if (headers.isEmpty()) spec else spec.withAdditionalHeaders(headers)
         }
         // A recording on this TV is a file. OkHttp only accepts http(s), so local files go through a file source.
         val localOrHttp = DefaultDataSource.Factory(context, withAuthorization)

@@ -167,7 +167,7 @@ class RecordingBook @Inject constructor(
     }
 
     /** Opens the file in the player. False when there is nothing to play yet. */
-    suspend fun play(id: String): Boolean {
+    suspend fun play(id: String, startMs: Long = 0L): Boolean {
         awaitLoaded()
         var item = _items.value.firstOrNull { it.id == id } ?: return false
         if (item.place == RecordingPlace.RECEIVER && item.fileName.isBlank()) {
@@ -178,14 +178,14 @@ class RecordingBook @Inject constructor(
             val file = fileFor(item)
             if (!file.exists() || file.length() < MIN_PLAY_BYTES) return false
             _nowPlaying.value = item
-            playback.playRecording(android.net.Uri.fromFile(file).toString(), null, durationMs(item))
+            playback.playRecording(android.net.Uri.fromFile(file).toString(), null, durationMs(item), startMs)
             return true
         }
         if (item.fileName.isBlank()) return false
         val receiver = receiverFor(item) ?: return false
         _nowPlaying.value = item
         val url = endpoints.recordedFile(receiver, item.fileName)
-        playback.playRecording(url, endpoints.streamAuthorization(receiver), durationMs(item))
+        playback.playRecording(url, endpoints.streamAuthorization(receiver), durationMs(item), startMs)
         return true
     }
 
@@ -241,12 +241,12 @@ class RecordingBook @Inject constructor(
     }
 
     /** Streams a box recording: OpenWebif /file?file=<path>. */
-    fun playBox(item: Recording): Boolean {
+    fun playBox(item: Recording, startMs: Long = 0L): Boolean {
         if (item.fileName.isBlank()) return false
         scope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
             _nowPlaying.value = item
-            playback.playRecording(endpoints.recordedFile(receiver, item.fileName), endpoints.streamAuthorization(receiver), durationMs(item))
+            playback.playRecording(endpoints.recordedFile(receiver, item.fileName), endpoints.streamAuthorization(receiver), durationMs(item), startMs)
         }
         return true
     }

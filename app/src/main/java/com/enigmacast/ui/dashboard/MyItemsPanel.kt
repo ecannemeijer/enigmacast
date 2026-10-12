@@ -1,6 +1,14 @@
 package com.enigmacast.ui.dashboard
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
+import com.enigmacast.ui.soccer.tvClick
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,6 +68,10 @@ fun MyItemsPanel(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
+    val posterMap by viewModel.posters.collectAsStateWithLifecycle()
+    val resumeMap by viewModel.resumePoints.collectAsStateWithLifecycle()
+    LaunchedEffect(items, viewModel.boxMovies) { viewModel.loadArtwork(items + viewModel.boxMovies) }
     LaunchedEffect(Unit) {
         viewModel.reloadNow()
         while (true) {
@@ -112,7 +124,32 @@ fun MyItemsPanel(
                     if (header != null) item(key = "h-$key") {
                         Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
                     }
-                    itemsIndexed(list, key = { _, item -> item.id }) { _, item ->
+                    val posters = list.filter(viewModel::isPoster)
+                    val rows = list.filterNot(viewModel::isPoster)
+                    if (posters.isNotEmpty()) item(key = "p-$key") {
+                        val rowState = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
+                        androidx.compose.foundation.lazy.LazyRow(
+                            state = rowState,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                        ) {
+                            itemsIndexed(posters, key = { _, item -> item.id }) { i, item ->
+                                PosterCard(
+                                    item = item,
+                                    movie = posterMap[item.id],
+                                    progress = com.enigmacast.domain.resume.ResumePolicy.fraction(resumeMap[item.id], (item.endEpochSec - item.beginEpochSec) * 1000),
+                                    modifier = Modifier
+                                        .then(if (item.id == focusOn) Modifier.focusRequester(listFocus) else Modifier)
+                                        .focusProperties {
+                                            canFocus = rowsFocusable
+                                            if (i == 0) left = menuFocus
+                                        },
+                                    onClick = { viewModel.open(item) },
+                                )
+                            }
+                        }
+                    }
+                    itemsIndexed(rows, key = { _, item -> item.id }) { _, item ->
                         RecordingRow(
                             item = item,
                             modifier = Modifier
@@ -133,15 +170,46 @@ fun MyItemsPanel(
     LaunchedEffect(viewModel.focusToken) {
         if (viewModel.focusToken == 0 || viewModel.focusToken == focusTokenOnEnter) return@LaunchedEffect
         if (viewModel.selected != null || viewModel.pendingDelete != null) return@LaunchedEffect
-        val index = listIndexOf(viewModel.focusId, items, viewModel.boxMovies, viewModel.boxTimers)
+        val index = listIndexOf(viewModel.focusId, items, viewModel.boxMovies, viewModel.boxTimers, viewModel::isPoster)
         if (index >= 0) listState.scrollToItem(index)
+        // A poster sits inside a sideways row: bring it into view there too.
+        for ((key, list) in listOf("app" to items, "movies" to viewModel.boxMovies)) {
+            val i = list.filter(viewModel::isPoster).indexOfFirst { it.id == viewModel.focusId }
+            if (i >= 0) rowStates[key]?.scrollToItem(i)
+        }
         listFocus.requestWhenReady()
         if (viewModel.holdList) {
             repeat(2) { withFrameNanos { } }
             viewModel.releaseList()
         }
     }
-    viewModel.selected?.let { item ->
+    viewModel.selected?.takeIf { viewModel.isPoster(it) }?.let { item ->
+        val point = resumeMap[item.id]
+        val offer = com.enigmacast.domain.resume.ResumePolicy.offer(point)
+        com.enigmacast.ui.home.RecordingInfoDialog(
+            film = recordingFilm(item, posterMap[item.id]),
+            detail = rowDetail(item),
+            progress = com.enigmacast.domain.resume.ResumePolicy.fraction(point, (item.endEpochSec - item.beginEpochSec) * 1000),
+            watchLabel = if (offer != null) stringResource(R.string.resume_from, com.enigmacast.domain.resume.ResumePolicy.clock(offer)) else stringResource(R.string.myitems_watch),
+            onWatch = { viewModel.play(onPlay) },
+            onDelete = viewModel::askDelete,
+            onClose = viewModel::dismiss,
+        )
+    }
+    viewModel.resumeAsk?.let { (item, position) ->
+        TvChoiceDialog(
+            title = stringResource(R.string.resume_title),
+            message = item.title,
+            choices = listOf(
+                stringResource(R.string.resume_from, com.enigmacast.domain.resume.ResumePolicy.clock(position)),
+                stringResource(R.string.resume_start_over),
+            ),
+            onChoose = { i -> viewModel.answerResume(fromStart = i == 1) },
+            onDismiss = viewModel::dismissResume,
+            compact = true,
+        )
+    }
+    viewModel.selected?.takeIf { !viewModel.isPoster(it) }?.let { item ->
         val actions = actionsFor(item, viewModel.isBox(item), viewModel.isBoxTimer(item))
         TvChoiceDialog(
             title = item.title,
@@ -174,18 +242,86 @@ fun MyItemsPanel(
 }
 
 /** Position of [id] in the LazyColumn, counting the section headers drawn when box items exist. */
-internal fun listIndexOf(id: String?, app: List<Recording>, movies: List<Recording>, timers: List<Recording>): Int {
+internal fun listIndexOf(
+    id: String?,
+    app: List<Recording>,
+    movies: List<Recording>,
+    timers: List<Recording>,
+    poster: (Recording) -> Boolean = { false },
+): Int {
     if (id == null) return -1
     val headers = movies.isNotEmpty() || timers.isNotEmpty()
     var offset = 0
     for (list in listOf(app, movies, timers)) {
         if (list.isEmpty()) continue
         if (headers) offset++
-        val i = list.indexOfFirst { it.id == id }
+        // Posters of a section share one LazyColumn item (their sideways row), before the plain rows.
+        val posters = list.filter(poster)
+        val rows = list.filterNot(poster)
+        if (posters.any { it.id == id }) return offset
+        if (posters.isNotEmpty()) offset++
+        val i = rows.indexOfFirst { it.id == id }
         if (i >= 0) return offset + i
-        offset += list.size
+        offset += rows.size
     }
     return -1
+}
+
+/** Small poster card: TMDB poster (or placeholder), watched bar, title and date. */
+@Composable
+private fun PosterCard(
+    item: Recording,
+    movie: com.enigmacast.domain.films.TmdbMovie?,
+    progress: Float,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    val focus = com.enigmacast.ui.soccer.rememberTvFocus()
+    val film = recordingFilm(item, movie)
+    Column(
+        modifier
+            .width(118.dp)
+            .tvClick(focus, onClick),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            Modifier
+                .width(118.dp)
+                .height(177.dp)
+                .border(if (focus.focused) 3.dp else 0.dp, if (focus.focused) EnigmaColors.Cyan else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(12.dp)),
+        ) {
+            com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
+            if (item.status == RecordingStatus.RECORDING) {
+                Text(
+                    stringResource(R.string.my_items_recording),
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontSize = 10.sp,
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
+                        .background(EnigmaColors.Danger, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                )
+            }
+            if (progress > 0f) {
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(androidx.compose.ui.graphics.Color(0x66000000))) {
+                    Box(Modifier.fillMaxWidth(progress).height(4.dp).background(EnigmaColors.Cyan))
+                }
+            }
+        }
+        Text(item.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            Instant.ofEpochSecond(item.beginEpochSec).atZone(ZoneId.systemDefault()).format(DayFormat),
+            color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1,
+        )
+    }
+}
+
+/** A recording dressed as a [HomeFilm] for the poster and the info page (placeholder movie without a match). */
+internal fun recordingFilm(item: Recording, movie: com.enigmacast.domain.films.TmdbMovie?): com.enigmacast.domain.films.HomeFilm {
+    val candidate = com.enigmacast.live.RecordingArtwork.candidateOf(item)
+        ?: com.enigmacast.domain.films.FilmCandidate(
+            com.enigmacast.domain.epg.GuideEvent(item.eventId, item.reference, item.title, "", "", item.beginEpochSec, (item.endEpochSec - item.beginEpochSec).coerceAtLeast(0)),
+            item.channelName, item.title, null,
+        )
+    return com.enigmacast.domain.films.HomeFilm(candidate, movie ?: com.enigmacast.domain.films.TmdbMovie(id = 0, title = item.title))
 }
 
 @Composable

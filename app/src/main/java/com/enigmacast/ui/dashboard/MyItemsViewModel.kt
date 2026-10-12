@@ -26,7 +26,25 @@ import javax.inject.Inject
 class MyItemsViewModel @Inject constructor(
     private val book: RecordingBook,
     settingsRepository: SettingsRepository,
+    private val resume: com.enigmacast.live.ResumeTracker,
+    private val artwork: com.enigmacast.live.RecordingArtwork,
 ) : ViewModel() {
+    /** Saved positions by recording id, for the progress bars. */
+    val resumePoints: StateFlow<Map<String, com.enigmacast.domain.resume.ResumePoint>> = resume.points
+    /** TMDB matches by recording id (null = no match, placeholder). */
+    val posters: StateFlow<Map<String, com.enigmacast.domain.films.TmdbMovie?>> = artwork.movies
+    /** "Resume from mm:ss / Start from the beginning" for this recording at this position. */
+    var resumeAsk by mutableStateOf<Pair<Recording, Long>?>(null)
+        private set
+    private var resumeStarted: (() -> Unit)? = null
+
+    /** Recordings that can be watched: shown as poster cards. */
+    fun isPoster(item: Recording) = !isBoxTimer(item) &&
+        (item.status == com.enigmacast.domain.recording.RecordingStatus.READY || item.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING)
+
+    fun loadArtwork(list: List<Recording>) {
+        viewModelScope.launch { artwork.resolve(list.filter(::isPoster)) }
+    }
     val items: StateFlow<List<Recording>> = combine(
         book.items,
         settingsRepository.settings.map { it.activeReceiver()?.id.orEmpty() }.distinctUntilChanged(),
@@ -99,7 +117,37 @@ class MyItemsViewModel @Inject constructor(
         holdList = true
         selected = null
         viewModelScope.launch {
-            if (if (isBox(item)) book.playBox(item) else book.play(item.id)) {
+            val offer = com.enigmacast.domain.resume.ResumePolicy.offer(resume.get(item.id))
+            if (offer != null) {
+                resumeStarted = onStarted
+                resumeAsk = item to offer
+                return@launch
+            }
+            start(item, 0L, onStarted)
+        }
+    }
+
+    /** Answer to the resume question: [fromStart] plays from 0 and forgets the position. */
+    fun answerResume(fromStart: Boolean) {
+        val (item, position) = resumeAsk ?: return
+        val onStarted = resumeStarted ?: {}
+        resumeAsk = null
+        resumeStarted = null
+        if (fromStart) resume.forget(item.id)
+        viewModelScope.launch { start(item, if (fromStart) 0L else position, onStarted) }
+    }
+
+    fun dismissResume() {
+        val item = resumeAsk?.first
+        resumeAsk = null
+        resumeStarted = null
+        holdList = true
+        restore(item?.id)
+    }
+
+    private suspend fun start(item: Recording, startMs: Long, onStarted: () -> Unit) {
+        run {
+            if (if (isBox(item)) book.playBox(item, startMs) else book.play(item.id, startMs)) {
                 holdList = false
                 onStarted()
             } else {
@@ -142,6 +190,7 @@ class MyItemsViewModel @Inject constructor(
             } else {
                 book.delete(item.id)
             }
+            resume.forget(item.id)
             deleting = false
             pendingDelete = null
             restore(items.value.firstOrNull()?.id)

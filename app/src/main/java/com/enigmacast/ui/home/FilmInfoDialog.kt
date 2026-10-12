@@ -261,3 +261,121 @@ private fun CastCard(member: TmdbCastMember) {
         }
     }
 }
+
+/**
+ * The same full-screen info page for a recording in My items: only Watch and Delete (Delete
+ * asks first, in the caller). [detail] is channel · date · place; [progress] the watched part.
+ */
+@Composable
+fun RecordingInfoDialog(
+    film: HomeFilm,
+    detail: String,
+    progress: Float,
+    watchLabel: String,
+    onWatch: () -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        NavigationSoundsForWindow()
+        val watchFocus = remember { FocusRequester() }
+        LaunchedEffect(film.key) { watchFocus.requestWhenReady() }
+        val movie = film.movie
+        val plot = movie.overview.ifBlank { film.event.description }
+        var showPlot by remember(film.key) { mutableStateOf(false) }
+        Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+            if (movie.backdropPath != null) {
+                AsyncImage(
+                    model = TmdbJson.image(movie.backdropPath, "w1280"),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(0f to EnigmaColors.Canvas, 0.55f to EnigmaColors.Canvas.copy(alpha = 0.82f), 1f to EnigmaColors.Canvas.copy(alpha = 0.2f)),
+                ),
+            )
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to EnigmaColors.Canvas)))
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    PosterBox(film, Modifier.width(150.dp).height(225.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        TitleOrLogo(film, height = 56.dp, fontSize = 28.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (movie.voteCount > 0) RatingStars(movie.voteAverage, size = 13.sp)
+                            movie.year?.let { Text(it.toString(), color = EnigmaColors.Muted, fontSize = 13.sp) }
+                            movie.runtimeMin?.let { Text(stringResource(R.string.home_runtime, it), color = EnigmaColors.Muted, fontSize = 13.sp) }
+                        }
+                        val genres = movie.genres.joinToString(" · ")
+                        if (genres.isNotBlank()) Text(genres, color = EnigmaColors.Cyan, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (plot.isNotBlank()) {
+                            Text(plot, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (movie.directors.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(stringResource(R.string.home_director), color = EnigmaColors.Subtle, fontSize = 13.sp)
+                                Text(movie.directors.joinToString(", "), color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        Text(detail, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (progress > 0f) EnigmaProgramProgress(progress, Modifier.width(320.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                            EnigmaGlassButton(watchLabel, onWatch, Modifier.focusRequester(watchFocus))
+                            EnigmaGlassButton(stringResource(R.string.myitems_delete), onDelete)
+                            if (plot.length > PLOT_MORE_CHARS) EnigmaGlassButton(stringResource(R.string.home_more), { showPlot = true })
+                        }
+                    }
+                }
+                if (movie.cast.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
+                            items(movie.cast, key = { it.name + it.character }) { member -> CastCard(member) }
+                        }
+                    }
+                }
+                if (movie.id > 0) Text(stringResource(R.string.home_tmdb_attribution), color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1)
+            }
+            if (showPlot) PlotDialog(film.displayTitle, plot, onClose = { showPlot = false })
+        }
+    }
+}
+
+/** TMDB poster, or a placeholder with the title when there is no match. */
+@Composable
+fun PosterBox(film: HomeFilm, modifier: Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brush.verticalGradient(listOf(EnigmaColors.Raised, EnigmaColors.Card)))
+            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val poster = film.movie.posterPath
+        if (poster != null) {
+            AsyncImage(
+                model = TmdbJson.image(poster, "w342"),
+                contentDescription = film.displayTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                film.displayTitle,
+                color = EnigmaColors.Muted,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(10.dp),
+            )
+        }
+    }
+}
