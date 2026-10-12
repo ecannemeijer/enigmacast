@@ -888,4 +888,11 @@
     <string name="pitch_apps">%1$d× in opstelling, %2$d× basis</string>
     <string name="pitch_hint_match">OK op een wedstrijd: details</string>
     <string name="pitch_no_squad">Nog geen opstellingen bekend</string>
+    <string name="record_choose">%1$s\n%2$s\nWaar wil je opnemen?</string>
+    <string name="record_on_device">Opnemen op dit apparaat</string>
+    <string name="record_on_box">Opnemen op Enigma2-box</string>
+    <string name="my_items_section_app">Opgenomen via deze app</string>
+    <string name="my_items_section_box">Opnames op de box</string>
+    <string name="my_items_section_box_timers">Ingepland op de box</string>
+    <string name="my_items_box_delete_failed">De box kon het niet verwijderen.</string>
 </resources>

@@ -891,4 +891,11 @@
     <string name="pitch_apps">%1$d× in lineup, %2$d× starter</string>
     <string name="pitch_hint_match">OK on a match: details</string>
     <string name="pitch_no_squad">No lineups known yet</string>
+    <string name="record_choose">%1$s\n%2$s\nWhere should it be recorded?</string>
+    <string name="record_on_device">Record on this device</string>
+    <string name="record_on_box">Record on Enigma2 box</string>
+    <string name="my_items_section_app">Recorded from this app</string>
+    <string name="my_items_section_box">Recordings on the box</string>
+    <string name="my_items_section_box_timers">Scheduled on the box</string>
+    <string name="my_items_box_delete_failed">The box could not delete it.</string>
 </resources>

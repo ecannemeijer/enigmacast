@@ -50,6 +50,14 @@ class MyItemsViewModel @Inject constructor(
     var holdList by mutableStateOf(false)
         private set
     private var deleting = false
+    /** Recordings and timers on the box itself (OpenWebif movielist / timerlist), not started from this app. */
+    var boxMovies by mutableStateOf<List<Recording>>(emptyList())
+        private set
+    var boxTimers by mutableStateOf<List<Recording>>(emptyList())
+        private set
+
+    fun isBox(item: Recording) = item.id.startsWith(RecordingBook.BOX_MOVIE) || item.id.startsWith(RecordingBook.BOX_TIMER)
+    fun isBoxTimer(item: Recording) = item.id.startsWith(RecordingBook.BOX_TIMER)
 
     private fun restore(id: String?) {
         focusId = id
@@ -67,7 +75,10 @@ class MyItemsViewModel @Inject constructor(
     fun focusRow(id: String) = restore(id)
 
     fun refresh() {
-        viewModelScope.launch { book.refreshReceiver() }
+        viewModelScope.launch {
+            book.refreshReceiver()
+            book.boxItems()?.let { boxMovies = it.movies; boxTimers = it.timers }
+        }
     }
 
     fun open(item: Recording) {
@@ -88,7 +99,7 @@ class MyItemsViewModel @Inject constructor(
         holdList = true
         selected = null
         viewModelScope.launch {
-            if (book.play(item.id)) {
+            if (if (isBox(item)) book.playBox(item) else book.play(item.id)) {
                 holdList = false
                 onStarted()
             } else {
@@ -125,7 +136,12 @@ class MyItemsViewModel @Inject constructor(
         deleting = true
         holdList = true
         viewModelScope.launch {
-            book.delete(item.id)
+            if (isBox(item)) {
+                if (!book.deleteBox(item)) notice = UiText.res(R.string.my_items_box_delete_failed)
+                book.boxItems()?.let { boxMovies = it.movies; boxTimers = it.timers }
+            } else {
+                book.delete(item.id)
+            }
             deleting = false
             pendingDelete = null
             restore(items.value.firstOrNull()?.id)

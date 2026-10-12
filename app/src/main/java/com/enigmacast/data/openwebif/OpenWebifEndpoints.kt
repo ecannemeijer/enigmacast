@@ -121,6 +121,11 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/timeraddbyeventid?sRef=${encode(serviceReference)}&eventid=$eventId")
     }
 
+    /** A timer without an EPG event: service, unix begin/end, name and description. */
+    fun timerAdd(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long, name: String, description: String): String {
+        return api(config, "/api/timeradd?sRef=${encode(serviceReference)}&begin=$begin&end=$end&name=${encode(name)}&description=${encode(description)}")
+    }
+
     /** Removes a timer. [begin] and [end] are the unix times OpenWebif stored. */
     fun timerDelete(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long): String {
         return api(config, "/api/timerdelete?sRef=${encode(serviceReference)}&begin=$begin&end=$end")

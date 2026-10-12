@@ -95,9 +95,6 @@ class RecordingBook @Inject constructor(
         awaitLoaded()
         val existing = _items.value.firstOrNull { it.reference == event.reference && it.beginEpochSec == event.beginEpochSec && it.isActive() }
         if (existing != null) return PrepareResult.Message(UiText.res(R.string.record_already_set))
-        if (place == RecordingTarget.RECEIVER && event.eventId < 0) {
-            return PrepareResult.Message(UiText.res(R.string.record_no_event))
-        }
         return PrepareResult.Ask(RecordAsk(event, channelName, place))
     }
 
@@ -200,6 +197,69 @@ class RecordingBook @Inject constructor(
         return ((item.endEpochSec - item.beginEpochSec).coerceAtLeast(0L)) * 1000L
     }
 
+    /** What the box holds that was not started from this app: recordings and its timers. */
+    data class BoxItems(val movies: List<Recording>, val timers: List<Recording>)
+
+    suspend fun boxItems(): BoxItems? {
+        awaitLoaded()
+        val receiver = settingsRepository.current().activeReceiver() ?: return null
+        val movies = runCatching { api.movies(receiver) }.getOrNull() ?: return null
+        val timers = runCatching { api.timers(receiver) }.getOrDefault(emptyList())
+        val ours = _items.value.receiverTimers(receiver.id)
+        val ourFiles = ours.map { it.fileName }.filter { it.isNotBlank() }.toSet()
+        val boxMovies = movies.filter { it.filename !in ourFiles }.sortedByDescending { it.begin }.map { m ->
+            Recording(
+                id = BOX_MOVIE + m.filename,
+                title = m.name.ifBlank { m.filename.substringAfterLast('/') },
+                channelName = m.serviceName,
+                reference = "",
+                eventId = -1,
+                beginEpochSec = m.begin,
+                endEpochSec = m.begin + m.lengthSec,
+                place = RecordingPlace.RECEIVER,
+                status = RecordingStatus.READY,
+                receiverId = receiver.id,
+                fileName = m.filename,
+            )
+        }
+        val now = nowSec()
+        val boxTimers = timers.filter { t -> t.end > now && t.state < 3 && ours.none { matchTimer(listOf(t), it) != null } }.sortedBy { it.begin }.map { t ->
+            Recording(
+                id = BOX_TIMER + t.reference + "|" + t.begin,
+                title = t.name,
+                channelName = "",
+                reference = t.reference,
+                eventId = t.eventId,
+                beginEpochSec = t.begin,
+                endEpochSec = t.end,
+                place = RecordingPlace.RECEIVER,
+                status = if (t.state == 2) RecordingStatus.RECORDING else RecordingStatus.SCHEDULED,
+                receiverId = receiver.id,
+            )
+        }
+        return BoxItems(boxMovies, boxTimers)
+    }
+
+    /** Streams a box recording: OpenWebif /file?file=<path>. */
+    fun playBox(item: Recording): Boolean {
+        if (item.fileName.isBlank()) return false
+        scope.launch {
+            val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            _nowPlaying.value = item
+            playback.playRecording(endpoints.recordedFile(receiver, item.fileName), endpoints.streamAuthorization(receiver), durationMs(item))
+        }
+        return true
+    }
+
+    /** Deletes a box recording (moviedelete) or a box timer (timerdelete). */
+    suspend fun deleteBox(item: Recording): Boolean {
+        val receiver = settingsRepository.current().activeReceiver() ?: return false
+        return runCatching {
+            if (item.id.startsWith(BOX_MOVIE)) api.deleteMovie(receiver, movieRef(item.fileName))
+            else api.deleteTimer(receiver, item.reference, item.beginEpochSec, item.endEpochSec)
+        }.isSuccess
+    }
+
     /** Pulls timer and movie state for receiver recordings started here. */
     suspend fun refreshReceiver() {
         awaitLoaded()
@@ -272,7 +332,9 @@ class RecordingBook @Inject constructor(
 
     private suspend fun scheduleOnReceiver(receiver: ReceiverConfig, recording: Recording): UiText {
         val result = try {
-            api.addTimer(receiver, recording.reference, recording.eventId)
+            // With an EPG event the box applies its own margins (timeraddbyeventid); without one, a plain timer.
+            if (recording.eventId >= 0) api.addTimer(receiver, recording.reference, recording.eventId)
+            else api.addTimer(receiver, recording.reference, recording.beginEpochSec, recording.endEpochSec, recording.title, recording.channelName)
         } catch (error: Exception) {
             EnigmaLog.service("record timer failed: ${error.javaClass.simpleName}")
             return UiText.res(R.string.record_failed)
@@ -396,6 +458,9 @@ class RecordingBook @Inject constructor(
     companion object {
         private const val START_SLOP_SEC = 20L
         const val MIN_PLAY_BYTES = 64L * 1024
+
+        const val BOX_MOVIE = "box-movie:"
+        const val BOX_TIMER = "box-timer:"
 
         fun movieRef(filename: String): String {
             if (filename.count { it == ':' } >= 8) return filename

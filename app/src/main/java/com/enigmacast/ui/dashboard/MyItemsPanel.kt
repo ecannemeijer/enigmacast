@@ -78,7 +78,10 @@ fun MyItemsPanel(
         if (notice.isNotBlank()) {
             Text(notice, color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
-        if (items.isEmpty()) {
+        val boxMovies = viewModel.boxMovies
+        val boxTimers = viewModel.boxTimers
+        val all = items + boxMovies + boxTimers
+        if (all.isEmpty()) {
             Text(
                 stringResource(R.string.my_items_empty),
                 color = EnigmaColors.Muted,
@@ -93,23 +96,34 @@ fun MyItemsPanel(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             )
         } else {
-            val focusOn = viewModel.focusId?.takeIf { id -> items.any { it.id == id } } ?: items.first().id
+            val focusOn = viewModel.focusId?.takeIf { id -> all.any { it.id == id } } ?: all.first().id
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                itemsIndexed(items, key = { _, item -> item.id }) { _, item ->
-                    RecordingRow(
-                        item = item,
-                        modifier = Modifier
-                            .then(if (item.id == focusOn) Modifier.focusRequester(listFocus) else Modifier)
-                            .focusProperties {
-                                canFocus = rowsFocusable
-                                left = menuFocus
-                            },
-                        onClick = { viewModel.open(item) },
-                    )
+                // Sections: this app's recordings, recordings on the box, timers on the box. Headers are not focusable.
+                listOf(
+                    Triple("app", if (boxMovies.isEmpty() && boxTimers.isEmpty()) null else R.string.my_items_section_app, items),
+                    Triple("movies", R.string.my_items_section_box, boxMovies),
+                    Triple("timers", R.string.my_items_section_box_timers, boxTimers),
+                ).forEach { (key, header, list) ->
+                    if (list.isEmpty()) return@forEach
+                    if (header != null) item(key = "h-$key") {
+                        Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
+                    }
+                    itemsIndexed(list, key = { _, item -> item.id }) { _, item ->
+                        RecordingRow(
+                            item = item,
+                            modifier = Modifier
+                                .then(if (item.id == focusOn) Modifier.focusRequester(listFocus) else Modifier)
+                                .focusProperties {
+                                    canFocus = rowsFocusable
+                                    left = menuFocus
+                                },
+                            onClick = { viewModel.open(item) },
+                        )
+                    }
                 }
             }
         }
@@ -119,7 +133,7 @@ fun MyItemsPanel(
     LaunchedEffect(viewModel.focusToken) {
         if (viewModel.focusToken == 0 || viewModel.focusToken == focusTokenOnEnter) return@LaunchedEffect
         if (viewModel.selected != null || viewModel.pendingDelete != null) return@LaunchedEffect
-        val index = items.indexOfFirst { it.id == viewModel.focusId }
+        val index = listIndexOf(viewModel.focusId, items, viewModel.boxMovies, viewModel.boxTimers)
         if (index >= 0) listState.scrollToItem(index)
         listFocus.requestWhenReady()
         if (viewModel.holdList) {
@@ -128,7 +142,7 @@ fun MyItemsPanel(
         }
     }
     viewModel.selected?.let { item ->
-        val actions = actionsFor(item)
+        val actions = actionsFor(item, viewModel.isBox(item), viewModel.isBoxTimer(item))
         TvChoiceDialog(
             title = item.title,
             message = rowDetail(item),
@@ -157,6 +171,21 @@ fun MyItemsPanel(
             compact = true,
         )
     }
+}
+
+/** Position of [id] in the LazyColumn, counting the section headers drawn when box items exist. */
+internal fun listIndexOf(id: String?, app: List<Recording>, movies: List<Recording>, timers: List<Recording>): Int {
+    if (id == null) return -1
+    val headers = movies.isNotEmpty() || timers.isNotEmpty()
+    var offset = 0
+    for (list in listOf(app, movies, timers)) {
+        if (list.isEmpty()) continue
+        if (headers) offset++
+        val i = list.indexOfFirst { it.id == id }
+        if (i >= 0) return offset + i
+        offset += list.size
+    }
+    return -1
 }
 
 @Composable
@@ -211,9 +240,9 @@ private enum class ItemAction(val label: Int) {
     CANCEL(R.string.cancel),
 }
 
-private fun actionsFor(item: Recording): List<ItemAction> = buildList {
-    if (item.status == RecordingStatus.READY || item.status == RecordingStatus.RECORDING) add(ItemAction.PLAY)
-    if (item.status == RecordingStatus.RECORDING) add(ItemAction.STOP)
+private fun actionsFor(item: Recording, box: Boolean, boxTimer: Boolean): List<ItemAction> = buildList {
+    if (!boxTimer && (item.status == RecordingStatus.READY || item.status == RecordingStatus.RECORDING)) add(ItemAction.PLAY)
+    if (!box && item.status == RecordingStatus.RECORDING) add(ItemAction.STOP)
     add(ItemAction.DELETE)
     add(ItemAction.CANCEL)
 }

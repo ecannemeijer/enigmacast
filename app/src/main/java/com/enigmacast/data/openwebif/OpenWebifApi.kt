@@ -342,6 +342,10 @@ class OpenWebifApi @Inject constructor(
         return OpenWebifJson.parseTimerResult(get(config, endpoints.timerAddByEventId(config, serviceReference, eventId)))
     }
 
+    suspend fun addTimer(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long, name: String, description: String): TimerResult {
+        return OpenWebifJson.parseTimerResult(get(config, endpoints.timerAdd(config, serviceReference, begin, end, name, description)))
+    }
+
     internal suspend fun timers(config: ReceiverConfig): List<OpenWebifJson.ReceiverTimer> {
         return OpenWebifJson.parseTimers(get(config, endpoints.timerList(config)))
     }

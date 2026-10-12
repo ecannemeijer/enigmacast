@@ -186,10 +186,10 @@ class HomeFilmsViewModel @Inject constructor(
         }
     }
 
-    fun confirmRecord() {
+    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget) {
         val ask = recordAsk ?: return
         recordAsk = null
-        viewModelScope.launch { showNotice(recordings.schedule(ask)) }
+        viewModelScope.launch { showNotice(recordings.schedule(ask.copy(place = place))) }
     }
 
     fun dismissRecord() {

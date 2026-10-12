@@ -349,6 +349,9 @@ internal object OpenWebifJson {
         val filename: String,
         val serviceName: String,
         val begin: Long,
+        /** From "length" ("90:12" or "1:30:12"); 0 when unknown. */
+        val lengthSec: Long = 0L,
+        val description: String = "",
     )
 
     fun parseTimers(body: String): List<ReceiverTimer> {
@@ -368,6 +371,16 @@ internal object OpenWebifJson {
         }
     }
 
+    /** "90:12" → 5412 s, "1:30:12" → 5412 s; anything else 0. */
+    fun movieLength(text: String?): Long {
+        val parts = text?.trim()?.split(':')?.map { it.trim().toLongOrNull() ?: return 0L } ?: return 0L
+        return when (parts.size) {
+            2 -> parts[0] * 60 + parts[1]
+            3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
+            else -> 0L
+        }
+    }
+
     fun parseMovies(body: String): List<ReceiverMovie> {
         val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
         val array = findArray(root, "movies") ?: return emptyList()
@@ -378,7 +391,9 @@ internal object OpenWebifJson {
                 name = unescape(item.primitive("eventname") ?: item.primitive("title") ?: ""),
                 filename = filename,
                 serviceName = unescape(item.primitive("servicename") ?: ""),
-                begin = item.primitive("begintime")?.toLongOrNull() ?: 0L,
+                begin = item.primitive("begintime")?.toLongOrNull() ?: item.primitive("recordingtime")?.toLongOrNull() ?: 0L,
+                lengthSec = movieLength(item.primitive("length")),
+                description = unescape(item.primitive("description") ?: ""),
             )
         }
     }

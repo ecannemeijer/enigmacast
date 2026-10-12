@@ -846,10 +846,10 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
-    fun confirmRecord() {
+    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget) {
         val ask = _ui.value.recordAsk ?: return
         _ui.update { it.copy(recordAsk = null) }
-        viewModelScope.launch { showNotice(recordings.schedule(ask), NOTICE_LONG_MS) }
+        viewModelScope.launch { showNotice(recordings.schedule(ask.copy(place = place)), NOTICE_LONG_MS) }
     }
 
     fun dismissRecord() {
