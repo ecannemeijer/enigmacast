@@ -86,6 +86,7 @@ import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.util.asString
 import com.enigmacast.util.isEmpty
 
+private const val RECENTS_SECTION = 1000
 private val PosterShape = RoundedCornerShape(12.dp)
 private const val CARD_WIDTH_DP = 132
 
@@ -109,8 +110,7 @@ fun FilmHomePanel(
     val autoKeys by model.autoSwitchKeys.collectAsStateWithLifecycle()
     val recordKeys by model.recordingKeys.collectAsStateWithLifecycle()
     val nowSec = rememberGuideClock()
-    LaunchedEffect(nowSec / 60) { model.refreshRows() }
-    LaunchedEffect(receiverId) { model.load(false) }
+    val sync by model.progress.collectAsStateWithLifecycle()
     val hero = model.hero
     var backdropFilm by remember { mutableStateOf<HomeFilm?>(null) }
     val shown = backdropFilm ?: hero
@@ -124,45 +124,50 @@ fun FilmHomePanel(
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
         ) {
             Backdrop(shown)
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
+            val sections = remember { PivotState() }
+            PivotColumn(sections, Modifier.fillMaxSize()) {
                 when (val state = model.state) {
-                    HomeFilmsViewModel.State.Loading -> LoadingSkeleton(contentFocus, left)
+                    HomeFilmsViewModel.State.Loading -> Box(sections.section(0)) { LoadingSkeleton(contentFocus, left, sync?.percent, sync?.step?.asString()) }
                     is HomeFilmsViewModel.State.Ready -> {
-                        if (hero != null) {
-                            Hero(
-                                film = hero,
-                                nowSec = nowSec,
-                                autoSwitchSet = hero.key in autoKeys,
-                                recordingSet = hero.key in recordKeys,
-                                watchModifier = Modifier.focusRequester(contentFocus).then(left),
-                                onFocused = { backdropFilm = null },
-                                onWatch = { onWatch(model.channelOf(hero)) },
-                                onInfo = { model.openInfo(hero) },
-                                onSchedule = { model.toggleAutoSwitch(hero) },
-                            )
-                        } else {
-                            Spacer(Modifier.size(1.dp).focusRequester(contentFocus).then(left).focusable())
+                        Box(sections.section(0)) {
+                            if (hero != null) {
+                                Hero(
+                                    film = hero,
+                                    nowSec = nowSec,
+                                    autoSwitchSet = hero.key in autoKeys,
+                                    recordingSet = hero.key in recordKeys,
+                                    watchModifier = Modifier.focusRequester(contentFocus).then(left),
+                                    onFocused = { backdropFilm = null },
+                                    onWatch = { onWatch(model.channelOf(hero)) },
+                                    onInfo = { model.openInfo(hero) },
+                                    onSchedule = { model.toggleAutoSwitch(hero) },
+                                )
+                            } else {
+                                Spacer(Modifier.size(1.dp).focusRequester(contentFocus).then(left).focusable())
+                            }
                         }
-                        model.rows.forEach { row ->
-                            FilmRow(
-                                row = row,
-                                nowSec = nowSec,
-                                autoKeys = autoKeys,
-                                recordKeys = recordKeys,
-                                firstModifier = left,
-                                onFocus = { backdropFilm = it },
-                                onOpen = model::openInfo,
-                                model = model,
-                            )
+                        model.rows.forEachIndexed { index, row ->
+                            Box(sections.section(index + 1)) {
+                                FilmRow(
+                                    row = row,
+                                    nowSec = nowSec,
+                                    autoKeys = autoKeys,
+                                    recordKeys = recordKeys,
+                                    firstModifier = left,
+                                    onFocus = { backdropFilm = it },
+                                    onOpen = model::openInfo,
+                                    model = model,
+                                )
+                            }
                         }
                     }
-                    else -> EmptyState(state, contentFocus, left, onRetry = { model.load(true) })
+                    else -> Box(sections.section(0)) { EmptyState(state, contentFocus, left, onRetry = { model.load(true) }) }
                 }
                 if (recents.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 24.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = sections.section(RECENTS_SECTION).padding(start = 24.dp),
+                    ) {
                         RowTitle(stringResource(R.string.home_recent))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 24.dp)) {
                             itemsIndexed(recents, key = { _, item -> item.reference }) { index, item ->
@@ -182,6 +187,21 @@ fun FilmHomePanel(
                     fontSize = EnigmaType.Caption,
                     modifier = Modifier.padding(start = 24.dp, bottom = 12.dp),
                 )
+            }
+            val running = sync
+            if (running != null && model.state is HomeFilmsViewModel.State.Ready) {
+                Row(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .background(EnigmaColors.Selected.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    EnigmaLoadingIndicator(Modifier.size(14.dp))
+                    Text(stringResource(R.string.sync_preparing, running.percent), color = EnigmaColors.Muted, fontSize = 12.sp)
+                }
             }
             if (!model.notice.isEmpty()) {
                 Text(
@@ -472,6 +492,19 @@ private fun FilmCard(
                     fallbackSize = 8.sp,
                 )
             }
+            if (!airing) {
+                Text(
+                    FilmFormat.time(film.event.beginEpochSec),
+                    color = EnigmaColors.Text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                        .background(Color(0xE0080D1C), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                )
+            }
             if (airing) {
                 EnigmaProgramProgress(
                     film.event.progress(nowSec),
@@ -488,13 +521,20 @@ private fun FilmCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(FilmFormat.channelTime(film), color = EnigmaColors.Accent, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(film.candidate.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            if (airing) stringResource(R.string.home_card_live_left, FilmFormat.minutesLeft(film, nowSec)) else FilmFormat.slot(film),
+            color = if (airing) LiveRed else EnigmaColors.Accent,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
         RatingStars(film.movie.voteAverage, size = 10.sp)
     }
 }
 
 @Composable
-private fun LoadingSkeleton(contentFocus: FocusRequester, left: Modifier) {
+private fun LoadingSkeleton(contentFocus: FocusRequester, left: Modifier, percent: Int?, step: String?) {
     val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
         initialValue = 0.35f,
         targetValue = 0.7f,
@@ -506,7 +546,7 @@ private fun LoadingSkeleton(contentFocus: FocusRequester, left: Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             EnigmaLoadingIndicator(Modifier.size(22.dp))
             Text(
-                stringResource(R.string.home_loading),
+                if (percent != null) stringResource(R.string.sync_preparing, percent) + (step?.let { "  ·  $it" } ?: "") else stringResource(R.string.home_loading),
                 color = EnigmaColors.Muted,
                 fontSize = 14.sp,
                 modifier = Modifier.focusRequester(contentFocus).then(left).focusable(),

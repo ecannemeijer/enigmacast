@@ -1467,6 +1467,7 @@ private fun GeneralSettingsPanel(
         )
     }
     com.enigmacast.ui.home.HomeFilmSettingsCard()
+    com.enigmacast.ui.home.DataSyncSettingsCard()
 }
 
 @Composable

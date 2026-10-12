@@ -3,6 +3,7 @@ package com.enigmacast.domain.films
 import kotlin.math.ln
 
 /** Full TMDB details used by the info dialog. Everything optional except the id. */
+@kotlinx.serialization.Serializable
 data class TmdbMovie(
     val id: Int,
     val title: String,
@@ -24,6 +25,7 @@ data class TmdbMovie(
     val cast: List<TmdbCastMember> = emptyList(),
 )
 
+@kotlinx.serialization.Serializable
 data class TmdbCastMember(val name: String, val character: String, val profilePath: String?)
 
 /** A guide film with its TMDB match. */

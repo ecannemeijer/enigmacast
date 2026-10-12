@@ -26,14 +26,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.isActive
+import com.enigmacast.domain.sync.HomeClock
+import com.enigmacast.sync.SyncProgress
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 import javax.inject.Inject
 
 /** The film home page: loads today's films, and Watch / Inplannen / Record from the info dialog. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeFilmsViewModel @Inject constructor(
     private val repository: HomeFilmsRepository,
@@ -49,7 +56,7 @@ class HomeFilmsViewModel @Inject constructor(
         data object NoReceiver : State
         data object MissingKey : State
         data object Empty : State
-        data class Ready(val films: List<HomeFilm>, val country: String) : State
+        data class Ready(val films: List<HomeFilm>) : State
     }
 
     var state by mutableStateOf<State>(State.Loading)
@@ -66,6 +73,9 @@ class HomeFilmsViewModel @Inject constructor(
     var notice by mutableStateOf(UiText.Empty)
         private set
 
+    /** Sync progress for the active receiver ("Preparing your guide… 37%"), or null. */
+    val progress: StateFlow<SyncProgress?> = repository.progress
+
     val autoSwitchKeys: StateFlow<Set<String>> = reminders.scheduledKeys
 
     /** Programme keys that have a scheduled or running recording. */
@@ -73,35 +83,63 @@ class HomeFilmsViewModel @Inject constructor(
         .map { list -> list.filter(Recording::isActive).mapTo(HashSet()) { com.enigmacast.domain.reminder.Reminder.keyOf(it.reference, it.beginEpochSec) } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-    private var loadJob: Job? = null
+    private val clock = MutableStateFlow(System.currentTimeMillis())
+    private val zone: ZoneId get() = ZoneId.systemDefault()
     private var noticeJob: Job? = null
 
     init {
-        load(false)
-    }
-
-    fun load(force: Boolean) {
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            if (state !is State.Ready || force) state = State.Loading
-            val result = runCatching { repository.load(force) }.getOrNull()
-            state = when {
-                result == null && settingsRepository.current().activeReceiver() == null -> State.NoReceiver
-                result == null -> State.Empty
-                result.missingKey -> State.MissingKey
-                result.films.isEmpty() -> State.Empty
-                else -> State.Ready(result.films, result.country)
+        // The clock ticks every 30 s; rows are recomputed, and the Room query moves at midnight.
+        viewModelScope.launch {
+            while (isActive) {
+                delay(30_000)
+                clock.value = System.currentTimeMillis()
             }
-            refreshRows()
+        }
+        val receiver = settingsRepository.settings.map { it.activeReceiver() }.distinctUntilChanged { a, b -> a?.id == b?.id && a?.host == b?.host }
+        val window = clock.map { HomeClock.queryWindow(it, zone) }.distinctUntilChanged()
+        viewModelScope.launch {
+            combine(receiver, window) { r, w -> r to w }
+                .flatMapLatest { (r, w) ->
+                    if (r == null) {
+                        flowOf<Pair<List<HomeFilm>, Boolean>?>(null)
+                    } else {
+                        // First use, a new box or a new day: fill whatever is missing (only due steps run).
+                        repository.ensurePeriodic()
+                        repository.syncNow(force = false)
+                        val key = repository.receiverKey(r)
+                        repository.films(key, w.first, w.second).combine(repository.syncState(key)) { films, states ->
+                            val filmsDone = states.any { it.kind == com.enigmacast.domain.sync.SyncKind.FILMS.name && it.lastAttemptMs > 0 }
+                            films to filmsDone
+                        }
+                    }
+                }
+                .combine(clock) { films, now -> films to now }
+                .combine(progress) { pair, sync -> Triple(pair.first, pair.second, sync) }
+                .collect { (films, now, sync) -> publish(films?.first, films?.second ?: true, now, sync) }
         }
     }
 
-    /** Re-sorts as time passes, so ended films drop off and "Now on TV" moves on. */
-    fun refreshRows() {
-        val ready = state as? State.Ready ?: run { rows = emptyList(); hero = null; return }
-        val now = System.currentTimeMillis() / 1000
-        hero = FilmRanking.hero(ready.films, now)
-        rows = FilmRanking.rows(ready.films, now, primeTimeStartSec())
+    private fun publish(films: List<HomeFilm>?, filmsDone: Boolean, nowMs: Long, sync: SyncProgress?) {
+        if (films == null) {
+            state = State.NoReceiver
+            hero = null
+            rows = emptyList()
+            return
+        }
+        val (top, list) = HomeClock.compute(films, nowMs, zone)
+        hero = top
+        rows = list
+        state = when {
+            list.isNotEmpty() -> State.Ready(films)
+            repository.apiKeyMissing() -> State.MissingKey
+            sync != null || !filmsDone -> State.Loading
+            else -> State.Empty
+        }
+    }
+
+    /** Try again / Refresh: [force] refreshes everything, otherwise only what is due. */
+    fun load(force: Boolean) {
+        repository.syncNow(force)
     }
 
     fun openInfo(film: HomeFilm) {
@@ -154,7 +192,7 @@ class HomeFilmsViewModel @Inject constructor(
 
     fun setCountry(code: String) {
         homeSettings.setCountry(code)
-        load(true)
+        repository.syncNow(force = true)
     }
 
     private var keyJob: Job? = null
@@ -166,7 +204,7 @@ class HomeFilmsViewModel @Inject constructor(
         keyJob?.cancel()
         keyJob = viewModelScope.launch {
             delay(1_500)
-            load(true)
+            repository.syncNow(force = true)
         }
     }
 
@@ -177,11 +215,6 @@ class HomeFilmsViewModel @Inject constructor(
             delay(NOTICE_MS)
             notice = UiText.Empty
         }
-    }
-
-    private fun primeTimeStartSec(): Long {
-        val zone = ZoneId.systemDefault()
-        return LocalDate.now(zone).atTime(LocalTime.of(FilmRanking.PRIME_TIME_HOUR, 0)).atZone(zone).toEpochSecond()
     }
 
     private companion object {

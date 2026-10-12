@@ -31,6 +31,8 @@ internal object FilmFormat {
     /** "20:30 – 22:45". */
     fun slot(film: HomeFilm): String = "${time(film.event.beginEpochSec)} – ${time(film.event.endEpochSec)}"
 
+    fun minutesLeft(film: HomeFilm, nowSec: Long): Int = ((film.event.endEpochSec - nowSec) / 60).toInt().coerceAtLeast(0)
+
     fun rating(value: Double): String = String.format(Locale.ROOT, "%.1f", value)
 }
 
