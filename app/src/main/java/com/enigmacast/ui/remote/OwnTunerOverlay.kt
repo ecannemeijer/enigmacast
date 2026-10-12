@@ -613,6 +613,7 @@ private fun ChannelPanel(
     val own = ui.own
     val channels = own.channels
     val current = own.channel?.reference.orEmpty()
+    val playingIndex = channels.indexOfFirst { it.reference.equals(current, ignoreCase = true) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
@@ -666,7 +667,7 @@ private fun ChannelPanel(
             itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
                 CompactListRow(
                     onClick = { onZap(entry) },
-                    selected = BouquetChannels.sameService(entry.reference, current),
+                    selected = if (playingIndex >= 0) index == playingIndex else BouquetChannels.sameService(entry.reference, current),
                     modifier = Modifier
                         .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
                         .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)

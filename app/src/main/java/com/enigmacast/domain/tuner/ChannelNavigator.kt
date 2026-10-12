@@ -30,17 +30,26 @@ object ChannelNavigator {
 
     /** Next ([delta] > 0) or previous channel, wrapping at the ends of the list. */
     fun step(channels: List<BouquetEntry>, currentReference: String, delta: Int): BouquetEntry? {
-        if (channels.isEmpty()) return null
+        if (channels.isEmpty() || delta == 0) return null
         val exact = channels.indexOfFirst { it.reference == currentReference }
-        val index = if (exact >= 0) {
+        val start = if (exact >= 0) {
             exact
         } else {
             channels.indexOfFirst { BouquetChannels.sameService(it.reference, currentReference) }
         }
-        if (index < 0) return channels.first()
+        if (start < 0) return channels.firstOrNull { playable(it) }
         val size = channels.size
-        return channels[((index + delta) % size + size) % size]
+        var cursor = start
+        repeat(size - 1) {
+            cursor = Math.floorMod(cursor + delta, size)
+            val candidate = channels[cursor]
+            if (playable(candidate)) return candidate
+        }
+        return null
     }
+
+    private fun playable(entry: BouquetEntry): Boolean =
+        BouquetChannels.isPlayableChannel(entry.reference) && !BouquetChannels.isSectionLabel(entry.name)
 
     fun byNumber(channels: List<BouquetEntry>, number: Int): BouquetEntry? {
         if (number <= 0) return null

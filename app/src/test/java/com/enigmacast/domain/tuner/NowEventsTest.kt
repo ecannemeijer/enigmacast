@@ -108,4 +108,11 @@ class ChannelListNavigationTest {
         assertEquals(1, ChannelListNavigation.channelFocusIndex(channels, "1:0:19:4652:3fc:1:c00000:0:0:0:"))
         assertEquals(0, ChannelListNavigation.channelFocusIndex(channels, "1:0:19:1:1:1:C00000:0:0:0:"))
     }
+
+    @Test
+    fun channelListStaysOnAnInternetStreamThatSharesTheServiceFields() {
+        val first = BouquetEntry("First", "4097:0:1:0:0:0:0:0:0:0:https3a//example/a.m3u8:First")
+        val broken = BouquetEntry("Broken", "4097:0:1:0:0:0:0:0:0:0:https3a//example/broken.m3u8:Broken")
+        assertEquals(1, ChannelListNavigation.channelFocusIndex(listOf(first, broken), broken.reference))
+    }
 }

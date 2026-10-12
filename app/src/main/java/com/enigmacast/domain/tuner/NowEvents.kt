@@ -1,6 +1,8 @@
 package com.enigmacast.domain.tuner
 
 import com.enigmacast.domain.model.BouquetEntry
+import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.ServiceStreams
 
 /** The programme on air on one channel, from OpenWebif `/api/epgnow?bRef=…`. */
 data class NowEvent(
@@ -113,9 +115,20 @@ object ChannelListNavigation {
         return bouquets.indexOfFirst { bouquetIdentity(it.reference) == active }.coerceAtLeast(0)
     }
 
-    /** The channel to focus in the list: the one playing, else the first. */
+    /**
+     * The channel to focus in the list: the one playing, else the first.
+     * Internet streams often share the first ten service fields and differ only by URL, so those
+     * are matched on the bouquet row itself. The ten-field key is only the fallback for DVB,
+     * where HD and SD are the same channel.
+     */
     fun channelFocusIndex(channels: List<BouquetEntry>, currentReference: String): Int {
-        if (currentReference.isBlank()) return 0
+        if (currentReference.isBlank() || channels.isEmpty()) return 0
+        val exact = channels.indexOfFirst { it.reference.equals(currentReference, ignoreCase = true) }
+        if (exact >= 0) return exact
+        if (ServiceStreams.isInternet(currentReference)) {
+            val byUrl = channels.indexOfFirst { BouquetChannels.sameService(it.reference, currentReference) }
+            if (byUrl >= 0) return byUrl
+        }
         val current = NowEvents.key(currentReference)
         return channels.indexOfFirst { NowEvents.key(it.reference) == current }.coerceAtLeast(0)
     }

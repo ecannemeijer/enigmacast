@@ -47,6 +47,28 @@ class ChannelNavigatorTest {
     }
 
     @Test
+    fun channelUpSkipsASectionLabelThatCopiesThePreviousStream() {
+        val zulthe = BouquetEntry(
+            "RTV Zulthe (Westerkwartier)",
+            "4097:0:1:1BC9:C86:600:0:0:0:0:https3a//cdn/zulthe.m3u8:RTV Zulthe (Westerkwartier)",
+            number = 5716,
+        )
+        val label = BouquetEntry(
+            "+++Friesland+++",
+            "1:0:21E:0:0:0:0:0:0:0:https3a//cdn/zulthe.m3u8:+++Friesland+++",
+            number = 5717,
+        )
+        val next = BouquetEntry(
+            "Omrop Fryslân",
+            "4097:0:1:524D:C99:3:0:0:0:0:https3a//cdn/fryslan.m3u8:Omrop Fryslân",
+            number = 5718,
+        )
+        val channels = listOf(zulthe, label, next)
+        assertEquals("Omrop Fryslân", ChannelNavigator.step(channels, zulthe.reference, 1)?.name)
+        assertEquals("RTV Zulthe (Westerkwartier)", ChannelNavigator.step(channels, next.reference, -1)?.name)
+    }
+
+    @Test
     fun duplicateUrlsStepFromTheCurrentRow() {
         val prefix = "4097:0:1:1641:CDCB:EC:0:0:0:0:"
         val shared = "https%3a//cdn.example/same.m3u8"

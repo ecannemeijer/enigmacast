@@ -45,6 +45,7 @@ import com.enigmacast.R
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.tuner.ChannelListNavigation
 import com.enigmacast.ui.animation.LocalMotionSpec
 import com.enigmacast.ui.components.EnigmaGlassPanel
 import com.enigmacast.ui.components.EnigmaProgramProgress
@@ -116,8 +117,9 @@ internal fun LiveBrowser(
     val firstFocus = remember { FocusRequester() }
     val lastFocus = remember { FocusRequester() }
     val bouquet = guideModel.selectedBouquetReference
-    val tunedIndex = channels.indexOfFirst { BouquetChannels.sameService(it.reference, guideModel.tunedReference) }
-        .let { if (it >= 0) it else 0 }
+    val tunedReference = guideModel.tunedReference
+    val tunedIndex = ChannelListNavigation.channelFocusIndex(channels, tunedReference)
+    val tunedExactly = channels.getOrNull(tunedIndex)?.reference.equals(tunedReference, ignoreCase = true)
     var focusedIndex by remember(bouquet) { mutableIntStateOf(tunedIndex) }
     var handledEnter by remember { mutableIntStateOf(0) }
     LaunchedEffect(channels.size, bouquet) {
@@ -195,7 +197,7 @@ internal fun LiveBrowser(
                     val next = now?.let { current -> events.firstOrNull { it.beginEpochSec >= current.endEpochSec } }
                     CompactListRow(
                         onClick = { guideModel.tune(entry, onMiniPlayer, onFullscreen) },
-                        selected = BouquetChannels.sameService(entry.reference, guideModel.tunedReference),
+                        selected = if (tunedExactly) index == tunedIndex else BouquetChannels.sameService(entry.reference, tunedReference),
                         modifier = Modifier
                             .then(if (index == focusedIndex) Modifier.focusRequester(listFocus) else Modifier)
                             .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)

@@ -323,7 +323,14 @@ class OwnTunerSession @Inject constructor(
             playback.health.value == StreamHealth.PLAYING &&
             !playback.isFilePlayback()
         if (StreamReuse.alreadyPlaying(_state.value.channel?.reference, channel.reference, playing, force)) {
-            EnigmaLog.service("same channel, stream kept: ${channel.name}")
+            val current = _state.value.channel
+            if (current != null && current.reference != channel.reference) {
+                // Another row can share this stream. Remember it, or the next step stays here.
+                EnigmaLog.service("same stream, next row: ${channel.name}")
+                _state.update { it.copy(channel = channel, zapCount = it.zapCount + 1) }
+            } else {
+                EnigmaLog.service("same channel, stream kept: ${channel.name}")
+            }
             return
         }
         restarts.reset()
