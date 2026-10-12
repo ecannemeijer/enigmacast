@@ -16,6 +16,7 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 25
         versionName = "1.0.0-beta.22"
+        buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey()}\"")
     }
 
     buildTypes {
@@ -69,6 +70,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.timber)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui.compose)
@@ -80,4 +82,12 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+}
+
+/** TMDB v3 key from local.properties (TMDB_API_KEY=...), never from source control. Blank disables the film home page. */
+fun tmdbApiKey(): String {
+    val file = rootProject.file("local.properties")
+    if (!file.isFile) return ""
+    return file.readLines().map { it.trim() }.firstOrNull { it.startsWith("TMDB_API_KEY=") }
+        ?.substringAfter('=')?.trim().orEmpty()
 }

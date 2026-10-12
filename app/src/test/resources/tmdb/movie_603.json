@@ -1,0 +1,373 @@
+{
+ "adult": false,
+ "backdrop_path": "/tlm8UkiQsitc8rSuIAscQDCnP8d.jpg",
+ "belongs_to_collection": {
+  "id": 2344,
+  "name": "The Matrix Collectie",
+  "poster_path": "/bV9qTVHTVf0gkW0j7p7M0ILD4pG.jpg",
+  "backdrop_path": "/bRm2DEgUiYciDw3myHuYFInD7la.jpg"
+ },
+ "budget": 63000000,
+ "genres": [
+  {
+   "id": 28,
+   "name": "Actie"
+  },
+  {
+   "id": 878,
+   "name": "Sciencefiction"
+  }
+ ],
+ "homepage": "",
+ "id": 603,
+ "imdb_id": "tt0133093",
+ "origin_country": [
+  "US"
+ ],
+ "original_language": "en",
+ "original_title": "The Matrix",
+ "overview": "De computerhacker Neo komt er achter dat het leven op aarde niets meer is dan een computersimulatie, opgezet door machines om de mensheid in bedwang te houden. Hij wordt door enkele vrijheidsstrijders uit deze \"Matrix\" gehaald.",
+ "popularity": 46.5747,
+ "poster_path": "/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg",
+ "production_companies": [
+  {
+   "id": 79,
+   "logo_path": "/at4uYdwAAgNRKhZuuFX8ShKSybw.png",
+   "name": "Village Roadshow Pictures",
+   "origin_country": "US"
+  },
+  {
+   "id": 372,
+   "logo_path": null,
+   "name": "Groucho II Film Partnership",
+   "origin_country": ""
+  },
+  {
+   "id": 1885,
+   "logo_path": "/xlvoOZr4s1PygosrwZyolIFe5xs.png",
+   "name": "Silver Pictures",
+   "origin_country": "US"
+  },
+  {
+   "id": 174,
+   "logo_path": "/zhD3hhtKB5qyv7ZeL4uLpNxgMVU.png",
+   "name": "Warner Bros. Pictures",
+   "origin_country": "US"
+  }
+ ],
+ "production_countries": [
+  {
+   "iso_3166_1": "US",
+   "name": "United States of America"
+  }
+ ],
+ "release_date": "1999-03-31",
+ "revenue": 463517383,
+ "runtime": 136,
+ "softcore": false,
+ "spoken_languages": [
+  {
+   "english_name": "English",
+   "iso_639_1": "en",
+   "name": "English"
+  }
+ ],
+ "status": "Released",
+ "tagline": "",
+ "title": "The Matrix",
+ "video": false,
+ "vote_average": 8.261,
+ "vote_count": 28935,
+ "credits": {
+  "cast": [
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 6384,
+    "known_for_department": "Acting",
+    "name": "Keanu Reeves",
+    "original_name": "Keanu Reeves",
+    "popularity": 8.735,
+    "profile_path": "/8RZLOyYGsoRe9p44q3xin9QkMHv.jpg",
+    "cast_id": 34,
+    "character": "Neo",
+    "credit_id": "52fe425bc3a36847f80181c1",
+    "order": 0
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 2975,
+    "known_for_department": "Acting",
+    "name": "Laurence Fishburne",
+    "original_name": "Laurence Fishburne",
+    "popularity": 4.6757,
+    "profile_path": "/2GbXERENPpl5MmlqOLlPVaVtifD.jpg",
+    "cast_id": 21,
+    "character": "Morpheus",
+    "credit_id": "52fe425bc3a36847f801818d",
+    "order": 1
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 530,
+    "known_for_department": "Acting",
+    "name": "Carrie-Anne Moss",
+    "original_name": "Carrie-Anne Moss",
+    "popularity": 4.8928,
+    "profile_path": "/9zya72vRZYBQILfetACsnmCBgdj.jpg",
+    "cast_id": 22,
+    "character": "Trinity",
+    "credit_id": "52fe425bc3a36847f8018191",
+    "order": 2
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 1331,
+    "known_for_department": "Acting",
+    "name": "Hugo Weaving",
+    "original_name": "Hugo Weaving",
+    "popularity": 7.3776,
+    "profile_path": "/lSC8Et0PYi5zeQb3IpPkFje7hgR.jpg",
+    "cast_id": 23,
+    "character": "Agent Smith",
+    "credit_id": "52fe425bc3a36847f8018195",
+    "order": 3
+   }
+  ],
+  "crew": [
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 9340,
+    "known_for_department": "Directing",
+    "name": "Lana Wachowski",
+    "original_name": "Lana Wachowski",
+    "popularity": 2.5702,
+    "profile_path": "/4nE4ttPQBuw1virOz0LYT08c1Vm.jpg",
+    "credit_id": "6969712e4643f373c87f1c5f",
+    "department": "Directing",
+    "job": "Director"
+   },
+   {
+    "adult": false,
+    "gender": 1,
+    "id": 9339,
+    "known_for_department": "Directing",
+    "name": "Lilly Wachowski",
+    "original_name": "Lilly Wachowski",
+    "popularity": 1.9875,
+    "profile_path": "/rCScAjSpeKA19BLNR07MqNNeeTT.jpg",
+    "credit_id": "696ab52c7f6c9ab39b5a1110",
+    "department": "Directing",
+    "job": "Director"
+   },
+   {
+    "adult": false,
+    "gender": 2,
+    "id": 9343,
+    "known_for_department": "Art",
+    "name": "Owen Paterson",
+    "original_name": "Owen Paterson",
+    "popularity": 0.5235,
+    "profile_path": null,
+    "credit_id": "52fe425bc3a36847f8018153",
+    "department": "Art",
+    "job": "Production Design"
+   }
+  ]
+ },
+ "release_dates": {
+  "results": [
+   {
+    "iso_3166_1": "DE",
+    "release_dates": [
+     {
+      "certification": "16",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "",
+      "release_date": "1999-06-17T00:00:00.000Z",
+      "type": 3
+     },
+     {
+      "certification": "",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "Re-Release",
+      "release_date": "2003-05-29T00:00:00.000Z",
+      "type": 3
+     },
+     {
+      "certification": "16",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "",
+      "release_date": "1999-11-25T00:00:00.000Z",
+      "type": 5
+     }
+    ]
+   },
+   {
+    "iso_3166_1": "NL",
+    "release_dates": [
+     {
+      "certification": "12",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "",
+      "release_date": "1999-06-17T00:00:00.000Z",
+      "type": 3
+     },
+     {
+      "certification": "",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "Re-Release",
+      "release_date": "2019-08-29T00:00:00.000Z",
+      "type": 3
+     },
+     {
+      "certification": "12",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "DVD",
+      "release_date": "2004-12-22T00:00:00.000Z",
+      "type": 5
+     },
+     {
+      "certification": "12",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "Blu-ray",
+      "release_date": "2011-01-12T00:00:00.000Z",
+      "type": 5
+     },
+     {
+      "certification": "12",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "SBS 6",
+      "release_date": "2002-09-23T00:00:00.000Z",
+      "type": 6
+     }
+    ]
+   },
+   {
+    "iso_3166_1": "US",
+    "release_dates": [
+     {
+      "certification": "R",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "Westwood, California",
+      "release_date": "1999-03-24T00:00:00.000Z",
+      "type": 1
+     },
+     {
+      "certification": "R",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "",
+      "release_date": "1999-03-31T00:00:00.000Z",
+      "type": 3
+     },
+     {
+      "certification": "R",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "Dolby Cinema Re-Release",
+      "release_date": "2024-03-20T00:00:00.000Z",
+      "type": 3
+     },
+     {
+      "certification": "R",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "Peacock",
+      "release_date": "2020-07-15T00:00:00.000Z",
+      "type": 4
+     },
+     {
+      "certification": "R",
+      "descriptors": [],
+      "iso_639_1": "",
+      "note": "4K UHD",
+      "release_date": "2018-05-22T00:00:00.000Z",
+      "type": 5
+     }
+    ]
+   }
+  ]
+ },
+ "images": {
+  "backdrops": [
+   {
+    "aspect_ratio": 1.778,
+    "height": 2160,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/tlm8UkiQsitc8rSuIAscQDCnP8d.jpg",
+    "vote_average": 6.042,
+    "vote_count": 12,
+    "width": 3840
+   },
+   {
+    "aspect_ratio": 1.778,
+    "height": 1440,
+    "iso_3166_1": null,
+    "iso_639_1": null,
+    "file_path": "/lrtSb1skJayPydZk0OSMAKjBOVe.jpg",
+    "vote_average": 5.786,
+    "vote_count": 7,
+    "width": 2560
+   }
+  ],
+  "logos": [
+   {
+    "aspect_ratio": 5.958,
+    "height": 24,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/xslT5YyQOaqcVKAZxcoq2YbcbEf.svg",
+    "vote_average": 3.334,
+    "vote_count": 1,
+    "width": 143
+   },
+   {
+    "aspect_ratio": 6.435,
+    "height": 124,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/iWxxHjuJ1vCLQcg3iiOMucvbrF1.png",
+    "vote_average": 2.066,
+    "vote_count": 5,
+    "width": 798
+   }
+  ],
+  "posters": [
+   {
+    "aspect_ratio": 0.667,
+    "height": 2250,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg",
+    "vote_average": 6.258,
+    "vote_count": 33,
+    "width": 1500
+   },
+   {
+    "aspect_ratio": 0.667,
+    "height": 3000,
+    "iso_3166_1": "US",
+    "iso_639_1": "en",
+    "file_path": "/aOIuZAjPaRIE6CMzbazvcHuHXDc.jpg",
+    "vote_average": 6.0,
+    "vote_count": 38,
+    "width": 2000
+   }
+  ]
+ }
+}
