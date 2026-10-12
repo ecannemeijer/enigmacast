@@ -32,7 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -80,9 +80,10 @@ import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.util.asString
 import com.enigmacast.util.isEmpty
 
+/** One row/block of the Soccer page, in visual order; [key] names it in the focus chain. */
+class PageSection(val key: String, val content: @Composable () -> Unit)
+
 private val CardShape = RoundedCornerShape(12.dp)
-private const val STANDINGS_SECTION = 900
-private const val PITCH_SECTIONS = 1000
 
 /**
  * The Soccer page, in the style of Home: a hero with the most relevant match, rows of live,
@@ -115,54 +116,61 @@ fun SoccerPanel(
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()
-            val order = ArrayList<String>()
-            // Each section joins the vertical chain: Down/Up go to the next/previous section, never the menu.
-            fun sec(index: Int, key: String): Modifier { order += key; return sections.section(index).then(chain.section(key)) }
-            SideEffect { chain.keys = order.toList() }
             val s = model.sections
-            PivotColumn(sections, Modifier.fillMaxSize()) {
+            val hasStandings = model.standings.values.any { t -> t.any { it.rows.isNotEmpty() } }
+            // One list in visual top-to-bottom order; it drives both what is drawn and the focus chain,
+            // so Down/Up always reach the row directly below/above on screen.
+            val list = buildList<PageSection> {
                 when {
-                    model.loading && s.isEmpty -> Box(sec(0, "top")) { Skeleton(contentFocus, left) }
+                    model.loading && s.isEmpty -> add(PageSection("top") { Skeleton(left) })
                     s.isEmpty && model.problem != SoccerViewModel.Problem.NONE ->
-                        Box(sec(0, "top")) { ProblemState(model.problem, contentFocus, left) { model.refresh(true) } }
-                    s.isEmpty -> Box(sec(0, "top")) { EmptyState(contentFocus, left) { model.refresh(true) } }
+                        add(PageSection("top") { ProblemState(model.problem, left) { model.refresh(true) } })
+                    s.isEmpty -> add(PageSection("top") { EmptyState(left) { model.refresh(true) } })
                     else -> {
-                        Box(sec(0, "top")) {
-                            val hero = s.hero
-                            if (hero != null) {
+                        s.hero?.let { hero ->
+                            add(PageSection("top") {
                                 Hero(
                                     match = hero,
                                     nowSec = nowSec,
                                     locale = locale,
                                     channel = model.channelOf(hero)?.let { it.entry.name to SoccerFormat.time(it.event.beginEpochSec, locale) },
                                     scheduled = model.scheduleKey(hero)?.let { it in autoKeys } == true,
-                                    firstModifier = Modifier.focusRequester(contentFocus).then(left),
+                                    firstModifier = left,
                                     onWatch = { model.channelOf(hero)?.let { onWatch(it.entry) } },
                                     onSchedule = { model.toggleSchedule(hero) },
                                     onStandings = { runCatching { standingsFocus.requestFocus() } },
                                     onInfo = { model.openInfo(hero) },
-                                    showStandings = model.standings.values.any { t -> t.any { it.rows.isNotEmpty() } },
+                                    showStandings = hasStandings,
                                 )
-                            } else {
-                                Spacer(Modifier.size(1.dp).focusRequester(contentFocus).then(left).focusable())
-                            }
+                            })
                         }
-                        var index = 1
-                        if (s.live.isNotEmpty()) Box(sec(index++, "fd-live")) { MatchRow(stringResource(R.string.soccer_row_live), s.live, nowSec, locale, left, model) }
-                        if (s.today.isNotEmpty()) Box(sec(index++, "fd-today")) { MatchRow(stringResource(R.string.soccer_row_today), s.today, nowSec, locale, left, model) }
-                        s.upcoming.take(3).forEach { (matchday, list) ->
-                            val title = if (matchday != null) stringResource(R.string.soccer_row_upcoming_md, matchday) else stringResource(R.string.soccer_row_upcoming)
-                            Box(sec(index++, "fd-up-$matchday")) { MatchRow(title, list, nowSec, locale, left, model) }
+                        if (s.live.isNotEmpty()) add(PageSection("fd-live") { MatchRow(stringResource(R.string.soccer_row_live), s.live, nowSec, locale, left, model) })
+                        if (s.today.isNotEmpty()) add(PageSection("fd-today") { MatchRow(stringResource(R.string.soccer_row_today), s.today, nowSec, locale, left, model) })
+                        s.upcoming.take(3).forEach { (matchday, matches) ->
+                            add(PageSection("fd-up-$matchday") {
+                                val title = if (matchday != null) stringResource(R.string.soccer_row_upcoming_md, matchday) else stringResource(R.string.soccer_row_upcoming)
+                                MatchRow(title, matches, nowSec, locale, left, model)
+                            })
                         }
-                        if (s.recent.isNotEmpty()) Box(sec(index++, "fd-recent")) { MatchRow(stringResource(R.string.soccer_row_recent), s.recent, nowSec, locale, left, model) }
+                        if (s.recent.isNotEmpty()) add(PageSection("fd-recent") { MatchRow(stringResource(R.string.soccer_row_recent), s.recent, nowSec, locale, left, model) })
                     }
                 }
-                if (model.standings.values.any { t -> t.any { it.rows.isNotEmpty() } }) {
-                    Box(sec(STANDINGS_SECTION, "fd-table")) {
+                if (hasStandings) {
+                    add(PageSection("fd-table") {
                         Standings(model, standingsFocus, left) { team -> pitch.findTeam(team.name)?.let { (t, league) -> pitch.openClub(t, league) } }
+                    })
+                }
+                addAll(pitchSections(pitch, nowSec, locale, left))
+            }
+            chain.keys = list.map { it.key }
+            PivotColumn(sections, Modifier.fillMaxSize()) {
+                list.forEachIndexed { i, section ->
+                    key(section.key) {
+                        // The page's entry point (Right / OK on the Soccer menu item) is the top-most section.
+                        val entry = if (i == 0) Modifier.focusRequester(contentFocus) else Modifier
+                        Box(sections.section(i).then(entry).then(chain.section(section.key))) { section.content() }
                     }
                 }
-                PitchSections(pitch, PITCH_SECTIONS, nowSec, locale, left, ::sec)
                 Text(
                     stringResource(R.string.soccer_attribution),
                     color = EnigmaColors.Subtle,
@@ -496,7 +504,7 @@ private fun FormCells(form: String?, modifier: Modifier) {
 }
 
 @Composable
-private fun Skeleton(contentFocus: FocusRequester, left: Modifier) {
+private fun Skeleton(left: Modifier) {
     val pulse by rememberInfiniteTransition(label = "soccerSkeleton").animateFloat(
         initialValue = 0.35f,
         targetValue = 0.7f,
@@ -507,7 +515,7 @@ private fun Skeleton(contentFocus: FocusRequester, left: Modifier) {
     Column(Modifier.padding(start = 28.dp, top = 30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             EnigmaLoadingIndicator(Modifier.size(22.dp))
-            Text(stringResource(R.string.soccer_loading), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.focusRequester(contentFocus).then(left).focusable())
+            Text(stringResource(R.string.soccer_loading), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = left.focusable())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(88.dp).background(block, RoundedCornerShape(44.dp)))
@@ -525,26 +533,26 @@ private fun Skeleton(contentFocus: FocusRequester, left: Modifier) {
 }
 
 @Composable
-private fun ProblemState(problem: SoccerViewModel.Problem, contentFocus: FocusRequester, left: Modifier, onRetry: () -> Unit) {
+private fun ProblemState(problem: SoccerViewModel.Problem, left: Modifier, onRetry: () -> Unit) {
     val body = when (problem) {
         SoccerViewModel.Problem.NO_KEY, SoccerViewModel.Problem.INVALID_KEY -> stringResource(R.string.soccer_key_hint)
         SoccerViewModel.Problem.RATE_LIMITED -> stringResource(R.string.soccer_rate_limited_hint)
         SoccerViewModel.Problem.NOT_IN_PLAN -> stringResource(R.string.soccer_not_in_plan_hint)
         else -> stringResource(R.string.soccer_offline_hint)
     }
-    Message(problemTitle(problem), body, contentFocus, left, onRetry)
+    Message(problemTitle(problem), body, left, onRetry)
 }
 
 @Composable
-private fun EmptyState(contentFocus: FocusRequester, left: Modifier, onRetry: () -> Unit) =
-    Message(stringResource(R.string.soccer_empty), stringResource(R.string.soccer_empty_hint), contentFocus, left, onRetry)
+private fun EmptyState(left: Modifier, onRetry: () -> Unit) =
+    Message(stringResource(R.string.soccer_empty), stringResource(R.string.soccer_empty_hint), left, onRetry)
 
 @Composable
-private fun Message(title: String, body: String, contentFocus: FocusRequester, left: Modifier, onRetry: () -> Unit) {
+private fun Message(title: String, body: String, left: Modifier, onRetry: () -> Unit) {
     Column(Modifier.padding(start = 28.dp, top = 60.dp).fillMaxWidth(0.7f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
         Text(body, color = EnigmaColors.Muted, fontSize = 14.sp)
-        EnigmaGlassButton(stringResource(R.string.home_try_again), onRetry, Modifier.focusRequester(contentFocus).then(left))
+        EnigmaGlassButton(stringResource(R.string.home_try_again), onRetry, left)
         Spacer(Modifier.height(120.dp))
     }
 }

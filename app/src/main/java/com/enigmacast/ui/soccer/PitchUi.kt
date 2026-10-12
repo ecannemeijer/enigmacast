@@ -178,46 +178,25 @@ private fun PitchRow(title: String, matches: List<PitchMatch>, nowSec: Long, loc
 }
 
 /**
- * PitchAPI sections on the Soccer page. Per league of the followed country: live, results and
- * upcoming rows, a "Clubs" row of crests (OK → club page), then one table calculated from the
- * results whose rows open the club page too. [sec] registers each section in the page's
- * vertical focus chain (see [FocusChain]).
+ * PitchAPI sections of the Soccer page, in visual order: per league of the followed country
+ * live, results and upcoming rows and a "Clubs" row of crests (OK → club page). The official
+ * table stays football-data.org's; calculated numbers are only on the club page.
  */
-@Composable
-fun ColumnScope.PitchSections(model: PitchViewModel, firstIndex: Int, nowSec: Long, locale: Locale, left: Modifier, sec: (Int, String) -> Modifier) {
-    var index = firstIndex
-    model.blocks.forEach { b ->
+fun pitchSections(model: PitchViewModel, nowSec: Long, locale: Locale, left: Modifier): List<PageSection> = buildList {
+    model.blocks.forEachIndexed { bi, b ->
         val name = b.league.name
         val id = b.league.id
-        if (b.live.isNotEmpty()) Box(sec(index++, "p-live-$id")) { PitchRow(stringResource(R.string.pitch_live, name), b.live, nowSec, locale, left, model::openMatch) }
-        if (b.recent.isNotEmpty()) Box(sec(index++, "p-res-$id")) { PitchRow(stringResource(R.string.pitch_results, name), b.recent, nowSec, locale, left, model::openMatch) }
-        if (b.upcoming.isNotEmpty()) Box(sec(index++, "p-up-$id")) { PitchRow(stringResource(R.string.pitch_upcoming, name), b.upcoming, nowSec, locale, left, model::openMatch) }
+        val last = bi == model.blocks.lastIndex
+        if (b.live.isNotEmpty()) add(PageSection("p-live-$id") { PitchRow(stringResource(R.string.pitch_live, name), b.live, nowSec, locale, left, model::openMatch) })
+        if (b.recent.isNotEmpty()) add(PageSection("p-res-$id") { PitchRow(stringResource(R.string.pitch_results, name), b.recent, nowSec, locale, left, model::openMatch) })
+        if (b.upcoming.isNotEmpty()) add(PageSection("p-up-$id") { PitchRow(stringResource(R.string.pitch_upcoming, name), b.upcoming, nowSec, locale, left, model::openMatch) })
         val clubs = b.table.map { it.stats.team }.sortedBy { it.name }
-        if (clubs.isNotEmpty()) Box(sec(index++, "p-clubs-$id")) { ClubsRow(name, clubs, left) { model.openClub(it, id) } }
-    }
-    val tables = model.blocks.filter { it.table.isNotEmpty() }
-    if (tables.isNotEmpty()) {
-        val current = tables.firstOrNull { it.league.id == model.tableLeague } ?: tables.first()
-        Box(sec(index, "p-table")) {
-            Column(Modifier.padding(start = 24.dp, end = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.pitch_table, current.league.name), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
-                    if (tables.size > 1) tables.forEachIndexed { i, t ->
-                        EnigmaGlassButton((if (t === current) "● " else "") + t.league.name, { model.tableLeague = t.league.id }, if (i == 0) left else Modifier)
-                    }
-                }
-                Text(stringResource(R.string.pitch_hint_club), color = EnigmaColors.Subtle, fontSize = 12.sp)
-                TableHeader()
-                LazyColumn(Modifier.fillMaxWidth().height(330.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    items(current.table, key = { it.stats.team.id }) { row ->
-                        TableLine(row, left) { model.openClub(row.stats.team, current.league.id) }
-                    }
-                }
+        if (clubs.isNotEmpty()) add(PageSection("p-clubs-$id") {
+            Column {
+                ClubsRow(name, clubs, left) { model.openClub(it, id) }
+                if (last) Text(stringResource(R.string.pitch_attribution), color = EnigmaColors.Subtle, fontSize = EnigmaType.Caption, modifier = Modifier.padding(start = 24.dp, top = 6.dp))
             }
-        }
-    }
-    if (model.blocks.isNotEmpty()) {
-        Text(stringResource(R.string.pitch_attribution), color = EnigmaColors.Subtle, fontSize = EnigmaType.Caption, modifier = Modifier.padding(start = 24.dp, top = 6.dp))
+        })
     }
 }
 
@@ -242,43 +221,6 @@ private fun ClubsRow(league: String, clubs: List<com.enigmacast.domain.soccer.pi
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TableHeader() {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
-        Cell("#", 30.dp, EnigmaColors.Subtle)
-        Spacer(Modifier.width(34.dp))
-        Text(stringResource(R.string.soccer_col_team), color = EnigmaColors.Subtle, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        Cell(stringResource(R.string.soccer_col_played), 36.dp, EnigmaColors.Subtle)
-        Cell(stringResource(R.string.soccer_col_won), 30.dp, EnigmaColors.Subtle)
-        Cell(stringResource(R.string.soccer_col_draw), 30.dp, EnigmaColors.Subtle)
-        Cell(stringResource(R.string.soccer_col_lost), 30.dp, EnigmaColors.Subtle)
-        Cell(stringResource(R.string.soccer_col_gd), 44.dp, EnigmaColors.Subtle)
-        Cell(stringResource(R.string.soccer_col_points), 40.dp, EnigmaColors.Subtle)
-        Cell(stringResource(R.string.soccer_col_form), 96.dp, EnigmaColors.Subtle)
-    }
-}
-
-@Composable
-private fun TableLine(row: TableRow, left: Modifier, onClick: () -> Unit) {
-    val s = row.stats
-    val focus = rememberTvFocus()
-    Row(
-        left.fillMaxWidth().tvClick(focus, onClick).then(focusLook(focus.focused, RoundedCornerShape(8.dp))).padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Cell(row.position.toString(), 30.dp, EnigmaColors.Text)
-        PitchImage(s.team.image, s.team.initials, 26.dp, Modifier.padding(end = 8.dp))
-        Text(s.team.name, color = EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Cell(s.played.toString(), 36.dp, EnigmaColors.Muted)
-        Cell(s.won.toString(), 30.dp, EnigmaColors.Muted)
-        Cell(s.draw.toString(), 30.dp, EnigmaColors.Muted)
-        Cell(s.lost.toString(), 30.dp, EnigmaColors.Muted)
-        Cell((if (s.goalDifference > 0) "+" else "") + s.goalDifference, 44.dp, EnigmaColors.Muted)
-        Cell(s.points.toString(), 40.dp, EnigmaColors.Text, bold = true)
-        FormDots(s.form, Modifier.width(96.dp))
     }
 }
 

@@ -28,6 +28,8 @@ class FocusChain(private val requesters: MutableMap<String, FocusRequester>) {
 
     fun requester(key: String): FocusRequester = requesters.getOrPut(key) { FocusRequester() }
 
+    internal fun neighbourKey(key: String, step: Int): String? = keys.indexOf(key).takeIf { it >= 0 }?.let { keys.getOrNull(it + step) }
+
     private fun neighbour(key: String, step: Int): FocusRequester? {
         val i = keys.indexOf(key)
         if (i < 0) return null
