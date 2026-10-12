@@ -363,17 +363,6 @@ fun DashboardScreen(
                     onClick = { enterSection(DashSection.Home) },
                 )
                 NavItem(
-                    icon = EnigmaIcons.Soccer,
-                    label = stringResource(R.string.nav_soccer),
-                    selected = section == DashSection.Soccer,
-                    showLabel = drawerExpanded,
-                    staggerIndex = 1,
-                    modifier = Modifier
-                        .focusRequester(soccerFocus)
-                        .focusProperties { right = if (section == DashSection.Soccer) soccerContentFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Soccer) },
-                )
-                NavItem(
                     icon = EnigmaIcons.Tv,
                     label = stringResource(R.string.nav_live),
                     selected = section == DashSection.Stream,
@@ -398,11 +387,22 @@ fun DashboardScreen(
                     onClick = { enterSection(DashSection.Guide) },
                 )
                 NavItem(
+                    icon = EnigmaIcons.Soccer,
+                    label = stringResource(R.string.nav_soccer),
+                    selected = section == DashSection.Soccer,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 3,
+                    modifier = Modifier
+                        .focusRequester(soccerFocus)
+                        .focusProperties { right = if (section == DashSection.Soccer) soccerContentFocus else FocusRequester.Cancel },
+                    onClick = { enterSection(DashSection.Soccer) },
+                )
+                NavItem(
                     icon = EnigmaIcons.Radio,
                     label = stringResource(R.string.nav_radio),
                     selected = section == DashSection.Radio,
                     showLabel = drawerExpanded,
-                    staggerIndex = 3,
+                    staggerIndex = 4,
                     modifier = Modifier
                         .focusRequester(radioFocus)
                         .onFocusChanged { radioItemFocused = it.isFocused }
@@ -414,7 +414,7 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_search),
                     selected = section == DashSection.Search,
                     showLabel = drawerExpanded,
-                    staggerIndex = 4,
+                    staggerIndex = 5,
                     modifier = Modifier
                         .focusRequester(searchMenuFocus)
                         .onFocusChanged { if (it.isFocused) searchActive = false }
@@ -433,7 +433,7 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_my_items),
                     selected = section == DashSection.MyItems,
                     showLabel = drawerExpanded,
-                    staggerIndex = 5,
+                    staggerIndex = 6,
                     modifier = Modifier
                         .focusRequester(myItemsMenuFocus)
                         .onFocusChanged {
@@ -456,7 +456,7 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_receiver),
                     selected = section == DashSection.Receiver,
                     showLabel = drawerExpanded,
-                    staggerIndex = 6,
+                    staggerIndex = 7,
                     modifier = Modifier
                         .focusRequester(receiverMenuFocus)
                         .focusProperties { right = if (section == DashSection.Receiver) receiverPageFocus else FocusRequester.Cancel },
@@ -467,7 +467,7 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_settings),
                     selected = section == DashSection.Settings,
                     showLabel = drawerExpanded,
-                    staggerIndex = 7,
+                    staggerIndex = 8,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .focusProperties { right = if (section == DashSection.Settings) settingsPageFocus else FocusRequester.Cancel },
@@ -479,7 +479,7 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_exit),
                     selected = false,
                     showLabel = drawerExpanded,
-                    staggerIndex = 8,
+                    staggerIndex = 9,
                     onClick = onExit,
                 )
                 Spacer(Modifier.weight(1f))
