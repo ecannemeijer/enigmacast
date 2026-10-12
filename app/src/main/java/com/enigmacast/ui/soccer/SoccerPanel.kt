@@ -81,6 +81,7 @@ import com.enigmacast.util.isEmpty
 
 private val CardShape = RoundedCornerShape(12.dp)
 private const val STANDINGS_SECTION = 900
+private const val PITCH_SECTIONS = 1000
 
 /**
  * The Soccer page, in the style of Home: a hero with the most relevant match, rows of live,
@@ -93,6 +94,7 @@ fun SoccerPanel(
     onRetreatTo: (FocusRequester) -> Unit,
     onWatch: (BouquetEntry) -> Unit,
     model: SoccerViewModel = hiltViewModel(),
+    pitch: PitchViewModel = hiltViewModel(),
 ) {
     val nowSec = rememberGuideClock()
     val autoKeys by model.autoSwitchKeys.collectAsStateWithLifecycle()
@@ -100,6 +102,7 @@ fun SoccerPanel(
     val left = Modifier.focusProperties { left = menuFocus }
     val standingsFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { model.whileVisible() }
+    LaunchedEffect(Unit) { pitch.whileVisible() }
 
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
         Box(
@@ -153,6 +156,7 @@ fun SoccerPanel(
                         Standings(model, standingsFocus, left)
                     }
                 }
+                PitchSections(pitch, sections, PITCH_SECTIONS, nowSec, locale, left)
                 Text(
                     stringResource(R.string.soccer_attribution),
                     color = EnigmaColors.Subtle,
@@ -201,8 +205,10 @@ fun SoccerPanel(
             },
             onSchedule = { model.toggleSchedule(match) },
             onClose = model::closeInfo,
+            onDetails = pitch.find(match)?.let { pm -> { model.closeInfo(); pitch.openMatch(pm) } },
         )
     }
+    PitchScreenHost(pitch, nowSec)
 }
 
 @Composable

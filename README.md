@@ -392,3 +392,10 @@ Settings can enable:
 - Zapping on the receiver updates the TV a moment later: that delay is the service poll plus tuner and decoder startup. Sending the zap from the Android remote triggers the fast poll.
 - Sound behind the picture: open Settings → Playback → Audio sync and raise the value of the row marked "active now" until lips and voice match. Usually 60–200 ms with passthrough to an amplifier or soundbar. Check the TV or amplifier for its own lip-sync or "AV sync" setting first, so the two do not add up.
 - Menus feel sluggish: turn on the debug overlay and read OSD latency and frame rate. The receiver's `grab` cost is usually the limit, not Compose.
+
+### Soccer details (PitchAPI)
+- pitchapi.dev (free, no daily limit, fair-use burst limit) adds the Eredivisie and Eerste Divisie season rows (results, upcoming, live), a table calculated from results, and full match screens: events (goals, cards, substitutions), lineups on a pitch with formation and substitutes, match statistics, player ratings and head-to-head.
+- Club page (OK on a team or table row): points, W/D/L, goals for/against, clean sheets, home/away record, form, next and recent matches, top scorers from match events.
+- Player page: profile (shirt, position, country) and the stats of that match.
+- Football-data.org stays for official standings and live minutes; its match dialog gets a Details button when PitchAPI has the same match.
+- Key: add `PITCH_API_KEY=pk_…` to `local.properties` (read into BuildConfig, never committed). Answers are cached in Room (`soccer_fetches`).

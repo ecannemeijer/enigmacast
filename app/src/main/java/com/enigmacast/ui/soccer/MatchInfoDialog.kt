@@ -52,6 +52,8 @@ fun MatchInfoDialog(
     onWatch: () -> Unit,
     onSchedule: () -> Unit,
     onClose: () -> Unit,
+    /** Opens the PitchAPI match screen (events, lineups, stats) when the match is found there. */
+    onDetails: (() -> Unit)? = null,
 ) {
     val locale = currentLocale()
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
@@ -119,6 +121,7 @@ fun MatchInfoDialog(
                     if (canSchedule) {
                         EnigmaGlassButton(stringResource(if (scheduled) R.string.autoswitch_cancel_action else R.string.home_schedule), onSchedule)
                     }
+                    if (onDetails != null) EnigmaGlassButton(stringResource(R.string.pitch_details), onDetails)
                     EnigmaGlassButton(stringResource(R.string.home_close), onClose, if (channel == null) Modifier.focusRequester(first) else Modifier)
                 }
                 Text(stringResource(R.string.soccer_attribution), color = EnigmaColors.Subtle, fontSize = 11.sp)
