@@ -68,6 +68,7 @@ class StreamGuideViewModel @Inject constructor(
     private val session: OwnTunerSession,
     private val streamTargets: StreamTargets,
     guideRepository: GuideRepository,
+    private val guideCache: com.enigmacast.domain.sync.GuideCacheReader,
     private val picons: PiconRepository,
     private val quality: StreamQualityController,
     private val reminders: ReminderScheduler,
@@ -251,10 +252,10 @@ class StreamGuideViewModel @Inject constructor(
         }
     }
 
-    fun confirmRecord() {
+    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget) {
         val ask = recordAsk ?: return
         recordAsk = null
-        viewModelScope.launch { showNotice(recordings.schedule(ask), NOTICE_LONG_MS) }
+        viewModelScope.launch { showNotice(recordings.schedule(ask.copy(place = place)), NOTICE_LONG_MS) }
     }
 
     fun dismissRecord() {
@@ -641,7 +642,46 @@ class StreamGuideViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Watch from anywhere (Home, guide, Soccer, search): when the channel is not in the list on
+     * screen, first switch to the synced bouquet that holds it, so the player's channel list
+     * (Left) shows that bouquet with the channel selected.
+     */
     fun tune(channel: BouquetEntry, onStarted: () -> Unit, onFullscreen: () -> Unit) {
+        if (channels.any { BouquetChannels.sameService(it.reference, channel.reference) }) {
+            tuneNow(channel, onStarted, onFullscreen)
+            return
+        }
+        viewModelScope.launch {
+            val aligned = runCatching { alignBouquetTo(channel) }.getOrNull()
+            tuneNow(aligned ?: channel, onStarted, onFullscreen)
+        }
+    }
+
+    /** Loads the bouquet holding [channel] (Room first, receiver as fallback); returns the list's entry for it. */
+    private suspend fun alignBouquetTo(channel: BouquetEntry): BouquetEntry? {
+        val receiver = settingsRepository.current().activeReceiver() ?: return null
+        val bouquet = guideCache.bouquetOf(receiver, channel.reference) ?: return null
+        val list = guideCache.channelsInBouquet(receiver, bouquet.reference)
+            ?: runCatching { serviceSource.channelsInBouquet(receiver, bouquet.reference) }.getOrNull()
+            ?: return null
+        val entry = list.firstOrNull { BouquetChannels.sameService(it.reference, channel.reference) } ?: return null
+        if (BouquetChannels.isRadioBouquet(bouquet.reference) != (medium == GuideMedium.Radio)) {
+            rememberCurrent()
+            medium = if (BouquetChannels.isRadioBouquet(bouquet.reference)) GuideMedium.Radio else GuideMedium.Television
+        }
+        bouquetJob?.cancel()
+        ++bouquetToken
+        selectedBouquetReference = bouquet.reference
+        bouquetName = bouquet.name
+        channels = list
+        bouquetLoaded = true
+        rememberCurrent()
+        EnigmaLog.service("watch: bouquet ${bouquet.name} for ${entry.name}")
+        return entry
+    }
+
+    private fun tuneNow(channel: BouquetEntry, onStarted: () -> Unit, onFullscreen: () -> Unit) {
         if (lastPressedReference.isNotBlank() && BouquetChannels.sameService(channel.reference, lastPressedReference)) {
             val refused = session.state.value.tuner.status.let { it == TunerStatus.FULL || it == TunerStatus.PROBLEM }
             if (mode != StreamMode.FOLLOW_RECEIVER && refused) session.retry() else onFullscreen()

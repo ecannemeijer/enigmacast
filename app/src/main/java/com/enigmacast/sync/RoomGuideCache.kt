@@ -59,6 +59,14 @@ class RoomGuideCache @Inject constructor(
         runCatching { dao.channelsIn(key(receiver), bouquetReference) }.getOrNull()?.takeIf { it.isNotEmpty() }
             ?.map { BouquetEntry(it.name, it.reference, it.number, it.picon) }
 
+    override suspend fun bouquetOf(receiver: ReceiverConfig, serviceReference: String): BouquetEntry? = runCatching {
+        val rk = key(receiver)
+        val want = NowEvents.key(serviceReference)
+        val holding = dao.channels(rk).filter { (it.serviceKey.ifBlank { NowEvents.key(it.reference) }) == want }.map { it.bouquetReference }.toSet()
+        if (holding.isEmpty()) return@runCatching null
+        dao.bouquets(rk).firstOrNull { it.reference in holding }?.let { BouquetEntry(it.name, it.reference) }
+    }.getOrNull()
+
     private fun askSync(nowMs: Long) {
         if (nowMs - lastSyncAskMs < 60_000) return
         lastSyncAskMs = nowMs

@@ -11,6 +11,9 @@ interface GuideCacheReader {
     suspend fun televisionBouquets(receiver: ReceiverConfig): List<BouquetEntry>?
     suspend fun channelsInBouquet(receiver: ReceiverConfig, bouquetReference: String): List<BouquetEntry>?
 
+    /** The first synced TV bouquet (menu order) that contains [serviceReference], or null. */
+    suspend fun bouquetOf(receiver: ReceiverConfig, serviceReference: String): BouquetEntry? = null
+
     object None : GuideCacheReader {
         override suspend fun bouquetEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent>? = null
         override suspend fun serviceEvents(receiver: ReceiverConfig, serviceReference: String): List<GuideEvent>? = null
