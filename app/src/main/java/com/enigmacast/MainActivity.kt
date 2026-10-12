@@ -172,32 +172,41 @@ class MainActivity : ComponentActivity() {
             return super.dispatchKeyEvent(event)
         }
         if (handleReminderKey(event)) return true
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && canHoldBackToStream()) {
-            if (event.action == KeyEvent.ACTION_UP && backHoldOpened) {
-                backHoldOpened = false
-                backHoldJob = null
-                return true
-            }
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0 && backHoldJob != null) {
-                return true
-            }
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                backHoldOpened = false
-                val consumed = super.dispatchKeyEvent(event)
-                if (!consumed) {
+        // Long-press Back (held BACK_HOLD_MS) from any menu returns to the full-screen player while a
+        // stream runs. The first key-down goes through as always, so a short Back behaves exactly as
+        // before (Back acts on key-up). Once the hold fires, the repeats and the key-up are swallowed,
+        // so no normal Back follows. Activity.onKeyDown always "consumes" Back (it starts tracking),
+        // so the hold is armed regardless of what the down returned.
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            when {
+                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
                     backHoldJob?.cancel()
-                    backHoldJob = lifecycleScope.launch {
-                        delay(BACK_HOLD_MS)
-                        backHoldOpened = true
-                        appViewModel.openStream()
+                    backHoldOpened = false
+                    if (canHoldBackToStream()) {
+                        backHoldJob = lifecycleScope.launch {
+                            delay(BACK_HOLD_MS)
+                            if (canHoldBackToStream()) {
+                                backHoldOpened = true
+                                appViewModel.openStream()
+                            }
+                        }
                     }
                 }
-                return consumed
+                event.action == KeyEvent.ACTION_DOWN && (backHoldJob?.isActive == true || backHoldOpened) -> return true
+                event.action == KeyEvent.ACTION_UP -> {
+                    backHoldJob?.cancel()
+                    backHoldJob = null
+                    if (backHoldOpened) {
+                        backHoldOpened = false
+                        return true
+                    }
+                }
             }
-            if (event.action == KeyEvent.ACTION_UP) {
-                backHoldJob?.cancel()
-                backHoldJob = null
-            }
+        }
+        // Play/Pause on a menu (not in the player) also returns to the full-screen player.
+        if (event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE && canHoldBackToStream()) {
+            if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) appViewModel.openStream()
+            return true
         }
         if (appViewModel.screen == AppScreen.Remote && remoteInputBus.handler?.invoke(event) == true) {
             return true
@@ -329,6 +338,6 @@ private fun Context.findActivity(): Activity? {
 }
 
 private const val NO_KEY = -1
-private const val BACK_HOLD_MS = 500L
+private const val BACK_HOLD_MS = 650L
 private val REMINDER_SWITCH_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 private val REMINDER_CANCEL_KEYS = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE)
