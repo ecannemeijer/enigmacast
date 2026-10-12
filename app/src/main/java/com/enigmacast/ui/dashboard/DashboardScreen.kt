@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -98,11 +99,13 @@ import com.enigmacast.ui.settings.SettingsViewModel
 import com.enigmacast.ui.theme.ChannelsLoadingDialog
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.edgeLeft
 import com.enigmacast.ui.theme.focusListRow
 import com.enigmacast.ui.theme.wrapListEnds
 import com.enigmacast.ui.theme.EnigmaIcons
 import com.enigmacast.ui.theme.FeedbackSnackbar
 import com.enigmacast.ui.theme.InfoRow
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.NavItem
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
@@ -132,6 +135,11 @@ private enum class DashSection {
     MyItems,
     Receiver,
     Settings,
+}
+
+/** Where Back goes while a column to the right of the main menu has focus. */
+private class DashBack {
+    var target: FocusRequester? = null
 }
 
 private enum class SettingPage {
@@ -214,25 +222,27 @@ fun DashboardScreen(
     /** Address form is open; focus landing on the main menu must not leave Settings. */
     var settingsFormOpen by remember { mutableStateOf(false) }
     val bouquetFocus = remember { FocusRequester() }
+    val dashBack = remember { DashBack() }
+    val retreat: (FocusRequester) -> Unit = { dashBack.target = it }
     val myItemsModel: MyItemsViewModel = hiltViewModel()
+    fun sectionMenu(): FocusRequester = when (section) {
+        DashSection.Home -> homeFocus
+        DashSection.Stream -> streamFocus
+        DashSection.Guide -> guideFocus
+        DashSection.Radio -> radioFocus
+        DashSection.Search -> searchMenuFocus
+        DashSection.MyItems -> myItemsMenuFocus
+        DashSection.Receiver -> receiverMenuFocus
+        DashSection.Settings -> settingsMenuFocus
+    }
     DisposableEffect(contentFocused, section, guideModel.askWake) {
         onBindBack {
             if (guideModel.askWake) {
                 guideModel.declineWake()
                 true
             } else if (contentFocused) {
-                runCatching {
-                    when (section) {
-                        DashSection.Home -> homeFocus.requestFocus()
-                        DashSection.Stream -> streamFocus.requestFocus()
-                        DashSection.Guide -> guideFocus.requestFocus()
-                        DashSection.Radio -> radioFocus.requestFocus()
-                        DashSection.Search -> searchMenuFocus.requestFocus()
-                        DashSection.MyItems -> myItemsMenuFocus.requestFocus()
-                        DashSection.Receiver -> receiverMenuFocus.requestFocus()
-                        DashSection.Settings -> settingsMenuFocus.requestFocus()
-                    }
-                }
+                // One column back: page to its submenu item, submenu (or a page without one) to the main item.
+                runCatching { (dashBack.target ?: sectionMenu()).requestFocus() }
                 true
             } else {
                 false
@@ -357,7 +367,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(streamFocus)
                         .onFocusChanged { streamItemFocused = it.isFocused }
-                        .focusProperties { right = if (section == DashSection.Stream) channelFocus else FocusRequester.Cancel },
+                        .focusProperties { right = if (section == DashSection.Stream) bouquetFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Stream) },
                 )
                 NavItem(
@@ -381,7 +391,7 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(radioFocus)
                         .onFocusChanged { radioItemFocused = it.isFocused }
-                        .focusProperties { right = if (section == DashSection.Radio) radioListFocus else FocusRequester.Cancel },
+                        .focusProperties { right = if (section == DashSection.Radio) bouquetFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Radio) },
                 )
                 NavItem(
@@ -491,6 +501,7 @@ fun DashboardScreen(
                         HomePanel(
                             contentFocus = homeContentFocus,
                             menuFocus = homeFocus,
+                            onRetreatTo = retreat,
                             onContinue = { last ->
                                 val entry = guideModel.channels.firstOrNull {
                                     BouquetChannels.sameService(it.reference, last.reference)
@@ -525,6 +536,7 @@ fun DashboardScreen(
                             medium = GuideMedium.Television,
                             guideModel = guideModel,
                             enterToken = sectionEnter,
+                            onRetreatTo = retreat,
                         )
                         DashSection.Guide -> {
                         LaunchedEffect(sectionEnter) {
@@ -543,6 +555,7 @@ fun DashboardScreen(
                             onMiniPlayer,
                             onStream,
                             guideModel,
+                            onRetreatTo = retreat,
                         )
                         }
                         DashSection.Radio -> LiveBrowser(
@@ -558,6 +571,7 @@ fun DashboardScreen(
                             medium = GuideMedium.Radio,
                             guideModel = guideModel,
                             enterToken = sectionEnter,
+                            onRetreatTo = retreat,
                         )
                         DashSection.Search -> {
                         LaunchedEffect(sectionEnter) {
@@ -576,6 +590,7 @@ fun DashboardScreen(
                                 section = if (BouquetChannels.isRadioBouquet(bouquet.reference)) DashSection.Radio else DashSection.Stream
                             },
                             viewModel = searchModel,
+                            onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
@@ -590,6 +605,7 @@ fun DashboardScreen(
                             menuFocus = myItemsMenuFocus,
                             rowsFocusable = myItemsListActive,
                             onPlay = onStream,
+                            onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
@@ -601,6 +617,7 @@ fun DashboardScreen(
                         ReceiverPowerPanel(
                             pageFocus = receiverPageFocus,
                             menuFocus = receiverMenuFocus,
+                            onRetreatTo = retreat,
                             viewModel = powerModel,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -619,6 +636,7 @@ fun DashboardScreen(
                             onSignalMeter = onSignalMeter,
                             onOscam = onOscam,
                             onFormActive = { settingsFormOpen = it },
+                            onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
@@ -681,6 +699,7 @@ private fun GuidePanel(
     onMiniPlayer: () -> Unit,
     onFullscreen: () -> Unit,
     guideModel: StreamGuideViewModel,
+    onRetreatTo: (FocusRequester) -> Unit,
 ) {
     BindGuide(GuideMedium.Television, guideModel)
     val grid by guideModel.grid.state.collectAsState()
@@ -692,6 +711,9 @@ private fun GuidePanel(
     var bouquetOpenToken by remember { mutableIntStateOf(0) }
     var gridFocusToken by remember { mutableIntStateOf(0) }
     var gridFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(bouquetsOpen, gridFocused) {
+        if (gridFocused) onRetreatTo(if (bouquetsOpen) bouquetFocus else settingsFocus)
+    }
     LaunchedEffect(gridFocusToken) {
         if (gridFocusToken == 0) return@LaunchedEffect
         channelFocus.requestWhenReady()
@@ -779,6 +801,7 @@ private fun GuidePanel(
                         bouquetsOpen = false
                         gridFocusToken += 1
                     },
+                    onColumnFocus = { onRetreatTo(settingsFocus) },
                     modifier = Modifier.width(220.dp).fillMaxHeight(),
                 )
             }
@@ -796,7 +819,10 @@ private fun GuidePanel(
                     .weight(1f)
                     .fillMaxHeight()
                     .focusRequester(channelFocus)
-                    .onFocusChanged { gridFocused = it.isFocused }
+                    .onFocusChanged {
+                        gridFocused = it.isFocused
+                        if (it.isFocused) onRetreatTo(if (bouquetsOpen) bouquetFocus else settingsFocus)
+                    }
                     .onPreviewKeyEvent { event ->
                         gridKey(
                             event = event,
@@ -877,21 +903,20 @@ internal fun BouquetColumn(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     requestFocus: Boolean = true,
+    onColumnFocus: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val firstFocus = remember { FocusRequester() }
     val lastFocus = remember { FocusRequester() }
     val lastIndex = bouquets.lastIndex
-    val focusIndex = remember(openToken) {
-        bouquets.indexOfFirst { it.reference == selectedReference }.let { if (it >= 0) it else 0 }
+    val focusIndex = bouquets.indexOfFirst { it.reference == selectedReference }.let { if (it >= 0) it else 0 }
+    LaunchedEffect(openToken, bouquets.size) {
+        if (openToken == 0 || bouquets.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem(focusIndex)
+        if (requestFocus) bouquetFocus.requestWhenReady()
     }
-    LaunchedEffect(openToken) {
-        if (openToken == 0) return@LaunchedEffect
-        if (bouquets.isNotEmpty()) listState.scrollToItem(focusIndex)
-        if (requestFocus) runCatching { bouquetFocus.requestFocus() }
-    }
-    Column(modifier) {
+    Column(modifier.onFocusChanged { if (it.hasFocus) onColumnFocus() }) {
         Text(
             stringResource(R.string.bouquets),
             color = Color.White,
@@ -982,7 +1007,7 @@ private fun BouquetRow(
 
 @Composable
 private fun RcInfoPanel(contentFocus: FocusRequester, modifier: Modifier = Modifier) {
-    Column(modifier.focusRequester(contentFocus).focusable()) {
+    Column(modifier.focusRequester(contentFocus).edgeLeft().focusable()) {
         PanelHeader(stringResource(R.string.rc_title), stringResource(R.string.rc_subtitle))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
             SettingsCard(stringResource(R.string.rc_navigation), Modifier.weight(1f)) {
@@ -1027,6 +1052,7 @@ private fun SettingsHub(
     onSignalMeter: () -> Unit,
     onOscam: () -> Unit,
     onFormActive: (Boolean) -> Unit,
+    onRetreatTo: (FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     connection: ConnectionViewModel = hiltViewModel(),
@@ -1034,8 +1060,14 @@ private fun SettingsHub(
     var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Language else SettingPage.Receivers) }
     var pageEnter by remember { mutableIntStateOf(0) }
     val pageContentFocus = remember { FocusRequester() }
+    val navFocus = remember { SettingPage.entries.associateWith { FocusRequester() } }
     var formActive by remember { mutableStateOf(false) }
-    fun openPage(target: SettingPage) {
+    /** Shows the page and keeps focus on the submenu row. */
+    fun showPage(target: SettingPage) {
+        page = target
+    }
+    /** OK or Right on a submenu row moves into that page's first option. */
+    fun enterPage(target: SettingPage) {
         page = target
         pageEnter += 1
     }
@@ -1051,29 +1083,34 @@ private fun SettingsHub(
     ) {
         PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
             Column(
                 modifier = Modifier
                     .width(220.dp)
                     .fillMaxHeight()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, pageFocus, menuFocus) { openPage(SettingPage.Receivers) }
-                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, null, menuFocus) { openPage(SettingPage.Remote) }
-                SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, null, menuFocus) { openPage(SettingPage.Playback) }
-                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, null, menuFocus) { openPage(SettingPage.Osd) }
-                SettingNav(EnigmaIcons.Speed, stringResource(R.string.signal_meter), false, null, menuFocus, onSignalMeter)
-                SettingNav(EnigmaIcons.Sync, stringResource(R.string.oscam), false, null, menuFocus, onOscam)
-                SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, null, menuFocus) { openPage(SettingPage.RcInfo) }
-                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, null, menuFocus) { openPage(SettingPage.General) }
-                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, null, menuFocus) { openPage(SettingPage.Info) }
-                SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, null, menuFocus) { openPage(SettingPage.Language) }
+                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
+                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
+                SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, navFocus.getValue(SettingPage.Playback), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Playback) }) { enterPage(SettingPage.Playback) }
+                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, navFocus.getValue(SettingPage.Osd), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Osd) }) { enterPage(SettingPage.Osd) }
+                SettingNav(EnigmaIcons.Speed, stringResource(R.string.signal_meter), false, null, null, menuFocus, pageContentFocus, opensPage = false, onSelect = onSignalMeter)
+                SettingNav(EnigmaIcons.Sync, stringResource(R.string.oscam), false, null, null, menuFocus, pageContentFocus, opensPage = false, onSelect = onOscam)
+                SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, navFocus.getValue(SettingPage.RcInfo), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.RcInfo) }) { enterPage(SettingPage.RcInfo) }
+                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, navFocus.getValue(SettingPage.General), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.General) }) { enterPage(SettingPage.General) }
+                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, navFocus.getValue(SettingPage.Info), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Info) }) { enterPage(SettingPage.Info) }
+                SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, navFocus.getValue(SettingPage.Language), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Language) }) { enterPage(SettingPage.Language) }
             }
+            }
+            CompositionLocalProvider(LocalEdgeLeft provides pageFocus) {
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(pageFocus) },
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 LaunchedEffect(pageEnter) {
@@ -1119,8 +1156,9 @@ private fun SettingsHub(
                     SettingPage.RcInfo -> RcInfoPanel(pageContentFocus, Modifier.fillMaxWidth())
                     SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel, pageContentFocus)
                     SettingPage.Info -> InfoSettingsPanel(settings, viewModel, pageContentFocus)
-                    SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, menuFocus, pageContentFocus)
+                    SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, pageContentFocus)
                 }
+            }
             }
         }
     }
@@ -1131,8 +1169,12 @@ private fun SettingNav(
     icon: ImageVector,
     label: String,
     selected: Boolean,
-    pageFocus: FocusRequester?,
+    itemFocus: FocusRequester?,
+    entryFocus: FocusRequester?,
     menuFocus: FocusRequester,
+    pageContentFocus: FocusRequester,
+    opensPage: Boolean,
+    onFocus: () -> Unit = {},
     onSelect: () -> Unit,
 ) {
     NavItem(
@@ -1140,9 +1182,14 @@ private fun SettingNav(
         label = label,
         selected = selected,
         onClick = onSelect,
+        onFocus = onFocus,
         modifier = Modifier
-            .then(if (pageFocus != null) Modifier.focusRequester(pageFocus) else Modifier)
-            .focusProperties { left = menuFocus },
+            .then(if (itemFocus != null) Modifier.focusRequester(itemFocus) else Modifier)
+            .then(if (selected && entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
+            .focusProperties {
+                left = menuFocus
+                right = if (opensPage) pageContentFocus else FocusRequester.Cancel
+            },
     )
 }
 
@@ -1320,7 +1367,6 @@ private fun LanguageSettingsPanel(
     restoreFocus: Boolean,
     onFocusRestored: () -> Unit,
     onChoose: (AppLanguage) -> Unit,
-    menuFocus: FocusRequester,
     contentFocus: FocusRequester,
 ) {
     val context = LocalContext.current
@@ -1338,7 +1384,7 @@ private fun LanguageSettingsPanel(
             options = AppLanguage.entries.map { it.nativeName },
             selectedIndex = AppLanguage.entries.indexOf(current),
             onSelect = { onChoose(AppLanguage.entries[it]) },
-            firstOptionModifier = Modifier.focusRequester(contentFocus).focusProperties { left = menuFocus },
+            firstOptionModifier = Modifier.focusRequester(contentFocus),
             selectedOptionModifier = Modifier.focusRequester(focus),
         )
     }
@@ -1453,8 +1499,9 @@ internal fun CompactField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     kind: TvFieldKind = TvFieldKind.TEXT,
+    followEdge: Boolean = false,
 ) {
-    TvTextField(label, value, onValueChange, modifier, kind = kind)
+    TvTextField(label, value, onValueChange, modifier, kind = kind, followEdge = followEdge)
 }
 
 @Composable

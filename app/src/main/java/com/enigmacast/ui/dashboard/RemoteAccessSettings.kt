@@ -35,6 +35,7 @@ import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
+import com.enigmacast.ui.theme.edgeLeft
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 
@@ -71,7 +72,7 @@ internal fun RemoteAccessSettingsPanel(
                     stringResource(label),
                     selected = viewModel.accessMode == mode,
                     onClick = { viewModel.accessMode = mode },
-                    modifier = if (index == 0) Modifier.focusRequester(contentFocus) else Modifier,
+                    modifier = if (index == 0) Modifier.focusRequester(contentFocus).edgeLeft() else Modifier,
                 )
             }
         }
@@ -80,7 +81,14 @@ internal fun RemoteAccessSettingsPanel(
     SettingsCard(stringResource(R.string.remote_profile_title)) {
         Hint(stringResource(R.string.conn_remote_intro))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            CompactField(stringResource(R.string.field_remote_host), viewModel.remoteHost, { viewModel.remoteHost = it }, kind = TvFieldKind.HOST, modifier = Modifier.weight(2f))
+            CompactField(
+                stringResource(R.string.field_remote_host),
+                viewModel.remoteHost,
+                { viewModel.remoteHost = it },
+                kind = TvFieldKind.HOST,
+                modifier = Modifier.weight(2f),
+                followEdge = true,
+            )
             CompactField(stringResource(R.string.field_remote_http_port), viewModel.remoteHttpPort, { viewModel.remoteHttpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
             CompactField(stringResource(R.string.field_remote_stream_port), viewModel.remoteStreamPort, { viewModel.remoteStreamPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
         }
@@ -123,13 +131,17 @@ internal fun RemoteAccessSettingsPanel(
         Hint(stringResource(viewModel.tunnelStatus.state.label()), EnigmaColors.Text)
         if (viewModel.tunnelStatus.detail.isNotEmpty()) Hint(viewModel.tunnelStatus.detail.asString())
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
-            TvButton(stringResource(R.string.action_wg_import), {
-                try {
-                    fileLauncher.launch(arrayOf("*/*"))
-                } catch (_: ActivityNotFoundException) {
-                    viewModel.onNoFilePicker()
-                }
-            })
+            TvButton(
+                stringResource(R.string.action_wg_import),
+                {
+                    try {
+                        fileLauncher.launch(arrayOf("*/*"))
+                    } catch (_: ActivityNotFoundException) {
+                        viewModel.onNoFilePicker()
+                    }
+                },
+                modifier = Modifier.edgeLeft(),
+            )
             if (!viewModel.vpnAllowed) {
                 TvButton(stringResource(R.string.action_wg_allow), {
                     val intent = viewModel.consentIntent()
@@ -157,6 +169,7 @@ internal fun RemoteAccessSettingsPanel(
             onClick = { viewModel.save() },
             enabled = !viewModel.busy,
             tone = TileTone.Primary,
+            modifier = Modifier.edgeLeft(),
         )
         if (viewModel.remoteHost.isNotBlank()) {
             TvButton(stringResource(R.string.action_test_remote), viewModel::testRemote, enabled = !viewModel.busy)
@@ -183,5 +196,6 @@ private fun WireGuardConfigField(value: String, onValueChange: (String) -> Unit)
         kind = TvFieldKind.MULTILINE,
         visualTransformation = HideWireGuardKeys,
         monospace = true,
+        followEdge = true,
     )
 }

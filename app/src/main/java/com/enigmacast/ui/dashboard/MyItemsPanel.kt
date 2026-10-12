@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +34,7 @@ import com.enigmacast.domain.recording.RecordingPlace
 import com.enigmacast.domain.recording.RecordingStatus
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.TvConfirmDialog
@@ -51,6 +54,7 @@ fun MyItemsPanel(
     menuFocus: FocusRequester,
     rowsFocusable: Boolean,
     onPlay: () -> Unit,
+    onRetreatTo: (FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MyItemsViewModel = hiltViewModel(),
 ) {
@@ -63,7 +67,12 @@ fun MyItemsPanel(
             delay(20_000)
         }
     }
-    Column(modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
+    Column(
+        modifier
+            .fillMaxSize()
+            .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+    ) {
         PanelHeader(stringResource(R.string.nav_my_items))
         val notice = viewModel.notice.asString()
         if (notice.isNotBlank()) {
@@ -104,6 +113,7 @@ fun MyItemsPanel(
                 }
             }
         }
+    }
     }
     val focusTokenOnEnter = remember { viewModel.focusToken }
     LaunchedEffect(viewModel.focusToken) {

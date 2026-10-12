@@ -92,6 +92,7 @@ fun TvTextField(
     fieldFocus: FocusRequester? = null,
     leftFocus: FocusRequester? = null,
     rightFocus: FocusRequester? = null,
+    followEdge: Boolean = false,
 ) {
     var editing by remember { mutableStateOf(false) }
     var highlighted by remember { mutableStateOf(false) }
@@ -134,6 +135,7 @@ fun TvTextField(
     val textSize = if (large) 20.sp else 14.sp
     val shape = RoundedCornerShape(if (large) 10.dp else 8.dp)
     val active = editing || highlighted
+    val edge = if (followEdge) LocalEdgeLeft.current else null
     Column(modifier) {
         // One line whatever happens, so focusing a field never changes its height; the label wins the width.
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -206,7 +208,10 @@ fun TvTextField(
                 .focusRequester(shell)
                 .focusProperties {
                     canFocus = browsable
-                    if (leftFocus != null) left = leftFocus
+                    when {
+                        leftFocus != null -> left = leftFocus
+                        edge != null -> left = edge
+                    }
                     if (rightFocus != null) right = rightFocus
                 }
                 .onFocusChanged { highlighted = it.isFocused }

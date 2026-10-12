@@ -234,7 +234,7 @@ fun ToggleRow(
     ListItem(
         selected = false,
         onClick = { onCheckedChange(!checked) },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.edgeLeft().fillMaxWidth(),
         headlineContent = { Text(title, fontSize = 15.sp) },
         supportingContent = if (description != null) {
             { Text(description, fontSize = 12.sp, lineHeight = 16.sp) }
@@ -296,7 +296,7 @@ fun ChoiceRow(
                     label = label,
                     selected = index == selectedIndex,
                     onClick = { onSelect(index) },
-                    modifier = (if (index == 0) firstOptionModifier else Modifier)
+                    modifier = (if (index == 0) firstOptionModifier.edgeLeft() else Modifier)
                         .then(if (index == selectedIndex) selectedOptionModifier else Modifier),
                 )
             }
@@ -378,7 +378,7 @@ fun StepperRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = 8.dp),
         ) {
-            ChoiceChip(label = decreaseLabel, selected = false, onClick = onDecrease, modifier = decreaseModifier)
+            ChoiceChip(label = decreaseLabel, selected = false, onClick = onDecrease, modifier = decreaseModifier.edgeLeft())
             Text(
                 value,
                 color = EnigmaColors.Accent,

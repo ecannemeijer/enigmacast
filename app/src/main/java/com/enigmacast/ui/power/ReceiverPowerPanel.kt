@@ -15,12 +15,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -37,6 +39,7 @@ import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.InfoRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.StatusPill
@@ -68,6 +71,7 @@ fun powerStateColor(state: ReceiverPowerState, restarting: PowerAction?): Color 
 fun ReceiverPowerPanel(
     pageFocus: FocusRequester,
     menuFocus: FocusRequester,
+    onRetreatTo: (FocusRequester) -> Unit,
     viewModel: ReceiverPowerViewModel,
     modifier: Modifier = Modifier,
 ) {
@@ -84,11 +88,13 @@ fun ReceiverPowerPanel(
     Column(modifier) {
         PanelHeader(stringResource(R.string.receiver_title), subtitle)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 SettingsCard(
@@ -166,6 +172,7 @@ fun ReceiverPowerPanel(
                     }
                 }
                 SleepTimerCard(viewModel, menuFocus)
+            }
             }
             ReceiverDetailsCard(viewModel, Modifier.width(280.dp))
         }

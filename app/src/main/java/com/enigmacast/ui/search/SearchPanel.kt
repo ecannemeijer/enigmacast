@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -52,6 +54,7 @@ import com.enigmacast.domain.search.SearchRows
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.util.asString
@@ -76,6 +79,7 @@ fun SearchPanel(
     modifier: Modifier = Modifier,
     menuFocus: FocusRequester? = null,
     focusToken: Int = 0,
+    onRetreatTo: ((FocusRequester) -> Unit)? = null,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val fieldFocus = remember { FocusRequester() }
@@ -109,15 +113,16 @@ fun SearchPanel(
     val nowSec = System.currentTimeMillis() / 1000
     val searchable = SearchQuery.parse(viewModel.query, nowSec).isSearchable
     val sections = viewModel.results.sections()
-    Column(
-        modifier
-            .fillMaxSize()
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown || event.key != Key.Search) return@onPreviewKeyEvent false
-                startVoice()
-                true
-            },
-    ) {
+    val body = modifier
+        .fillMaxSize()
+        .onFocusChanged { if (it.hasFocus && menuFocus != null) onRetreatTo?.invoke(menuFocus) }
+        .onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown || event.key != Key.Search) return@onPreviewKeyEvent false
+            startVoice()
+            true
+        }
+    val column: @Composable () -> Unit = {
+        Column(body) {
         Text(
             stringResource(R.string.nav_search),
             color = Color.White,
@@ -211,6 +216,12 @@ fun SearchPanel(
                 }
             }
         }
+    }
+    }
+    if (menuFocus != null) {
+        CompositionLocalProvider(LocalEdgeLeft provides menuFocus) { column() }
+    } else {
+        column()
     }
 }
 

@@ -26,6 +26,7 @@ import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
+import com.enigmacast.ui.theme.edgeLeft
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 
@@ -73,7 +74,7 @@ fun ReceiverSetup(
                 label = stringResource(R.string.action_autodetect),
                 selected = step == ReceiverSetupStep.Detected,
                 onClick = viewModel::startAutodetect,
-                modifier = Modifier.focusRequester(autodetectFocus),
+                modifier = Modifier.focusRequester(autodetectFocus).edgeLeft(),
             )
             ChoiceChip(
                 label = stringResource(R.string.action_manual),
@@ -104,11 +105,11 @@ fun ReceiverSetup(
             }
             ReceiverSetupStep.Manual -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    SetupField(stringResource(R.string.field_receiver_name), viewModel.name, { viewModel.name = it }, Modifier.weight(1f))
+                    SetupField(stringResource(R.string.field_receiver_name), viewModel.name, { viewModel.name = it }, Modifier.weight(1f), followEdge = true)
                     SetupField(stringResource(R.string.field_host), viewModel.host, { viewModel.host = it }, Modifier.weight(1f), TvFieldKind.HOST)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    SetupField(stringResource(R.string.field_http_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
+                    SetupField(stringResource(R.string.field_http_port), viewModel.httpPort, { viewModel.httpPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER, followEdge = true)
                     SetupField(stringResource(R.string.field_stream_port), viewModel.streamPort, { viewModel.streamPort = it }, Modifier.weight(1f), TvFieldKind.NUMBER)
                 }
                 LoginFields(viewModel)
@@ -128,7 +129,7 @@ fun ReceiverSetup(
 @Composable
 private fun LoginFields(viewModel: ConnectionViewModel) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-        SetupField(stringResource(R.string.field_username), viewModel.username, { viewModel.username = it }, Modifier.weight(1f))
+        SetupField(stringResource(R.string.field_username), viewModel.username, { viewModel.username = it }, Modifier.weight(1f), followEdge = true)
         SetupField(
             stringResource(R.string.field_password),
             viewModel.password,
@@ -146,8 +147,9 @@ private fun SetupField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     kind: TvFieldKind = TvFieldKind.TEXT,
+    followEdge: Boolean = false,
 ) {
-    TvTextField(label, value, onValueChange, modifier, kind = kind)
+    TvTextField(label, value, onValueChange, modifier, kind = kind, followEdge = followEdge)
 }
 
 @Composable
@@ -174,9 +176,11 @@ private fun SetupActions(
         modifier = Modifier.fillMaxWidth(),
     ) {
         if (showConnect) {
-            CompactButton(stringResource(R.string.action_test_connection), viewModel::test)
+            CompactButton(stringResource(R.string.action_test_connection), viewModel::test, modifier = Modifier.edgeLeft())
+            CompactButton(stringResource(R.string.action_save), { viewModel.save(onSaved) })
+        } else {
+            CompactButton(stringResource(R.string.action_save), { viewModel.save(onSaved) }, modifier = Modifier.edgeLeft())
         }
-        CompactButton(stringResource(R.string.action_save), { viewModel.save(onSaved) })
         if (showConnect) {
             CompactButton(stringResource(R.string.action_connect), { viewModel.connect(onConnected) })
         }

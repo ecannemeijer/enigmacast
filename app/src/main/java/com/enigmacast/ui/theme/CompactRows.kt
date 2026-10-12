@@ -19,10 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -89,6 +92,7 @@ fun CompactListRow(
             }
             .onGloballyPositioned { if (focused) onPlaced(it) }
             .background(background, CompactShape)
+            .edgeLeft()
             .onKeyEvent { event ->
                 val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                 if (confirm && event.type == KeyEventType.KeyUp) onClick()
@@ -143,6 +147,19 @@ fun Modifier.wrapListEnds(
         }
         else -> false
     }
+}
+
+/**
+ * Left from the left edge of a column. Full-width rows and the first control of a row
+ * read this so D-pad left returns to the menu item that opened the column, not to a
+ * nearer row in the column on the left.
+ */
+val LocalEdgeLeft = staticCompositionLocalOf<FocusRequester?> { null }
+
+/** Sends D-pad left to [LocalEdgeLeft] when that column set one. */
+fun Modifier.edgeLeft(): Modifier = composed {
+    val edge = LocalEdgeLeft.current ?: return@composed this
+    focusProperties { left = edge }
 }
 
 /** Scrolls [index] into view, then focuses this requester once the row is attached. */

@@ -73,6 +73,7 @@ internal fun StreamTypeCard(viewModel: ConnectionViewModel = hiltViewModel()) {
                     onValueChange = viewModel::editTranscodingPort,
                     modifier = Modifier.width(140.dp),
                     kind = TvFieldKind.NUMBER,
+                    followEdge = true,
                 )
                 TvButton(stringResource(R.string.stream_type_detect), viewModel::detectTranscodingPort, enabled = !viewModel.detecting)
             }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,11 +36,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +53,7 @@ import com.enigmacast.ui.remote.rememberGuideClock
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.focusListRow
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.ui.theme.wrapListEnds
@@ -106,8 +103,9 @@ internal fun LiveBrowser(
     onFullscreen: () -> Unit,
     medium: GuideMedium,
     guideModel: StreamGuideViewModel,
-    /** Bumped when OK on the side menu should land on the first channel. */
+    /** Bumped when OK on the side menu should land on the open bouquet. */
     enterToken: Int = 0,
+    onRetreatTo: (FocusRequester) -> Unit = {},
 ) {
     BindGuide(medium, guideModel)
     val channels = guideModel.channels
@@ -126,12 +124,18 @@ internal fun LiveBrowser(
         if (channels.isEmpty()) return@LaunchedEffect
         if (focusedIndex !in channels.indices) focusedIndex = tunedIndex.coerceIn(0, channels.lastIndex)
     }
-    LaunchedEffect(enterToken, channels.size) {
-        if (enterToken == 0 || enterToken == handledEnter || channels.isEmpty()) return@LaunchedEffect
-        handledEnter = enterToken
-        focusedIndex = 0
-        listState.scrollToItem(0)
-        firstFocus.requestWhenReady()
+    LaunchedEffect(enterToken, guideModel.bouquets.size, channels.size) {
+        if (enterToken == 0 || enterToken == handledEnter) return@LaunchedEffect
+        when {
+            guideModel.bouquets.isNotEmpty() -> {
+                handledEnter = enterToken
+                bouquetFocus.requestWhenReady()
+            }
+            channels.isNotEmpty() -> {
+                handledEnter = enterToken
+                firstFocus.requestWhenReady()
+            }
+        }
     }
     LaunchedEffect(focusPlayingChannel, channels.isNotEmpty()) {
         if (!focusPlayingChannel || channels.isEmpty()) return@LaunchedEffect
@@ -156,11 +160,12 @@ internal fun LiveBrowser(
             onClose = {
                 scope.launch {
                     if (channels.isEmpty()) return@launch
-                    focusedIndex = 0
-                    listState.scrollToItem(0)
-                    firstFocus.requestWhenReady()
+                    val index = focusedIndex.coerceIn(0, channels.lastIndex)
+                    listState.scrollToItem(index)
+                    listFocus.requestWhenReady()
                 }
             },
+            onColumnFocus = { onRetreatTo(menuFocus) },
             modifier = Modifier.width(210.dp).fillMaxHeight(),
         )
         Column(Modifier.weight(1.2f).fillMaxHeight()) {
@@ -176,7 +181,14 @@ internal fun LiveBrowser(
             if (channels.isEmpty()) {
                 Text(stringResource(R.string.osd_no_channels_loaded), color = EnigmaColors.Muted, fontSize = 14.sp)
             }
-            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+            CompositionLocalProvider(LocalEdgeLeft provides bouquetFocus) {
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(bouquetFocus) },
+            ) {
                 itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
                     val events = grid.eventsOf(entry)
                     val now = events.firstOrNull { it.isAiring(nowSec) }
@@ -185,7 +197,7 @@ internal fun LiveBrowser(
                         onClick = { guideModel.tune(entry, onMiniPlayer, onFullscreen) },
                         selected = BouquetChannels.sameService(entry.reference, guideModel.tunedReference),
                         modifier = Modifier
-                            .then(if (index == tunedIndex) Modifier.focusRequester(listFocus) else Modifier)
+                            .then(if (index == focusedIndex) Modifier.focusRequester(listFocus) else Modifier)
                             .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
                             .then(if (index == channels.lastIndex && channels.lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
                             .onFocusChanged { if (it.isFocused) focusedIndex = index }
@@ -194,16 +206,12 @@ internal fun LiveBrowser(
                                 lastIndex = channels.lastIndex,
                                 onWrapToFirst = { scope.launch { firstFocus.focusListRow(listState, 0) } },
                                 onWrapToLast = { scope.launch { lastFocus.focusListRow(listState, channels.lastIndex) } },
-                            )
-                            .onPreviewKeyEvent { event ->
-                                if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionLeft) return@onPreviewKeyEvent false
-                                runCatching { bouquetFocus.requestFocus() }
-                                true
-                            },
+                            ),
                     ) { focused ->
                         ChannelLine(entry, guideModel.numberOf(entry), now, next, nowSec, focused, guideModel::picon, guideModel::cachedPicon)
                     }
                 }
+            }
             }
         }
         val motion = LocalMotionSpec.current

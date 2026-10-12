@@ -35,6 +35,7 @@ import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.ui.theme.edgeLeft
 import com.enigmacast.ui.theme.requestWhenReady
 
 private enum class ReceiverForm { Add, Edit }
@@ -113,7 +114,7 @@ fun ReceiversSettingsPanel(
                 connection.beginNew()
                 form = ReceiverForm.Add
             },
-            modifier = Modifier.focusRequester(addFocus).focusRequester(contentFocus),
+            modifier = Modifier.focusRequester(addFocus).focusRequester(contentFocus).edgeLeft(),
         )
         if (receivers.isEmpty()) {
             Text(stringResource(R.string.receivers_empty), color = EnigmaColors.Muted, fontSize = 14.sp)

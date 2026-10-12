@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -46,6 +48,7 @@ import com.enigmacast.ui.remote.rememberGuideClock
 import com.enigmacast.ui.settings.SettingsViewModel
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.util.asString
 import androidx.compose.ui.res.stringResource
 
@@ -57,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 internal fun HomePanel(
     contentFocus: FocusRequester,
     menuFocus: FocusRequester,
+    onRetreatTo: (FocusRequester) -> Unit,
     onContinue: (LastChannel) -> Unit,
     onPlayChannel: (BouquetEntry) -> Unit,
     onOpenBouquet: (BouquetEntry) -> Unit,
@@ -98,10 +102,12 @@ internal fun HomePanel(
         val toMenu = if (index == 0) left else Modifier
         return Modifier.width(width).then(focus).then(toMenu)
     }
+    CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         EnigmaGlassPanel(
@@ -209,6 +215,7 @@ internal fun HomePanel(
             fontSize = EnigmaType.Caption,
             modifier = Modifier.padding(bottom = 8.dp),
         )
+    }
     }
 }
 
