@@ -16,6 +16,28 @@ The full-screen player still shows the receiver's own OSD. The dashboard adds a 
 
 That is the "Follow receiver" mode. The default mode is "Own tuner": each Android TV streams its own channel straight from the receiver without zapping it, so several TVs can watch different channels at once, one per free tuner. See [Viewing modes](#viewing-modes).
 
+## New on features/smarthome
+
+- **Menu:** Home, Movies, TV Series, Soccer, Live TV, TV Guide, Radio, Search, My Items, Settings (the Receiver controls now live inside Settings). After you open a page, focus goes to its first item (the hero's Watch button), and loading data does not send focus back to the menu.
+- **Home: tuner dashboard.** One card per tuner of the box shows what uses it (the box's own picture, a recording, or a stream with the client's name), with the channel's picon, bouquet and current programme. Below the tuner cards come TV series cards (several recordings of one series grouped), then **Scheduled today** and **Upcoming** (7 days) as rows of poster cards. Each card has the TMDB poster, title, channel logo, time, a badge (Record box / Record TV / AutoSwitch) and a Now tag. A box timer and the app's own entry for the same programme show as one card with the programme times (the box margins appear as a note). OK opens Cancel recording / Cancel AutoSwitch / Close, followed by a confirmation; a box timer is removed with `/api/timerdelete`. Up and Down move between the rows.
+- **Movies:** today's films with TMDB artwork (the former Home page, described under [Dashboard](#dashboard)).
+- **TV Series:** the same page for series, matched against TMDB TV. Series are recognised from the DVB genre, episode labels (S1E4, "Afl. 12") and titles that recur in the guide.
+- **Soccer:** football-data.org for fixtures, standings and live minutes, plus PitchAPI for Eredivisie and Eerste Divisie details, lineups, statistics, club and player pages (see [Soccer](#soccer)).
+- **Room cache and sync settings:** bouquets, channels, guide and TMDB data are cached per receiver, refreshed in the background, and controlled from Settings › General › Data & sync.
+- **Bouquet selection:** choose which TV bouquets feed Movies, TV Series and Home.
+- **Record:** the choice dialog is compact and puts the box first, named after the receiver ("Record on SF8008", focused by default), then "Record on this device", then Cancel. **Record all upcoming** records every coming episode on the same channel: on the box through an AutoTimer (`/autotimer/edit`), or with an app rule that keeps scheduling new episodes. If an episode is already set to record, the dialog still offers Record all upcoming. Upcoming episodes are taken from the cache and from the box's guide, up to 8 days ahead.
+- **My Items:** recordings show posters, a resume position with a progress bar, and seeking. Recordings on the box are listed alongside the app's own.
+- **Search** runs on the Room cache, ignoring accents, and falls back to the box. OK on a result offers Watch now, AutoSwitch or Record.
+- **Full screen:** a long press on Back toggles full screen, and Live TV opens full screen.
+- **Recording vs tuners:** when a recording (a box timer or the app's own capture) is about to start and no tuner is left, this device's stream moves to the recording channel about 15 s before the start, with the notice "Recording starts: switching to <channel>". This only happens when this device's own stream is what blocks the recording. While a recording uses the last tuner, zaps to other transponders are refused with "Not possible during the recording on <channel>; only channels on the same transponder". Channels on the same transponder (the TSID:ONID:namespace parts of the service reference are equal) stay allowed. In multi-user mode, other devices' streams count as busy tuners; only this device's own stream is ever moved. The check is based on `/api/about` (tuners and stream clients), `/api/statusinfo` and `/api/timerlist`.
+- **API keys** come from the git-ignored `local.properties` and are never committed:
+
+```properties
+TMDB_API_KEY=your_tmdb_v3_key
+FOOTBALL_DATA_API_KEY=your_football_data_key
+PITCH_API_KEY=pk_your_pitchapi_key
+```
+
 ## Requirements
 
 - Android Studio Quail 4 (2026.1.4) or newer, with AGP 9.4 support
@@ -68,9 +90,11 @@ The film home page needs a TMDB v3 API key. Put it in `local.properties` (never 
 
 ```properties
 TMDB_API_KEY=your_tmdb_v3_key
+FOOTBALL_DATA_API_KEY=your_football_data_key   # Soccer (football-data.org)
+PITCH_API_KEY=pk_your_pitchapi_key             # Soccer details (pitchapi.dev)
 ```
 
-Gradle copies it into `BuildConfig.TMDB_API_KEY`. Without it the home page says that no key is set; a key typed in Settings › General › Home page replaces the built-in one.
+Gradle copies them into BuildConfig; for TMDB it copies into `BuildConfig.TMDB_API_KEY`. Without it the home page says that no key is set; a key typed in Settings › General › Home page replaces the built-in one.
 
 ## Dashboard
 
