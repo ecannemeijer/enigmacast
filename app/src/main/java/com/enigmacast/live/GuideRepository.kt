@@ -25,7 +25,11 @@ import javax.inject.Singleton
 @Singleton
 class GuideRepository @Inject constructor(
     private val source: EpgSource,
+    private val cache: com.enigmacast.domain.sync.GuideCacheReader,
 ) {
+    /** Tests: the receiver only. */
+    constructor(source: EpgSource) : this(source, com.enigmacast.domain.sync.GuideCacheReader.None)
+
     private class Entry(val fetchedAtMs: Long, val events: List<GuideEvent>)
 
     private val services = LinkedHashMap<String, Entry>()
@@ -37,6 +41,7 @@ class GuideRepository @Inject constructor(
         val key = "${receiverKey(receiver)}|${NowEvents.key(serviceReference)}"
         val nowMs = System.currentTimeMillis()
         cachedFresh(services, key, nowMs, SERVICE_TTL_MS)?.let { return it }
+        cache.serviceEvents(receiver, serviceReference)?.let { return it }
         val events = fetch("epgservice") { source.serviceEvents(receiver, serviceReference) }
             ?: return mutex.withLock { services[key]?.events.orEmpty() }
         val sorted = events.sortedBy { it.beginEpochSec }
@@ -55,6 +60,7 @@ class GuideRepository @Inject constructor(
         val nowMs = System.currentTimeMillis()
         cachedFresh(chunks, key, nowMs, CHUNK_TTL_MS)?.let { return it }
         val minutes = (GuideTimeline.CHUNK_SEC / 60).toInt()
+        cache.bouquetEvents(receiver, bouquetReference, chunkStartSec, chunkStartSec + GuideTimeline.CHUNK_SEC)?.let { return it }
         val events = fetch("epgmulti") { source.bouquetEvents(receiver, bouquetReference, chunkStartSec, minutes) }
             ?: return mutex.withLock { chunks[key]?.events }
         store(chunks, key, Entry(nowMs, events), MAX_CHUNKS)

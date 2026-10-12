@@ -7,7 +7,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.R
 import com.enigmacast.domain.films.CountryResolver
-import com.enigmacast.ui.theme.ChoiceRow
+import com.enigmacast.ui.theme.ValueSetting
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvTextField
 
@@ -18,13 +18,14 @@ fun HomeFilmSettingsCard(model: HomeFilmsViewModel = hiltViewModel()) {
     val codes = listOf(CountryResolver.AUTO) + CountryResolver.CHOICES
     val labels = listOf(stringResource(R.string.home_country_auto)) + CountryResolver.CHOICES.map { if (it == "GB") "UK" else it }
     SettingsCard(stringResource(R.string.settings_home)) {
-        ChoiceRow(
+        ValueSetting(
             title = stringResource(R.string.home_country),
             description = stringResource(R.string.home_country_desc),
             options = labels,
             selectedIndex = codes.indexOf(values.country).coerceAtLeast(0),
             onSelect = { index -> model.setCountry(codes[index]) },
         )
+        HomeBouquetsRow()
         TvTextField(
             label = stringResource(R.string.home_tmdb_key),
             value = values.tmdbKey,

@@ -31,12 +31,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         val entry = EntryPointAccessors.fromApplication(applicationContext, SyncEntryPoint::class.java)
         val receiver = entry.settings().current().activeReceiver() ?: return Result.success()
-        entry.engine().run(receiver, force = inputData.getBoolean(KEY_FORCE, false))
+        entry.engine().run(receiver, force = inputData.getBoolean(KEY_FORCE, false), refilm = inputData.getBoolean(KEY_REFILM, false))
         return Result.success()
     }
 
     companion object {
         const val KEY_FORCE = "force"
+        const val KEY_REFILM = "refilm"
     }
 }
 
@@ -44,6 +45,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 object SyncScheduler {
     private const val PERIODIC = "cache-sync-periodic"
     private const val NOW = "cache-sync-now"
+    private const val REFILM = "cache-sync-refilm"
 
     private val network = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -55,11 +57,13 @@ object SyncScheduler {
     }
 
     /** [force] refreshes everything; otherwise only what is due or missing. */
-    fun runNow(context: Context, force: Boolean) {
+    fun runNow(context: Context, force: Boolean, refilm: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(network)
-            .setInputData(workDataOf(SyncWorker.KEY_FORCE to force))
+            .setInputData(workDataOf(SyncWorker.KEY_FORCE to force, SyncWorker.KEY_REFILM to refilm))
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(NOW, if (force) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP, request)
+        // Re-matching films after a bouquet change has its own queue, so it never cancels a running full sync.
+        val name = if (refilm && !force) REFILM else NOW
+        WorkManager.getInstance(context).enqueueUniqueWork(name, if (force || refilm) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP, request)
     }
 }

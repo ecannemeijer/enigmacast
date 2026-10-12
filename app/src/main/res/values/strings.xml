@@ -746,4 +746,13 @@
     <string name="sync_running">Now</string>
     <string name="sync_refresh_now">Refresh now</string>
     <string name="sync_clear_cache">Clear cache</string>
+    <string name="home_bouquets">Bouquets for Home</string>
+    <string name="home_bouquets_desc">Films on Home come only from channels in these bouquets.</string>
+    <string name="home_bouquets_count">%1$d of %2$d selected</string>
+    <string name="home_bouquets_none_cached">Not loaded yet</string>
+    <string name="home_bouquets_all">Select all</string>
+    <string name="home_bouquets_none">Deselect all</string>
+    <string name="home_no_bouquets">No bouquets chosen for Home</string>
+    <string name="home_no_bouquets_hint">Choose bouquets in Settings › General › Home page › Bouquets for Home.</string>
+    <string name="home_guide_none">No guide data</string>
 </resources>

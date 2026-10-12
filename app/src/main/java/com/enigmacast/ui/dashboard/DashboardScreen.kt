@@ -1036,6 +1036,7 @@ private fun RcRow(button: String, action: String) {
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun SettingsHub(
     pageFocus: FocusRequester,
     menuFocus: FocusRequester,
@@ -1097,7 +1098,10 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, navFocus.getValue(SettingPage.Language), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Language) }) { enterPage(SettingPage.Language) }
             }
             }
-            CompositionLocalProvider(LocalEdgeLeft provides pageFocus) {
+            CompositionLocalProvider(
+                LocalEdgeLeft provides pageFocus,
+                androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.MinimalBringIntoView,
+            ) {
             Column(
                 modifier = Modifier
                     .weight(1f)

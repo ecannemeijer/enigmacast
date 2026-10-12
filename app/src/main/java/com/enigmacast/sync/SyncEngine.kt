@@ -19,6 +19,8 @@ import com.enigmacast.domain.films.HomeFilmsBuilder
 import com.enigmacast.domain.films.TmdbMovie
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.sync.DayWindow
+import com.enigmacast.domain.sync.BouquetChannel
+import com.enigmacast.domain.sync.HomeBouquets
 import com.enigmacast.domain.sync.SyncKind
 import com.enigmacast.domain.sync.SyncPolicy
 import com.enigmacast.domain.tuner.NowEvents
@@ -58,6 +60,7 @@ class SyncEngine @Inject constructor(
     private val tmdb: TmdbHttp,
     private val settings: SyncSettings,
     private val country: CountryDetector,
+    private val bouquetStore: com.enigmacast.data.tmdb.HomeBouquetStore,
 ) {
     private val gate = Mutex()
     private val _progress = MutableStateFlow<SyncProgress?>(null)
@@ -66,7 +69,7 @@ class SyncEngine @Inject constructor(
     fun receiverKey(receiver: ReceiverConfig) = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
 
     /** True when something was refreshed. Errors are stored per step and do not throw. */
-    suspend fun run(receiver: ReceiverConfig, force: Boolean): Boolean = gate.withLock {
+    suspend fun run(receiver: ReceiverConfig, force: Boolean, refilm: Boolean = false): Boolean = gate.withLock {
         val rk = receiverKey(receiver)
         val zone = ZoneId.systemDefault()
         val nowMs = System.currentTimeMillis()
@@ -92,7 +95,7 @@ class SyncEngine @Inject constructor(
                 changed = true
             }
             val filmsToday = lastDay(rk, SyncKind.FILMS, zone) == today.date.toString()
-            val filmsDue = changed || force || !filmsToday ||
+            val filmsDue = changed || force || refilm || !filmsToday ||
                 SyncPolicy.isDue(values.effectiveFilmsPerDay, last(rk, SyncKind.FILMS), nowMs, true)
             if (filmsDue && tmdb.apiKey().isNotBlank()) {
                 attempt(rk, SyncKind.FILMS) { syncFilms(rk, today, horizonSec, zone) }
@@ -105,7 +108,7 @@ class SyncEngine @Inject constructor(
     }
 
     private suspend fun syncChannels(receiver: ReceiverConfig, rk: String) {
-        val bouquets = api.televisionBouquets(receiver).take(MAX_BOUQUETS)
+        val bouquets = api.televisionBouquets(receiver)
         require(bouquets.isNotEmpty()) { "no bouquets" }
         val bouquetRows = bouquets.mapIndexed { index, b -> BouquetRow(rk, b.reference, b.name, index) }
         val channelRows = ArrayList<ChannelRow>()
@@ -113,7 +116,7 @@ class SyncEngine @Inject constructor(
         bouquets.forEachIndexed { index, bouquet ->
             step(rk, 2 + 13 * (index + 1) / bouquets.size, R.string.sync_step_channels)
             val channels = runCatching { api.channelsInBouquet(receiver, bouquet.reference) }.getOrDefault(emptyList())
-            channels.forEach { c -> channelRows += ChannelRow(rk, bouquet.reference, c.reference, c.name, c.picon, c.number, position++) }
+            channels.forEach { c -> channelRows += ChannelRow(rk, bouquet.reference, c.reference, c.name, c.picon, c.number, position++, NowEvents.key(c.reference)) }
         }
         dao.replaceChannels(rk, bouquetRows, channelRows)
         EnigmaLog.service("sync channels receiver=$rk bouquets=${bouquets.size} channels=${channelRows.size}")
@@ -156,8 +159,12 @@ class SyncEngine @Inject constructor(
         step(rk, 66, R.string.sync_step_films)
         val countryCode = country.country()
         val language = CountryResolver.tmdbLanguage(country.appLanguage(), countryCode)
-        val names = HashMap<String, ChannelRow>()
-        dao.channels(rk).forEach { names.putIfAbsent(NowEvents.key(it.reference), it) }
+        val allBouquets = dao.bouquets(rk).map { it.reference }
+        val selected = HomeBouquets.effective(bouquetStore.selected(rk), allBouquets)
+        val names = HomeBouquets.channels(
+            dao.channels(rk).map { BouquetChannel(it.bouquetReference, it.reference, it.name, it.picon) },
+            selected,
+        )
         val nowSec = System.currentTimeMillis() / 1000
         val candidates = dao.events(rk, nowSec - 4 * 3600, horizonSec)
             .mapNotNull { row ->
@@ -206,7 +213,6 @@ class SyncEngine @Inject constructor(
     }
 
     private companion object {
-        const val MAX_BOUQUETS = 20
         const val FALLBACK_CHANNELS = 40
     }
 }

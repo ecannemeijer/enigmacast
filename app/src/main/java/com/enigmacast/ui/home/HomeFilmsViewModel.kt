@@ -56,6 +56,7 @@ class HomeFilmsViewModel @Inject constructor(
         data object NoReceiver : State
         data object MissingKey : State
         data object Empty : State
+        data object NoBouquets : State
         data class Ready(val films: List<HomeFilm>) : State
     }
 
@@ -86,6 +87,7 @@ class HomeFilmsViewModel @Inject constructor(
     private val clock = MutableStateFlow(System.currentTimeMillis())
     private val zone: ZoneId get() = ZoneId.systemDefault()
     private var noticeJob: Job? = null
+    private var noBouquets = false
 
     init {
         // The clock ticks every 30 s; rows are recomputed, and the Room query moves at midnight.
@@ -110,6 +112,9 @@ class HomeFilmsViewModel @Inject constructor(
                         repository.films(key, w.first, w.second).combine(repository.syncState(key)) { films, states ->
                             val filmsDone = states.any { it.kind == com.enigmacast.domain.sync.SyncKind.FILMS.name && it.lastAttemptMs > 0 }
                             films to filmsDone
+                        }.combine(repository.bouquetChoice(key)) { pair, choice ->
+                            noBouquets = choice.first.isNotEmpty() && choice.second.isEmpty()
+                            pair
                         }
                     }
                 }
@@ -130,6 +135,7 @@ class HomeFilmsViewModel @Inject constructor(
         hero = top
         rows = list
         state = when {
+            noBouquets -> State.NoBouquets
             list.isNotEmpty() -> State.Ready(films)
             repository.apiKeyMissing() -> State.MissingKey
             sync != null || !filmsDone -> State.Loading

@@ -1,5 +1,10 @@
 package com.enigmacast.ui.theme
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -720,5 +725,113 @@ fun FeedbackSnackbar(message: String, isError: Boolean, modifier: Modifier = Mod
         )
         Spacer(Modifier.width(12.dp))
         Text(message, color = EnigmaColors.Text, fontSize = 15.sp)
+    }
+}
+
+/**
+ * A setting with several values as one compact row: title, description and the current value
+ * on the right. OK opens [OptionListDialog]. Replaces chip rows that do not fit on a TV screen.
+ */
+@Composable
+fun ValueRow(
+    title: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+) {
+    ListItem(
+        selected = false,
+        onClick = onClick,
+        modifier = modifier.edgeLeft().fillMaxWidth(),
+        headlineContent = { Text(title, fontSize = 15.sp, maxLines = 1) },
+        supportingContent = if (description != null) {
+            { Text(description, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2) }
+        } else {
+            null
+        },
+        trailingContent = {
+            Text("$value  ›", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        },
+        colors = rowColors(),
+        shape = ListItemDefaults.shape(shape = RowShape),
+        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.03f),
+    )
+}
+
+/** [ValueRow] with its option list: the current option is checked and gets focus; Back closes. */
+@Composable
+fun ValueSetting(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+) {
+    var open by remember { mutableStateOf(false) }
+    ValueRow(title, options.getOrElse(selectedIndex) { "" }, { open = true }, modifier, description)
+    if (open) {
+        OptionListDialog(title, options, selectedIndex, onSelect = { open = false; onSelect(it) }, onDismiss = { open = false })
+    }
+}
+
+@Composable
+fun OptionListDialog(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        NavigationSoundsForWindow()
+        val current = remember { FocusRequester() }
+        LaunchedEffect(Unit) { current.requestWhenReady() }
+        Column(
+            modifier = Modifier
+                .widthIn(min = 280.dp, max = 380.dp)
+                .heightIn(max = 470.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(title, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                options.forEachIndexed { index, label ->
+                    ListItem(
+                        selected = index == selectedIndex,
+                        onClick = { onSelect(index) },
+                        modifier = Modifier.fillMaxWidth().then(if (index == selectedIndex.coerceAtLeast(0)) Modifier.focusRequester(current) else Modifier),
+                        headlineContent = { Text(label, fontSize = 15.sp) },
+                        trailingContent = if (index == selectedIndex) {
+                            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else {
+                            null
+                        },
+                        colors = rowColors(),
+                        shape = ListItemDefaults.shape(shape = RowShape),
+                        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.02f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Scrolls a settings column only as far as needed to show the focused row, instead of the
+ * TV default that pulls focus towards the middle and leaves a big empty band above.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+val MinimalBringIntoView = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val trailing = offset + size
+        return when {
+            offset >= 0f && trailing <= containerSize -> 0f
+            offset < 0f || size > containerSize -> offset
+            else -> trailing - containerSize
+        }
     }
 }

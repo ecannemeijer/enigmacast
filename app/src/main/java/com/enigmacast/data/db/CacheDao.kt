@@ -59,6 +59,23 @@ interface CacheDao {
     @Query("SELECT * FROM epg_events WHERE receiverKey = :receiverKey AND serviceKey = :serviceKey AND endSec > :fromSec ORDER BY beginSec")
     suspend fun serviceEvents(receiverKey: String, serviceKey: String, fromSec: Long): List<EpgRow>
 
+    /** A bouquet's programmes overlapping [fromSec, toSec), through the cached channel list. */
+    @Query(
+        "SELECT e.* FROM epg_events e WHERE e.receiverKey = :receiverKey AND e.endSec > :fromSec AND e.beginSec < :toSec " +
+            "AND e.serviceKey IN (SELECT c.serviceKey FROM channels c WHERE c.receiverKey = :receiverKey AND c.bouquetReference = :bouquetReference) " +
+            "ORDER BY e.beginSec",
+    )
+    suspend fun bouquetEvents(receiverKey: String, bouquetReference: String, fromSec: Long, toSec: Long): List<EpgRow>
+
+    @Query("SELECT * FROM channels WHERE receiverKey = :receiverKey AND bouquetReference = :bouquetReference ORDER BY position")
+    suspend fun channelsIn(receiverKey: String, bouquetReference: String): List<ChannelRow>
+
+    @Query("SELECT * FROM channels WHERE receiverKey = :receiverKey ORDER BY position")
+    fun observeChannels(receiverKey: String): Flow<List<ChannelRow>>
+
+    @Query("SELECT * FROM bouquets WHERE receiverKey = :receiverKey ORDER BY position")
+    fun observeBouquets(receiverKey: String): Flow<List<BouquetRow>>
+
     @Query("SELECT COUNT(*) FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec")
     suspend fun eventCount(receiverKey: String, fromSec: Long, toSec: Long): Int
 

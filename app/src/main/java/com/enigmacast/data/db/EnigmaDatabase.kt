@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {

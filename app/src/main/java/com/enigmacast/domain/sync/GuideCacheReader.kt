@@ -1,0 +1,20 @@
+package com.enigmacast.domain.sync
+
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.model.BouquetEntry
+import com.enigmacast.domain.model.ReceiverConfig
+
+/** The synced guide and channel lists. null = not cached, ask the receiver. */
+interface GuideCacheReader {
+    suspend fun bouquetEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent>?
+    suspend fun serviceEvents(receiver: ReceiverConfig, serviceReference: String): List<GuideEvent>?
+    suspend fun televisionBouquets(receiver: ReceiverConfig): List<BouquetEntry>?
+    suspend fun channelsInBouquet(receiver: ReceiverConfig, bouquetReference: String): List<BouquetEntry>?
+
+    object None : GuideCacheReader {
+        override suspend fun bouquetEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent>? = null
+        override suspend fun serviceEvents(receiver: ReceiverConfig, serviceReference: String): List<GuideEvent>? = null
+        override suspend fun televisionBouquets(receiver: ReceiverConfig): List<BouquetEntry>? = null
+        override suspend fun channelsInBouquet(receiver: ReceiverConfig, bouquetReference: String): List<BouquetEntry>? = null
+    }
+}

@@ -26,7 +26,7 @@ import com.enigmacast.domain.sync.SyncKind
 import com.enigmacast.domain.sync.SyncPolicy
 import com.enigmacast.live.HomeFilmsRepository
 import com.enigmacast.sync.SyncProgress
-import com.enigmacast.ui.theme.ChoiceRow
+import com.enigmacast.ui.theme.ValueSetting
 import com.enigmacast.ui.theme.InfoRow
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvButton
@@ -87,14 +87,14 @@ fun DataSyncSettingsCard(model: DataSyncViewModel = hiltViewModel()) {
     val perDay = SyncPolicy.CHOICES
     val perDayLabels = perDay.map { if (it == SyncPolicy.OFF) stringResource(R.string.sync_off) else stringResource(R.string.sync_times_per_day, it) }
     SettingsCard(stringResource(R.string.settings_data_sync)) {
-        ChoiceRow(
+        ValueSetting(
             title = stringResource(R.string.sync_channels),
             description = stringResource(R.string.sync_channels_desc),
             options = perDayLabels,
             selectedIndex = perDay.indexOf(values.channelsPerDay).coerceAtLeast(0),
             onSelect = { model.syncSettings.setChannels(perDay[it]) },
         )
-        ChoiceRow(
+        ValueSetting(
             title = stringResource(R.string.sync_epg),
             description = stringResource(R.string.sync_epg_desc),
             options = perDayLabels,
@@ -102,14 +102,14 @@ fun DataSyncSettingsCard(model: DataSyncViewModel = hiltViewModel()) {
             onSelect = { model.syncSettings.setEpg(perDay[it]) },
         )
         val filmChoices = listOf(SyncPolicy.FOLLOW_EPG) + perDay
-        ChoiceRow(
+        ValueSetting(
             title = stringResource(R.string.sync_films),
             description = stringResource(R.string.sync_films_desc),
             options = listOf(stringResource(R.string.sync_follow_epg)) + perDayLabels,
             selectedIndex = filmChoices.indexOf(values.filmsPerDay).coerceAtLeast(0),
             onSelect = { model.syncSettings.setFilms(filmChoices[it]) },
         )
-        ChoiceRow(
+        ValueSetting(
             title = stringResource(R.string.sync_epg_days),
             options = listOf(stringResource(R.string.sync_days_today), stringResource(R.string.sync_days_two), stringResource(R.string.sync_days_three)),
             selectedIndex = (values.epgDays - 1).coerceIn(0, 2),

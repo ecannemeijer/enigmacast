@@ -570,6 +570,7 @@ private fun EmptyState(state: HomeFilmsViewModel.State, contentFocus: FocusReque
     val (title, body) = when (state) {
         HomeFilmsViewModel.State.NoReceiver -> stringResource(R.string.home_empty) to ""
         HomeFilmsViewModel.State.MissingKey -> stringResource(R.string.home_missing_key) to stringResource(R.string.home_missing_key_hint)
+        HomeFilmsViewModel.State.NoBouquets -> stringResource(R.string.home_no_bouquets) to stringResource(R.string.home_no_bouquets_hint)
         else -> stringResource(R.string.home_no_films) to stringResource(R.string.home_no_films_hint)
     }
     Column(Modifier.padding(start = 28.dp, top = 60.dp).fillMaxWidth(0.7f), verticalArrangement = Arrangement.spacedBy(10.dp)) {

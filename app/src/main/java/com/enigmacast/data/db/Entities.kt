@@ -21,6 +21,8 @@ data class ChannelRow(
     val picon: String,
     val number: Int,
     val position: Int,
+    /** NowEvents.key of [reference], to join with the guide. */
+    val serviceKey: String = "",
 )
 
 @Entity(

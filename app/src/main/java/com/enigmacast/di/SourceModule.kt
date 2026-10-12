@@ -37,7 +37,11 @@ abstract class SourceModule {
 
     @Binds
     @Singleton
-    abstract fun serviceSource(impl: OpenWebifServiceStateSource): ServiceStateSource
+    abstract fun serviceSource(impl: com.enigmacast.data.openwebif.CachedServiceStateSource): ServiceStateSource
+
+    @Binds
+    @Singleton
+    abstract fun guideCache(impl: com.enigmacast.sync.RoomGuideCache): com.enigmacast.domain.sync.GuideCacheReader
 
     @Binds
     @Singleton

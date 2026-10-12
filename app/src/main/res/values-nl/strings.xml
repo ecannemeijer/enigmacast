@@ -743,4 +743,13 @@
     <string name="sync_running">Bezig</string>
     <string name="sync_refresh_now">Nu verversen</string>
     <string name="sync_clear_cache">Cache wissen</string>
+    <string name="home_bouquets">Bouquets voor Home</string>
+    <string name="home_bouquets_desc">Films op Home komen alleen van zenders in deze bouquets.</string>
+    <string name="home_bouquets_count">%1$d van %2$d gekozen</string>
+    <string name="home_bouquets_none_cached">Nog niet geladen</string>
+    <string name="home_bouquets_all">Alles kiezen</string>
+    <string name="home_bouquets_none">Niets kiezen</string>
+    <string name="home_no_bouquets">Geen bouquets gekozen voor Home</string>
+    <string name="home_no_bouquets_hint">Kies bouquets bij Instellingen › Algemeen › Startpagina › Bouquets voor Home.</string>
+    <string name="home_guide_none">Geen gidsgegevens</string>
 </resources>

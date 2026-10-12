@@ -13,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.combine
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,7 +28,20 @@ class HomeFilmsRepository @Inject constructor(
     private val dao: CacheDao,
     private val engine: SyncEngine,
     private val tmdb: com.enigmacast.data.tmdb.TmdbHttp,
+    private val bouquetStore: com.enigmacast.data.tmdb.HomeBouquetStore,
 ) {
+    /** All cached TV bouquets of a receiver with the Home choice. */
+    fun bouquetChoice(receiverKey: String): Flow<Pair<List<com.enigmacast.data.db.BouquetRow>, Set<String>>> =
+        dao.observeBouquets(receiverKey).combine(bouquetStore.changes) { bouquets, _ ->
+            bouquets to com.enigmacast.domain.sync.HomeBouquets.effective(bouquetStore.selected(receiverKey), bouquets.map { it.reference })
+        }
+
+    /** Stores the choice and re-matches Home films from the cache (no full resync). */
+    fun setBouquets(receiverKey: String, selection: Set<String>?) {
+        bouquetStore.set(receiverKey, selection)
+        SyncScheduler.runNow(context, force = false, refilm = true)
+    }
+
     fun apiKeyMissing(): Boolean = tmdb.apiKey().isBlank()
 
     val progress = engine.progress
