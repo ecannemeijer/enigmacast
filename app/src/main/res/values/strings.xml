@@ -216,6 +216,8 @@
     <string name="nav_home">Home</string>
     <string name="nav_live">Live TV</string>
     <string name="nav_movies">Movies</string>
+    <string name="search_watch_now">Watch now</string>
+    <string name="search_autoswitch">AutoSwitch</string>
     <string name="nav_guide">TV Guide</string>
     <string name="nav_stream">Watch TV</string>
     <string name="nav_radio">Radio</string>

@@ -19,6 +19,18 @@ class BoxItemsTest {
     }
 
     @Test
+    fun postersShareOneRowItem() {
+        val app = listOf(r("a1"), r("a2"))
+        val movies = listOf(r("m1"))
+        val timers = listOf(r("t1"))
+        val poster = { x: Recording -> !x.id.startsWith("t") }
+        // h-app, posters(a1,a2), h-movies, posters(m1), h-timers, t1
+        assertEquals(1, listIndexOf("a2", app, movies, timers, poster))
+        assertEquals(3, listIndexOf("m1", app, movies, timers, poster))
+        assertEquals(5, listIndexOf("t1", app, movies, timers, poster))
+    }
+
+    @Test
     fun listIndexCountsHeaders() {
         val app = listOf(r("a1"), r("a2"))
         val movies = listOf(r("m1"))

@@ -46,6 +46,8 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.search.SearchHit
 import com.enigmacast.domain.search.SearchKind
@@ -84,6 +86,7 @@ fun SearchPanel(
 ) {
     val fieldFocus = remember { FocusRequester() }
     val micFocus = remember { FocusRequester() }
+    SearchProgrammeDialogs(viewModel, onPlayed, onBouquet, onPrepare)
     val context = LocalContext.current
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
@@ -194,7 +197,10 @@ fun SearchPanel(
                         }
                         items(hits, key = { it.rowKey() }) { hit ->
                             CompactListRow(
-                                onClick = { viewModel.choose(hit, onPlayed, onBouquet, onPrepare) },
+                                onClick = {
+                                    if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) viewModel.openProgramme(hit)
+                                    else viewModel.choose(hit, onPlayed, onBouquet, onPrepare)
+                                },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                                 modifier = Modifier
                                     .focusProperties {
@@ -265,4 +271,42 @@ private fun SearchHit.rowKey(): String = when (kind) {
     SearchKind.RECORDING -> "rec:$recordingId"
     SearchKind.BOUQUET -> "bq:$bouquetReference"
     else -> "$kind:$serviceReference:$beginEpochSec"
+}
+
+/** OK on a found programme: Watch now (only while it airs), AutoSwitch, Record (TV or box), Cancel. */
+@Composable
+internal fun SearchProgrammeDialogs(viewModel: SearchViewModel, onPlayed: () -> Unit, onBouquet: (BouquetEntry) -> Unit, onPrepare: () -> Unit) {
+    val autoKeys by viewModel.autoSwitchKeys.collectAsStateWithLifecycle()
+    viewModel.programme?.let { hit ->
+        val event = hit.event ?: return@let
+        val nowSec = System.currentTimeMillis() / 1000
+        val airing = event.isAiring(nowSec)
+        val autoSet = event.programmeKey in autoKeys
+        val watch = stringResource(R.string.search_watch_now)
+        val auto = stringResource(if (autoSet) R.string.autoswitch_cancel_action else R.string.search_autoswitch)
+        val record = stringResource(R.string.home_record)
+        val choices = buildList {
+            if (airing) add(watch)
+            if (event.beginEpochSec > nowSec) add(auto)
+            if (event.endEpochSec > nowSec) add(record)
+            add(stringResource(R.string.cancel))
+        }
+        com.enigmacast.ui.theme.TvChoiceDialog(
+            title = hit.title,
+            message = listOf(hit.channelName, SearchRows.headline(hit).takeIf { it != hit.title }.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "),
+            choices = choices,
+            onChoose = { i ->
+                when (choices[i]) {
+                    watch -> { viewModel.dismissProgramme(); viewModel.choose(hit, onPlayed, onBouquet, onPrepare) }
+                    auto -> viewModel.toggleAutoSwitch()
+                    record -> viewModel.chooseRecord()
+                    else -> viewModel.dismissProgramme()
+                }
+            },
+            onDismiss = viewModel::dismissProgramme,
+        )
+    }
+    viewModel.recordAsk?.let { ask ->
+        com.enigmacast.ui.recording.RecordConfirmDialog(ask, onConfirm = viewModel::confirmRecord, onDismiss = viewModel::dismissRecord)
+    }
 }

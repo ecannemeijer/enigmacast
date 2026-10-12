@@ -117,6 +117,14 @@ interface CacheDao {
         rows.chunked(500).forEach { insertHomeFilms(it) }
     }
 
+    /** TMDB titles of the guide's films, keyed by programme, for search. */
+    @Query(
+        "SELECT h.serviceKey AS serviceKey, h.beginSec AS beginSec, m.title AS title FROM home_films h " +
+            "JOIN tmdb_movies m ON m.tmdbId = h.tmdbId AND m.language = h.language " +
+            "WHERE h.receiverKey = :receiverKey AND h.endSec > :fromSec",
+    )
+    suspend fun filmTitles(receiverKey: String, fromSec: Long): List<FilmTitle>
+
     @Query("SELECT * FROM home_films WHERE receiverKey = :receiverKey AND endSec > :fromSec AND beginSec < :toSec ORDER BY beginSec")
     fun observeHomeFilms(receiverKey: String, fromSec: Long, toSec: Long): Flow<List<HomeFilmRow>>
 
@@ -161,3 +169,5 @@ interface CacheDao {
         clearSoccerMatches(); clearSoccerStandings(); clearSoccerFetches()
     }
 }
+
+data class FilmTitle(val serviceKey: String, val beginSec: Long, val title: String)

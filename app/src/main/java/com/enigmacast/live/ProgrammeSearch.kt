@@ -32,6 +32,7 @@ class ProgrammeSearch @Inject constructor(
     private val epg: EpgSource,
     private val services: ServiceStateSource,
     private val settings: SettingsRepository,
+    private val cache: CacheSearch,
 ) {
     private val gate = Mutex()
     private var catalog: Catalog? = null
@@ -40,6 +41,12 @@ class ProgrammeSearch @Inject constructor(
         val parsed = SearchQuery.parse(query, nowSec)
         if (!parsed.isSearchable) return SearchResults()
         val receiver = settings.current().activeReceiver() ?: return SearchResults()
+        // The synced Room cache first: fast and offline. The box only when nothing is cached yet.
+        val index = runCatching { cache.index(receiver, nowSec * 1000) }.getOrNull()
+        if (index != null && !index.isEmpty) {
+            val found = if (parsed.text.length < SearchGrouping.MIN_QUERY) emptyList() else cache.programmes(index, parsed.text)
+            return SearchGrouping.group(parsed, nowSec, found, recordings, index.bouquets, index.channels)
+        }
         val programmes = if (parsed.text.length < SearchGrouping.MIN_QUERY) {
             emptyList()
         } else {
@@ -59,6 +66,14 @@ class ProgrammeSearch @Inject constructor(
     /** The bouquet and its channels that contain [serviceReference], or null when none does. */
     suspend fun placeOf(serviceReference: String): ChannelPlace? {
         if (serviceReference.isBlank()) return null
+        val receiver = settings.current().activeReceiver()
+        val index = receiver?.let { runCatching { cache.index(it, System.currentTimeMillis()) }.getOrNull() }
+        if (index != null && index.channels.isNotEmpty()) {
+            SearchGrouping.placeOf(serviceReference, index.channels)?.let { listed ->
+                val channels = index.channels.filter { it.bouquet.reference == listed.bouquet.reference }.map { it.channel }
+                return ChannelPlace(listed.bouquet, listed.channel, channels)
+            }
+        }
         val lists = catalog(System.currentTimeMillis())
         val listed = SearchGrouping.placeOf(serviceReference, lists.channels) ?: return null
         val channels = lists.channels

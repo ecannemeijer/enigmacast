@@ -26,7 +26,57 @@ class SearchViewModel @Inject constructor(
     private val programmeSearch: ProgrammeSearch,
     private val player: SearchPlayer,
     private val recordings: RecordingBook,
+    private val reminders: com.enigmacast.live.ReminderScheduler,
+    private val settingsRepository: com.enigmacast.data.settings.SettingsRepository,
 ) : ViewModel() {
+    /** A programme whose OK opened the action dialog (AutoSwitch / Record / Watch now). */
+    var programme by mutableStateOf<SearchHit?>(null)
+        private set
+    var recordAsk by mutableStateOf<com.enigmacast.domain.recording.RecordAsk?>(null)
+        private set
+    val autoSwitchKeys = reminders.scheduledKeys
+
+    fun openProgramme(hit: SearchHit) {
+        message = UiText.Empty
+        programme = hit
+    }
+
+    fun dismissProgramme() {
+        programme = null
+    }
+
+    fun toggleAutoSwitch() {
+        val hit = programme ?: return
+        val event = hit.event ?: return
+        programme = null
+        viewModelScope.launch {
+            val receiverId = settingsRepository.current().activeReceiver()?.id.orEmpty()
+            val toggle = reminders.toggle(event, hit.channelName, receiverId)
+            message = com.enigmacast.ui.remote.AutoSwitchTexts.result(toggle, com.enigmacast.domain.epg.ProgrammePrompt(event, hit.channelName, false))
+        }
+    }
+
+    fun chooseRecord() {
+        val hit = programme ?: return
+        val event = hit.event ?: return
+        programme = null
+        viewModelScope.launch {
+            when (val result = recordings.prepare(event, hit.channelName)) {
+                is RecordingBook.PrepareResult.Ask -> recordAsk = result.ask
+                is RecordingBook.PrepareResult.Message -> message = result.text
+            }
+        }
+    }
+
+    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget) {
+        val ask = recordAsk ?: return
+        recordAsk = null
+        viewModelScope.launch { message = recordings.schedule(ask.copy(place = place)) }
+    }
+
+    fun dismissRecord() {
+        recordAsk = null
+    }
     var query by mutableStateOf("")
         private set
     var results by mutableStateOf(SearchResults())

@@ -213,6 +213,8 @@
     <string name="nav_home">Home</string>
     <string name="nav_live">Live tv</string>
     <string name="nav_movies">Films</string>
+    <string name="search_watch_now">Nu kijken</string>
+    <string name="search_autoswitch">AutoSwitch</string>
     <string name="nav_guide">Tv-gids</string>
     <string name="nav_stream">Tv kijken</string>
     <string name="nav_radio">Radio</string>

@@ -13,6 +13,8 @@ import java.time.ZoneId
 data class EpgSearchEvent(
     val event: GuideEvent,
     val channelName: String,
+    /** Other names the programme is known by (the TMDB title of a film), also searched. */
+    val alsoKnownAs: String = "",
 )
 
 /**
@@ -38,6 +40,8 @@ data class SearchHit(
     val recordingId: String = "",
     val beginEpochSec: Long = 0L,
     val endEpochSec: Long = 0L,
+    /** The guide programme behind a NOW/LATER hit (for AutoSwitch and Record). */
+    val event: GuideEvent? = null,
 )
 
 /** A channel as it sits in one bouquet, so choosing it can switch the bouquet too. */
@@ -124,7 +128,7 @@ object SearchGrouping {
         val later = ArrayList<SearchHit>()
         if (titles) {
             programmes.forEach { found ->
-                if (!contains(found.event.title, text)) return@forEach
+                if (!contains(found.event.title, text) && !contains(found.alsoKnownAs, text)) return@forEach
                 val key = found.event.programmeKey
                 if (!seen.add(key)) return@forEach
                 val hit = SearchHit(
@@ -134,6 +138,7 @@ object SearchGrouping {
                     channelName = found.channelName,
                     beginEpochSec = found.event.beginEpochSec,
                     endEpochSec = found.event.endEpochSec,
+                    event = found.event,
                 )
                 if (hit.kind == SearchKind.NOW) now += hit else later += hit
             }
@@ -199,9 +204,23 @@ object SearchGrouping {
         return channels.firstOrNull { BouquetChannels.sameService(it.channel.reference, serviceReference) }
     }
 
-    private fun contains(value: String, query: String): Boolean = value.contains(query, ignoreCase = true)
+    private fun contains(value: String, query: String): Boolean = SearchText.contains(value, query)
 
     private fun Recording.startedOn(day: LocalDate, zone: ZoneId): Boolean {
         return Instant.ofEpochSecond(beginEpochSec).atZone(zone).toLocalDate() == day
     }
+}
+
+/** Case- and accent-insensitive matching: "cafe" finds "Café", "ZDF" finds "zdf". */
+object SearchText {
+    private val marks = Regex("\\p{Mn}+")
+
+    fun fold(value: String): String {
+        if (value.all { it.code < 128 }) return value.lowercase()
+        return marks.replace(java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD), "")
+            .replace("ß", "ss").replace("ø", "o").replace("Ø", "o").replace("æ", "ae").replace("Æ", "ae").replace("ł", "l")
+            .lowercase()
+    }
+
+    fun contains(value: String, query: String): Boolean = query.isEmpty() || fold(value).contains(fold(query))
 }
