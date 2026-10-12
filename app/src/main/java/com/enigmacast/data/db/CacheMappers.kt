@@ -58,7 +58,7 @@ object CacheMappers {
             TmdbMovie(row.tmdbId, row.title, posterPath = row.posterPath, backdropPath = row.backdropPath, logoPath = row.logoPath)
         }
 
-    fun homeFilmRow(receiverKey: String, film: HomeFilm, day: String, language: String): HomeFilmRow {
+    fun homeFilmRow(receiverKey: String, film: HomeFilm, day: String, language: String, kind: String = HomeKinds.FILM): HomeFilmRow {
         val event = film.event
         return HomeFilmRow(
             receiverKey = receiverKey,
@@ -77,6 +77,7 @@ object CacheMappers {
             year = film.candidate.year,
             tmdbId = film.movie.id,
             language = language,
+            kind = kind,
         )
     }
 

@@ -68,10 +68,10 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget) {
+    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget, all: Boolean = false) {
         val ask = recordAsk ?: return
         recordAsk = null
-        viewModelScope.launch { message = recordings.schedule(ask.copy(place = place)) }
+        viewModelScope.launch { message = recordings.schedule(ask.copy(place = place, allUpcoming = all)) }
     }
 
     fun dismissRecord() {

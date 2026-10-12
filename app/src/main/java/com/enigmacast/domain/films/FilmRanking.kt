@@ -23,6 +23,10 @@ data class TmdbMovie(
     val certification: String = "",
     val directors: List<String> = emptyList(),
     val cast: List<TmdbCastMember> = emptyList(),
+    /** TV series (TMDB /tv): [id] is then negative, see SeriesIds. */
+    val isSeries: Boolean = false,
+    val seasons: Int? = null,
+    val episodes: Int? = null,
 )
 
 @kotlinx.serialization.Serializable

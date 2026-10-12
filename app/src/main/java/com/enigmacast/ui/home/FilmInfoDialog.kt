@@ -84,7 +84,8 @@ fun FilmInfoDialog(
         val movie = film.movie
         val airing = film.event.isAiring(nowSec)
         val ended = film.event.endEpochSec <= nowSec
-        val plot = movie.overview.ifBlank { film.event.description }
+        // A series: this episode's guide text first, the show's overview when the guide has none.
+        val plot = if (movie.isSeries) film.event.description.ifBlank { movie.overview } else movie.overview.ifBlank { film.event.description }
         var showPlot by remember(film.key) { mutableStateOf(false) }
         Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
             if (movie.backdropPath != null) {
@@ -132,6 +133,12 @@ fun FilmInfoDialog(
                             RatingStars(movie.voteAverage, size = 13.sp)
                             movie.year?.let { Text(it.toString(), color = EnigmaColors.Muted, fontSize = 13.sp) }
                             movie.runtimeMin?.let { Text(stringResource(R.string.home_runtime, it), color = EnigmaColors.Muted, fontSize = 13.sp) }
+                            if (movie.isSeries) {
+                                movie.seasons?.let { Text(androidx.compose.ui.res.pluralStringResource(R.plurals.series_seasons, it, it), color = EnigmaColors.Muted, fontSize = 13.sp) }
+                                com.enigmacast.domain.series.EpisodeLabel.parse(film.event)?.text()?.takeIf { it.isNotBlank() }?.let {
+                                    Text(it, color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
                             if (movie.certification.isNotBlank()) {
                                 Text(
                                     movie.certification,

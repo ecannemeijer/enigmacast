@@ -50,6 +50,7 @@ class RecordingBook @Inject constructor(
     private val endpoints: OpenWebifEndpoints,
     private val streamTargets: StreamTargets,
     private val playback: LivePlaybackController,
+    private val series: dagger.Lazy<SeriesRecorder>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val gate = Mutex()
@@ -95,10 +96,12 @@ class RecordingBook @Inject constructor(
         awaitLoaded()
         val existing = _items.value.firstOrNull { it.reference == event.reference && it.beginEpochSec == event.beginEpochSec && it.isActive() }
         if (existing != null) return PrepareResult.Message(UiText.res(R.string.record_already_set))
-        return PrepareResult.Ask(RecordAsk(event, channelName, place))
+        val upcoming = runCatching { series.get().upcoming(event).size }.getOrDefault(0)
+        return PrepareResult.Ask(RecordAsk(event, channelName, place, upcoming = upcoming))
     }
 
     suspend fun schedule(ask: RecordAsk): UiText {
+        if (ask.allUpcoming) return series.get().recordAll(ask)
         val settings = settingsRepository.current()
         val receiver = settings.activeReceiver() ?: return UiText.res(R.string.conn_no_receiver_configured)
         val event = ask.event

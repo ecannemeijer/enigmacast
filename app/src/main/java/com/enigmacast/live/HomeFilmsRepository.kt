@@ -49,8 +49,8 @@ class HomeFilmsRepository @Inject constructor(
     fun receiverKey(receiver: ReceiverConfig) = engine.receiverKey(receiver)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun films(receiverKey: String, fromSec: Long, toSec: Long): Flow<List<HomeFilm>> =
-        dao.observeHomeFilms(receiverKey, fromSec, toSec).mapLatest { rows ->
+    fun films(receiverKey: String, fromSec: Long, toSec: Long, kind: String = com.enigmacast.data.db.HomeKinds.FILM): Flow<List<HomeFilm>> =
+        dao.observeHomeFilms(receiverKey, fromSec, toSec, kind).mapLatest { rows ->
             val movies = rows.groupBy { it.language }.flatMap { (language, list) ->
                 dao.movies(list.map { it.tmdbId }.distinct(), language)
             }.associate { it.tmdbId to CacheMappers.movie(it) }

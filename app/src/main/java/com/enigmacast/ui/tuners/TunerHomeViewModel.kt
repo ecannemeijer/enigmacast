@@ -30,6 +30,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
@@ -51,7 +52,13 @@ class TunerHomeViewModel @Inject constructor(
     private val recordings: RecordingBook,
     private val session: OwnTunerSession,
     private val playback: LivePlaybackController,
+    private val seriesRecorder: com.enigmacast.live.SeriesRecorder,
+    private val cacheDao: com.enigmacast.data.db.CacheDao,
 ) : ViewModel() {
+    /** Series recordings: one card per series and channel. */
+    var series by mutableStateOf<List<com.enigmacast.domain.series.SeriesGroup>>(emptyList()); private set
+    var posters by mutableStateOf<Map<String, String?>>(emptyMap()); private set
+    private var groupedKeys: Set<String> = emptySet()
     var cards by mutableStateOf<List<TunerCard>>(emptyList()); private set
     var channelInfo by mutableStateOf<Map<String, CardChannel>>(emptyMap()); private set
     var schedule by mutableStateOf<List<ScheduleItem>>(emptyList()); private set
@@ -82,6 +89,7 @@ class TunerHomeViewModel @Inject constructor(
             cards = TunerBoard.cards(snapshot, ownAddresses(receiver), running)
             loadChannelInfo(receiver)
         }
+        buildSeries(receiver, timers)
         schedule = buildSchedule(receiver, timers)
         loading = false
     }
@@ -107,9 +115,9 @@ class TunerHomeViewModel @Inject constructor(
         val start = today.atStartOfDay(zone).toEpochSecond()
         val end = today.plusDays(1).atStartOfDay(zone).toEpochSecond()
         val nowSec = System.currentTimeMillis() / 1000
-        val ours = recordings.items.value.filter { it.isActive() }
+        val ours = recordings.items.value.filter { it.isActive() && it.receiverId == receiver.id }
         val items = mutableListOf<ScheduleItem>()
-        ours.forEach { r ->
+        ours.filter { com.enigmacast.domain.series.SeriesGrouping.keyOf(it) !in groupedKeys }.forEach { r ->
             items += ScheduleItem(
                 r.beginEpochSec, r.endEpochSec, r.channelName, r.title,
                 if (r.place == RecordingPlace.TV) ScheduleKind.TV_RECORDING else ScheduleKind.BOX_RECORDING,
@@ -118,6 +126,7 @@ class TunerHomeViewModel @Inject constructor(
         }
         timers.filter { it.state < 3 }
             .filter { t -> ours.none { it.place == RecordingPlace.RECEIVER && it.beginEpochSec == t.begin && it.title.equals(t.name, true) } }
+            .filter { t -> com.enigmacast.domain.series.SeriesDetector.key(t.name, t.reference) !in groupedKeys }
             .forEach { t ->
                 val channel = channelName(receiver, t.reference)
                 items += ScheduleItem(t.begin, t.end, channel, t.name, ScheduleKind.BOX_TIMER, running = t.state == 2)
@@ -126,6 +135,50 @@ class TunerHomeViewModel @Inject constructor(
             items += ScheduleItem(r.beginEpochSec, r.beginEpochSec, r.channelName, r.title, ScheduleKind.AUTOSWITCH)
         }
         return TodaySchedule.merge(items, start, end, nowSec)
+    }
+
+    private suspend fun buildSeries(receiver: ReceiverConfig, timers: List<com.enigmacast.data.openwebif.OpenWebifJson.ReceiverTimer>) {
+        val nowSec = System.currentTimeMillis() / 1000
+        val ours = recordings.items.value.filter { it.isActive() && it.receiverId == receiver.id && it.endEpochSec > nowSec }
+        val box = timers.filter { t -> t.state < 3 && t.end > nowSec }
+            .filter { t -> ours.none { kotlin.math.abs(it.beginEpochSec - t.begin) < 300 && com.enigmacast.domain.tuner.NowEvents.key(it.reference) == com.enigmacast.domain.tuner.NowEvents.key(t.reference) } }
+            .map { t ->
+                com.enigmacast.domain.recording.Recording(
+                    id = com.enigmacast.live.RecordingBook.BOX_TIMER + t.reference + "|" + t.begin,
+                    title = t.name, channelName = channelName(receiver, t.reference), reference = t.reference, eventId = t.eventId,
+                    beginEpochSec = t.begin, endEpochSec = t.end, place = RecordingPlace.RECEIVER,
+                    status = if (t.state == 2) RecordingStatus.RECORDING else RecordingStatus.SCHEDULED, receiverId = receiver.id,
+                )
+            }
+        val rules = kotlinx.coroutines.withTimeoutOrNull(2_000) { seriesRecorder.rules.first() }.orEmpty()
+            .filter { it.receiverId == receiver.id }
+            .associate { "${it.titleKey}|${it.serviceKey}" to (it.title to it.channelName) }
+        val (groups, _) = com.enigmacast.domain.series.SeriesGrouping.group(ours + box, rules)
+        series = groups
+        groupedKeys = groups.map { it.key }.toSet()
+        val rk = com.enigmacast.data.db.CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
+        val next = posters.toMutableMap()
+        for (g in groups) if (g.key !in next) {
+            next[g.key] = runCatching { cacheDao.seriesPoster(rk, com.enigmacast.domain.series.SeriesDetector.cleanTitle(g.title)) }.getOrNull()
+        }
+        posters = next
+    }
+
+    /** Cancels one episode (an app recording or a box timer). */
+    fun cancelEpisode(item: com.enigmacast.domain.recording.Recording) {
+        viewModelScope.launch {
+            if (item.id.startsWith(com.enigmacast.live.RecordingBook.BOX_TIMER)) recordings.deleteBox(item) else recordings.delete(item.id)
+            refresh()
+        }
+    }
+
+    /** Cancel all: timers, AutoTimer and the series rule. */
+    fun cancelSeries(group: com.enigmacast.domain.series.SeriesGroup) {
+        viewModelScope.launch {
+            seriesRecorder.cancelAll(group.key, group.episodes)
+            message = null
+            refresh()
+        }
     }
 
     private val channelNames = mutableMapOf<String, String>()

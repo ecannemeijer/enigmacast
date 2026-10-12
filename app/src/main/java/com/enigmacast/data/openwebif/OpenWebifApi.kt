@@ -350,6 +350,27 @@ class OpenWebifApi @Inject constructor(
         return OpenWebifJson.parseTimers(get(config, endpoints.timerList(config)))
     }
 
+    /** Null when the AutoTimer plugin is not installed (or answers no list). */
+    suspend fun autoTimers(config: ReceiverConfig): List<AutoTimerEntry>? {
+        val response = runCatching { execute(config, endpoints.autoTimerList(config), accept = "application/xml") }.getOrNull() ?: return null
+        if (response.code !in 200..299) return null
+        val body = response.bytes.toString(Charsets.UTF_8)
+        if (!body.contains("<autotimer", ignoreCase = true)) return null
+        return AutoTimerXml.parse(body)
+    }
+
+    /** Adds an AutoTimer and returns its id (looked up by name afterwards), or null when it failed. */
+    suspend fun addAutoTimer(config: ReceiverConfig, name: String, match: String, serviceReference: String): String? {
+        val body = runCatching { get(config, endpoints.autoTimerAdd(config, name, match, serviceReference)) }.getOrNull() ?: return null
+        if (!AutoTimerXml.success(body)) return null
+        val id = autoTimers(config)?.lastOrNull { it.name == name && it.match.equals(match, ignoreCase = true) }?.id
+        runCatching { get(config, endpoints.autoTimerParse(config)) }
+        return id ?: ""
+    }
+
+    suspend fun removeAutoTimer(config: ReceiverConfig, id: String): Boolean =
+        runCatching { AutoTimerXml.success(get(config, endpoints.autoTimerRemove(config, id))) }.getOrDefault(false)
+
     suspend fun deleteTimer(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long) {
         get(config, endpoints.timerDelete(config, serviceReference, begin, end))
     }

@@ -2,6 +2,12 @@ package com.enigmacast.ui.tuners
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.items
+import com.enigmacast.ui.soccer.trapFocus
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,6 +88,7 @@ fun TunerHomePanel(
     var chosen by remember { mutableStateOf<TunerCard?>(null) }
     var info by remember { mutableStateOf<Pair<String, String>?>(null) }
     var confirmStandby by remember { mutableStateOf(false) }
+    var openSeries by remember { mutableStateOf<com.enigmacast.domain.series.SeriesGroup?>(null) }
 
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
         Box(
@@ -95,6 +102,7 @@ fun TunerHomePanel(
             val chain = rememberFocusChain()
             val list = buildList {
                 add(PageSection("tuners") { TunersRow(model, left) { chosen = it } })
+                if (model.series.isNotEmpty()) add(PageSection("series") { SeriesRow(model, left) { openSeries = it } })
                 add(PageSection("schedule") { ScheduleBlock(model.schedule, left) })
             }
             chain.keys = list.map { it.key }
@@ -160,6 +168,16 @@ fun TunerHomePanel(
             choices = listOf(stringResource(R.string.home_standby_confirm), stringResource(R.string.cancel)),
             onChoose = { i -> confirmStandby = false; if (i == 0) model.standby() },
             onDismiss = { confirmStandby = false },
+        )
+    }
+    openSeries?.let { group ->
+        // Keep the dialog in step with refreshes (episodes cancelled meanwhile).
+        val live = model.series.firstOrNull { it.key == group.key } ?: group
+        SeriesEpisodesDialog(
+            group = live,
+            onCancelEpisode = { model.cancelEpisode(it) },
+            onCancelAll = { model.cancelSeries(live); openSeries = null },
+            onClose = { openSeries = null },
         )
     }
     info?.let { (title, message) ->
@@ -277,5 +295,121 @@ private fun ScheduleBlock(items: List<ScheduleItem>, left: Modifier) {
                 )
             }
         }
+    }
+}
+
+
+@Composable
+private fun SeriesRow(model: TunerHomeViewModel, left: Modifier, onOpen: (com.enigmacast.domain.series.SeriesGroup) -> Unit) {
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.home_series_title), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
+            items(model.series.size, key = { model.series[it].key }) { i ->
+                val group = model.series[i]
+                SeriesCard(group, model.posters[group.key], if (i == 0) left else Modifier) { onOpen(group) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeriesCard(group: com.enigmacast.domain.series.SeriesGroup, poster: String?, modifier: Modifier, onClick: () -> Unit) {
+    val focus = rememberTvFocus()
+    val time = remember { SimpleDateFormat("EEE HH:mm", Locale.getDefault()) }
+    Row(
+        modifier.width(320.dp).height(110.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus, onClick).padding(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.width(60.dp).height(90.dp).clip(RoundedCornerShape(8.dp)).background(EnigmaColors.CardBorder), contentAlignment = Alignment.Center) {
+            if (poster != null) {
+                coil3.compose.AsyncImage(
+                    model = com.enigmacast.data.tmdb.TmdbJson.image(poster, "w185"),
+                    contentDescription = group.title,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(group.title.take(2).uppercase(), color = EnigmaColors.Muted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(group.title, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(group.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1)
+            if (group.episodes.isEmpty()) {
+                Text(stringResource(R.string.series_rule_only), color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 2)
+            } else {
+                Text(androidx.compose.ui.res.pluralStringResource(R.plurals.home_series_count, group.episodes.size, group.episodes.size), color = EnigmaColors.Cyan, fontSize = 12.sp)
+                group.next?.let { Text(stringResource(R.string.home_series_next, time.format(Date(it.beginEpochSec * 1000))), color = EnigmaColors.Muted, fontSize = 12.sp) }
+            }
+        }
+    }
+}
+
+/** Episodes of a series card: OK on an episode cancels it (asks first); Cancel all asks, then removes everything. */
+@Composable
+private fun SeriesEpisodesDialog(
+    group: com.enigmacast.domain.series.SeriesGroup,
+    onCancelEpisode: (com.enigmacast.domain.recording.Recording) -> Unit,
+    onCancelAll: () -> Unit,
+    onClose: () -> Unit,
+) {
+    var askEpisode by remember { mutableStateOf<com.enigmacast.domain.recording.Recording?>(null) }
+    var askAll by remember { mutableStateOf(false) }
+    val time = remember { SimpleDateFormat("EEE d MMM  HH:mm", Locale.getDefault()) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        com.enigmacast.ui.theme.NavigationSoundsForWindow()
+        val first = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+        Column(
+            Modifier.width(560.dp).background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp)).padding(16.dp)
+                .trapFocus(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.home_series_dialog, group.title, group.channelName), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (group.episodes.isEmpty()) Text(stringResource(R.string.series_rule_only), color = EnigmaColors.Muted, fontSize = 13.sp)
+                group.episodes.forEachIndexed { i, ep ->
+                    val focus = rememberTvFocus()
+                    Row(
+                        Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier)
+                            .then(focusLook(focus.focused, CardShape)).tvClick(focus) { askEpisode = ep }.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(time.format(Date(ep.beginEpochSec * 1000)), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.width(150.dp))
+                        Text(ep.title, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(
+                            stringResource(if (ep.place == com.enigmacast.domain.recording.RecordingPlace.TV) R.string.myitems_on_tv else R.string.myitems_on_box),
+                            color = EnigmaColors.Subtle, fontSize = 11.sp,
+                        )
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                com.enigmacast.ui.components.EnigmaGlassButton(
+                    stringResource(R.string.series_cancel_all), { askAll = true },
+                    if (group.episodes.isEmpty()) Modifier.focusRequester(first) else Modifier,
+                )
+                com.enigmacast.ui.components.EnigmaGlassButton(stringResource(R.string.close), onClose)
+            }
+        }
+    }
+    askEpisode?.let { ep ->
+        TvChoiceDialog(
+            title = stringResource(R.string.series_cancel_episode),
+            message = ep.title + " · " + time.format(Date(ep.beginEpochSec * 1000)),
+            choices = listOf(stringResource(R.string.series_cancel_episode), stringResource(R.string.cancel)),
+            onChoose = { i -> askEpisode = null; if (i == 0) onCancelEpisode(ep) },
+            onDismiss = { askEpisode = null },
+        )
+    }
+    if (askAll) {
+        TvChoiceDialog(
+            title = stringResource(R.string.series_cancel_all_title, group.title),
+            message = stringResource(R.string.series_cancel_all_message),
+            choices = listOf(stringResource(R.string.series_cancel_all), stringResource(R.string.cancel)),
+            onChoose = { i -> askAll = false; if (i == 0) onCancelAll() },
+            onDismiss = { askAll = false },
+        )
     }
 }

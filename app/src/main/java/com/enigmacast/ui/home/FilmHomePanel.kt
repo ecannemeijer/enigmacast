@@ -101,9 +101,11 @@ fun FilmHomePanel(
     onRetreatTo: (FocusRequester) -> Unit,
     onWatch: (BouquetEntry) -> Unit,
     onContinue: (LastChannel) -> Unit,
-    model: HomeFilmsViewModel = hiltViewModel(),
+    series: Boolean = false,
+    model: HomeFilmsViewModel = hiltViewModel(key = if (series) "home-series" else "home-films"),
     settingsModel: SettingsViewModel = hiltViewModel(),
 ) {
+    model.setSeries(series)
     val settings by settingsModel.settings.collectAsStateWithLifecycle()
     val receiverId = settings.activeReceiver()?.id.orEmpty()
     val recents = ChannelMemory.recentFor(settings, receiverId)
@@ -116,7 +118,7 @@ fun FilmHomePanel(
     val shown = backdropFilm ?: hero
     val left = Modifier.focusProperties { left = menuFocus }
 
-    CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
+    CompositionLocalProvider(LocalEdgeLeft provides menuFocus, LocalSeriesPage provides series) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -297,7 +299,7 @@ private fun Hero(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.home_hero_label), color = EnigmaColors.Cyan, fontSize = EnigmaType.Label, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(if (LocalSeriesPage.current) R.string.series_hero_label else R.string.home_hero_label), color = EnigmaColors.Cyan, fontSize = EnigmaType.Label, fontWeight = FontWeight.SemiBold)
             if (airing) Badge(stringResource(R.string.home_live), LiveRed)
         }
         TitleOrLogo(film, height = 72.dp, fontSize = 36.sp)
@@ -571,7 +573,8 @@ private fun EmptyState(state: HomeFilmsViewModel.State, contentFocus: FocusReque
         HomeFilmsViewModel.State.NoReceiver -> stringResource(R.string.home_empty) to ""
         HomeFilmsViewModel.State.MissingKey -> stringResource(R.string.home_missing_key) to stringResource(R.string.home_missing_key_hint)
         HomeFilmsViewModel.State.NoBouquets -> stringResource(R.string.home_no_bouquets) to stringResource(R.string.home_no_bouquets_hint)
-        else -> stringResource(R.string.home_no_films) to stringResource(R.string.home_no_films_hint)
+        else -> if (LocalSeriesPage.current) stringResource(R.string.series_none) to stringResource(R.string.series_none_hint)
+        else stringResource(R.string.home_no_films) to stringResource(R.string.home_no_films_hint)
     }
     Column(Modifier.padding(start = 28.dp, top = 60.dp).fillMaxWidth(0.7f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
@@ -580,3 +583,6 @@ private fun EmptyState(state: HomeFilmsViewModel.State, contentFocus: FocusReque
         Spacer(Modifier.height(140.dp))
     }
 }
+
+/** True on the TV Series page, which reuses this layout. */
+internal val LocalSeriesPage = androidx.compose.runtime.staticCompositionLocalOf { false }

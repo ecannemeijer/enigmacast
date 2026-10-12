@@ -936,4 +936,26 @@
     <string name="myitems_recorded">Opgenomen %1$s</string>
     <string name="myitems_on_box">Op de box</string>
     <string name="myitems_on_tv">Op deze tv</string>
+    <string name="nav_series">Series</string>
+    <string name="series_hero_label">SERIES OP TV</string>
+    <string name="series_none">Geen series gevonden in de gids</string>
+    <string name="series_none_hint">Series worden met TMDB gezocht in de gids van je Home-boeketten. Vernieuw na de volgende synchronisatie.</string>
+    <string name="record_all_upcoming">Alle komende opnemen</string>
+    <string name="record_all_where">Alle komende afleveringen van “%1$s” opnemen op %2$s</string>
+    <string name="record_all_none">Geen andere afleveringen in de gids; deze wordt opgenomen.</string>
+    <string name="record_all_done">%1$d afleveringen van “%2$s” ingepland</string>
+    <string name="record_all_autotimer">AutoTimer op de box aangemaakt voor “%1$s”</string>
+    <string name="home_series_title">Serie-opnames</string>
+    <string name="home_series_next">Volgende: %1$s</string>
+    <string name="home_series_dialog">%1$s · %2$s</string>
+    <string name="series_cancel_all">Alles annuleren</string>
+    <string name="series_cancel_all_title">Alle opnames van “%1$s” annuleren?</string>
+    <string name="series_cancel_all_message">Alle geplande afleveringen en de serieregel worden verwijderd. Al opgenomen afleveringen blijven.</string>
+    <string name="series_cancel_episode">Deze aflevering annuleren</string>
+    <string name="series_cancelled">Serie-opnames geannuleerd</string>
+    <string name="series_rule_only">Serieregel, nog geen afleveringen in de gids</string>
+    <string name="series_autotimer">AutoTimer op de box</string>
+    <string name="close">Sluiten</string>
+    <plurals name="series_seasons"><item quantity="one">%d seizoen</item><item quantity="other">%d seizoenen</item></plurals>
+    <plurals name="home_series_count"><item quantity="one">%d aflevering gepland</item><item quantity="other">%d afleveringen gepland</item></plurals>
 </resources>

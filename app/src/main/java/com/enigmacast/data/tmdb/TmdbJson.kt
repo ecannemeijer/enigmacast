@@ -77,6 +77,71 @@ object TmdbJson {
         )
     }
 
+    /** `/search/tv`: same hit shape as films (name → title, first_air_date → year). */
+    fun parseTvSearch(body: String): List<TmdbSearchHit> {
+        val root = obj(body) ?: return emptyList()
+        val results = root["results"] as? JsonArray ?: return emptyList()
+        return results.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val id = item.int("id") ?: return@mapNotNull null
+            TmdbSearchHit(
+                id = id,
+                title = item.str("name").orEmpty(),
+                originalTitle = item.str("original_name").orEmpty(),
+                year = yearOf(item.str("first_air_date")),
+                voteAverage = item.double("vote_average") ?: 0.0,
+                voteCount = item.int("vote_count") ?: 0,
+                popularity = item.double("popularity") ?: 0.0,
+                posterPath = item.str("poster_path"),
+                backdropPath = item.str("backdrop_path"),
+                overview = item.str("overview").orEmpty(),
+                genreIds = (item["genre_ids"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() }.orEmpty(),
+            )
+        }
+    }
+
+    /** `/tv/{id}?append_to_response=aggregate_credits,content_ratings,images` as a [TmdbMovie] with isSeries. */
+    fun parseTv(body: String, country: String, language: String): TmdbMovie? {
+        val root = obj(body) ?: return null
+        val id = root.int("id") ?: return null
+        val genres = (root["genres"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        val cast = ((root["aggregate_credits"] as? JsonObject)?.get("cast") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+            .sortedBy { it.int("order") ?: Int.MAX_VALUE }
+            .take(15)
+            .map { member ->
+                val role = (member["roles"] as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.str("character") }.orEmpty()
+                TmdbCastMember(member.str("name").orEmpty(), role, member.str("profile_path"))
+            }
+            .filter { it.name.isNotBlank() }
+        val creators = (root["created_by"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.str("name") }.orEmpty()
+        val runtime = (root["episode_run_time"] as? JsonArray)?.firstNotNullOfOrNull { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() }
+        val ratings = ((root["content_ratings"] as? JsonObject)?.get("results") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        val rating = (ratings.firstOrNull { it.str("iso_3166_1") == country } ?: ratings.firstOrNull { it.str("iso_3166_1") == "US" })?.str("rating").orEmpty()
+        return TmdbMovie(
+            id = com.enigmacast.domain.series.SeriesIds.toRow(id),
+            title = root.str("name").orEmpty(),
+            originalTitle = root.str("original_name").orEmpty(),
+            year = yearOf(root.str("first_air_date")),
+            overview = root.str("overview").orEmpty(),
+            tagline = root.str("tagline").orEmpty(),
+            runtimeMin = runtime?.takeIf { it > 0 },
+            voteAverage = root.double("vote_average") ?: 0.0,
+            voteCount = root.int("vote_count") ?: 0,
+            popularity = root.double("popularity") ?: 0.0,
+            posterPath = root.str("poster_path"),
+            backdropPath = root.str("backdrop_path"),
+            logoPath = logo(root["images"] as? JsonObject, language),
+            genres = genres.mapNotNull { it.str("name") },
+            genreIds = genres.mapNotNull { it.int("id") },
+            certification = rating,
+            directors = creators,
+            cast = cast,
+            isSeries = true,
+            seasons = root.int("number_of_seasons"),
+            episodes = root.int("number_of_episodes"),
+        )
+    }
+
     /** Raster logos only (Coil cannot draw SVG here); the viewer's language first, then English, then any. */
     private fun logo(images: JsonObject?, language: String): String? {
         val logos = (images?.get("logos") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()

@@ -939,4 +939,26 @@
     <string name="myitems_recorded">Recorded %1$s</string>
     <string name="myitems_on_box">On the box</string>
     <string name="myitems_on_tv">On this TV</string>
+    <string name="nav_series">TV Series</string>
+    <string name="series_hero_label">SERIES ON TV</string>
+    <string name="series_none">No series found in the guide</string>
+    <string name="series_none_hint">Series are matched from the guide of your Home bouquets with TMDB. Refresh after the next sync.</string>
+    <string name="record_all_upcoming">Record all upcoming</string>
+    <string name="record_all_where">Record all upcoming episodes of “%1$s” on %2$s</string>
+    <string name="record_all_none">No other episodes found in the guide; this one is recorded.</string>
+    <string name="record_all_done">%1$d episodes of “%2$s” scheduled</string>
+    <string name="record_all_autotimer">AutoTimer created on the box for “%1$s”</string>
+    <string name="home_series_title">Series recordings</string>
+    <string name="home_series_next">Next: %1$s</string>
+    <string name="home_series_dialog">%1$s · %2$s</string>
+    <string name="series_cancel_all">Cancel all</string>
+    <string name="series_cancel_all_title">Cancel all recordings of “%1$s”?</string>
+    <string name="series_cancel_all_message">All scheduled episodes and the series rule are removed. Episodes already recorded stay.</string>
+    <string name="series_cancel_episode">Cancel this episode</string>
+    <string name="series_cancelled">Series recordings cancelled</string>
+    <string name="series_rule_only">Series rule, no episodes in the guide yet</string>
+    <string name="series_autotimer">AutoTimer on the box</string>
+    <string name="close">Close</string>
+    <plurals name="series_seasons"><item quantity="one">%d season</item><item quantity="other">%d seasons</item></plurals>
+    <plurals name="home_series_count"><item quantity="one">%d episode scheduled</item><item quantity="other">%d episodes scheduled</item></plurals>
 </resources>

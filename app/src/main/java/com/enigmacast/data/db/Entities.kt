@@ -94,7 +94,14 @@ data class HomeFilmRow(
     val year: Int?,
     val tmdbId: Int,
     val language: String,
+    /** "film" or "series" (then [tmdbId] is the negative TMDB TV id, see SeriesIds). */
+    @androidx.room.ColumnInfo(defaultValue = "film") val kind: String = HomeKinds.FILM,
 )
+
+object HomeKinds {
+    const val FILM = "film"
+    const val SERIES = "series"
+}
 
 @Entity(tableName = "sync_state", primaryKeys = ["receiverKey", "kind"])
 data class SyncStateRow(

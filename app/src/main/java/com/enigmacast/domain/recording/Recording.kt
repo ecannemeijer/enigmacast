@@ -50,4 +50,8 @@ data class RecordAsk(
     val event: GuideEvent,
     val channelName: String,
     val place: RecordingTarget,
+    /** Later episodes of the same series on that channel in the cached guide (0: not a series). */
+    val upcoming: Int = 0,
+    /** "Record all upcoming": this one, the others in the guide, and a series rule for new ones. */
+    val allUpcoming: Boolean = false,
 )

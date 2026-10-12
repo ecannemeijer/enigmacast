@@ -105,15 +105,15 @@ interface CacheDao {
     suspend fun purgeMatches(nowMs: Long)
 
     // Home films
-    @Query("DELETE FROM home_films WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec")
-    suspend fun deleteHomeFilms(receiverKey: String, fromSec: Long, toSec: Long)
+    @Query("DELETE FROM home_films WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec AND kind = :kind")
+    suspend fun deleteHomeFilms(receiverKey: String, fromSec: Long, toSec: Long, kind: String = HomeKinds.FILM)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHomeFilms(rows: List<HomeFilmRow>)
 
     @Transaction
-    suspend fun replaceHomeFilms(receiverKey: String, fromSec: Long, toSec: Long, rows: List<HomeFilmRow>) {
-        deleteHomeFilms(receiverKey, fromSec, toSec)
+    suspend fun replaceHomeFilms(receiverKey: String, fromSec: Long, toSec: Long, rows: List<HomeFilmRow>, kind: String = HomeKinds.FILM) {
+        deleteHomeFilms(receiverKey, fromSec, toSec, kind)
         rows.chunked(500).forEach { insertHomeFilms(it) }
     }
 
@@ -125,8 +125,15 @@ interface CacheDao {
     )
     suspend fun filmTitles(receiverKey: String, fromSec: Long): List<FilmTitle>
 
-    @Query("SELECT * FROM home_films WHERE receiverKey = :receiverKey AND endSec > :fromSec AND beginSec < :toSec ORDER BY beginSec")
-    fun observeHomeFilms(receiverKey: String, fromSec: Long, toSec: Long): Flow<List<HomeFilmRow>>
+    @Query("SELECT * FROM home_films WHERE receiverKey = :receiverKey AND endSec > :fromSec AND beginSec < :toSec AND kind = :kind ORDER BY beginSec")
+    fun observeHomeFilms(receiverKey: String, fromSec: Long, toSec: Long, kind: String = HomeKinds.FILM): Flow<List<HomeFilmRow>>
+
+    /** Poster of a matched series by its cleaned EPG title (for Home's series cards). */
+    @Query(
+        "SELECT m.posterPath FROM home_films h JOIN tmdb_movies m ON m.tmdbId = h.tmdbId AND m.language = h.language " +
+            "WHERE h.receiverKey = :receiverKey AND h.kind = 'series' AND h.searchTitle = :searchTitle AND m.posterPath IS NOT NULL LIMIT 1",
+    )
+    suspend fun seriesPoster(receiverKey: String, searchTitle: String): String?
 
     @Query("DELETE FROM home_films WHERE endSec < :beforeSec")
     suspend fun purgeHomeFilms(beforeSec: Long)

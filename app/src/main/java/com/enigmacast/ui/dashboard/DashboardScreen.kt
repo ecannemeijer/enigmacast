@@ -129,6 +129,7 @@ import kotlinx.coroutines.launch
 private enum class DashSection {
     Home,
     Movies,
+    Series,
     Soccer,
     Stream,
     Guide,
@@ -200,6 +201,8 @@ fun DashboardScreen(
     val homeContentFocus = remember { FocusRequester() }
     val moviesFocus = remember { FocusRequester() }
     val moviesContentFocus = remember { FocusRequester() }
+    val seriesFocus = remember { FocusRequester() }
+    val seriesContentFocus = remember { FocusRequester() }
     val soccerFocus = remember { FocusRequester() }
     val soccerContentFocus = remember { FocusRequester() }
     val streamFocus = remember { FocusRequester() }
@@ -231,6 +234,7 @@ fun DashboardScreen(
     fun sectionMenu(): FocusRequester = when (section) {
         DashSection.Home -> homeFocus
         DashSection.Movies -> moviesFocus
+        DashSection.Series -> seriesFocus
         DashSection.Soccer -> soccerFocus
         DashSection.Stream -> streamFocus
         DashSection.Guide -> guideFocus
@@ -400,6 +404,17 @@ fun DashboardScreen(
                     onClick = { enterSection(DashSection.Movies) },
                 )
                 NavItem(
+                    icon = EnigmaIcons.Series,
+                    label = stringResource(R.string.nav_series),
+                    selected = section == DashSection.Series,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 4,
+                    modifier = Modifier
+                        .focusRequester(seriesFocus)
+                        .focusProperties { right = if (section == DashSection.Series) seriesContentFocus else FocusRequester.Cancel },
+                    onClick = { enterSection(DashSection.Series) },
+                )
+                NavItem(
                     icon = EnigmaIcons.Soccer,
                     label = stringResource(R.string.nav_soccer),
                     selected = section == DashSection.Soccer,
@@ -530,6 +545,30 @@ fun DashboardScreen(
                         com.enigmacast.ui.home.FilmHomePanel(
                             contentFocus = moviesContentFocus,
                             menuFocus = moviesFocus,
+                            onRetreatTo = retreat,
+                            onWatch = { entry ->
+                                val known = guideModel.channels.firstOrNull {
+                                    BouquetChannels.sameService(it.reference, entry.reference)
+                                } ?: entry
+                                guideModel.tune(known, onStream, onStream)
+                            },
+                            onContinue = { last ->
+                                val entry = guideModel.channels.firstOrNull {
+                                    BouquetChannels.sameService(it.reference, last.reference)
+                                } ?: BouquetEntry(name = last.name, reference = last.reference)
+                                guideModel.tune(entry, onStream, onStream)
+                            },
+                        )
+                        }
+                        DashSection.Series -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            seriesContentFocus.requestWhenReady()
+                        }
+                        com.enigmacast.ui.home.FilmHomePanel(
+                            series = true,
+                            contentFocus = seriesContentFocus,
+                            menuFocus = seriesFocus,
                             onRetreatTo = retreat,
                             onWatch = { entry ->
                                 val known = guideModel.channels.firstOrNull {

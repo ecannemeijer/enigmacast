@@ -126,6 +126,20 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/timeradd?sRef=${encode(serviceReference)}&begin=$begin&end=$end&name=${encode(name)}&description=${encode(description)}")
     }
 
+    /** AutoTimer plugin (OpenWebif proxies it at /autotimer): list, add, remove, run now. */
+    fun autoTimerList(config: ReceiverConfig): String = api(config, "/autotimer")
+
+    fun autoTimerAdd(config: ReceiverConfig, name: String, match: String, serviceReference: String, justplay: Boolean = false): String =
+        api(
+            config,
+            "/autotimer/edit?name=${encode(name)}&match=${encode(match)}&enabled=1&justplay=${if (justplay) 1 else 0}" +
+                "&searchType=exact&searchCase=insensitive&services=${encode(serviceReference)}&avoidDuplicateDescription=1",
+        )
+
+    fun autoTimerRemove(config: ReceiverConfig, id: String): String = api(config, "/autotimer/remove?id=${encode(id)}")
+
+    fun autoTimerParse(config: ReceiverConfig): String = api(config, "/autotimer/parse")
+
     /** Removes a timer. [begin] and [end] are the unix times OpenWebif stored. */
     fun timerDelete(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long): String {
         return api(config, "/api/timerdelete?sRef=${encode(serviceReference)}&begin=$begin&end=$end")

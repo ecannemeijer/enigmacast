@@ -85,6 +85,14 @@ class HomeFilmsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     private val clock = MutableStateFlow(System.currentTimeMillis())
+    private val kind = MutableStateFlow(com.enigmacast.data.db.HomeKinds.FILM)
+    /** True on the TV Series page. */
+    val series: Boolean get() = kind.value == com.enigmacast.data.db.HomeKinds.SERIES
+
+    /** The TV Series page uses its own instance of this view model with series rows. */
+    fun setSeries(on: Boolean) {
+        kind.value = if (on) com.enigmacast.data.db.HomeKinds.SERIES else com.enigmacast.data.db.HomeKinds.FILM
+    }
     private val zone: ZoneId get() = ZoneId.systemDefault()
     private var noticeJob: Job? = null
     private var noBouquets = false
@@ -100,8 +108,8 @@ class HomeFilmsViewModel @Inject constructor(
         val receiver = settingsRepository.settings.map { it.activeReceiver() }.distinctUntilChanged { a, b -> a?.id == b?.id && a?.host == b?.host }
         val window = clock.map { HomeClock.queryWindow(it, zone) }.distinctUntilChanged()
         viewModelScope.launch {
-            combine(receiver, window) { r, w -> r to w }
-                .flatMapLatest { (r, w) ->
+            combine(receiver, window, kind) { r, w, k -> Triple(r, w, k) }
+                .flatMapLatest { (r, w, k) ->
                     if (r == null) {
                         flowOf<Pair<List<HomeFilm>, Boolean>?>(null)
                     } else {
@@ -109,7 +117,7 @@ class HomeFilmsViewModel @Inject constructor(
                         repository.ensurePeriodic()
                         repository.syncNow(force = false)
                         val key = repository.receiverKey(r)
-                        repository.films(key, w.first, w.second).combine(repository.syncState(key)) { films, states ->
+                        repository.films(key, w.first, w.second, k).combine(repository.syncState(key)) { films, states ->
                             val filmsDone = states.any { it.kind == com.enigmacast.domain.sync.SyncKind.FILMS.name && it.lastAttemptMs > 0 }
                             films to filmsDone
                         }.combine(repository.bouquetChoice(key)) { pair, choice ->
@@ -131,7 +139,14 @@ class HomeFilmsViewModel @Inject constructor(
             rows = emptyList()
             return
         }
-        val (top, list) = HomeClock.compute(films, nowMs, zone)
+        // A series airs many times: show each show once per channel, its next (or current) episode.
+        val shown = if (series) {
+            val nowSec = nowMs / 1000
+            films.filter { it.event.endEpochSec > nowSec }
+                .sortedBy { it.event.beginEpochSec }
+                .distinctBy { it.movie.id to com.enigmacast.domain.tuner.NowEvents.key(it.event.reference) }
+        } else films
+        val (top, list) = HomeClock.compute(shown, nowMs, zone)
         hero = top
         rows = list
         state = when {
@@ -186,10 +201,10 @@ class HomeFilmsViewModel @Inject constructor(
         }
     }
 
-    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget) {
+    fun confirmRecord(place: com.enigmacast.domain.model.RecordingTarget, all: Boolean = false) {
         val ask = recordAsk ?: return
         recordAsk = null
-        viewModelScope.launch { showNotice(recordings.schedule(ask.copy(place = place))) }
+        viewModelScope.launch { showNotice(recordings.schedule(ask.copy(place = place, allUpcoming = all))) }
     }
 
     fun dismissRecord() {

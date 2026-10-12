@@ -1,6 +1,8 @@
 package com.enigmacast.ui.recording
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.enigmacast.R
 import com.enigmacast.domain.model.RecordingTarget
@@ -20,7 +22,7 @@ private val ClockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm"
 @Composable
 fun RecordConfirmDialog(
     ask: RecordAsk,
-    onConfirm: (RecordingTarget) -> Unit,
+    onConfirm: (RecordingTarget, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val zone = ZoneId.systemDefault()
@@ -28,14 +30,39 @@ fun RecordConfirmDialog(
     val end = Instant.ofEpochSecond(ask.event.endEpochSec).atZone(zone)
     val whenText = "${start.format(DayFormat)}  ${start.format(ClockFormat)} – ${end.format(ClockFormat)}"
     val title = ask.event.title.ifBlank { ask.channelName }
+    // "Record all upcoming" asks where next (TV or box), in a second step.
+    var all by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    if (all) {
+        TvChoiceDialog(
+            title = stringResource(R.string.record_all_upcoming),
+            message = stringResource(R.string.record_all_where, com.enigmacast.domain.series.SeriesDetector.cleanTitle(title).ifBlank { title }, ask.channelName),
+            choices = listOf(stringResource(R.string.record_on_device), stringResource(R.string.record_on_box), stringResource(R.string.cancel)),
+            onChoose = { i ->
+                when (i) {
+                    0 -> onConfirm(RecordingTarget.TV, true)
+                    1 -> onConfirm(RecordingTarget.RECEIVER, true)
+                    else -> all = false
+                }
+            },
+            onDismiss = { all = false },
+        )
+        return
+    }
+    val choices = buildList {
+        add(stringResource(R.string.record_on_device))
+        add(stringResource(R.string.record_on_box))
+        if (ask.upcoming > 0) add(stringResource(R.string.record_all_upcoming))
+        add(stringResource(R.string.cancel))
+    }
     TvChoiceDialog(
         title = stringResource(R.string.epg_record),
         message = stringResource(R.string.record_choose, title, whenText),
-        choices = listOf(stringResource(R.string.record_on_device), stringResource(R.string.record_on_box), stringResource(R.string.cancel)),
+        choices = choices,
         onChoose = { i ->
-            when (i) {
-                0 -> onConfirm(RecordingTarget.TV)
-                1 -> onConfirm(RecordingTarget.RECEIVER)
+            when {
+                i == 0 -> onConfirm(RecordingTarget.TV, false)
+                i == 1 -> onConfirm(RecordingTarget.RECEIVER, false)
+                i == 2 && ask.upcoming > 0 -> all = true
                 else -> onDismiss()
             }
         },

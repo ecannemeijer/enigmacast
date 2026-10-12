@@ -57,6 +57,18 @@ class TmdbHttp @Inject constructor(
         ),
     )
 
+    override suspend fun searchTv(query: String, language: String): String? =
+        get("/search/tv", listOf("query" to query, "language" to language, "include_adult" to "false"))
+
+    override suspend fun tv(id: Int, language: String): String? = get(
+        "/tv/$id",
+        listOf(
+            "language" to language,
+            "append_to_response" to "aggregate_credits,content_ratings,images",
+            "include_image_language" to "${language.take(2)},en,null",
+        ),
+    )
+
     private suspend fun get(path: String, params: List<Pair<String, String>>): String? {
         val key = apiKey()
         if (key.isBlank()) return null

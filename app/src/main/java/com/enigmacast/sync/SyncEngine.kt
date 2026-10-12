@@ -61,6 +61,7 @@ class SyncEngine @Inject constructor(
     private val settings: SyncSettings,
     private val country: CountryDetector,
     private val bouquetStore: com.enigmacast.data.tmdb.HomeBouquetStore,
+    private val seriesRecorder: dagger.Lazy<com.enigmacast.live.SeriesRecorder>,
 ) {
     private val gate = Mutex()
     private val _progress = MutableStateFlow<SyncProgress?>(null)
@@ -101,6 +102,9 @@ class SyncEngine @Inject constructor(
                 attempt(rk, SyncKind.FILMS) { syncFilms(rk, today, horizonSec, zone) }
                 changed = true
             }
+            // Series rules: add timers for episodes that the new guide shows.
+            runCatching { seriesRecorder.get().rescan(receiver) }
+                .onFailure { EnigmaLog.service("series rescan failed: ${it.javaClass.simpleName}") }
             changed
         } finally {
             _progress.value = null
@@ -181,6 +185,33 @@ class SyncEngine @Inject constructor(
         }
         dao.replaceHomeFilms(rk, today.startSec - 24 * 3600, horizonSec + 24 * 3600, rows)
         EnigmaLog.service("sync films receiver=$rk country=$countryCode candidates=${candidates.size} matched=${rows.size}")
+        syncSeries(rk, today, horizonSec, zone, countryCode, language, names)
+    }
+
+    /** TV Series page: recurring / episode-marked programmes matched with TMDB TV. */
+    private suspend fun syncSeries(
+        rk: String,
+        today: DayWindow,
+        horizonSec: Long,
+        zone: ZoneId,
+        countryCode: String,
+        language: String,
+        names: Map<String, BouquetChannel>,
+    ) {
+        val nowSec = System.currentTimeMillis() / 1000
+        val events = dao.events(rk, nowSec - 4 * 3600, horizonSec).map { CacheMappers.event(it) }
+        val candidates = com.enigmacast.domain.series.SeriesDetector.candidates(events) { e ->
+            names[com.enigmacast.domain.tuner.NowEvents.key(e.reference)]?.let { it.name to it.picon }
+        }
+        val shows = com.enigmacast.domain.series.HomeSeriesBuilder(tmdb, RoomFilmCache(dao, cacheMs())).build(candidates, countryCode, language) { done, total ->
+            step(rk, 99, R.string.sync_step_films)
+        }
+        val rows = shows.map { film ->
+            val day = Instant.ofEpochSecond(film.event.beginEpochSec).atZone(zone).toLocalDate().toString()
+            CacheMappers.homeFilmRow(rk, film, day, language, com.enigmacast.data.db.HomeKinds.SERIES)
+        }
+        dao.replaceHomeFilms(rk, today.startSec - 24 * 3600, horizonSec + 24 * 3600, rows, com.enigmacast.data.db.HomeKinds.SERIES)
+        EnigmaLog.service("sync series receiver=$rk candidates=${candidates.size} matched=${rows.size}")
     }
 
     /** How long TMDB answers stay valid: the films interval, at least 6 h; a week when Off. */
