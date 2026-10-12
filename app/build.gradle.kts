@@ -18,6 +18,7 @@ android {
         versionName = "1.0.0-beta.22"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey()}\"")
         buildConfigField("String", "FOOTBALL_DATA_API_KEY", "\"${localProperty("FOOTBALL_DATA_API_KEY")}\"")
+        buildConfigField("String", "PITCH_API_KEY", "\"${localProperty("PITCH_API_KEY")}\"")
     }
 
     buildTypes {
