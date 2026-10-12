@@ -171,6 +171,37 @@ class OwnTunerSession @Inject constructor(
 
     fun setConflict(value: com.enigmacast.domain.tuner.TunerConflict?) { _conflict.value = value }
 
+    /** Reads the running recordings from the box now (set by [RecordingTunerGuard]). */
+    var fetchRunningRecordings: (suspend () -> List<PlannedRecording>)? = null
+
+    /** The running recordings, read from the box at once rather than from the last 30 s poll. */
+    private suspend fun freshRunning(): List<PlannedRecording> {
+        val fresh = runCatching { fetchRunningRecordings?.invoke() }.getOrNull()
+        if (fresh != null) runningRecordings = fresh
+        return runningRecordings.ifEmpty {
+            com.enigmacast.domain.tuner.RecordingConflicts.fromSnapshot(lastSnapshot) { channelNameFor(it, it) }
+        }
+    }
+
+    /** A stream did not start: when recordings run on other transponders, offer them instead of "no tuner free". */
+    private var conflictRaisedAtZap = -1
+
+    private suspend fun conflictAfterFailure(channel: BouquetEntry, health: StreamHealth): Boolean {
+        val zap = _state.value.zapCount
+        if (conflictRaisedAtZap == zap) return true
+        val running = freshRunning()
+        val blockers = com.enigmacast.domain.tuner.RecordingConflicts.afterStreamFailure(health, running, channel.reference)
+        EnigmaLog.service("stream failure $health on ${channel.name}: running=${running.size} blockers=${blockers.size}")
+        if (blockers.isEmpty()) return false
+        conflictRaisedAtZap = zap
+        // Stop retrying a stream that cannot get a tuner; the dialog decides what comes next.
+        streaming = false
+        playback.stopForZap()
+        _conflict.value = com.enigmacast.domain.tuner.TunerConflict(channel, blockers)
+        _state.update { it.copy(tuner = TunerState(TunerStatus.FULL, blockedMessage(blockers.first()))) }
+        return true
+    }
+
     private fun raiseConflict(channel: BouquetEntry): Boolean {
         val blockers = com.enigmacast.domain.tuner.RecordingConflicts.blockers(runningRecordings, channel.reference)
         if (blockers.isEmpty()) return false
@@ -586,6 +617,8 @@ class OwnTunerSession @Inject constructor(
         if (verdict is TunerVerdict.Full) {
             if (tryNextBox(channel)) return
             restoreOrigin()
+            EnigmaLog.service("tuners full for ${channel.name}")
+            freshRunning()
             val recording = runningRecordings.firstOrNull { !RecordingGuard.sameTransponder(it.reference, channel.reference) }
             val message = recording?.let(::blockedMessage) ?: fullMessage(verdict.used, verdict.total)
             raiseConflict(channel)
@@ -632,6 +665,7 @@ class OwnTunerSession @Inject constructor(
                     startJob = scope.launch {
                         if (tryNextBox(channel)) return@launch
                         restoreOrigin()
+                        if (conflictAfterFailure(channel, health)) return@launch
                         val refused = TunerAvailability.refused(lastSnapshot, channel.reference, lastOwnAddresses)
                         _state.update {
                             it.copy(tuner = TunerState(TunerStatus.FULL, fullMessage(refused.used, refused.total), refused.used, refused.total, refused.users))
@@ -667,6 +701,11 @@ class OwnTunerSession @Inject constructor(
             health == StreamHealth.INTERNET_UNSUPPORTED || health == StreamHealth.INTERNET_FAILED
         ) {
             streaming = false
+        }
+        if (health == StreamHealth.NO_PICTURE || health == StreamHealth.FAILED) {
+            _state.value.channel?.takeIf { !ServiceStreams.isInternet(it.reference) }?.let { channel ->
+                scope.launch { conflictAfterFailure(channel, health) }
+            }
         }
         if (tuner.autoRetry && restarts.exhausted) {
             // The automatic tries are used up: say so now and wait for the user.

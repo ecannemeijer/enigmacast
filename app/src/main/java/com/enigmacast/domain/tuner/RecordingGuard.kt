@@ -35,6 +35,20 @@ object RecordingConflicts {
             .distinctBy { Triple(it.reference, it.beginEpochSec, it.recordingId) }
             .sortedBy { it.untilEpochSec }
     }
+
+    /**
+     * A stream that failed to start while recordings run: offer them, whatever `/api/about`
+     * says about free tuners. A tuner listed as free may not reach the satellite (loop-through,
+     * no cable on that input, other position), so the box's free count cannot be trusted here.
+     */
+    fun afterStreamFailure(health: StreamHealth, running: List<PlannedRecording>, target: String): List<PlannedRecording> =
+        if (health in START_FAILURES) blockers(running, target) else emptyList()
+
+    /** Running recordings from the box's timer list (state 2, not zap-only) when the guard has none yet. */
+    fun fromSnapshot(snapshot: TunerSnapshot?, nameOf: (String) -> String): List<PlannedRecording> =
+        snapshot?.recordingReferences.orEmpty().distinct().map { PlannedRecording(it, nameOf(it), 0, 0) }
+
+    val START_FAILURES = setOf(StreamHealth.NO_TUNER, StreamHealth.NO_PICTURE, StreamHealth.FAILED)
 }
 
 sealed interface StartAction {

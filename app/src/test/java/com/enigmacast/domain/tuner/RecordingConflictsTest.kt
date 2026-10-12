@@ -27,3 +27,23 @@ class RecordingConflictsTest {
         assertEquals(2000L, news.untilEpochSec)
     }
 }
+
+class StreamFailureConflictTest {
+    private val rai1 = "1:0:19:D49:1450:13E:820000:0:0:0:"
+    private val npo1 = "1:0:19:17C0:44D:1:C00000:0:0:0:"
+    private val rec = PlannedRecording(rai1, "Rai 1 HD", 1000, 5000, "La volta buona", timer = true)
+
+    @Test fun failureWithFreeTunerClaimStillOffersRecording() {
+        // Box state from the field: tuner A records Rai 1, tuner B listed free, no streams.
+        for (h in listOf(StreamHealth.NO_TUNER, StreamHealth.NO_PICTURE, StreamHealth.FAILED)) {
+            assertEquals(listOf(rec), RecordingConflicts.afterStreamFailure(h, listOf(rec), npo1))
+        }
+        assertTrue(RecordingConflicts.afterStreamFailure(StreamHealth.PLAYING, listOf(rec), npo1).isEmpty())
+        assertTrue(RecordingConflicts.afterStreamFailure(StreamHealth.NO_TUNER, emptyList(), npo1).isEmpty())
+    }
+
+    @Test fun snapshotFallbackNamesRunningRecordings() {
+        val snap = TunerSnapshot(listOf(TunerSlot(0, "A", "Si2166D (DVB-S2X)", recording = "13.0° E / Rai 1 HD"), TunerSlot(1, "B", "Si2166D (DVB-S2X)")), inStandby = true, recordingReferences = listOf(rai1))
+        assertEquals(listOf(PlannedRecording(rai1, "Rai 1 HD", 0, 0)), RecordingConflicts.fromSnapshot(snap) { "Rai 1 HD" })
+    }
+}

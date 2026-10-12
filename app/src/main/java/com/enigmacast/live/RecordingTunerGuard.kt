@@ -45,6 +45,11 @@ class RecordingTunerGuard @Inject constructor(
     fun invalidate() { timersAt = 0L }
 
     fun start() {
+        session.fetchRunningRecordings = {
+            invalidate()
+            tick()
+            session.runningRecordings
+        }
         if (job?.isActive == true) return
         job = scope.launch {
             while (isActive) {
