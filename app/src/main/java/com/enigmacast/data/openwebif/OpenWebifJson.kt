@@ -342,7 +342,13 @@ internal object OpenWebifJson {
         val end: Long,
         val state: Int,
         val eventId: Int,
-    )
+        /** Seconds the box adds before/after the programme (begin/end include them). */
+        val marginBefore: Long = 0,
+        val marginAfter: Long = 0,
+    ) {
+        val eventBegin: Long get() = begin + marginBefore
+        val eventEnd: Long get() = (end - marginAfter).coerceAtLeast(eventBegin)
+    }
 
     data class ReceiverMovie(
         val name: String,
@@ -353,6 +359,12 @@ internal object OpenWebifJson {
         val lengthSec: Long = 0L,
         val description: String = "",
     )
+
+    /** openATV sends seconds (180); some images send minutes (3). Small values are read as minutes. */
+    internal fun marginSec(raw: String?): Long {
+        val v = raw?.toDoubleOrNull()?.toLong() ?: return 0L
+        return if (v in 1..59) v * 60 else v.coerceAtLeast(0)
+    }
 
     fun parseTimers(body: String): List<ReceiverTimer> {
         val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
@@ -367,6 +379,8 @@ internal object OpenWebifJson {
                 end = item.primitive("end")?.toLongOrNull() ?: 0L,
                 state = item.primitive("state")?.toIntOrNull() ?: 0,
                 eventId = item.primitive("eit")?.toIntOrNull() ?: -1,
+                marginBefore = marginSec(item.primitive("marginbefore")),
+                marginAfter = marginSec(item.primitive("marginafter")),
             )
         }
     }

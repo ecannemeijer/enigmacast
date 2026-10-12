@@ -48,11 +48,22 @@ class SeriesRecorder @Inject constructor(
     /** Later episodes of [event]'s series on the same channel, from the cached guide. */
     suspend fun upcoming(event: GuideEvent): List<GuideEvent> {
         val receiver = settings.current().activeReceiver() ?: return emptyList()
-        val nowSec = System.currentTimeMillis() / 1000
-        val rows = dao.serviceEvents(rk(receiver), NowEvents.key(event.reference), nowSec)
         val titleKey = titleKey(event.title)
-        return rows.map { CacheMappers.event(it) }
+        return channelGuide(receiver, event.reference)
             .filter { it.beginEpochSec != event.beginEpochSec && it.beginEpochSec > event.beginEpochSec - 60 && titleKey(it.title) == titleKey }
+    }
+
+    /**
+     * The channel's coming programmes, up to [HORIZON_SEC]: the synced cache (often only 2 days)
+     * plus the box's own guide for that one service, which usually reaches a week or more.
+     */
+    private suspend fun channelGuide(receiver: ReceiverConfig, reference: String): List<GuideEvent> {
+        val nowSec = System.currentTimeMillis() / 1000
+        val cached = dao.serviceEvents(rk(receiver), NowEvents.key(reference), nowSec).map { CacheMappers.event(it) }
+        val box = runCatching { kotlinx.coroutines.withTimeout(6_000) { api.serviceEvents(receiver, reference) } }.getOrDefault(emptyList())
+        return (cached + box).filter { it.endEpochSec > nowSec && it.beginEpochSec < nowSec + HORIZON_SEC }
+            .distinctBy { it.beginEpochSec / 60 }
+            .sortedBy { it.beginEpochSec }
     }
 
     suspend fun recordAll(ask: RecordAsk): UiText = gate.withLock {
@@ -91,7 +102,7 @@ class SeriesRecorder @Inject constructor(
         val nowSec = System.currentTimeMillis() / 1000
         for (rule in rulesDao.forReceiver(receiver.id)) {
             if (rule.autoTimerId != null) continue
-            val events = dao.serviceEvents(rk(receiver), rule.serviceKey, nowSec).map { CacheMappers.event(it) }
+            val events = channelGuide(receiver, rule.reference)
                 .filter { titleKey(it.title) == rule.titleKey && it.beginEpochSec > nowSec }
             val added = scheduleFor(receiver, rule, events)
             if (added > 0) EnigmaLog.service("series: ${rule.title} +$added")
@@ -104,7 +115,7 @@ class SeriesRecorder @Inject constructor(
         val boxTimers = if (place == RecordingTarget.RECEIVER) runCatching { api.timers(receiver) }.getOrDefault(emptyList()) else emptyList()
         val taken = book.items.value.filter { it.isActive() && it.receiverId == receiver.id }
             .map { SeriesPlan.Slot(NowEvents.key(it.reference), it.beginEpochSec) } +
-            boxTimers.filter { it.state < 3 }.map { SeriesPlan.Slot(NowEvents.key(it.reference), it.begin) }
+            boxTimers.filter { it.state < 3 }.map { SeriesPlan.Slot(NowEvents.key(it.reference), it.eventBegin) }
         val todo = SeriesPlan.missing(events.map { SeriesPlan.Slot(NowEvents.key(it.reference), it.beginEpochSec) to it }, taken)
         var added = 0
         for (event in todo) {
@@ -135,6 +146,8 @@ class SeriesRecorder @Inject constructor(
     private fun rk(receiver: ReceiverConfig) = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
 
     companion object {
+        const val HORIZON_SEC = 8L * 24 * 3600
+
         fun titleKey(title: String): String = SeriesDetector.key(title, "").substringBeforeLast('|')
     }
 }

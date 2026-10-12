@@ -54,4 +54,20 @@ data class RecordAsk(
     val upcoming: Int = 0,
     /** "Record all upcoming": this one, the others in the guide, and a series rule for new ones. */
     val allUpcoming: Boolean = false,
+    /** This episode is already set: the dialog only offers "Record all upcoming". */
+    val onlyAll: Boolean = false,
 )
+
+/**
+ * Is a box timer the same recording as [item]? OpenWebif stores timers with margins
+ * (begin − marginbefore, end + marginafter) while the app keeps the programme times, so: the
+ * same service and EPG event id, or the same service and overlapping times.
+ */
+object TimerMatch {
+    fun same(timerReference: String, timerBegin: Long, timerEnd: Long, timerEventId: Int, item: Recording): Boolean {
+        val sameService = com.enigmacast.domain.tuner.NowEvents.key(timerReference) == com.enigmacast.domain.tuner.NowEvents.key(item.reference)
+        if (!sameService) return false
+        if (timerEventId >= 0 && item.eventId >= 0) return timerEventId == item.eventId
+        return timerBegin < item.endEpochSec && item.beginEpochSec < timerEnd
+    }
+}

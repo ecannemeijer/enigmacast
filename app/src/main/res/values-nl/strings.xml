@@ -958,4 +958,10 @@
     <string name="close">Sluiten</string>
     <plurals name="series_seasons"><item quantity="one">%d seizoen</item><item quantity="other">%d seizoenen</item></plurals>
     <plurals name="home_series_count"><item quantity="one">%d aflevering gepland</item><item quantity="other">%d afleveringen gepland</item></plurals>
+    <string name="home_upcoming_title">Binnenkort</string>
+    <string name="home_cancel_recording">Opname annuleren</string>
+    <string name="home_cancel_autoswitch">AutoSwitch annuleren</string>
+    <string name="home_cancel_recording_title">Opname van “%1$s” annuleren?</string>
+    <string name="home_cancel_autoswitch_title">AutoSwitch voor “%1$s” annuleren?</string>
+    <string name="home_margins">(box: −%1$d / +%2$d min)</string>
 </resources>

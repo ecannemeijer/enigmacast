@@ -94,8 +94,11 @@ fun TunerCard.stopOption(): StopOption = when {
     else -> StopOption.NOTHING
 }
 
-/** One line of "Scheduled today". */
+/** One card of "Scheduled today / upcoming". Times are the programme's, without box margins. */
 enum class ScheduleKind { BOX_TIMER, BOX_RECORDING, TV_RECORDING, AUTOSWITCH }
+
+/** A box timer as the box stores it (with margins): what /api/timerdelete needs. */
+data class BoxTimerRef(val reference: String, val begin: Long, val end: Long)
 
 data class ScheduleItem(
     val beginEpochSec: Long,
@@ -104,13 +107,25 @@ data class ScheduleItem(
     val title: String,
     val kind: ScheduleKind,
     val running: Boolean = false,
-)
+    val reference: String = "",
+    /** App recording (RecordingBook id), when the app made it. */
+    val recordingId: String? = null,
+    /** Box timer not made by the app. */
+    val boxTimer: BoxTimerRef? = null,
+    /** AutoSwitch reminder key. */
+    val reminderKey: String? = null,
+    /** Minutes the box adds before/after, for the optional margin note. */
+    val marginBeforeMin: Int = 0,
+    val marginAfterMin: Int = 0,
+) {
+    val id: String get() = recordingId ?: reminderKey ?: boxTimer?.let { "box|${it.reference}|${it.begin}" } ?: "$reference|$beginEpochSec|$kind"
+}
 
 object TodaySchedule {
     /** Items that begin in [dayStart, dayEnd) or are still running at [nowSec], earliest first, without duplicates. */
     fun merge(items: List<ScheduleItem>, dayStart: Long, dayEnd: Long, nowSec: Long): List<ScheduleItem> = items
         .filter { (it.beginEpochSec in dayStart until dayEnd) || (it.beginEpochSec <= nowSec && it.endEpochSec > nowSec) }
         .filter { it.endEpochSec == 0L || it.endEpochSec > dayStart }
-        .distinctBy { Triple(it.beginEpochSec, it.title.lowercase(), it.kind == ScheduleKind.AUTOSWITCH) }
+        .distinctBy { Triple(NowEvents.key(it.reference).ifBlank { it.channelName }, it.beginEpochSec / 60, it.kind == ScheduleKind.AUTOSWITCH) }
         .sortedBy { it.beginEpochSec }
 }

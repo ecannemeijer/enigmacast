@@ -48,6 +48,16 @@ fun RecordConfirmDialog(
         )
         return
     }
+    if (ask.onlyAll) {
+        TvChoiceDialog(
+            title = stringResource(R.string.epg_record),
+            message = stringResource(R.string.record_already_set),
+            choices = listOf(stringResource(R.string.record_all_upcoming), stringResource(R.string.cancel)),
+            onChoose = { i -> if (i == 0) all = true else onDismiss() },
+            onDismiss = onDismiss,
+        )
+        return
+    }
     val choices = buildList {
         add(stringResource(R.string.record_on_device))
         add(stringResource(R.string.record_on_box))

@@ -128,12 +128,12 @@ interface CacheDao {
     @Query("SELECT * FROM home_films WHERE receiverKey = :receiverKey AND endSec > :fromSec AND beginSec < :toSec AND kind = :kind ORDER BY beginSec")
     fun observeHomeFilms(receiverKey: String, fromSec: Long, toSec: Long, kind: String = HomeKinds.FILM): Flow<List<HomeFilmRow>>
 
-    /** Poster of a matched series by its cleaned EPG title (for Home's series cards). */
+    /** Poster of a matched film or series by its cleaned EPG title (for Home's scheduled cards). */
     @Query(
         "SELECT m.posterPath FROM home_films h JOIN tmdb_movies m ON m.tmdbId = h.tmdbId AND m.language = h.language " +
-            "WHERE h.receiverKey = :receiverKey AND h.kind = 'series' AND h.searchTitle = :searchTitle AND m.posterPath IS NOT NULL LIMIT 1",
+            "WHERE h.receiverKey = :receiverKey AND (h.searchTitle IN (:titles) OR h.epgTitle IN (:titles)) AND m.posterPath IS NOT NULL LIMIT 1",
     )
-    suspend fun seriesPoster(receiverKey: String, searchTitle: String): String?
+    suspend fun posterFor(receiverKey: String, titles: List<String>): String?
 
     @Query("DELETE FROM home_films WHERE endSec < :beforeSec")
     suspend fun purgeHomeFilms(beforeSec: Long)

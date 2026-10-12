@@ -109,32 +109,78 @@ class TunerHomeViewModel @Inject constructor(
 
     private fun GuideEvent.covers(nowSec: Long) = beginEpochSec <= nowSec && beginEpochSec + durationSec > nowSec
 
+    /** Today's cards and the coming week's, one per programme (box timers matched with the app's own). */
     private suspend fun buildSchedule(receiver: ReceiverConfig, timers: List<com.enigmacast.data.openwebif.OpenWebifJson.ReceiverTimer>): List<ScheduleItem> {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val start = today.atStartOfDay(zone).toEpochSecond()
         val end = today.plusDays(1).atStartOfDay(zone).toEpochSecond()
+        val weekEnd = today.plusDays(8).atStartOfDay(zone).toEpochSecond()
         val nowSec = System.currentTimeMillis() / 1000
         val ours = recordings.items.value.filter { it.isActive() && it.receiverId == receiver.id }
         val items = mutableListOf<ScheduleItem>()
         ours.filter { com.enigmacast.domain.series.SeriesGrouping.keyOf(it) !in groupedKeys }.forEach { r ->
+            val timer = if (r.place == RecordingPlace.RECEIVER) timers.firstOrNull { t -> com.enigmacast.domain.recording.TimerMatch.same(t.reference, t.begin, t.end, t.eventId, r) } else null
             items += ScheduleItem(
                 r.beginEpochSec, r.endEpochSec, r.channelName, r.title,
                 if (r.place == RecordingPlace.TV) ScheduleKind.TV_RECORDING else ScheduleKind.BOX_RECORDING,
-                running = r.status == RecordingStatus.RECORDING,
+                running = r.status == RecordingStatus.RECORDING || timer?.state == 2,
+                reference = r.reference,
+                recordingId = r.id,
+                marginBeforeMin = ((timer?.marginBefore ?: 0) / 60).toInt(),
+                marginAfterMin = ((timer?.marginAfter ?: 0) / 60).toInt(),
             )
         }
         timers.filter { it.state < 3 }
-            .filter { t -> ours.none { it.place == RecordingPlace.RECEIVER && it.beginEpochSec == t.begin && it.title.equals(t.name, true) } }
+            // One entry per recording: a box timer that the app made is already listed above.
+            .filter { t -> ours.none { it.place == RecordingPlace.RECEIVER && com.enigmacast.domain.recording.TimerMatch.same(t.reference, t.begin, t.end, t.eventId, it) } }
             .filter { t -> com.enigmacast.domain.series.SeriesDetector.key(t.name, t.reference) !in groupedKeys }
             .forEach { t ->
                 val channel = channelName(receiver, t.reference)
-                items += ScheduleItem(t.begin, t.end, channel, t.name, ScheduleKind.BOX_TIMER, running = t.state == 2)
+                items += ScheduleItem(
+                    t.eventBegin, t.eventEnd, channel, t.name, ScheduleKind.BOX_TIMER,
+                    running = t.state == 2, reference = t.reference,
+                    boxTimer = com.enigmacast.domain.tuner.BoxTimerRef(t.reference, t.begin, t.end),
+                    marginBeforeMin = (t.marginBefore / 60).toInt(), marginAfterMin = (t.marginAfter / 60).toInt(),
+                )
             }
         reminders.reminders.value.filter { it.receiverId.isBlank() || it.receiverId == receiver.id }.forEach { r ->
-            items += ScheduleItem(r.beginEpochSec, r.beginEpochSec, r.channelName, r.title, ScheduleKind.AUTOSWITCH)
+            items += ScheduleItem(r.beginEpochSec, r.beginEpochSec, r.channelName, r.title, ScheduleKind.AUTOSWITCH, reference = r.serviceReference, reminderKey = r.key)
         }
+        upcoming = TodaySchedule.merge(items, end, weekEnd, 0L)
+        loadPosters(receiver, items)
         return TodaySchedule.merge(items, start, end, nowSec)
+    }
+
+    /** The coming week after today. */
+    var upcoming by mutableStateOf<List<ScheduleItem>>(emptyList()); private set
+    /** TMDB poster path by cleaned title (null: none in the cache). */
+    var titlePosters by mutableStateOf<Map<String, String?>>(emptyMap()); private set
+
+    private suspend fun loadPosters(receiver: ReceiverConfig, items: List<ScheduleItem>) {
+        val rk = com.enigmacast.data.db.CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
+        val next = titlePosters.toMutableMap()
+        for (title in items.map { it.title }.distinct()) {
+            if (title in next) continue
+            val names = listOf(com.enigmacast.domain.films.FilmDetector.cleanTitle(title), com.enigmacast.domain.series.SeriesDetector.cleanTitle(title)).distinct()
+            next[title] = runCatching { cacheDao.posterFor(rk, names) }.getOrNull()
+        }
+        titlePosters = next
+    }
+
+    fun piconFor(item: ScheduleItem): BouquetEntry = BouquetEntry(item.channelName, item.reference)
+
+    /** Cancel from a Home card: the app's recording, a box timer (by the box's own begin/end), or an AutoSwitch. */
+    fun cancel(item: ScheduleItem) {
+        viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver()
+            when {
+                item.recordingId != null -> recordings.delete(item.recordingId)
+                item.boxTimer != null && receiver != null -> runCatching { api.deleteTimer(receiver, item.boxTimer.reference, item.boxTimer.begin, item.boxTimer.end) }
+                item.reminderKey != null -> reminders.cancel(item.reminderKey)
+            }
+            refresh()
+        }
     }
 
     private suspend fun buildSeries(receiver: ReceiverConfig, timers: List<com.enigmacast.data.openwebif.OpenWebifJson.ReceiverTimer>) {
@@ -159,7 +205,7 @@ class TunerHomeViewModel @Inject constructor(
         val rk = com.enigmacast.data.db.CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
         val next = posters.toMutableMap()
         for (g in groups) if (g.key !in next) {
-            next[g.key] = runCatching { cacheDao.seriesPoster(rk, com.enigmacast.domain.series.SeriesDetector.cleanTitle(g.title)) }.getOrNull()
+            next[g.key] = runCatching { cacheDao.posterFor(rk, listOf(com.enigmacast.domain.series.SeriesDetector.cleanTitle(g.title), g.title).distinct()) }.getOrNull()
         }
         posters = next
     }

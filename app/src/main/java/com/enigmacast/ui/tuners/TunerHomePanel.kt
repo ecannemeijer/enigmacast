@@ -89,6 +89,8 @@ fun TunerHomePanel(
     var info by remember { mutableStateOf<Pair<String, String>?>(null) }
     var confirmStandby by remember { mutableStateOf(false) }
     var openSeries by remember { mutableStateOf<com.enigmacast.domain.series.SeriesGroup?>(null) }
+    var openItem by remember { mutableStateOf<ScheduleItem?>(null) }
+    var confirmCancel by remember { mutableStateOf<ScheduleItem?>(null) }
 
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
         Box(
@@ -100,10 +102,21 @@ fun TunerHomePanel(
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()
+            // Explicit Up/Down to the neighbouring row on every card: the column is clipped and moved
+            // by an offset, so a plain focus search may find nothing below and focus would stay put.
+            fun rowNav(key: String) = Modifier.focusProperties {
+                down = chain.neighbourKey(key, 1)?.let(chain::requester) ?: FocusRequester.Cancel
+                up = chain.neighbourKey(key, -1)?.let(chain::requester) ?: FocusRequester.Cancel
+            }
             val list = buildList {
-                add(PageSection("tuners") { TunersRow(model, left) { chosen = it } })
-                if (model.series.isNotEmpty()) add(PageSection("series") { SeriesRow(model, left) { openSeries = it } })
-                add(PageSection("schedule") { ScheduleBlock(model.schedule, left) })
+                add(PageSection("tuners") { TunersRow(model, left, rowNav("tuners")) { chosen = it } })
+                if (model.series.isNotEmpty()) add(PageSection("series") { SeriesRow(model, left, rowNav("series")) { openSeries = it } })
+                add(PageSection("today") {
+                    ScheduleRow(stringResource(R.string.home_schedule_title), model.schedule, model, left, rowNav("today"), emptyText = stringResource(R.string.home_schedule_empty)) { openItem = it }
+                })
+                if (model.upcoming.isNotEmpty()) add(PageSection("upcoming") {
+                    ScheduleRow(stringResource(R.string.home_upcoming_title), model.upcoming, model, left, rowNav("upcoming"), withDay = true) { openItem = it }
+                })
             }
             chain.keys = list.map { it.key }
             PivotColumn(sections, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
@@ -170,6 +183,32 @@ fun TunerHomePanel(
             onDismiss = { confirmStandby = false },
         )
     }
+    openItem?.let { item ->
+        val cancelRec = stringResource(R.string.home_cancel_recording)
+        val cancelAuto = stringResource(R.string.home_cancel_autoswitch)
+        val choices = buildList {
+            if (item.recordingId != null || item.boxTimer != null) add(cancelRec)
+            if (item.reminderKey != null) add(cancelAuto)
+            add(stringResource(R.string.close))
+        }
+        TvChoiceDialog(
+            title = item.title,
+            message = scheduleLine(item, withDay = true),
+            choices = choices,
+            onChoose = { i -> openItem = null; if (choices[i] == cancelRec || choices[i] == cancelAuto) confirmCancel = item },
+            onDismiss = { openItem = null },
+        )
+    }
+    confirmCancel?.let { item ->
+        val auto = item.kind == ScheduleKind.AUTOSWITCH
+        TvChoiceDialog(
+            title = stringResource(if (auto) R.string.home_cancel_autoswitch_title else R.string.home_cancel_recording_title, item.title),
+            message = scheduleLine(item, withDay = true),
+            choices = listOf(stringResource(if (auto) R.string.home_cancel_autoswitch else R.string.home_cancel_recording), stringResource(R.string.cancel)),
+            onChoose = { i -> confirmCancel = null; if (i == 0) model.cancel(item) },
+            onDismiss = { confirmCancel = null },
+        )
+    }
     openSeries?.let { group ->
         // Keep the dialog in step with refreshes (episodes cancelled meanwhile).
         val live = model.series.firstOrNull { it.key == group.key } ?: group
@@ -194,15 +233,15 @@ private fun useLine(use: TunerUse): String = when (use.kind) {
 } + " · " + use.channelName
 
 @Composable
-private fun TunersRow(model: TunerHomeViewModel, left: Modifier, onOpen: (TunerCard) -> Unit) {
+private fun TunersRow(model: TunerHomeViewModel, left: Modifier, nav: Modifier, onOpen: (TunerCard) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(vertical = 10.dp)) {
         model.cards.forEachIndexed { i, card ->
-            TunerCardView(card, model, if (i == 0) left else Modifier) { onOpen(card) }
+            TunerCardView(card, model, (if (i == 0) left else Modifier).then(nav)) { onOpen(card) }
         }
         if (model.cards.isEmpty()) {
             // Keeps the section focusable (and the menu's Right working) before the first answer.
             val focus = rememberTvFocus()
-            Box(left.width(300.dp).height(150.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus) { model.message = null }, contentAlignment = Alignment.Center) {
+            Box(left.then(nav).width(300.dp).height(150.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus) { model.message = null }, contentAlignment = Alignment.Center) {
                 Text(
                     if (model.loading) "…" else stringResource(R.string.home_unreachable),
                     color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
@@ -252,61 +291,114 @@ private fun TunerCardView(card: TunerCard, model: TunerHomeViewModel, modifier: 
 }
 
 @Composable
-private fun Picon(model: TunerHomeViewModel, use: TunerUse) {
+private fun Picon(model: TunerHomeViewModel, use: TunerUse, small: Boolean = false) {
     val bitmap by produceState<ImageBitmap?>(model.cachedPicon(use.reference, use.channelName), use.reference) {
         if (value == null) value = model.picon(use.reference, use.channelName)
     }
-    bitmap?.let { Image(it, contentDescription = null, modifier = Modifier.width(56.dp).height(34.dp)) }
+    bitmap?.let { Image(it, contentDescription = null, modifier = if (small) Modifier.width(28.dp).height(17.dp) else Modifier.width(56.dp).height(34.dp)) }
 }
 
 @Composable
-private fun ScheduleBlock(items: List<ScheduleItem>, left: Modifier) {
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(stringResource(R.string.home_schedule_title), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+private fun scheduleLine(item: ScheduleItem, withDay: Boolean): String {
+    val fmt = remember(withDay) { SimpleDateFormat(if (withDay) "EEE d MMM  HH:mm" else "HH:mm", Locale.getDefault()) }
+    val clock = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val span = fmt.format(Date(item.beginEpochSec * 1000)) +
+        if (item.endEpochSec > item.beginEpochSec) "–" + clock.format(Date(item.endEpochSec * 1000)) else ""
+    val margins = if (item.marginBeforeMin > 0 || item.marginAfterMin > 0) "  " + stringResource(R.string.home_margins, item.marginBeforeMin, item.marginAfterMin) else ""
+    return listOf(item.channelName, span + margins).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+/** A row of scheduled cards (recordings and AutoSwitches); OK opens Cancel / Close. */
+@Composable
+private fun ScheduleRow(
+    title: String,
+    items: List<ScheduleItem>,
+    model: TunerHomeViewModel,
+    left: Modifier,
+    nav: Modifier,
+    withDay: Boolean = false,
+    emptyText: String = "",
+    onOpen: (ScheduleItem) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         if (items.isEmpty()) {
             val focus = rememberTvFocus()
-            Box(left.fillMaxWidth().then(focusLook(focus.focused, CardShape)).tvClick(focus) {}.padding(12.dp)) {
-                Text(stringResource(R.string.home_schedule_empty), color = EnigmaColors.Muted, fontSize = 13.sp)
+            Box(left.then(nav).width(320.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus) {}.padding(12.dp)) {
+                Text(emptyText, color = EnigmaColors.Muted, fontSize = 13.sp)
             }
+            return@Column
         }
-        val time = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-        items.forEach { item ->
-            val focus = rememberTvFocus()
-            Row(
-                left.fillMaxWidth().then(focusLook(focus.focused, CardShape)).tvClick(focus) {}.padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val span = time.format(Date(item.beginEpochSec * 1000)) +
-                    if (item.endEpochSec > item.beginEpochSec) "–" + time.format(Date(item.endEpochSec * 1000)) else ""
-                Text(span, color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.width(110.dp))
-                Text(item.channelName, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(170.dp))
-                Text(item.title, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (item.running) Text(stringResource(R.string.home_now_running), color = Color(0xFFFF5A5A), fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
-                Text(
-                    stringResource(
-                        when (item.kind) {
-                            ScheduleKind.BOX_TIMER -> R.string.home_kind_box_timer
-                            ScheduleKind.BOX_RECORDING -> R.string.home_kind_box_rec
-                            ScheduleKind.TV_RECORDING -> R.string.home_kind_tv_rec
-                            ScheduleKind.AUTOSWITCH -> R.string.home_kind_autoswitch
-                        },
-                    ),
-                    color = EnigmaColors.Subtle, fontSize = 11.sp,
-                )
+        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
+            items(items.size, key = { items[it].id }) { i ->
+                val item = items[i]
+                ScheduleCard(item, model, withDay, (if (i == 0) left else Modifier).then(nav)) { onOpen(item) }
             }
         }
     }
 }
 
+@Composable
+private fun ScheduleCard(item: ScheduleItem, model: TunerHomeViewModel, withDay: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val focus = rememberTvFocus()
+    val fmt = remember(withDay) { SimpleDateFormat(if (withDay) "EEE HH:mm" else "HH:mm", Locale.getDefault()) }
+    val clock = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val poster = model.titlePosters[item.title]
+    Row(
+        modifier.width(320.dp).height(110.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus, onClick).padding(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.width(60.dp).height(90.dp).clip(RoundedCornerShape(8.dp)).background(EnigmaColors.CardBorder), contentAlignment = Alignment.Center) {
+            if (poster != null) {
+                coil3.compose.AsyncImage(
+                    model = com.enigmacast.data.tmdb.TmdbJson.image(poster, "w185"),
+                    contentDescription = item.title,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(item.title.take(2).uppercase(), color = EnigmaColors.Muted, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            if (item.running) {
+                Text(
+                    stringResource(R.string.home_now_running), color = Color.White, fontSize = 10.sp,
+                    modifier = Modifier.align(Alignment.TopStart).padding(3.dp).background(Color(0xFFE53935), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                )
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(item.title, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (item.reference.isNotBlank()) Picon(model, TunerUse(TunerUseKind.LIVE, item.channelName, item.reference), small = true)
+                Text(item.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            val span = fmt.format(Date(item.beginEpochSec * 1000)) +
+                if (item.endEpochSec > item.beginEpochSec) "–" + clock.format(Date(item.endEpochSec * 1000)) else ""
+            Text(span, color = EnigmaColors.Cyan, fontSize = 12.sp)
+            Text(
+                stringResource(
+                    when (item.kind) {
+                        ScheduleKind.BOX_TIMER, ScheduleKind.BOX_RECORDING -> R.string.home_kind_box_rec
+                        ScheduleKind.TV_RECORDING -> R.string.home_kind_tv_rec
+                        ScheduleKind.AUTOSWITCH -> R.string.home_kind_autoswitch
+                    },
+                ),
+                color = if (item.kind == ScheduleKind.AUTOSWITCH) EnigmaColors.Accent else Color(0xFFFF7A7A),
+                fontSize = 11.sp,
+                modifier = Modifier.border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+            )
+        }
+    }
+}
 
 @Composable
-private fun SeriesRow(model: TunerHomeViewModel, left: Modifier, onOpen: (com.enigmacast.domain.series.SeriesGroup) -> Unit) {
+private fun SeriesRow(model: TunerHomeViewModel, left: Modifier, nav: Modifier, onOpen: (com.enigmacast.domain.series.SeriesGroup) -> Unit) {
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(stringResource(R.string.home_series_title), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
             items(model.series.size, key = { model.series[it].key }) { i ->
                 val group = model.series[i]
-                SeriesCard(group, model.posters[group.key], if (i == 0) left else Modifier) { onOpen(group) }
+                SeriesCard(group, model.posters[group.key], (if (i == 0) left else Modifier).then(nav)) { onOpen(group) }
             }
         }
     }

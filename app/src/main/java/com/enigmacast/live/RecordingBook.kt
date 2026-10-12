@@ -94,9 +94,16 @@ class RecordingBook @Inject constructor(
         val settings = settingsRepository.current()
         val place = settings.playback.recordingTarget
         awaitLoaded()
-        val existing = _items.value.firstOrNull { it.reference == event.reference && it.beginEpochSec == event.beginEpochSec && it.isActive() }
-        if (existing != null) return PrepareResult.Message(UiText.res(R.string.record_already_set))
+        val existing = _items.value.firstOrNull {
+            com.enigmacast.domain.tuner.NowEvents.key(it.reference) == com.enigmacast.domain.tuner.NowEvents.key(event.reference) &&
+                it.beginEpochSec == event.beginEpochSec && it.isActive()
+        }
         val upcoming = runCatching { series.get().upcoming(event).size }.getOrDefault(0)
+        // Already set: a series can still get "Record all upcoming" for the other episodes.
+        if (existing != null) {
+            return if (upcoming > 0) PrepareResult.Ask(RecordAsk(event, channelName, place, upcoming = upcoming, onlyAll = true))
+            else PrepareResult.Message(UiText.res(R.string.record_already_set))
+        }
         return PrepareResult.Ask(RecordAsk(event, channelName, place, upcoming = upcoming))
     }
 
@@ -159,7 +166,12 @@ class RecordingBook @Inject constructor(
         } else {
             val receiver = receiverFor(item)
             if (receiver != null) {
-                runCatching { api.deleteTimer(receiver, item.reference, item.beginEpochSec, item.endEpochSec) }
+                // The box stores the timer with its margins: delete it by the box's own begin/end.
+                val timer = runCatching { matchTimer(api.timers(receiver), item) }.getOrNull()
+                runCatching {
+                    if (timer != null) api.deleteTimer(receiver, timer.reference, timer.begin, timer.end)
+                    else api.deleteTimer(receiver, item.reference, item.beginEpochSec, item.endEpochSec)
+                }
                 if (item.fileName.isNotBlank()) {
                     runCatching { api.deleteMovie(receiver, movieRef(item.fileName)) }
                 }
@@ -471,10 +483,10 @@ class RecordingBook @Inject constructor(
         }
 
         private fun matchTimer(timers: List<OpenWebifJson.ReceiverTimer>, item: Recording): OpenWebifJson.ReceiverTimer? {
-            timers.firstOrNull { it.eventId >= 0 && it.eventId == item.eventId && it.reference == item.reference }
+            timers.firstOrNull { com.enigmacast.domain.recording.TimerMatch.same(it.reference, it.begin, it.end, it.eventId, item) }
                 ?.let { return it }
             return timers.firstOrNull {
-                it.name.equals(item.title, true) && kotlin.math.abs(it.begin - item.beginEpochSec) < 180
+                it.name.equals(item.title, true) && it.begin <= item.beginEpochSec + 60 && it.end >= item.endEpochSec - 60
             }
         }
 
