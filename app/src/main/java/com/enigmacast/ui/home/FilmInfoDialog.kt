@@ -374,15 +374,7 @@ fun PosterBox(film: HomeFilm, modifier: Modifier) {
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Text(
-                film.displayTitle,
-                color = EnigmaColors.Muted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(10.dp),
-            )
+            com.enigmacast.ui.components.DefaultArtwork(film.displayTitle, Modifier.fillMaxSize())
         }
     }
 }

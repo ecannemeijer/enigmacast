@@ -28,24 +28,48 @@ class FocusChain(private val requesters: MutableMap<String, FocusRequester>) {
 
     fun requester(key: String): FocusRequester = requesters.getOrPut(key) { FocusRequester() }
 
-    internal fun neighbourKey(key: String, step: Int): String? = keys.indexOf(key).takeIf { it >= 0 }?.let { keys.getOrNull(it + step) }
+    internal fun neighbourKey(key: String, step: Int): String? = targetKey(keys, key, step)
 
-    private fun neighbour(key: String, step: Int): FocusRequester? {
-        val i = keys.indexOf(key)
-        if (i < 0) return null
-        return keys.getOrNull(i + step)?.let(::requester)
+    companion object {
+        private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+        /** The section one [step] away from [key] in page order; null at either end (focus stays). */
+        fun targetKey(keys: List<String>, key: String, step: Int): String? =
+            keys.indexOf(key).takeIf { it >= 0 }?.let { keys.getOrNull(it + step) }
     }
 
     /** Focus the first section (e.g. when the page is entered from the menu). */
     fun first(): FocusRequester? = keys.firstOrNull()?.let(::requester)
+
+    /**
+     * Requesting the next section from inside onExit moved the focus while the first move was
+     * still being processed: the section being left saw a second exit with the same direction
+     * and passed it on again, so a row was skipped. The request now runs after the current focus
+     * change, and only one move is in flight at a time.
+     */
+    private var moving = false
+
+    private fun move(key: String, step: Int) {
+        if (moving) return
+        val target = targetKey(keys, key, step) ?: return
+        moving = true
+        mainHandler.post {
+            // A restorer whose remembered card was recycled (scrolled-away LazyRow item) can refuse:
+            // then enter the section in the direction of travel, landing on its first card.
+            val r = requester(target)
+            val ok = runCatching { r.requestFocus() }.getOrDefault(false)
+            if (!ok) runCatching { r.requestFocus(if (step > 0) FocusDirection.Down else FocusDirection.Up) }
+            moving = false
+        }
+    }
 
     @OptIn(ExperimentalComposeUiApi::class)
     fun section(key: String): Modifier = Modifier
         .focusProperties {
             onExit = {
                 when (requestedFocusDirection) {
-                    FocusDirection.Down -> { cancelFocusChange(); neighbour(key, 1)?.requestFocus() }
-                    FocusDirection.Up -> { cancelFocusChange(); neighbour(key, -1)?.requestFocus() }
+                    FocusDirection.Down -> { cancelFocusChange(); move(key, 1) }
+                    FocusDirection.Up -> { cancelFocusChange(); move(key, -1) }
                     FocusDirection.Right -> cancelFocusChange()
                     else -> Unit
                 }

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -83,7 +84,9 @@ fun MyItemsPanel(
     Column(
         modifier
             .fillMaxSize()
-            .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+            .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
+            // The empty/loading line is replaced by the list: keep the focus on the page (first item).
+            .holdPageFocus(listFocus, (items + viewModel.boxMovies + viewModel.boxTimers).firstOrNull()?.id),
     ) {
         PanelHeader(stringResource(R.string.nav_my_items))
         val notice = viewModel.notice.asString()
@@ -130,8 +133,8 @@ fun MyItemsPanel(
                         val rowState = rowStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
                         androidx.compose.foundation.lazy.LazyRow(
                             state = rowState,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                         ) {
                             itemsIndexed(posters, key = { _, item -> item.id }) { i, item ->
                                 PosterCard(
@@ -280,14 +283,14 @@ private fun PosterCard(
     val film = recordingFilm(item, movie)
     Column(
         modifier
-            .width(118.dp)
+            .width(100.dp)
             .tvClick(focus, onClick),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Box(
             Modifier
-                .width(118.dp)
-                .height(177.dp)
+                .width(100.dp)
+                .height(150.dp)
                 .border(if (focus.focused) 3.dp else 0.dp, if (focus.focused) EnigmaColors.Cyan else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(12.dp)),
         ) {
             com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
@@ -306,7 +309,7 @@ private fun PosterCard(
                 }
             }
         }
-        Text(item.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
             Instant.ofEpochSecond(item.beginEpochSec).atZone(ZoneId.systemDefault()).format(DayFormat),
             color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1,
