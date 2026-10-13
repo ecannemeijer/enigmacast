@@ -63,6 +63,7 @@ class SyncEngine @Inject constructor(
     private val bouquetStore: com.enigmacast.data.tmdb.HomeBouquetStore,
     private val seriesRecorder: dagger.Lazy<com.enigmacast.live.SeriesRecorder>,
     private val channelMemory: dagger.Lazy<ChannelMemoryCarrier>,
+    private val listEvents: ChannelListEvents,
 ) {
     private val gate = Mutex()
     private val _progress = MutableStateFlow<SyncProgress?>(null)
@@ -125,8 +126,10 @@ class SyncEngine @Inject constructor(
     /**
      * Settings › Receivers: fetches the box's bouquets and channels now and replaces the cache
      * when anything differs. Throws when the box cannot be reached. The guide follows in the background.
+     * With [force] the cache is replaced even when the content hash matches (after a settings import).
+     * Screens are told through [ChannelListEvents] whenever the cache was replaced.
      */
-    suspend fun refreshChannelsNow(receiver: ReceiverConfig): ChannelOutcome {
+    suspend fun refreshChannelsNow(receiver: ReceiverConfig, force: Boolean = false): ChannelOutcome {
         val rk = receiverKey(receiver)
         val outcome = gate.withLock {
             try {
@@ -134,7 +137,7 @@ class SyncEngine @Inject constructor(
                 var result: ChannelOutcome? = null
                 var failure: Exception? = null
                 attempt(rk, SyncKind.CHANNELS, keepHash = true, onError = { failure = it }) {
-                    result = syncChannels(receiver, rk, force = false, carryFrom = null)
+                    result = syncChannels(receiver, rk, force = force, carryFrom = null)
                 }
                 failure?.let { throw it }
                 result!!
@@ -142,6 +145,7 @@ class SyncEngine @Inject constructor(
                 _progress.value = null
             }
         }
+        if (outcome.replaced) listEvents.notifyChanged(receiver.id)
         return outcome
     }
 

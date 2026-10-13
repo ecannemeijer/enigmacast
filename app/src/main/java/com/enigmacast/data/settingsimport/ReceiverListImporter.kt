@@ -10,6 +10,7 @@ import com.enigmacast.domain.settingsimport.ImportPlans
 import com.enigmacast.domain.settingsimport.IptvBouquets
 import com.enigmacast.domain.settingsimport.M3uEntry
 import com.enigmacast.domain.settingsimport.M3uParser
+import com.enigmacast.domain.settingsimport.ReloadCheck
 import com.enigmacast.domain.settingsimport.SettingsFiles
 import com.enigmacast.domain.settingsimport.SettingsProvider
 import com.enigmacast.domain.settingsimport.TransferErrors
@@ -112,6 +113,8 @@ class ReceiverListImporter @Inject constructor(
     ): ReceiverOutcome = gate.withLock {
         val warnings = mutableListOf<TransferException>()
         var backupLabel: String? = null
+        var expected: Set<String>? = null
+        var removed: List<String> = emptyList()
         try {
             onStep(ImportStep(ImportStage.CONNECT))
             val count = withContext(Dispatchers.IO) {
@@ -136,6 +139,8 @@ class ReceiverListImporter @Inject constructor(
                     }
                     val bouquetsTv = current["bouquets.tv"]?.toString(Charsets.UTF_8)
                     val (work, count) = plan(box, boxFiles, bouquetsTv)
+                    expected = ReloadCheck.expectedFiles(work.uploads)
+                    removed = work.deletions
                     val uploads = work.uploads.entries.toList()
                     uploads.forEachIndexed { i, (name, bytes) ->
                         onStep(ImportStep(ImportStage.UPLOAD, i + 1, uploads.size))
@@ -155,11 +160,12 @@ class ReceiverListImporter @Inject constructor(
             }
             onStep(ImportStep(ImportStage.RELOAD))
             reload(receiver)
-            // Enigma2 reloads on its own thread; give it a moment before the app reads the new list.
-            kotlinx.coroutines.delay(1_500)
+            // Enigma2 reloads on its own thread: wait until OpenWebif lists the new bouquets.
+            awaitReload(receiver, expected, removed)
             onStep(ImportStep(ImportStage.SYNC))
             try {
-                sync.refreshChannelsNow(receiver)
+                // Forced: the cache and every screen showing this box take the new lists now.
+                sync.refreshChannelsNow(receiver, force = true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -174,6 +180,36 @@ class ReceiverListImporter @Inject constructor(
             EnigmaLog.service("settings import on ${receiver.name}: ${mapped.failure}")
             ReceiverOutcome(receiver.id, receiver.name, mapped, warnings, backupLabel = backupLabel)
         }
+    }
+
+    /** Polls the bouquet list (up to ~20 s) until it shows [expected]; without a bouquets.tv upload a short pause. */
+    private suspend fun awaitReload(receiver: ReceiverConfig, expected: Set<String>?, removed: List<String>) {
+        if (expected.isNullOrEmpty()) {
+            kotlinx.coroutines.delay(1_500)
+            return
+        }
+        val client = http.webifClient(receiver.allowInsecureCertificates, receiver.timeoutSeconds)
+        val path = "/api/getservices?sRef=" + java.net.URLEncoder.encode(BOUQUETS_TV_REF, "UTF-8").replace("+", "%20")
+        val started = System.currentTimeMillis()
+        kotlinx.coroutines.delay(500)
+        while (System.currentTimeMillis() - started < 20_000) {
+            val body = withContext(Dispatchers.IO) {
+                runCatching {
+                    val request = Request.Builder().url(endpoints.api(receiver, path))
+                        .apply { if (receiver.username.isNotEmpty()) header("Authorization", Credentials.basic(receiver.username, receiver.password)) }
+                        .build()
+                    client.newCall(request).execute().use { it.body.string() }
+                }.getOrNull()
+            }
+            if (body != null && ReloadCheck.isLive(body, expected, removed)) {
+                EnigmaLog.service("settings import on ${receiver.name}: lists live after ${System.currentTimeMillis() - started} ms")
+                // Channels inside the bouquets are read right after; give Enigma2 a short moment more.
+                kotlinx.coroutines.delay(500)
+                return
+            }
+            kotlinx.coroutines.delay(1_000)
+        }
+        EnigmaLog.service("settings import on ${receiver.name}: reload not confirmed in 20 s, reading lists anyway")
     }
 
     /** `/api/servicelistreload?mode=0` (lamedb + bouquets); older OpenWebif only has `/web/…`. */
@@ -203,5 +239,9 @@ class ReceiverListImporter @Inject constructor(
             }
         }
         throw last ?: TransferException(TransferFailure.RELOAD_FAILED)
+    }
+
+    private companion object {
+        const val BOUQUETS_TV_REF = "1:7:1:0:0:0:0:0:0:0:FROM BOUQUET \"bouquets.tv\" ORDER BY bouquet"
     }
 }

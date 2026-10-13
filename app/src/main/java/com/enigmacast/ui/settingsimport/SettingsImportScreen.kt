@@ -172,14 +172,23 @@ private class PanelFocus {
     var lastRowKey by mutableStateOf<String?>(null)
 }
 
+/** Fixed targets in the IPTV group column: Load groups, Select all / none and the filter. */
+private class GroupFocus {
+    val load = FocusRequester()
+    val all = FocusRequester()
+    val none = FocusRequester()
+    val filter = FocusRequester()
+}
+
 /** Attaches [PanelFocus.lastRow] to the row the right panel returns to. */
-private fun Modifier.listRow(focus: PanelFocus, key: String, isTarget: Boolean): Modifier =
+private fun Modifier.listRow(focus: PanelFocus, key: String, isTarget: Boolean, up: FocusRequester? = null): Modifier =
     this
         .then(if (isTarget) Modifier.focusRequester(focus.lastRow) else Modifier)
         .onFocusChanged { if (it.isFocused) focus.lastRowKey = key }
         .focusProperties {
             left = focus.chooser
             right = focus.panel
+            if (up != null) this.up = up
         }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -272,6 +281,7 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
     val targetKey = focus.lastRowKey?.takeIf { key -> groups.any { it.name == key } } ?: groups.firstOrNull()?.name
     val backTarget = if (targetKey != null) focus.lastRow else focus.chooser
     val leftOut = Modifier.focusProperties { right = focus.panel }
+    val groupFocus = remember { GroupFocus() }
     Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionLabel(stringResource(R.string.import_sources_title))
         IptvSource.entries.forEachIndexed { index, source ->
@@ -282,11 +292,15 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                 modifier = (if (index == 0) Modifier.focusRequester(focus.chooser) else Modifier).then(leftOut),
             )
         }
+        val hasGroups = viewModel.groups.isNotEmpty()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CompactButton(
                 stringResource(R.string.import_load_groups),
                 viewModel::loadGroups,
-                modifier = leftOut,
+                modifier = Modifier.focusRequester(groupFocus.load).focusProperties {
+                    right = focus.panel
+                    if (hasGroups) down = groupFocus.all
+                },
                 icon = EnigmaIcons.Sync,
             )
             if (viewModel.groupsError != null && !viewModel.groupsLoading) FailureText(viewModel.groupsError!!)
@@ -297,24 +311,56 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
             else stringResource(R.string.import_groups_downloading, p.done + 1, p.total, p.current)
             ProgressLine(fraction = p?.takeIf { it.total > 0 && it.done < it.total }?.let { it.done.toFloat() / it.total }, text = text)
         }
-        if (viewModel.groups.isNotEmpty()) {
+        if (hasGroups) {
+            // Fixed header above the list: Select all / none and the count. Explicit Up/Down so the
+            // D-pad always reaches it from "Load groups", the filter and the first group row.
             Row(
-                Modifier.fillMaxWidth().padding(top = 4.dp),
+                Modifier.fillMaxWidth().padding(top = 4.dp).focusGroup(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                CompactButton(
+                    stringResource(R.string.import_select_all),
+                    viewModel::selectAllGroups,
+                    modifier = Modifier.focusRequester(groupFocus.all).focusProperties {
+                        up = groupFocus.load
+                        down = groupFocus.filter
+                        left = FocusRequester.Cancel
+                        right = groupFocus.none
+                    },
+                    icon = Icons.Filled.Check,
+                )
+                CompactButton(
+                    stringResource(R.string.import_select_none),
+                    viewModel::selectNoGroups,
+                    modifier = Modifier.focusRequester(groupFocus.none).focusProperties {
+                        up = groupFocus.load
+                        down = groupFocus.filter
+                        left = groupFocus.all
+                        right = focus.panel
+                    },
+                )
                 Text(
                     stringResource(R.string.import_groups_count, viewModel.chosenGroups.size, viewModel.groups.size),
                     color = EnigmaColors.Text,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    modifier = Modifier.weight(1f).padding(start = 6.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    modifier = Modifier.weight(1f).padding(end = 6.dp),
                 )
-                CompactButton(stringResource(R.string.import_select_all), viewModel::selectAllGroups, modifier = leftOut, icon = Icons.Filled.Check)
-                CompactButton(stringResource(R.string.import_select_none), viewModel::selectNoGroups, modifier = leftOut)
             }
-            TvTextField(stringResource(R.string.import_filter_groups), viewModel.groupFilter, viewModel::setFilter, modifier = leftOut)
+            TvTextField(
+                stringResource(R.string.import_filter_groups),
+                viewModel.groupFilter,
+                viewModel::setFilter,
+                modifier = Modifier.focusRequester(groupFocus.filter).focusProperties {
+                    up = groupFocus.all
+                    if (groups.isNotEmpty()) down = focus.lastRow
+                    right = focus.panel
+                },
+            )
+            val firstKey = groups.firstOrNull()?.name
             LazyColumn(
                 Modifier
                     .fillMaxWidth()
@@ -330,7 +376,7 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                         group.name,
                         group.name in viewModel.chosenGroups,
                         { viewModel.toggleGroup(group.name) },
-                        modifier = Modifier.listRow(focus, group.name, group.name == targetKey),
+                        modifier = Modifier.listRow(focus, group.name, group.name == targetKey, up = if (group.name == firstKey) groupFocus.filter else null),
                         trailing = group.count.toString(),
                     )
                 }

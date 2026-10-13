@@ -99,8 +99,29 @@ class OwnTunerSession @Inject constructor(
     private val streamTargets: StreamTargets,
     private val quality: StreamQualityController,
     private val premiumGate: PremiumGate,
+    private val listEvents: com.enigmacast.sync.ChannelListEvents,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    init {
+        // New lists on the box (settings import): the zap list follows without a restart; the channel keeps playing.
+        scope.launch { listEvents.changed.collect { id -> if (id == boundReceiverId) reloadChannelList() } }
+    }
+
+    /** Re-reads the shown bouquet's channels from the (fresh) cache. */
+    private suspend fun reloadChannelList() {
+        val reference = _state.value.bouquetReference
+        if (reference.isBlank()) return
+        val receiver = settingsRepository.current().activeReceiver() ?: return
+        if (receiver.id != boundReceiverId) return
+        val channels = runCatching { serviceSource.channelsInBouquet(receiver, reference) }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            return
+        }
+        if (channels.isEmpty()) return
+        _state.update { it.copy(channels = channels) }
+        EnigmaLog.service("channel list reloaded after list change: ${channels.size}")
+    }
     private val _state = MutableStateFlow(OwnTunerState())
     val state: StateFlow<OwnTunerState> = _state.asStateFlow()
     private var startJob: Job? = null

@@ -60,6 +60,7 @@ enum class GuideMedium { Television, Radio }
 
 @HiltViewModel
 class StreamGuideViewModel @Inject constructor(
+    private val listEvents: com.enigmacast.sync.ChannelListEvents,
     private val settingsRepository: SettingsRepository,
     private val serviceSource: ServiceStateSource,
     private val infoSource: ReceiverInfoSource,
@@ -163,6 +164,9 @@ class StreamGuideViewModel @Inject constructor(
         }
         viewModelScope.launch {
             session.state.collect(::mirror)
+        }
+        viewModelScope.launch {
+            listEvents.changed.collect { id -> if (id == settingsRepository.current().activeReceiver()?.id) onListsChanged() }
         }
         viewModelScope.launch {
             quality.notices.collect { showNotice(it, NOTICE_LONG_MS) }
@@ -288,6 +292,31 @@ class StreamGuideViewModel @Inject constructor(
     fun numberOf(entry: BouquetEntry): Int = ChannelNavigator.numberOf(channels, entry)
 
     /** Another box was chosen: drop this box's bouquet and load the new one. */
+    /**
+     * The active box got new bouquets (settings import): the bouquet list and the shown bouquet
+     * are read again; what plays keeps playing. A bouquet that is gone falls back to the first one.
+     */
+    private fun onListsChanged() {
+        mediumJob?.cancel()
+        mediumJob = viewModelScope.launch {
+            val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            remembered.clear()
+            val list = runCatching { bouquetsFor(receiver, medium) }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                return@launch
+            }
+            bouquets = list
+            val shown = list.firstOrNull { it.reference == selectedBouquetReference }
+                ?: list.firstOrNull()?.takeIf { selectedBouquetReference.isNotBlank() }
+            if (shown != null) {
+                selectedBouquetReference = shown.reference
+                showBouquet(shown, ++bouquetToken)
+            }
+            rememberCurrent()
+            EnigmaLog.service("guide lists reloaded after list change: bouquets=${list.size}")
+        }
+    }
+
     private fun onReceiverChanged(id: String?) {
         tuneJob?.cancel()
         previewJob?.cancel()

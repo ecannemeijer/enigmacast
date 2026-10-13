@@ -47,6 +47,7 @@ data class CardChannel(val bouquet: String = "", val now: GuideEvent? = null)
 
 @HiltViewModel
 class TunerHomeViewModel @Inject constructor(
+    private val listEvents: com.enigmacast.sync.ChannelListEvents,
     private val switcher: com.enigmacast.live.ReceiverSwitcher,
     private val settingsRepository: SettingsRepository,
     private val api: OpenWebifApi,
@@ -64,6 +65,10 @@ class TunerHomeViewModel @Inject constructor(
     init {
         // Another box was chosen: drop the old box's cards at once and load the new one,
         // instead of showing the old box until the next poll.
+        viewModelScope.launch {
+            // New lists on the active box (settings import): reload the cards' channel facts.
+            listEvents.changed.collect { id -> if (id == settingsRepository.current().activeReceiver()?.id) refresh() }
+        }
         viewModelScope.launch {
             settingsRepository.settings.map { it.activeReceiver()?.id }.distinctUntilChanged().drop(1).collect {
                 cards = emptyList()

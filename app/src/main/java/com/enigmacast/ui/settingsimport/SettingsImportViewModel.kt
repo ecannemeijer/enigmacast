@@ -321,6 +321,9 @@ class SettingsImportViewModel @Inject constructor(
                     if (outcome.ok) remember(load, receiver.id, now)
                 }
                 ImportRefreshScheduler.update(context, configs.state.value)
+                // The channel cache is already replaced; the guide and Home films follow for the active box.
+                val activeLoaded = status[activeId].let { it is ReceiverStatus.Done && it.outcome.ok }
+                if (activeLoaded) com.enigmacast.sync.SyncScheduler.runNow(context, force = true)
             } finally {
                 busy = false
                 progress = null
