@@ -110,4 +110,6 @@ data class SyncStateRow(
     val lastSuccessMs: Long,
     val lastAttemptMs: Long,
     val error: String,
+    /** CHANNELS only: ChannelListHash of the lists last stored for this receiver. */
+    @androidx.room.ColumnInfo(defaultValue = "") val contentHash: String = "",
 )

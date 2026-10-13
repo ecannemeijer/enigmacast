@@ -1224,11 +1224,11 @@ private fun SettingsHub(
                         receivers = settings.receivers,
                         activeId = settings.activeReceiver()?.id,
                         onSelect = { id ->
-                            // Free: only the box in use; another one needs Premium.
-                            if (id == settings.activeReceiver()?.id || premiumGate.require(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)) {
-                                viewModel.selectReceiver(id)
-                            }
+                            // The same switch as the Red key; on Free it opens the Premium dialog.
+                            if (id != settings.activeReceiver()?.id) viewModel.selectReceiver(id)
                         },
+                        channelRefresh = viewModel.channelRefresh.collectAsState().value,
+                        onRefreshChannels = viewModel::refreshChannels,
                         onDelete = viewModel::removeReceiver,
                         menuAnchor = pageFocus,
                         contentFocus = pageContentFocus,

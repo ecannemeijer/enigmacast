@@ -62,6 +62,7 @@ class SyncEngine @Inject constructor(
     private val country: CountryDetector,
     private val bouquetStore: com.enigmacast.data.tmdb.HomeBouquetStore,
     private val seriesRecorder: dagger.Lazy<com.enigmacast.live.SeriesRecorder>,
+    private val channelMemory: dagger.Lazy<ChannelMemoryCarrier>,
 ) {
     private val gate = Mutex()
     private val _progress = MutableStateFlow<SyncProgress?>(null)
@@ -69,8 +70,12 @@ class SyncEngine @Inject constructor(
 
     fun receiverKey(receiver: ReceiverConfig) = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
 
-    /** True when something was refreshed. Errors are stored per step and do not throw. */
-    suspend fun run(receiver: ReceiverConfig, force: Boolean, refilm: Boolean = false): Boolean = gate.withLock {
+    /**
+     * True when something was refreshed. Errors are stored per step and do not throw.
+     * [check] compares the box's channel lists with the cache even when the channel step is not
+     * due (app start/resume). [carryFrom] is the receiver key the user just switched away from.
+     */
+    suspend fun run(receiver: ReceiverConfig, force: Boolean, refilm: Boolean = false, check: Boolean = false, carryFrom: String? = null): Boolean = gate.withLock {
         val rk = receiverKey(receiver)
         val zone = ZoneId.systemDefault()
         val nowMs = System.currentTimeMillis()
@@ -82,11 +87,14 @@ class SyncEngine @Inject constructor(
             dao.purgeHomeFilms(today.purgeBeforeSec)
             dao.purgeMatches(nowMs)
 
-            val channelsDue = force || SyncPolicy.isDue(values.channelsPerDay, last(rk, SyncKind.CHANNELS), nowMs, dao.channelCount(rk) > 0)
-            if (channelsDue) {
+            val hasChannels = dao.channelCount(rk) > 0
+            val channelsDue = force || SyncPolicy.isDue(values.channelsPerDay, last(rk, SyncKind.CHANNELS), nowMs, hasChannels)
+            if (channelsDue || check || carryFrom != null) {
                 step(rk, 2, R.string.sync_step_channels)
-                attempt(rk, SyncKind.CHANNELS) { syncChannels(receiver, rk) }
-                changed = true
+                attempt(rk, SyncKind.CHANNELS, keepHash = true) {
+                    val outcome = syncChannels(receiver, rk, force = channelsDue, carryFrom = carryFrom?.takeIf { it != rk })
+                    if (outcome.replaced) changed = true
+                }
             }
             val horizonSec = today.startSec + values.epgDays * 24 * 3600L
             val epgDue = changed || force ||
@@ -111,19 +119,79 @@ class SyncEngine @Inject constructor(
         }
     }
 
-    private suspend fun syncChannels(receiver: ReceiverConfig, rk: String) {
+    /** Result of a channel-list sync, for Settings' "Refresh channels & bouquets now". */
+    data class ChannelOutcome(val replaced: Boolean, val bouquets: Int, val channels: Int)
+
+    /**
+     * Settings › Receivers: fetches the box's bouquets and channels now and replaces the cache
+     * when anything differs. Throws when the box cannot be reached. The guide follows in the background.
+     */
+    suspend fun refreshChannelsNow(receiver: ReceiverConfig): ChannelOutcome {
+        val rk = receiverKey(receiver)
+        val outcome = gate.withLock {
+            try {
+                step(rk, 2, R.string.sync_step_channels)
+                var result: ChannelOutcome? = null
+                var failure: Exception? = null
+                attempt(rk, SyncKind.CHANNELS, keepHash = true, onError = { failure = it }) {
+                    result = syncChannels(receiver, rk, force = false, carryFrom = null)
+                }
+                failure?.let { throw it }
+                result!!
+            } finally {
+                _progress.value = null
+            }
+        }
+        return outcome
+    }
+
+    /**
+     * Fetches all TV bouquets and their channels and compares their [ChannelListHash] with the
+     * stored one. When it differs (or [force]), this receiver's bouquets and channels are fully
+     * replaced in one transaction, so removed, renamed and reordered entries never linger.
+     */
+    private suspend fun syncChannels(receiver: ReceiverConfig, rk: String, force: Boolean, carryFrom: String?): ChannelOutcome {
         val bouquets = api.televisionBouquets(receiver)
         require(bouquets.isNotEmpty()) { "no bouquets" }
+        val snapshots = ArrayList<com.enigmacast.domain.sync.BouquetSnapshot>()
         val bouquetRows = bouquets.mapIndexed { index, b -> BouquetRow(rk, b.reference, b.name, index) }
         val channelRows = ArrayList<ChannelRow>()
         var position = 0
         bouquets.forEachIndexed { index, bouquet ->
             step(rk, 2 + 13 * (index + 1) / bouquets.size, R.string.sync_step_channels)
-            val channels = runCatching { api.channelsInBouquet(receiver, bouquet.reference) }.getOrDefault(emptyList())
+            // A bouquet that fails to load keeps its cached channels instead of being emptied.
+            val channels = runCatching { api.channelsInBouquet(receiver, bouquet.reference) }.getOrElse {
+                dao.channelsIn(rk, bouquet.reference).map { com.enigmacast.domain.model.BouquetEntry(it.name, it.reference, it.number, it.picon) }
+            }
+            snapshots += com.enigmacast.domain.sync.BouquetSnapshot(bouquet.reference, bouquet.name, channels.map { it.reference })
             channels.forEach { c -> channelRows += ChannelRow(rk, bouquet.reference, c.reference, c.name, c.picon, c.number, position++, NowEvents.key(c.reference)) }
         }
-        dao.replaceChannels(rk, bouquetRows, channelRows)
-        EnigmaLog.service("sync channels receiver=$rk bouquets=${bouquets.size} channels=${channelRows.size}")
+        val hash = com.enigmacast.domain.sync.ChannelListHash.of(snapshots)
+        val stored = dao.syncState(rk, SyncKind.CHANNELS.name)
+        val hasCache = dao.channelCount(rk) > 0
+        val action = com.enigmacast.domain.sync.ChannelSyncDecision.decide(force, hasCache, stored?.contentHash.orEmpty(), hash)
+        val now = System.currentTimeMillis()
+        val state = SyncStateRow(rk, SyncKind.CHANNELS.name, now, now, "", hash)
+        if (action == com.enigmacast.domain.sync.ChannelSyncDecision.Action.KEEP) {
+            dao.putSyncState(state)
+            EnigmaLog.service("sync channels receiver=$rk unchanged")
+            return ChannelOutcome(false, bouquets.size, channelRows.size)
+        }
+        val previousHash = carryFrom?.let { dao.syncState(it, SyncKind.CHANNELS.name)?.contentHash }.orEmpty()
+        val same = carryFrom != null && com.enigmacast.domain.sync.ChannelSyncDecision.carryOver(previousHash, hash)
+        if (same && !hasCache && carryFrom != null) {
+            // Same lists as the box we came from: reuse its guide and the user's choices; the EPG refreshes later.
+            dao.replaceChannels(rk, bouquetRows, channelRows)
+            dao.putSyncState(state)
+            dao.copyEvents(carryFrom, rk)
+            if (bouquetStore.selected(rk) == null) bouquetStore.selected(carryFrom)?.let { bouquetStore.set(rk, it) }
+            runCatching { channelMemory.get().carryOver(carryFrom, receiver.id) }
+            EnigmaLog.service("sync channels receiver=$rk same lists as $carryFrom: cache carried over")
+            return ChannelOutcome(true, bouquets.size, channelRows.size)
+        }
+        dao.replaceChannelLists(rk, bouquetRows, channelRows, state)
+        EnigmaLog.service("sync channels receiver=$rk bouquets=${bouquets.size} channels=${channelRows.size} replaced")
+        return ChannelOutcome(true, bouquets.size, channelRows.size)
     }
 
     private suspend fun syncEpg(receiver: ReceiverConfig, rk: String, fromSec: Long, toSec: Long) = coroutineScope {
@@ -220,17 +288,19 @@ class SyncEngine @Inject constructor(
         return interval.coerceAtLeast(6L * 3600 * 1000)
     }
 
-    private suspend fun attempt(rk: String, kind: SyncKind, block: suspend () -> Unit) {
+    private suspend fun attempt(rk: String, kind: SyncKind, keepHash: Boolean = false, onError: (Exception) -> Unit = {}, block: suspend () -> Unit) {
         val start = System.currentTimeMillis()
         val previous = dao.syncState(rk, kind.name)
         try {
             block()
-            dao.putSyncState(SyncStateRow(rk, kind.name, System.currentTimeMillis(), start, ""))
+            val hash = if (keepHash) dao.syncState(rk, kind.name)?.contentHash.orEmpty() else ""
+            dao.putSyncState(SyncStateRow(rk, kind.name, System.currentTimeMillis(), start, "", hash))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             EnigmaLog.service("sync $kind failed: ${e.javaClass.simpleName} ${e.message}")
-            dao.putSyncState(SyncStateRow(rk, kind.name, previous?.lastSuccessMs ?: 0L, start, e.message ?: e.javaClass.simpleName))
+            dao.putSyncState(SyncStateRow(rk, kind.name, previous?.lastSuccessMs ?: 0L, start, e.message ?: e.javaClass.simpleName, previous?.contentHash.orEmpty()))
+            onError(e)
         }
     }
 

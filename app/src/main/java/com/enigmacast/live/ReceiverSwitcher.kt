@@ -50,11 +50,14 @@ class ReceiverSwitcher @Inject constructor(
         _open.value = false
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)) return
         scope.launch {
-            if (settings.current().activeReceiver()?.id == id) return@launch
+            val previous = settings.current().activeReceiver()
+            if (previous?.id == id) return@launch
             EnigmaLog.service("switch receiver to $id")
             ownTuner.prepareReceiverSwitch(id)
             settings.selectReceiver(id)
-            SyncScheduler.runNow(context, force = true)
+            // Full sync of the new box; identical lists carry the old box's cache and choices over.
+            val from = previous?.let { com.enigmacast.data.db.CacheMappers.receiverKey(it.id, it.host, it.httpPort) }
+            SyncScheduler.runNow(context, force = true, carryFrom = from)
             _switched.tryEmit(id)
         }
     }

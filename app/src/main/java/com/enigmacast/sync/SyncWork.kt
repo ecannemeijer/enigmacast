@@ -31,13 +31,21 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         val entry = EntryPointAccessors.fromApplication(applicationContext, SyncEntryPoint::class.java)
         val receiver = entry.settings().current().activeReceiver() ?: return Result.success()
-        entry.engine().run(receiver, force = inputData.getBoolean(KEY_FORCE, false), refilm = inputData.getBoolean(KEY_REFILM, false))
+        entry.engine().run(
+            receiver,
+            force = inputData.getBoolean(KEY_FORCE, false),
+            refilm = inputData.getBoolean(KEY_REFILM, false),
+            check = inputData.getBoolean(KEY_CHECK, false),
+            carryFrom = inputData.getString(KEY_FROM),
+        )
         return Result.success()
     }
 
     companion object {
         const val KEY_FORCE = "force"
         const val KEY_REFILM = "refilm"
+        const val KEY_CHECK = "check"
+        const val KEY_FROM = "carry_from"
     }
 }
 
@@ -56,14 +64,27 @@ object SyncScheduler {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
+    @Volatile private var lastCheckMs = 0L
+
+    /**
+     * App start/resume: compares the box's bouquets and channels with the cache (at most every
+     * 2 minutes) and refreshes them, and then the guide, when the box changed them.
+     */
+    fun checkForChanges(context: Context) {
+        val now = System.currentTimeMillis()
+        if (now - lastCheckMs < 2 * 60_000) return
+        lastCheckMs = now
+        runNow(context, force = false, check = true)
+    }
+
     /** [force] refreshes everything; otherwise only what is due or missing. */
-    fun runNow(context: Context, force: Boolean, refilm: Boolean = false) {
+    fun runNow(context: Context, force: Boolean, refilm: Boolean = false, check: Boolean = false, carryFrom: String? = null) {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(network)
-            .setInputData(workDataOf(SyncWorker.KEY_FORCE to force, SyncWorker.KEY_REFILM to refilm))
+            .setInputData(workDataOf(SyncWorker.KEY_FORCE to force, SyncWorker.KEY_REFILM to refilm, SyncWorker.KEY_CHECK to check, SyncWorker.KEY_FROM to carryFrom))
             .build()
         // Re-matching films after a bouquet change has its own queue, so it never cancels a running full sync.
         val name = if (refilm && !force) REFILM else NOW
-        WorkManager.getInstance(context).enqueueUniqueWork(name, if (force || refilm) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniqueWork(name, if (force || refilm || carryFrom != null) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP, request)
     }
 }

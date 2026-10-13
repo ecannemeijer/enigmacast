@@ -30,6 +30,27 @@ interface CacheDao {
         channels.chunked(500).forEach { insertChannels(it) }
     }
 
+    /**
+     * A sync's channel lists: everything of this receiver is replaced at once (removed, renamed
+     * and reordered bouquets included), its hash stored, and the guide marked due again.
+     */
+    @Transaction
+    suspend fun replaceChannelLists(receiverKey: String, bouquets: List<BouquetRow>, channels: List<ChannelRow>, state: SyncStateRow) {
+        replaceChannels(receiverKey, bouquets, channels)
+        putSyncState(state)
+        expireSyncState(receiverKey, listOf("EPG", "FILMS"))
+    }
+
+    @Query("UPDATE sync_state SET lastSuccessMs = 0 WHERE receiverKey = :receiverKey AND kind IN (:kinds)")
+    suspend fun expireSyncState(receiverKey: String, kinds: List<String>)
+
+    /** Copies the guide of one receiver onto another (same channel lists after a switch). */
+    @Query(
+        "INSERT OR REPLACE INTO epg_events SELECT :toKey, serviceKey, reference, beginSec, endSec, eventId, title, " +
+            "shortDescription, longDescription, genreId, genre FROM epg_events WHERE receiverKey = :fromKey",
+    )
+    suspend fun copyEvents(fromKey: String, toKey: String)
+
     @Query("SELECT * FROM bouquets WHERE receiverKey = :receiverKey ORDER BY position")
     suspend fun bouquets(receiverKey: String): List<BouquetRow>
 

@@ -50,6 +50,8 @@ fun ReceiversSettingsPanel(
     activeId: String?,
     onSelect: (String) -> Unit,
     onDelete: (String) -> Unit,
+    channelRefresh: Map<String, com.enigmacast.ui.settings.SettingsViewModel.ChannelRefresh> = emptyMap(),
+    onRefreshChannels: (String) -> Unit = {},
     /** Left from the form returns to the Receivers item, not the main menu. */
     menuAnchor: FocusRequester,
     /**
@@ -153,6 +155,13 @@ fun ReceiversSettingsPanel(
                     }
                 }
                 CompactButton(
+                    label = stringResource(
+                        if (channelRefresh[receiver.id] == com.enigmacast.ui.settings.SettingsViewModel.ChannelRefresh.Running) R.string.receivers_refresh_running
+                        else R.string.receivers_refresh_channels,
+                    ),
+                    onClick = { onRefreshChannels(receiver.id) },
+                )
+                CompactButton(
                     label = stringResource(R.string.receivers_edit),
                     onClick = {
                         onFormActive(true)
@@ -164,6 +173,18 @@ fun ReceiversSettingsPanel(
                     label = stringResource(R.string.receivers_delete),
                     onClick = { pendingDelete = receiver },
                 )
+            }
+            when (val state = channelRefresh[receiver.id]) {
+                is com.enigmacast.ui.settings.SettingsViewModel.ChannelRefresh.Done -> Text(
+                    if (state.changed) stringResource(R.string.receivers_refresh_updated, state.bouquets, state.channels)
+                    else stringResource(R.string.receivers_refresh_unchanged, state.bouquets, state.channels),
+                    color = EnigmaColors.Muted, fontSize = 12.sp,
+                )
+                is com.enigmacast.ui.settings.SettingsViewModel.ChannelRefresh.Failed -> Text(
+                    stringResource(R.string.receivers_refresh_failed, state.message),
+                    color = EnigmaColors.Muted, fontSize = 12.sp,
+                )
+                else -> Unit
             }
         }
     }

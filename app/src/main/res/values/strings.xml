@@ -246,6 +246,11 @@
     <string name="receivers_edit">Edit</string>
     <string name="receivers_empty">No receivers yet. Add one to watch its channels.</string>
     <string name="receivers_in_use">In use</string>
+    <string name="receivers_refresh_channels">Refresh channels &amp; bouquets now</string>
+    <string name="receivers_refresh_running">Refreshing…</string>
+    <string name="receivers_refresh_updated">Updated: %1$d bouquets, %2$d channels</string>
+    <string name="receivers_refresh_unchanged">Up to date: %1$d bouquets, %2$d channels (no changes on the receiver)</string>
+    <string name="receivers_refresh_failed">Refresh failed: %1$s</string>
     <string name="receivers_delete">Remove</string>
     <string name="receivers_delete_title">Remove receiver</string>
     <string name="receivers_delete_message">Remove %1$s? This app will no longer use that box.</string>

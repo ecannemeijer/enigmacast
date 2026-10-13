@@ -20,7 +20,40 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    private val switcher: com.enigmacast.live.ReceiverSwitcher,
+    private val syncEngine: com.enigmacast.sync.SyncEngine,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) : ViewModel() {
+    /** Settings › Receivers "Refresh channels & bouquets now": per receiver id. */
+    sealed interface ChannelRefresh {
+        data object Running : ChannelRefresh
+        data class Done(val changed: Boolean, val bouquets: Int, val channels: Int) : ChannelRefresh
+        data class Failed(val message: String) : ChannelRefresh
+    }
+    private val _channelRefresh = kotlinx.coroutines.flow.MutableStateFlow<Map<String, ChannelRefresh>>(emptyMap())
+    val channelRefresh: kotlinx.coroutines.flow.StateFlow<Map<String, ChannelRefresh>> = _channelRefresh
+
+    fun refreshChannels(id: String) {
+        val receiver = settings.value.receivers.firstOrNull { it.id == id } ?: return
+        if (_channelRefresh.value[id] == ChannelRefresh.Running) return
+        _channelRefresh.value = _channelRefresh.value + (id to ChannelRefresh.Running)
+        viewModelScope.launch {
+            val result = try {
+                val outcome = syncEngine.refreshChannelsNow(receiver)
+                // The guide and Home follow in the background for the box in use.
+                if (outcome.replaced && id == settings.value.activeReceiver()?.id) {
+                    com.enigmacast.sync.SyncScheduler.runNow(appContext, force = false)
+                }
+                ChannelRefresh.Done(outcome.replaced, outcome.bouquets, outcome.channels)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ChannelRefresh.Failed(e.message ?: e.javaClass.simpleName)
+            }
+            _channelRefresh.value = _channelRefresh.value + (id to result)
+        }
+    }
+
     val settings = settingsRepository.settings.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -66,7 +99,8 @@ class SettingsViewModel @Inject constructor(
     fun setOsdTransparency(percent: Int) = update {
         it.copy(osd = it.osd.copy(transparencyPercent = percent.coerceIn(0, 100)))
     }
-    fun selectReceiver(id: String) = update { ReceiverList.select(it, id) }
+    /** Same path as the Red key: frees the old box's tuner, saves, full sync, Premium check on Free. */
+    fun selectReceiver(id: String) = switcher.switchTo(id)
     fun removeReceiver(id: String) = update { ReceiverList.remove(it, id) }
     fun setInsecureCertificates(enabled: Boolean) = update { current ->
         val active = current.activeReceiver() ?: return@update current

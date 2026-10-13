@@ -140,6 +140,8 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         appViewModel.setForeground(true)
         appViewModel.resumeFromBackground()
+        // Bouquets or channels edited on the box itself show up without waiting for the daily refresh.
+        com.enigmacast.sync.SyncScheduler.checkForChanges(applicationContext)
     }
 
     override fun onStop() {

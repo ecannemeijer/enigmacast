@@ -8,6 +8,17 @@ import com.enigmacast.domain.player.RecentChannels
  * for the only box; [migrate] hangs those on the active receiver.
  */
 object ChannelMemory {
+    /** Same channel lists on another box: its last and recent channels start from [fromId]'s, unless it has its own. */
+    fun carryOver(settings: AppSettings, fromId: String, toId: String): AppSettings {
+        if (fromId.isBlank() || toId.isBlank() || fromId == toId) return settings
+        val last = settings.lastChannels[fromId]
+        val recent = settings.recentByReceiver[fromId]
+        return settings.copy(
+            lastChannels = if (last != null && toId !in settings.lastChannels) settings.lastChannels + (toId to last) else settings.lastChannels,
+            recentByReceiver = if (recent != null && toId !in settings.recentByReceiver) settings.recentByReceiver + (toId to recent) else settings.recentByReceiver,
+        )
+    }
+
     fun needsMigration(settings: AppSettings): Boolean {
         if (settings.activeReceiver()?.id.isNullOrBlank()) return false
         return settings.lastChannel.isRemembered() || settings.recentChannels.isNotEmpty()

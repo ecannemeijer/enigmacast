@@ -243,6 +243,11 @@
     <string name="receivers_edit">Bewerken</string>
     <string name="receivers_empty">Nog geen ontvangers. Voeg er een toe om de zenders te kijken.</string>
     <string name="receivers_in_use">In gebruik</string>
+    <string name="receivers_refresh_channels">Zenders &amp; bouquets nu vernieuwen</string>
+    <string name="receivers_refresh_running">Bezig met vernieuwen…</string>
+    <string name="receivers_refresh_updated">Bijgewerkt: %1$d bouquets, %2$d zenders</string>
+    <string name="receivers_refresh_unchanged">Actueel: %1$d bouquets, %2$d zenders (geen wijzigingen op de ontvanger)</string>
+    <string name="receivers_refresh_failed">Vernieuwen mislukt: %1$s</string>
     <string name="receivers_delete">Verwijderen</string>
     <string name="receivers_delete_title">Ontvanger verwijderen</string>
     <string name="receivers_delete_message">%1$s verwijderen? De app gebruikt die box dan niet meer.</string>

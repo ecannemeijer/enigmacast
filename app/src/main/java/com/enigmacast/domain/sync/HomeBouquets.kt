@@ -11,8 +11,12 @@ data class BouquetChannel(val bouquetReference: String, val reference: String, v
  */
 object HomeBouquets {
     /** The selected references among [all]; null stored = everything. Unknown stored references are dropped. */
-    fun effective(stored: Set<String>?, all: List<String>): Set<String> =
-        if (stored == null) all.toSet() else stored.intersect(all.toSet())
+    fun effective(stored: Set<String>?, all: List<String>): Set<String> {
+        if (stored == null) return all.toSet()
+        val kept = stored.intersect(all.toSet())
+        // None of the remembered bouquets exist on this box any more (renamed/removed, other box): show all.
+        return if (kept.isEmpty() && stored.isNotEmpty()) all.toSet() else kept
+    }
 
     /** Channels of the selected bouquets, once each (the first bouquet in list order wins), keyed by service key. */
     fun channels(channels: List<BouquetChannel>, selected: Set<String>): Map<String, BouquetChannel> {

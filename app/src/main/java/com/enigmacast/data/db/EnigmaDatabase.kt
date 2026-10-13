@@ -14,7 +14,7 @@ import javax.inject.Singleton
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
         SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
@@ -23,6 +23,13 @@ abstract class EnigmaDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "enigmacast-cache.db"
+
+        /** 4 → 5: the channel-list hash per receiver. Existing rows keep their receiver key. */
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sync_state ADD COLUMN contentHash TEXT NOT NULL DEFAULT ''")
+            }
+        }
     }
 }
 
@@ -34,6 +41,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
