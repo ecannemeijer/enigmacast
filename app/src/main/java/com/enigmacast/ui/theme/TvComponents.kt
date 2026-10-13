@@ -675,7 +675,7 @@ private fun StackedChoiceDialog(title: String, message: String, choices: List<St
                     destructive = false,
                     enabled = true,
                     compact = true,
-                    modifier = Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier),
+                    modifier = Modifier.fillMaxWidth().focusRequesterIf(index == 0, firstFocus),
                 )
             }
         }
@@ -841,7 +841,7 @@ fun OptionListDialog(
                     ListItem(
                         selected = index == selectedIndex,
                         onClick = { onSelect(index) },
-                        modifier = Modifier.fillMaxWidth().then(if (index == selectedIndex.coerceAtLeast(0)) Modifier.focusRequester(current) else Modifier),
+                        modifier = Modifier.fillMaxWidth().focusRequesterIf(index == selectedIndex.coerceAtLeast(0), current),
                         headlineContent = { Text(label, fontSize = 15.sp) },
                         trailingContent = if (index == selectedIndex) {
                             { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -266,8 +267,8 @@ fun DashboardScreen(
             }
             focusLanguageSetting || returnToMyItemsId != null -> Unit
             // Back from the player: Live TV opens the player, so focus its menu item.
-            focusPlayingChannel -> { streamFocus.requestFocus(); onPlayingChannelFocused() }
-            else -> homeFocus.requestFocus()
+            focusPlayingChannel -> { streamFocus.requestWhenReady(); onPlayingChannelFocused() }
+            else -> homeFocus.requestWhenReady()
         }
     }
     LaunchedEffect(returnToMyItemsId) {
@@ -1018,9 +1019,9 @@ internal fun BouquetColumn(
                         onClick = onClose,
                         onFocus = { onPreview(bouquet) },
                         modifier = Modifier
-                            .then(if (index == focusIndex) Modifier.focusRequester(bouquetFocus) else Modifier)
-                            .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
-                            .then(if (index == lastIndex && lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
+                            .focusRequesterIf(index == focusIndex, bouquetFocus)
+                            .focusRequesterIf(index == 0, firstFocus)
+                            .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
                             .focusProperties { left = settingsFocus }
                             .wrapListEnds(
                                 index = index,
@@ -1141,11 +1142,13 @@ private fun SettingsHub(
     }
     val formFocus = remember { FocusRequester() }
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val focusScope = androidx.compose.runtime.rememberCoroutineScope()
     Column(
         modifier.onFocusChanged { state ->
             val dialogOpen = connection.autodetectState !is AutodetectState.Hidden
             if (formActive && !state.hasFocus && !dialogOpen) {
-                runCatching { formFocus.requestFocus() }
+                // Not from inside the focus change: the old node may be detaching right now.
+                focusScope.launch { formFocus.requestWhenReady() }
             }
         },
     ) {
@@ -1273,8 +1276,8 @@ private fun SettingNav(
         onClick = onSelect,
         onFocus = onFocus,
         modifier = Modifier
-            .then(if (itemFocus != null) Modifier.focusRequester(itemFocus) else Modifier)
-            .then(if (selected && entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier)
+            .focusRequesterIf(true, itemFocus)
+            .focusRequesterIf(selected && entryFocus != null, entryFocus)
             .focusProperties {
                 left = menuFocus
                 right = if (opensPage) pageContentFocus else FocusRequester.Cancel

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -199,9 +200,9 @@ internal fun LiveBrowser(
                         onClick = { guideModel.tune(entry, onMiniPlayer, onFullscreen) },
                         selected = if (tunedExactly) index == tunedIndex else BouquetChannels.sameService(entry.reference, tunedReference),
                         modifier = Modifier
-                            .then(if (index == focusedIndex) Modifier.focusRequester(listFocus) else Modifier)
-                            .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
-                            .then(if (index == channels.lastIndex && channels.lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
+                            .focusRequesterIf(index == focusedIndex, listFocus)
+                            .focusRequesterIf(index == 0, firstFocus)
+                            .focusRequesterIf(index == channels.lastIndex && channels.lastIndex > 0, lastFocus)
                             .onFocusChanged { if (it.isFocused) focusedIndex = index }
                             .wrapListEnds(
                                 index = index,

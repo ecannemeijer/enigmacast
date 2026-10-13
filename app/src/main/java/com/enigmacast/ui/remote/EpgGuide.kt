@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -541,7 +542,7 @@ fun ChannelEpgPanel(
                     onClick = { actions.onChooseProgramme(channel, event) },
                     selected = airing,
                     modifier = Modifier
-                        .then(if (index == 0) Modifier.focusRequester(focus) else Modifier)
+                        .focusRequesterIf(index == 0, focus)
                         .onFocusChanged { if (it.isFocused) focusedIndex = index },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 ) { focused ->

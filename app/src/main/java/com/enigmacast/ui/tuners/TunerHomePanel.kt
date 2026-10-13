@@ -1,5 +1,6 @@
 package com.enigmacast.ui.tuners
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -473,7 +474,7 @@ private fun SeriesEpisodesDialog(
                 group.episodes.forEachIndexed { i, ep ->
                     val focus = rememberTvFocus()
                     Row(
-                        Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier)
+                        Modifier.fillMaxWidth().focusRequesterIf(i == 0, first)
                             .then(focusLook(focus.focused, CardShape)).tvClick(focus) { askEpisode = ep }.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

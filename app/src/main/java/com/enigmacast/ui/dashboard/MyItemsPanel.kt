@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -142,7 +143,7 @@ fun MyItemsPanel(
                                     movie = posterMap[item.id],
                                     progress = com.enigmacast.domain.resume.ResumePolicy.fraction(resumeMap[item.id], (item.endEpochSec - item.beginEpochSec) * 1000),
                                     modifier = Modifier
-                                        .then(if (item.id == focusOn) Modifier.focusRequester(listFocus) else Modifier)
+                                        .focusRequesterIf(item.id == focusOn, listFocus)
                                         .focusProperties {
                                             canFocus = rowsFocusable
                                             if (i == 0) left = menuFocus
@@ -156,7 +157,7 @@ fun MyItemsPanel(
                         RecordingRow(
                             item = item,
                             modifier = Modifier
-                                .then(if (item.id == focusOn) Modifier.focusRequester(listFocus) else Modifier)
+                                .focusRequesterIf(item.id == focusOn, listFocus)
                                 .focusProperties {
                                     canFocus = rowsFocusable
                                     left = menuFocus

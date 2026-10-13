@@ -1,5 +1,6 @@
 package com.enigmacast.ui.recording
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -96,7 +97,7 @@ fun TunerConflictHost(model: TunerConflictViewModel = androidx.hilt.lifecycle.vi
                     DialogButton(
                         label = stringResource(R.string.conflict_watch, rec.channelName),
                         onClick = { model.watch(rec) }, destructive = false, enabled = true, compact = true,
-                        modifier = Modifier.weight(1f).then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                        modifier = Modifier.weight(1f).focusRequesterIf(i == 0, first),
                     )
                     DialogButton(
                         label = stringResource(R.string.home_cancel_recording),

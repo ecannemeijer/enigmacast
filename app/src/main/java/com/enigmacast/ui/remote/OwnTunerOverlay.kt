@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -585,9 +586,9 @@ internal fun BouquetPanel(
                     selected = index == anchor && activeReference.isNotBlank(),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                     modifier = Modifier
-                        .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
-                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
-                        .then(if (index == lastIndex && lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
+                        .focusRequesterIf(index == anchor, focus)
+                        .focusRequesterIf(index == 0, firstFocus)
+                        .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
                         .focusProperties { left = FocusRequester.Cancel }
                         .wrapListEnds(
                             index = index,
@@ -680,9 +681,9 @@ private fun ChannelPanel(
                     onClick = { onZap(entry) },
                     selected = if (playingIndex >= 0) index == playingIndex else BouquetChannels.sameService(entry.reference, current),
                     modifier = Modifier
-                        .then(if (index == anchor) Modifier.focusRequester(focus) else Modifier)
-                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
-                        .then(if (index == lastIndex && lastIndex > 0) Modifier.focusRequester(lastFocus) else Modifier)
+                        .focusRequesterIf(index == anchor, focus)
+                        .focusRequesterIf(index == 0, firstFocus)
+                        .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
                         .wrapListEnds(
                             index = index,
                             lastIndex = lastIndex,

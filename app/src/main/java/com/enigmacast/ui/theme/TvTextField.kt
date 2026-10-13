@@ -204,7 +204,7 @@ fun TvTextField(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (fieldFocus != null) Modifier.focusRequester(fieldFocus) else Modifier)
+                .focusRequesterIf(true, fieldFocus)
                 .focusRequester(shell)
                 .focusProperties {
                     canFocus = browsable
