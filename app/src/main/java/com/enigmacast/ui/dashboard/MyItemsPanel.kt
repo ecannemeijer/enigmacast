@@ -68,12 +68,16 @@ fun MyItemsPanel(
     modifier: Modifier = Modifier,
     viewModel: MyItemsViewModel = hiltViewModel(),
 ) {
-    val items by viewModel.items.collectAsStateWithLifecycle()
+    val book by viewModel.items.collectAsStateWithLifecycle()
+    val boxName by viewModel.receiverName.collectAsStateWithLifecycle()
+    // The section follows where a recording is stored, not which device scheduled it.
+    val sections = com.enigmacast.domain.recording.MyItemsSections.split(book, viewModel.boxMovies, viewModel.boxTimers)
+    val items = sections.device
     val listState = rememberLazyListState()
     val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val posterMap by viewModel.posters.collectAsStateWithLifecycle()
     val resumeMap by viewModel.resumePoints.collectAsStateWithLifecycle()
-    LaunchedEffect(items, viewModel.boxMovies) { viewModel.loadArtwork(items + viewModel.boxMovies) }
+    LaunchedEffect(book, viewModel.boxMovies) { viewModel.loadArtwork(book + viewModel.boxMovies) }
     LaunchedEffect(Unit) {
         viewModel.reloadNow()
         while (true) {
@@ -87,15 +91,15 @@ fun MyItemsPanel(
             .fillMaxSize()
             .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
             // The empty/loading line is replaced by the list: keep the focus on the page (first item).
-            .holdPageFocus(listFocus, (items + viewModel.boxMovies + viewModel.boxTimers).firstOrNull()?.id),
+            .holdPageFocus(listFocus, sections.all.firstOrNull()?.id),
     ) {
         PanelHeader(stringResource(R.string.nav_my_items))
         val notice = viewModel.notice.asString()
         if (notice.isNotBlank()) {
             Text(notice, color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
-        val boxMovies = viewModel.boxMovies
-        val boxTimers = viewModel.boxTimers
+        val boxMovies = sections.onReceiver
+        val boxTimers = sections.scheduledOnReceiver
         val all = items + boxMovies + boxTimers
         if (all.isEmpty()) {
             Text(
@@ -119,14 +123,15 @@ fun MyItemsPanel(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 // Sections: this app's recordings, recordings on the box, timers on the box. Headers are not focusable.
+                val box = boxName.ifBlank { null }
                 listOf(
                     Triple("app", if (boxMovies.isEmpty() && boxTimers.isEmpty()) null else R.string.my_items_section_app, items),
-                    Triple("movies", R.string.my_items_section_box, boxMovies),
-                    Triple("timers", R.string.my_items_section_box_timers, boxTimers),
+                    Triple("movies", if (box != null) R.string.my_items_section_box_named else R.string.my_items_section_box, boxMovies),
+                    Triple("timers", if (box != null) R.string.my_items_section_box_timers_named else R.string.my_items_section_box_timers, boxTimers),
                 ).forEach { (key, header, list) ->
                     if (list.isEmpty()) return@forEach
                     if (header != null) item(key = "h-$key") {
-                        Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
+                        Text(stringResource(header, box.orEmpty()), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
                     }
                     val posters = list.filter(viewModel::isPoster)
                     val rows = list.filterNot(viewModel::isPoster)
@@ -174,10 +179,10 @@ fun MyItemsPanel(
     LaunchedEffect(viewModel.focusToken) {
         if (viewModel.focusToken == 0 || viewModel.focusToken == focusTokenOnEnter) return@LaunchedEffect
         if (viewModel.selected != null || viewModel.pendingDelete != null) return@LaunchedEffect
-        val index = listIndexOf(viewModel.focusId, items, viewModel.boxMovies, viewModel.boxTimers, viewModel::isPoster)
+        val index = listIndexOf(viewModel.focusId, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
         if (index >= 0) listState.scrollToItem(index)
         // A poster sits inside a sideways row: bring it into view there too.
-        for ((key, list) in listOf("app" to items, "movies" to viewModel.boxMovies)) {
+        for ((key, list) in listOf("app" to items, "movies" to sections.onReceiver)) {
             val i = list.filter(viewModel::isPoster).indexOfFirst { it.id == viewModel.focusId }
             if (i >= 0) rowStates[key]?.scrollToItem(i)
         }

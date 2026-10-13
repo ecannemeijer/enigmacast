@@ -28,6 +28,7 @@ class MyItemsViewModel @Inject constructor(
     settingsRepository: SettingsRepository,
     private val resume: com.enigmacast.live.ResumeTracker,
     private val artwork: com.enigmacast.live.RecordingArtwork,
+    receiverNames: com.enigmacast.live.ReceiverNames,
 ) : ViewModel() {
     /** Saved positions by recording id, for the progress bars. */
     val resumePoints: StateFlow<Map<String, com.enigmacast.domain.resume.ResumePoint>> = resume.points
@@ -73,6 +74,9 @@ class MyItemsViewModel @Inject constructor(
         private set
     var boxTimers by mutableStateOf<List<Recording>>(emptyList())
         private set
+
+    /** Label of the box ("Octagon SF8008") for the section headers. */
+    val receiverName = receiverNames.active
 
     fun isBox(item: Recording) = item.id.startsWith(RecordingBook.BOX_MOVIE) || item.id.startsWith(RecordingBook.BOX_TIMER)
     fun isBoxTimer(item: Recording) = item.id.startsWith(RecordingBook.BOX_TIMER)

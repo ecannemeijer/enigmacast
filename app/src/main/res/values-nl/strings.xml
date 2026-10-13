@@ -894,7 +894,7 @@
     <string name="record_choose">%1$s\n%2$s\nWaar wil je opnemen?</string>
     <string name="record_on_device">Opnemen op dit apparaat</string>
     <string name="record_on_box">Opnemen op Enigma2-box</string>
-    <string name="my_items_section_app">Opgenomen via deze app</string>
+    <string name="my_items_section_app">Opgenomen op dit apparaat</string>
     <string name="my_items_section_box">Opnames op de box</string>
     <string name="my_items_section_box_timers">Ingepland op de box</string>
     <string name="my_items_box_delete_failed">De box kon het niet verwijderen.</string>
@@ -971,4 +971,6 @@
     <string name="conflict_running">Opname op %1$s: ‘%2$s’, tot %3$s</string>
     <string name="conflict_watch">Kijk %1$s</string>
     <string name="conflict_cancel_then">Daarna start %1$s.</string>
+    <string name="my_items_section_box_named">Opnames op %1$s</string>
+    <string name="my_items_section_box_timers_named">Ingepland op %1$s</string>
 </resources>

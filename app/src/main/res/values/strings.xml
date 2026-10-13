@@ -897,7 +897,7 @@
     <string name="record_choose">%1$s\n%2$s\nWhere should it be recorded?</string>
     <string name="record_on_device">Record on this device</string>
     <string name="record_on_box">Record on Enigma2 box</string>
-    <string name="my_items_section_app">Recorded from this app</string>
+    <string name="my_items_section_app">Recorded on this device</string>
     <string name="my_items_section_box">Recordings on the box</string>
     <string name="my_items_section_box_timers">Scheduled on the box</string>
     <string name="my_items_box_delete_failed">The box could not delete it.</string>
@@ -974,4 +974,6 @@
     <string name="conflict_running">Recording on %1$s: ‘%2$s’, until %3$s</string>
     <string name="conflict_watch">Watch %1$s</string>
     <string name="conflict_cancel_then">Afterwards %1$s starts.</string>
+    <string name="my_items_section_box_named">Recordings on %1$s</string>
+    <string name="my_items_section_box_timers_named">Scheduled on %1$s</string>
 </resources>

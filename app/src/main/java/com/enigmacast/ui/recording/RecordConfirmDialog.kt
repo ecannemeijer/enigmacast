@@ -32,9 +32,8 @@ fun RecordConfirmDialog(
     val whenText = "${start.format(DayFormat)}  ${start.format(ClockFormat)} – ${end.format(ClockFormat)}"
     val title = ask.event.title.ifBlank { ask.channelName }
     // The box option names the receiver ("Record on SF8008"), first and focused.
-    val settingsModel: com.enigmacast.ui.settings.SettingsViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
-    val settings by settingsModel.settings.collectAsStateWithLifecycle()
-    val boxName = settings.activeReceiver()?.name?.trim().orEmpty()
+    val names: ReceiverNameViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
+    val boxName by names.active.collectAsStateWithLifecycle()
     val onBox = if (boxName.isNotBlank()) stringResource(R.string.record_on_named, boxName) else stringResource(R.string.record_on_box)
     // "Record all upcoming" asks where next (TV or box), in a second step.
     var all by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
