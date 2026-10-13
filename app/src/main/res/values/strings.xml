@@ -1229,4 +1229,8 @@ Profile: %2$s</string>
     <string name="import_step_epg">Reading the TV guide (XMLTV)…</string>
     <string name="import_epg_receiver">TV guide for %1$d IPTV channels via EPGImport on the receiver (enable the source \"EnigmaCast IPTV\" in EPGImport once).</string>
     <string name="import_epg_app">TV guide for %1$d IPTV channels stored in the app.</string>
+    <string name="import_step_epg_file">TV guide %1$d/%2$d · %3$s · %4$d%% · %5$d programmes</string>
+    <string name="import_epg_hint">The channels are already on the receiver; the guide follows.</string>
+    <string name="import_epg_background">In the background</string>
+    <string name="import_epg_running_background">The TV guide is being read in the background.</string>
 </resources>

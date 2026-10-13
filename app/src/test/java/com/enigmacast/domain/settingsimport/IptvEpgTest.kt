@@ -40,7 +40,7 @@ class IptvEpgTest {
         )
         var matches = emptyMap<String, String>()
         val programmes = ArrayList<XmltvProgramme>()
-        XmltvReader(res("epgshare-nl-sample.xml").reader()).read(
+        XmltvReader(org.kxml2.io.KXmlParser(), res("epgshare-nl-sample.xml").reader()).read(
             onChannel = { id, names -> channels[id] = names },
             onChannelsDone = { matches = IptvEpg.match(links, channels); true },
             wanted = { it in matches.values },
@@ -55,15 +55,16 @@ class IptvEpgTest {
 
     @Test fun stopsAfterChannelsWhenAsked() {
         var programmes = 0
-        XmltvReader(res("epgshare-nl-sample.xml").reader()).read({ _, _ -> }, { false }, { true }, { programmes++ })
+        XmltvReader(org.kxml2.io.KXmlParser(), res("epgshare-nl-sample.xml").reader()).read({ _, _ -> }, { false }, { true }, { programmes++ })
         assertEquals(0, programmes)
     }
 
     @Test fun lexerEntitiesCdataAndTimes() {
-        val xml = """<?xml version="1.0"?><!-- c --><tv><channel id="a&amp;b"><display-name>A &amp; B</display-name></channel>
+        val xml = """<?xml version="1.0"?><!-- c --><tv>
+<channel id="a&amp;b"><display-name>A &amp; B</display-name></channel>
             <programme start="20261013200000 +0200" stop="20261013210000 +0200" channel="a&amp;b"><title><![CDATA[News <live>]]></title><desc>x &#233;</desc></programme></tv>"""
         val got = ArrayList<XmltvProgramme>()
-        XmltvReader(xml.reader()).read({ _, _ -> }, { true }, { it == "a&b" }, { got += it })
+        XmltvReader(org.kxml2.io.KXmlParser(), xml.reader()).read({ _, _ -> }, { true }, { it == "a&b" }, { got += it })
         assertEquals(1, got.size)
         assertEquals("News <live>", got[0].title)
         assertEquals("x é", got[0].desc)

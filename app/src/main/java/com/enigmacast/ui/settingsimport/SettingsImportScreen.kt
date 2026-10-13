@@ -420,7 +420,7 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                 else -> null
             },
         )
-        LoadProgressCard(viewModel.progress)
+        LoadProgressCard(viewModel.progress, viewModel::epgInBackground, Modifier.focusProperties { left = backTarget })
         Results(viewModel)
     }
 }
@@ -506,7 +506,7 @@ private fun ProgressLine(fraction: Float?, text: String) {
 
 /** Per receiver and per file while a list or bouquets are loaded on the receivers. */
 @Composable
-private fun LoadProgressCard(progress: LoadProgress?) {
+private fun LoadProgressCard(progress: LoadProgress?, onBackground: (() -> Unit)? = null, buttonModifier: Modifier = Modifier) {
     if (progress == null) return
     SettingsCard(stringResource(R.string.import_progress_title)) {
         val name = progress.receiverName
@@ -515,7 +515,11 @@ private fun LoadProgressCard(progress: LoadProgress?) {
             name == null -> stringResource(R.string.import_progress_preparing)
             step == null -> stringResource(R.string.import_step_connect, name)
             else -> when (step.stage) {
-                ImportStage.EPG -> stringResource(R.string.import_step_epg)
+                ImportStage.EPG -> if (step.total > 0 && step.label.isNotEmpty()) {
+                    stringResource(R.string.import_step_epg_file, (step.done + 1).coerceAtMost(step.total), step.total, step.label, (step.part * 100).toInt(), step.count)
+                } else {
+                    stringResource(R.string.import_step_epg)
+                }
                 ImportStage.CONNECT -> stringResource(R.string.import_step_connect, name)
                 ImportStage.BACKUP -> stringResource(R.string.import_step_backup, step.done, step.total, name)
                 ImportStage.UPLOAD -> stringResource(R.string.import_step_upload, step.done, step.total, name)
@@ -527,6 +531,10 @@ private fun LoadProgressCard(progress: LoadProgress?) {
         ProgressLine(progress.fraction, text)
         if (progress.receiverCount > 1 && name != null) {
             Muted(stringResource(R.string.import_progress_receiver, progress.receiverIndex + 1, progress.receiverCount, name))
+        }
+        if (step?.stage == ImportStage.EPG && onBackground != null) {
+            Muted(stringResource(R.string.import_epg_hint))
+            CompactButton(stringResource(R.string.import_epg_background), onBackground, modifier = buttonModifier, icon = EnigmaIcons.History)
         }
     }
 }
@@ -763,6 +771,7 @@ private fun Results(viewModel: SettingsImportViewModel) {
                             FailureText(outcome.failure!!)
                         }
                         outcome.backupLabel?.let { Muted(stringResource(R.string.import_backup_made, it)) }
+                        if (outcome.ok && outcome.epgBackground) Muted(stringResource(R.string.import_epg_running_background))
                         if (outcome.ok && outcome.epgChannels > 0) {
                             Muted(stringResource(if (outcome.epgOnReceiver) R.string.import_epg_receiver else R.string.import_epg_app, outcome.epgChannels))
                         }

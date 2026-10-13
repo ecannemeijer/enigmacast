@@ -1,8 +1,7 @@
 package com.enigmacast.domain.settingsimport
 
 import java.io.Reader
-import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
+import org.xmlpull.v1.XmlPullParser
 
 /** EPG key of one IPTV service: what the playlist says about it and its Enigma2 reference (first ten fields). */
 data class EpgLink(val tvgId: String, val name: String, val reference: String, val country: String? = null)
@@ -110,180 +109,113 @@ object IptvEpg {
         append("</channels>\n")
     }
 
-    private val XMLTV_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss Z")
-
-    /** `20261012000000 +0000` → epoch seconds; no offset means UTC. */
+    /** `20261012000000 +0000` → epoch seconds; no offset means UTC. Digit arithmetic, no formatter objects. */
     fun parseTime(text: String): Long? {
         val t = text.trim()
         if (t.length < 14) return null
-        val withZone = if (t.length >= 20) t.substring(0, 14) + " " + t.substring(t.length - 5) else t.substring(0, 14) + " +0000"
-        return runCatching { OffsetDateTime.parse(withZone, XMLTV_TIME).toEpochSecond() }.getOrNull()
+        fun num(from: Int, len: Int): Int {
+            var v = 0
+            for (i in from until from + len) {
+                val d = t[i] - '0'
+                if (d !in 0..9) return -1
+                v = v * 10 + d
+            }
+            return v
+        }
+        val y = num(0, 4); val mo = num(4, 2); val d = num(6, 2); val h = num(8, 2); val mi = num(10, 2); val se = num(12, 2)
+        if (y < 0 || mo !in 1..12 || d !in 1..31 || h < 0 || mi < 0 || se < 0) return null
+        val days = java.time.LocalDate.of(y, mo, d).toEpochDay()
+        var sec = days * 86_400 + h * 3600 + mi * 60 + se
+        val zone = t.substring(14).trim()
+        if (zone.length == 5 && (zone[0] == '+' || zone[0] == '-')) {
+            val zh = zone.substring(1, 3).toIntOrNull() ?: return null
+            val zm = zone.substring(3, 5).toIntOrNull() ?: return null
+            val off = zh * 3600 + zm * 60
+            sec -= if (zone[0] == '+') off else -off
+        }
+        return sec
     }
 }
 
 /**
- * Streaming XMLTV reader: one pass over the text, never the whole document in memory. Channels
- * come first; [onProgramme] gets only programmes whose channel [wanted] accepts. Return false
- * from [onChannelsDone] to stop after the channel list (EPGImport needs only the ids).
+ * Streaming XMLTV reader on an [XmlPullParser] (Android's native-backed parser on the TV, kXML in
+ * tests): one pass, never the whole document in memory. Channels come first; programmes of
+ * channels that [wanted] rejects are skipped without building strings. Return false from
+ * [onChannelsDone] to stop after the channel list.
  */
-class XmltvReader(private val reader: Reader) {
+class XmltvReader(private val parser: XmlPullParser, private val reader: Reader) {
     fun read(
         onChannel: (id: String, names: List<String>) -> Unit,
         onChannelsDone: () -> Boolean,
         wanted: (String) -> Boolean,
         onProgramme: (XmltvProgramme) -> Unit,
     ) {
-        val lexer = XmlLexer(reader)
-        var channelId: String? = null
-        val names = ArrayList<String>()
+        runCatching { parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false) }
+        parser.setInput(reader)
         var channelsDone = false
-        var programme: Map<String, String>? = null
-        var field: String? = null
-        val text = StringBuilder()
-        var title = ""
-        var desc = ""
-        while (true) {
-            val token = lexer.next() ?: break
-            when (token) {
-                is XmlLexer.Token.Start -> {
-                    when (token.name) {
-                        "channel" -> if (programme == null) { channelId = token.attrs["id"]; names.clear() }
-                        "programme" -> {
-                            if (!channelsDone) {
-                                channelsDone = true
-                                if (!onChannelsDone()) return
-                            }
-                            val ch = token.attrs["channel"].orEmpty()
-                            programme = if (wanted(ch)) token.attrs else null
-                            title = ""; desc = ""
-                            if (programme == null) lexer.skipUntilEnd("programme")
-                        }
-                        "display-name", "title", "desc" -> { field = token.name; text.clear() }
-                    }
-                    if (token.selfClosing && token.name == "channel") { channelId?.let { onChannel(it, names.toList()) }; channelId = null }
-                }
-                is XmlLexer.Token.Text -> if (field != null) text.append(token.text)
-                is XmlLexer.Token.End -> when (token.name) {
-                    "display-name" -> { if (channelId != null) names += text.toString().trim(); field = null }
-                    "title" -> { if (title.isEmpty()) title = text.toString().trim(); field = null }
-                    "desc" -> { if (desc.isEmpty()) desc = text.toString().trim(); field = null }
-                    "channel" -> { channelId?.let { onChannel(it, names.toList()) }; channelId = null }
+        var event = parser.eventType
+        while (event != XmlPullParser.END_DOCUMENT) {
+            if (event == XmlPullParser.START_TAG && parser.depth == 2) {
+                when (parser.name) {
+                    "channel" -> readChannel(onChannel)
                     "programme" -> {
-                        val p = programme
-                        if (p != null) {
-                            val start = IptvEpg.parseTime(p["start"].orEmpty())
-                            val stop = IptvEpg.parseTime(p["stop"].orEmpty())
-                            if (start != null && stop != null && stop > start && title.isNotEmpty()) {
-                                onProgramme(XmltvProgramme(p["channel"].orEmpty(), start, stop, title, desc))
-                            }
+                        if (!channelsDone) {
+                            channelsDone = true
+                            if (!onChannelsDone()) return
                         }
-                        programme = null
+                        val channel = parser.getAttributeValue(null, "channel").orEmpty()
+                        if (wanted(channel)) readProgramme(channel)?.let(onProgramme) else skip()
                     }
+                    else -> skip()
                 }
             }
+            event = parser.next()
         }
         if (!channelsDone) onChannelsDone()
     }
-}
 
-/** Minimal pull lexer for XMLTV: tags with attributes, text with entities, CDATA; skips PIs, comments, DOCTYPE. */
-internal class XmlLexer(private val reader: Reader) {
-    sealed interface Token {
-        data class Start(val name: String, val attrs: Map<String, String>, val selfClosing: Boolean) : Token
-        data class End(val name: String) : Token
-        data class Text(val text: String) : Token
+    private fun readChannel(onChannel: (String, List<String>) -> Unit) {
+        val id = parser.getAttributeValue(null, "id")
+        val names = ArrayList<String>(2)
+        val depth = parser.depth
+        while (true) {
+            val e = parser.next()
+            if (e == XmlPullParser.END_DOCUMENT || (e == XmlPullParser.END_TAG && parser.depth == depth)) break
+            if (e == XmlPullParser.START_TAG && parser.name == "display-name") names += parser.nextText().trim()
+        }
+        if (!id.isNullOrEmpty()) onChannel(id, names)
     }
 
-    private var peeked = -2
-
-    private fun read(): Int = if (peeked != -2) peeked.also { peeked = -2 } else reader.read()
-    private fun unread(c: Int) { peeked = c }
-
-    fun next(): Token? {
+    private fun readProgramme(channel: String): XmltvProgramme? {
+        val start = IptvEpg.parseTime(parser.getAttributeValue(null, "start").orEmpty())
+        val stop = IptvEpg.parseTime(parser.getAttributeValue(null, "stop").orEmpty())
+        var title = ""
+        var desc = ""
+        val depth = parser.depth
         while (true) {
-            val c = read()
-            if (c < 0) return null
-            if (c != '<'.code) {
-                val sb = StringBuilder().append(c.toChar())
-                while (true) {
-                    val d = read()
-                    if (d < 0) break
-                    if (d == '<'.code) { unread(d); break }
-                    sb.append(d.toChar())
-                }
-                return Token.Text(decode(sb.toString()))
-            }
-            val d = read()
-            when (d) {
-                '?'.code -> skipPast("?>")
-                '!'.code -> {
-                    val head = StringBuilder()
-                    repeat(2) { val e = read(); if (e >= 0) head.append(e.toChar()) }
-                    when {
-                        head.toString() == "--" -> skipPast("-->")
-                        head.toString() == "[C" -> {
-                            skipPast("[") // "DATA["
-                            return Token.Text(readUntil("]]>"))
-                        }
-                        else -> skipPast(">")
-                    }
-                }
-                '/'.code -> {
-                    val name = readUntil(">").trim()
-                    return Token.End(name)
-                }
-                else -> {
-                    if (d < 0) return null
-                    val raw = StringBuilder().append(d.toChar())
-                    var quote = 0
-                    while (true) {
-                        val e = read()
-                        if (e < 0) break
-                        if (quote != 0) { if (e == quote) quote = 0 }
-                        else if (e == '"'.code || e == '\''.code) quote = e
-                        else if (e == '>'.code) break
-                        raw.append(e.toChar())
-                    }
-                    var body = raw.toString()
-                    val self = body.endsWith("/")
-                    if (self) body = body.dropLast(1)
-                    val name = body.takeWhile { !it.isWhitespace() }
-                    val attrs = HashMap<String, String>()
-                    ATTR.findAll(body.substring(name.length)).forEach { m ->
-                        attrs[m.groupValues[1]] = decode(m.groups[2]?.value ?: m.groups[3]?.value.orEmpty())
-                    }
-                    return Token.Start(name, attrs, self)
+            val e = parser.next()
+            if (e == XmlPullParser.END_DOCUMENT || (e == XmlPullParser.END_TAG && parser.depth == depth)) break
+            if (e == XmlPullParser.START_TAG) {
+                when (parser.name) {
+                    "title" -> if (title.isEmpty()) title = parser.nextText().trim() else skip()
+                    "desc" -> if (desc.isEmpty()) desc = parser.nextText().trim() else skip()
+                    else -> skip()
                 }
             }
         }
+        if (start == null || stop == null || stop <= start || title.isEmpty()) return null
+        return XmltvProgramme(channel, start, stop, title, desc)
     }
 
-    /** Skips everything up to and including `</name>` (nested same-name tags do not occur in XMLTV). */
-    fun skipUntilEnd(name: String) { skipPast("</$name>") }
-
-    private fun skipPast(marker: String) { readUntil(marker) }
-
-    private fun readUntil(marker: String): String {
-        val sb = StringBuilder()
-        while (true) {
-            val c = read()
-            if (c < 0) return sb.toString()
-            sb.append(c.toChar())
-            if (sb.length >= marker.length && sb.endsWith(marker)) return sb.substring(0, sb.length - marker.length)
-            if (sb.length > 1_000_000) sb.setLength(0) // never hold a huge skipped block
-        }
-    }
-
-    private companion object {
-        val ATTR = Regex("""([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
-        val ENTITY = Regex("&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);")
-        fun decode(text: String): String = if (!text.contains('&')) text else ENTITY.replace(text) { m ->
-            when (val e = m.groupValues[1]) {
-                "amp" -> "&"; "lt" -> "<"; "gt" -> ">"; "quot" -> "\""; "apos" -> "'"
-                else -> runCatching {
-                    val code = if (e.startsWith("#x")) e.drop(2).toInt(16) else e.drop(1).toInt()
-                    String(Character.toChars(code))
-                }.getOrDefault(m.value)
+    /** Skips the element the parser is on, with its children. */
+    private fun skip() {
+        if (parser.eventType != XmlPullParser.START_TAG) return
+        var level = 1
+        while (level > 0) {
+            when (parser.next()) {
+                XmlPullParser.START_TAG -> level++
+                XmlPullParser.END_TAG -> level--
+                XmlPullParser.END_DOCUMENT -> return
             }
         }
     }
