@@ -99,6 +99,8 @@ data class OsdSettings(
 data class RemoteSettings(
     val keyRepeatIntervalMs: Long = 120,
     val longPressMs: Long = 500,
+    /** Own remote key choices, "<MODE>.<ACTION>" to encoded keys; missing actions use the defaults. */
+    val keyBindings: Map<String, List<String>> = emptyMap(),
 )
 
 @Serializable

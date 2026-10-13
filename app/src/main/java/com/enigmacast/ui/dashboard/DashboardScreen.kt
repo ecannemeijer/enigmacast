@@ -1238,7 +1238,7 @@ private fun SettingsHub(
                         contentFocus = pageContentFocus,
                         part = PlaybackPart.VIEWING,
                     )
-                    SettingPage.Keys -> Unit
+                    SettingPage.Keys -> com.enigmacast.ui.keys.RemoteKeysSettingsPanel(pageContentFocus, settings.streamMode)
                     SettingPage.Guide -> GuideHomeSettingsPanel(pageContentFocus)
                     SettingPage.Recordings -> PlaybackSettingsPanel(
                         settings.streamMode,

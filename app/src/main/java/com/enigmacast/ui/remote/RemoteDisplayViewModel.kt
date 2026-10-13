@@ -45,6 +45,9 @@ import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.recording.forReceiver
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.EnigmaKeyMapper
+import com.enigmacast.domain.remote.KeyBindings
+import com.enigmacast.domain.remote.KeyMode
+import com.enigmacast.domain.remote.PlayerAction
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.domain.service.ServiceMonitor
@@ -226,8 +229,6 @@ class RemoteDisplayViewModel @Inject constructor(
     private var okJob: Job? = null
     private var blueTextSent = false
     private var blueJob: Job? = null
-    private var infoQuickBar = false
-    private var infoJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
     var onLeaveToMyItems: ((String) -> Unit)? = null
     private var bannerJob: Job? = null
@@ -1074,12 +1075,11 @@ class RemoteDisplayViewModel @Inject constructor(
             }
             return false
         }
-        if (action == OwnKeyAction.PASS) return false
+        // OK, Back and the digits are fixed; everything else follows Settings › Remote control keys.
         val down = event.action == KeyEvent.ACTION_DOWN
+        val bindings = KeyBindings.effective(settingsSnapshot.remote.keyBindings, KeyMode.OWN)
+        if (handleBound(event, bindings, follow = false)) return true
         when (action) {
-            OwnKeyAction.NEXT, OwnKeyAction.PREVIOUS -> if (down && event.repeatCount % 4 == 0) {
-                ownSession.zapRelative(if (action == OwnKeyAction.NEXT) 1 else -1)
-            }
             OwnKeyAction.OK -> if (!down) {
                 val tuner = ui.own.tuner.status
                 when {
@@ -1090,15 +1090,106 @@ class RemoteDisplayViewModel @Inject constructor(
                     else -> showBanner()
                 }
             }
-            OwnKeyAction.LIST -> if (!down) openChannelList()
-            OwnKeyAction.DETAILS -> if (!down) {
-                if (ui.banner && ui.details) hideBanner() else showBanner(details = true)
-            }
-            OwnKeyAction.BANNER -> if (down && event.repeatCount == 0) showBanner()
             OwnKeyAction.DIGIT -> if (down && event.repeatCount == 0) pushDigit(OwnTunerKeys.digit(event.keyCode))
+            OwnKeyAction.PASS -> return false
             else -> Unit
         }
         return true
+    }
+
+    private var boundJob: Job? = null
+    private var boundLongFired = false
+
+    /**
+     * Keys assigned in Settings › Remote control keys. A key that also has a held action waits
+     * for the release (or the long-press time) before it decides. Following the receiver, a
+     * key with no app action short-pressed still goes to the receiver.
+     */
+    private fun handleBound(event: KeyEvent, bindings: com.enigmacast.domain.remote.Bindings, follow: Boolean): Boolean {
+        val code = event.keyCode
+        val down = event.action == KeyEvent.ACTION_DOWN
+        if (KeyBindings.hasLong(bindings, code)) {
+            if (down) {
+                if (event.repeatCount != 0) return true
+                boundLongFired = false
+                boundJob?.cancel()
+                boundJob = viewModelScope.launch {
+                    delay(settingsSnapshot.remote.longPressMs)
+                    boundLongFired = true
+                    KeyBindings.lookup(bindings, code, long = true)?.let(::perform)
+                }
+            } else {
+                boundJob?.cancel()
+                if (!boundLongFired) {
+                    val short = KeyBindings.lookup(bindings, code, long = false)
+                    when {
+                        short != null -> perform(short)
+                        follow -> EnigmaKeyMapper.fromAndroidKeyCode(code)?.let { key ->
+                            keys?.onDown(key)
+                            keys?.onUp(key)
+                        }
+                    }
+                }
+                boundLongFired = false
+            }
+            return true
+        }
+        val action = KeyBindings.lookup(bindings, code, long = false) ?: return false
+        when (action) {
+            // Zapping keeps working while the key is held.
+            PlayerAction.CHANNEL_UP, PlayerAction.CHANNEL_DOWN -> if (down && event.repeatCount % 4 == 0) perform(action)
+            PlayerAction.BANNER -> if (down && event.repeatCount == 0) perform(action)
+            else -> if (!down) perform(action)
+        }
+        return true
+    }
+
+    private fun perform(action: PlayerAction) {
+        val ui = _ui.value
+        when (action) {
+            PlayerAction.CHANNEL_UP -> ownSession.zapRelative(1)
+            PlayerAction.CHANNEL_DOWN -> ownSession.zapRelative(-1)
+            PlayerAction.CHANNEL_LIST -> openChannelList()
+            PlayerAction.INFO -> if (ui.banner && ui.details) hideBanner() else showBanner(details = true)
+            PlayerAction.BANNER -> showBanner()
+            PlayerAction.OPTIONS -> openQuickBar()
+            PlayerAction.GUIDE -> openGuideFromBar()
+            PlayerAction.SEARCH -> {
+                openQuickBar()
+                openSearch()
+            }
+            PlayerAction.RECORD -> recordWatching()
+            PlayerAction.PAUSE -> playback.toggleTimeshiftPause()
+            PlayerAction.AUDIO_TRACK -> {
+                val tracks = ui.tracks.audio
+                if (tracks.size < 2) return showNotice(UiText.res(R.string.keys_no_other_audio))
+                val next = tracks[(tracks.indexOfFirst { it.selected } + 1).mod(tracks.size)]
+                chooseAudio(next.id)
+                showNotice(next.label)
+            }
+            PlayerAction.SUBTITLES -> {
+                val tracks = ui.tracks.subtitles
+                if (tracks.isEmpty()) return showNotice(UiText.res(R.string.keys_no_subtitles))
+                val at = if (ui.tracks.subtitlesOn) tracks.indexOfFirst { it.selected } else -1
+                val next = tracks.getOrNull(at + 1)
+                chooseSubtitles(next?.id)
+                showNotice(next?.label ?: UiText.res(R.string.keys_subtitles_off))
+            }
+            PlayerAction.PICTURE_MODE -> {
+                val modes = PictureMode.entries
+                val next = modes[(modes.indexOf(ui.pictureMode) + 1).mod(modes.size)]
+                choosePictureMode(next)
+                showNotice(UiText.res(R.string.keys_picture_mode, UiText.res(pictureModeLabel(next))))
+            }
+        }
+    }
+
+    private fun pictureModeLabel(mode: PictureMode): Int = when (mode) {
+        PictureMode.AUTO -> R.string.picture_auto
+        PictureMode.WIDE -> R.string.picture_wide
+        PictureMode.NORMAL -> R.string.picture_normal
+        PictureMode.ZOOM -> R.string.picture_zoom
+        PictureMode.STRETCH -> R.string.picture_stretch
     }
 
     private fun ownBack() {
@@ -1212,11 +1303,13 @@ class RemoteDisplayViewModel @Inject constructor(
             }
             return false
         }
+        if (!KeyBindings.isFixed(event.keyCode) &&
+            handleBound(event, KeyBindings.effective(settingsSnapshot.remote.keyBindings, KeyMode.FOLLOW), follow = true)
+        ) return true
         val mapped = EnigmaKeyMapper.fromAndroidKeyCode(event.keyCode) ?: return false
         if (mapped == EnigmaKey.EXIT) return handleBack(event)
         if (mapped == EnigmaKey.OK) return handleOk(event)
         if (mapped == EnigmaKey.BLUE) return handleBlue(event)
-        if (mapped == EnigmaKey.INFO) return handleInfo(event)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) keys?.onDown(mapped)
             KeyEvent.ACTION_UP -> keys?.onUp(mapped)
@@ -1306,32 +1399,6 @@ class RemoteDisplayViewModel @Inject constructor(
                     keys?.onUp(EnigmaKey.BLUE)
                 }
                 blueTextSent = false
-            }
-        }
-        return true
-    }
-
-    /** Following the receiver: Info goes to the receiver, holding Info opens the app's quick bar. */
-    private fun handleInfo(event: KeyEvent): Boolean {
-        val threshold = settingsSnapshot.remote.longPressMs
-        when (event.action) {
-            KeyEvent.ACTION_DOWN -> {
-                if (event.repeatCount != 0) return true
-                infoQuickBar = false
-                infoJob?.cancel()
-                infoJob = viewModelScope.launch {
-                    delay(threshold)
-                    infoQuickBar = true
-                    openQuickBar()
-                }
-            }
-            KeyEvent.ACTION_UP -> {
-                infoJob?.cancel()
-                if (!infoQuickBar) {
-                    keys?.onDown(EnigmaKey.INFO)
-                    keys?.onUp(EnigmaKey.INFO)
-                }
-                infoQuickBar = false
             }
         }
         return true
