@@ -29,6 +29,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.foundation.focusGroup
+import com.enigmacast.ui.theme.ValueRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -145,16 +148,20 @@ private class DashBack {
     var target: FocusRequester? = null
 }
 
+/** Settings submenu, in display order (see README "Settings"). */
 private enum class SettingPage {
+    Profiles,
     Receivers,
     Receiver,
-    Remote,
     Playback,
-    Osd,
-    RcInfo,
-    General,
-    Info,
-    Language,
+    Viewing,
+    Keys,
+    Guide,
+    Recordings,
+    Appearance,
+    Remote,
+    Soccer,
+    About,
 }
 
 @Composable
@@ -175,6 +182,7 @@ fun DashboardScreen(
     onSettingsHubShown: () -> Unit = {},
     onSignalMeter: () -> Unit = {},
     onOscam: () -> Unit = {},
+    onRunSetup: () -> Unit = {},
     onChooseLanguage: (AppLanguage) -> Unit = {},
     pendingSearchQuery: String? = null,
     pendingSearchPlay: Boolean = false,
@@ -710,6 +718,7 @@ fun DashboardScreen(
                             onChooseLanguage,
                             onSignalMeter = onSignalMeter,
                             onOscam = onOscam,
+                            onRunSetup = onRunSetup,
                             powerModel = powerModel,
                             onFormActive = { settingsFormOpen = it },
                             onRetreatTo = retreat,
@@ -1082,43 +1091,6 @@ private fun BouquetRow(
 }
 
 @Composable
-private fun RcInfoPanel(contentFocus: FocusRequester, modifier: Modifier = Modifier) {
-    Column(modifier.focusRequester(contentFocus).edgeLeft().focusable()) {
-        PanelHeader(stringResource(R.string.rc_title), stringResource(R.string.rc_subtitle))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-            SettingsCard(stringResource(R.string.rc_navigation), Modifier.weight(1f)) {
-                RcRow(stringResource(R.string.rc_arrows), stringResource(R.string.rc_arrows_desc))
-                RcRow(stringResource(R.string.rc_ok_short), stringResource(R.string.rc_ok_short_desc))
-                RcRow(stringResource(R.string.rc_ok_long), stringResource(R.string.rc_ok_long_desc))
-                RcRow(stringResource(R.string.rc_back_short), stringResource(R.string.rc_back_short_desc))
-                RcRow(stringResource(R.string.rc_back_long), stringResource(R.string.rc_back_long_desc))
-                RcRow(stringResource(R.string.rc_back_menu), stringResource(R.string.rc_back_menu_desc))
-            }
-            SettingsCard(stringResource(R.string.rc_tv_buttons), Modifier.weight(1f)) {
-                RcRow(stringResource(R.string.rc_info), stringResource(R.string.rc_info_desc))
-                RcRow(stringResource(R.string.rc_guide), stringResource(R.string.rc_guide_desc))
-                RcRow("P+ / P-", stringResource(R.string.rc_channel_desc))
-                RcRow(stringResource(R.string.rc_colours), stringResource(R.string.rc_colours_desc))
-                RcRow(stringResource(R.string.rc_blue_long), stringResource(R.string.rc_blue_long_desc))
-                RcRow("0–9", stringResource(R.string.rc_digits_desc))
-                RcRow("Play / Pause / Stop", stringResource(R.string.rc_play_desc))
-            }
-        }
-    }
-}
-
-@Composable
-private fun RcRow(button: String, action: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(button, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(140.dp))
-        Text(action, color = EnigmaColors.Muted, fontSize = 14.sp)
-    }
-}
-
-@Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun SettingsHub(
     pageFocus: FocusRequester,
@@ -1128,6 +1100,7 @@ private fun SettingsHub(
     onChooseLanguage: (AppLanguage) -> Unit,
     onSignalMeter: () -> Unit,
     onOscam: () -> Unit,
+    onRunSetup: () -> Unit,
     powerModel: com.enigmacast.ui.power.ReceiverPowerViewModel,
     onFormActive: (Boolean) -> Unit,
     onRetreatTo: (FocusRequester) -> Unit,
@@ -1135,7 +1108,7 @@ private fun SettingsHub(
     viewModel: SettingsViewModel = hiltViewModel(),
     connection: ConnectionViewModel = hiltViewModel(),
 ) {
-    var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Language else SettingPage.Receivers) }
+    var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Appearance else SettingPage.Receivers) }
     var pageEnter by remember { mutableIntStateOf(0) }
     val pageContentFocus = remember { FocusRequester() }
     val navFocus = remember { SettingPage.entries.associateWith { FocusRequester() } }
@@ -1172,17 +1145,20 @@ private fun SettingsHub(
                     .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                SettingNav(Icons.Filled.Person, stringResource(R.string.settings_profiles), page == SettingPage.Profiles, navFocus.getValue(SettingPage.Profiles), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Profiles) }) { enterPage(SettingPage.Profiles) }
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
                 SettingNav(EnigmaIcons.Power, stringResource(R.string.nav_receiver), page == SettingPage.Receiver, navFocus.getValue(SettingPage.Receiver), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receiver) }) { enterPage(SettingPage.Receiver) }
-                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, navFocus.getValue(SettingPage.Playback), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Playback) }) { enterPage(SettingPage.Playback) }
-                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_osd), page == SettingPage.Osd, navFocus.getValue(SettingPage.Osd), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Osd) }) { enterPage(SettingPage.Osd) }
+                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_viewing), page == SettingPage.Viewing, navFocus.getValue(SettingPage.Viewing), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Viewing) }) { enterPage(SettingPage.Viewing) }
+                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_keys), page == SettingPage.Keys, navFocus.getValue(SettingPage.Keys), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Keys) }) { enterPage(SettingPage.Keys) }
+                SettingNav(EnigmaIcons.Guide, stringResource(R.string.settings_guide_home), page == SettingPage.Guide, navFocus.getValue(SettingPage.Guide), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Guide) }) { enterPage(SettingPage.Guide) }
+                SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
+                SettingNav(EnigmaIcons.Palette, stringResource(R.string.settings_appearance), page == SettingPage.Appearance, navFocus.getValue(SettingPage.Appearance), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Appearance) }) { enterPage(SettingPage.Appearance) }
+                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
+                SettingNav(EnigmaIcons.Soccer, stringResource(R.string.settings_soccer), page == SettingPage.Soccer, navFocus.getValue(SettingPage.Soccer), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Soccer) }) { enterPage(SettingPage.Soccer) }
                 SettingNav(EnigmaIcons.Speed, stringResource(R.string.signal_meter), false, null, null, menuFocus, pageContentFocus, opensPage = false, onSelect = onSignalMeter)
                 SettingNav(EnigmaIcons.Sync, stringResource(R.string.oscam), false, null, null, menuFocus, pageContentFocus, opensPage = false, onSelect = onOscam)
-                SettingNav(Icons.Filled.Info, stringResource(R.string.nav_rc_info), page == SettingPage.RcInfo, navFocus.getValue(SettingPage.RcInfo), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.RcInfo) }) { enterPage(SettingPage.RcInfo) }
-                SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_general), page == SettingPage.General, navFocus.getValue(SettingPage.General), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.General) }) { enterPage(SettingPage.General) }
-                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_info), page == SettingPage.Info, navFocus.getValue(SettingPage.Info), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Info) }) { enterPage(SettingPage.Info) }
-                SettingNav(EnigmaIcons.Language, stringResource(R.string.settings_language), page == SettingPage.Language, navFocus.getValue(SettingPage.Language), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Language) }) { enterPage(SettingPage.Language) }
+                SettingNav(Icons.Filled.Info, stringResource(R.string.settings_about), page == SettingPage.About, navFocus.getValue(SettingPage.About), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.About) }) { enterPage(SettingPage.About) }
             }
             }
             if (page == SettingPage.Receiver) {
@@ -1232,6 +1208,7 @@ private fun SettingsHub(
                         formFocus = formFocus,
                     )
                     SettingPage.Receiver -> Unit
+                    SettingPage.Profiles -> ProfilesSettingsPanel(pageContentFocus)
                     SettingPage.Remote -> RemoteAccessSettingsPanel(contentFocus = pageContentFocus)
                     SettingPage.Playback -> PlaybackSettingsPanel(
                         settings.streamMode,
@@ -1245,19 +1222,52 @@ private fun SettingsHub(
                         settings.playback.recordingPreset,
                         viewModel,
                         contentFocus = pageContentFocus,
+                        part = PlaybackPart.STREAMING,
                     )
-                    SettingPage.Osd -> OsdSettingsPanel(
-                        settings.osd.format,
-                        settings.osd.fastPolling,
-                        settings.osd.transparencyPercent,
-                        settings.osdInfo,
+                    SettingPage.Viewing -> PlaybackSettingsPanel(
+                        settings.streamMode,
+                        settings.playback.lowLatency,
+                        settings.playback.autoReconnect,
+                        settings.playback.hdmiPassthrough,
+                        settings.playback.subtitlesEnabled,
+                        settings.playback.audioDelayPcmMs,
+                        settings.playback.audioDelayPassthroughMs,
+                        settings.playback.recordingTarget,
+                        settings.playback.recordingPreset,
                         viewModel,
                         contentFocus = pageContentFocus,
+                        part = PlaybackPart.VIEWING,
                     )
-                    SettingPage.RcInfo -> RcInfoPanel(pageContentFocus, Modifier.fillMaxWidth())
-                    SettingPage.General -> GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel, pageContentFocus)
-                    SettingPage.Info -> InfoSettingsPanel(settings, viewModel, pageContentFocus)
-                    SettingPage.Language -> LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, pageContentFocus)
+                    SettingPage.Keys -> Unit
+                    SettingPage.Guide -> GuideHomeSettingsPanel(pageContentFocus)
+                    SettingPage.Recordings -> PlaybackSettingsPanel(
+                        settings.streamMode,
+                        settings.playback.lowLatency,
+                        settings.playback.autoReconnect,
+                        settings.playback.hdmiPassthrough,
+                        settings.playback.subtitlesEnabled,
+                        settings.playback.audioDelayPcmMs,
+                        settings.playback.audioDelayPassthroughMs,
+                        settings.playback.recordingTarget,
+                        settings.playback.recordingPreset,
+                        viewModel,
+                        contentFocus = pageContentFocus,
+                        part = PlaybackPart.RECORDINGS,
+                    )
+                    SettingPage.Appearance -> {
+                        LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, pageContentFocus)
+                        GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel, remember { FocusRequester() })
+                        OsdSettingsPanel(
+                            settings.osd.format,
+                            settings.osd.fastPolling,
+                            settings.osd.transparencyPercent,
+                            settings.osdInfo,
+                            viewModel,
+                            contentFocus = remember { FocusRequester() },
+                        )
+                    }
+                    SettingPage.Soccer -> SoccerSettingsPanel(pageContentFocus)
+                    SettingPage.About -> InfoSettingsPanel(settings, viewModel, pageContentFocus, onRunSetup)
                 }
             }
             }
@@ -1307,12 +1317,13 @@ private fun PlaybackSettingsPanel(
     recordingPreset: TranscodePreset?,
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
+    part: PlaybackPart,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
     val passthroughActive by remote.audioPassthroughActive.collectAsStateWithLifecycle()
     // Where to record is asked per recording (box or this device); only the size of captures on this device is set here.
-    SettingsCard(stringResource(R.string.record_settings)) {
+    if (part == PlaybackPart.RECORDINGS) SettingsCard(stringResource(R.string.record_settings)) {
         val presets = TranscodePreset.entries
         ChoiceRow(
             title = stringResource(R.string.record_size),
@@ -1324,8 +1335,9 @@ private fun PlaybackSettingsPanel(
             firstOptionModifier = Modifier.focusRequester(contentFocus),
         )
     }
-    SettingsCard(stringResource(R.string.viewing_mode)) {
+    if (part == PlaybackPart.VIEWING) SettingsCard(stringResource(R.string.viewing_mode)) {
         ChoiceRow(
+            firstOptionModifier = Modifier.focusRequester(contentFocus),
             title = stringResource(R.string.viewing_mode_title),
             description = if (streamMode == StreamMode.OWN_TUNER) {
                 stringResource(R.string.viewing_mode_own_desc)
@@ -1337,9 +1349,10 @@ private fun PlaybackSettingsPanel(
             onSelect = { viewModel.setStreamMode(if (it == 0) StreamMode.OWN_TUNER else StreamMode.FOLLOW_RECEIVER) },
         )
     }
-    StreamTypeCard()
+    if (part != PlaybackPart.STREAMING) return
     SettingsCard(stringResource(R.string.picture)) {
         ChoiceRow(
+            firstOptionModifier = Modifier.focusRequester(contentFocus),
             title = stringResource(R.string.buffer),
             description = if (fast) stringResource(R.string.buffer_fast_desc) else stringResource(R.string.buffer_stable_desc),
             options = listOf(stringResource(R.string.buffer_stable), stringResource(R.string.buffer_fast)),
@@ -1347,6 +1360,7 @@ private fun PlaybackSettingsPanel(
             onSelect = { viewModel.setLowLatency(it == 1) },
         )
     }
+    StreamTypeCard()
     SettingsCard(stringResource(R.string.sound)) {
         ChoiceRow(
             title = stringResource(R.string.audio_output),
@@ -1568,9 +1582,6 @@ private fun GeneralSettingsPanel(
             },
         )
     }
-    com.enigmacast.ui.home.HomeFilmSettingsCard()
-    com.enigmacast.ui.home.DataSyncSettingsCard()
-    com.enigmacast.ui.soccer.SoccerSettingsCard()
 }
 
 @Composable
@@ -1578,13 +1589,23 @@ private fun InfoSettingsPanel(
     settings: AppSettings,
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
+    onRunSetup: () -> Unit,
 ) {
+    SettingsCard(stringResource(R.string.setup_title)) {
+        ValueRow(
+            title = stringResource(R.string.setup_run_again),
+            value = "",
+            description = stringResource(R.string.setup_run_again_desc),
+            onClick = onRunSetup,
+            modifier = Modifier.focusRequester(contentFocus),
+        )
+    }
     SettingsCard(stringResource(R.string.app)) {
         InfoRow(stringResource(R.string.version), BuildConfig.VERSION_NAME)
         InfoRow(stringResource(R.string.build), BuildConfig.VERSION_CODE.toString())
     }
     SettingsCard(stringResource(R.string.diagnostics)) {
-        ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay, modifier = Modifier.focusRequester(contentFocus))
+        ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay)
         ToggleRow(stringResource(R.string.verbose_logging), settings.debug.verboseLogging, viewModel::setVerboseLogging)
         ToggleRow(stringResource(R.string.osd_border), settings.osd.debugBorders, viewModel::setDebugBorders)
     }
@@ -1637,5 +1658,45 @@ internal fun MiniStreamPlayer(
                 modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
             )
         }
+    }
+}
+
+private enum class PlaybackPart { STREAMING, VIEWING, RECORDINGS }
+
+/** Settings › Profiles: who is watching now, switch, and manage (add, edit, delete). */
+@Composable
+private fun ProfilesSettingsPanel(contentFocus: FocusRequester, model: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()) {
+    val state by model.state.collectAsStateWithLifecycle()
+    val active = state.profiles.firstOrNull { it.id == state.activeId }
+    SettingsCard(stringResource(R.string.settings_profiles)) {
+        ValueRow(
+            title = stringResource(R.string.profile_switch),
+            value = active?.name.orEmpty(),
+            description = stringResource(R.string.profile_switch_desc),
+            onClick = { model.openPicker(false) },
+            modifier = Modifier.focusRequester(contentFocus),
+        )
+        ValueRow(
+            title = stringResource(R.string.profile_manage),
+            value = state.profiles.size.toString(),
+            description = stringResource(R.string.profile_manage_desc),
+            onClick = { model.openPicker(true) },
+        )
+    }
+}
+
+/** Settings › Guide & Home: Home country, Home bouquets, TMDB key, and data sync. */
+@Composable
+private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
+    Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        com.enigmacast.ui.home.HomeFilmSettingsCard()
+        com.enigmacast.ui.home.DataSyncSettingsCard()
+    }
+}
+
+@Composable
+private fun SoccerSettingsPanel(contentFocus: FocusRequester) {
+    Column(Modifier.focusRequester(contentFocus).focusGroup()) {
+        com.enigmacast.ui.soccer.SoccerSettingsCard()
     }
 }
