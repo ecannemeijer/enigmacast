@@ -42,6 +42,40 @@ FOOTBALL_DATA_API_KEY=your_football_data_key
 PITCH_API_KEY=pk_your_pitchapi_key
 ```
 
+## Account and Premium
+
+EnigmaCast needs an account (e-mail + password), created or used in the setup wizard or under
+Settings › Account. Accounts live on the VelixaTV API server (`BuildConfig.ACCOUNT_API_URL`,
+`https://api.velixatv.com/`) in their own table, apart from VelixaTV users:
+
+| Endpoint | |
+|---|---|
+| `POST api/enigmacast/register` | `{email, password, device_id, device_name, device_model, app_version}`; starts the Premium trial |
+| `POST api/enigmacast/login` | same body; returns `token`, `plan`, `is_premium`, `premium_until`, `max_devices`, `devices_used` |
+| `GET api/enigmacast/me` | `Authorization: Bearer <token>`; current plan (checks that the device is still registered) |
+| `POST api/enigmacast/logout` | unregisters this device |
+
+- **Free:** one receiver, Live TV, Radio, Search, My items. **Premium:** also Movies, TV Series,
+  Soccer, TV Guide/EPG and several receivers (add, Switch receiver, tuner failover).
+- A new account gets a 14-day Premium trial; during the beta the server grants 2 years
+  (`enigmacast.trialDays` in the server `.env`, default 730).
+- Each account has at most 10 devices (per user in the admin panel); the 11th login is refused.
+- The plan is checked on start and every 6 hours. Offline, the cached answer is honoured for
+  14 days, never past `premium_until`. All rules are in `domain/account/Entitlements.kt`.
+- Locked items show a lock; choosing one opens the Premium dialog.
+
+### Update manifest: reinstall required
+
+`dist/enigmacast.json` may mark a release that cannot be installed over the current version:
+
+```json
+{ "reinstallRequired": true, "reinstallMessage": "…", "reinstallMessageNl": "…" }
+```
+
+The update dialog then explains it and offers only OK. Older builds ignore these fields, so put
+the same text in `notes` and point `apkUrl` at a URL that is not an APK, so their Update button
+cannot install it.
+
 ## Requirements
 
 - Android Studio Quail 4 (2026.1.4) or newer, with AGP 9.4 support

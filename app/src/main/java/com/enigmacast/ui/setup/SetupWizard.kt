@@ -70,6 +70,7 @@ fun SetupWizard(
 ) {
     val step = model.step
     val receiver by model.receiver.collectAsStateWithLifecycle()
+    val signedIn by model.accountState.collectAsStateWithLifecycle()
     val stepFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
     LaunchedEffect(model.stepToken) {
@@ -108,6 +109,7 @@ fun SetupWizard(
             ) {
                 when (step) {
                     SetupStep.WELCOME -> LanguageStep(stepFocus, onChooseLanguage)
+                    SetupStep.ACCOUNT -> AccountStep(stepFocus, onSignedIn = { model.next() })
                     SetupStep.RECEIVER -> ReceiverStep(model, connection, stepFocus, onConnected = { model.next() })
                     SetupStep.PROFILE -> ProfileStep(model, stepFocus)
                     SetupStep.VIEWING -> ViewingStep(model, stepFocus)
@@ -131,7 +133,7 @@ fun SetupWizard(
                 SetupStep.DONE -> R.string.setup_finish
                 else -> R.string.setup_next
             }
-            if (model.canGoNext() || receiver != null && step == SetupStep.RECEIVER) {
+            if (model.canGoNext() || receiver != null && step == SetupStep.RECEIVER || signedIn != null && step == SetupStep.ACCOUNT) {
                 TvButton(stringResource(nextLabel), ::next, Modifier.focusRequester(nextFocus))
             }
         }
@@ -304,6 +306,7 @@ private fun DoneStep(model: SetupViewModel) {
 
 private fun SetupStep.title(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_welcome_title
+    SetupStep.ACCOUNT -> R.string.setup_account_title
     SetupStep.RECEIVER -> R.string.setup_receiver_title
     SetupStep.PROFILE -> R.string.setup_profile_title
     SetupStep.VIEWING -> R.string.setup_viewing_title
@@ -315,6 +318,7 @@ private fun SetupStep.title(): Int = when (this) {
 
 private fun SetupStep.body(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_welcome_body
+    SetupStep.ACCOUNT -> R.string.setup_account_body
     SetupStep.RECEIVER -> R.string.setup_receiver_body
     SetupStep.PROFILE -> R.string.setup_profile_body
     SetupStep.VIEWING -> R.string.setup_viewing_body
@@ -322,4 +326,30 @@ private fun SetupStep.body(): Int = when (this) {
     SetupStep.SYNC -> R.string.setup_sync_body
     SetupStep.SOCCER -> R.string.setup_soccer_body
     SetupStep.DONE -> R.string.setup_done_body
+}
+
+/** Account: the form, or who is signed in with the plan once that is done (Next goes on). */
+@Composable
+private fun AccountStep(focus: FocusRequester, onSignedIn: () -> Unit) {
+    val model: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
+    val account by model.account.collectAsStateWithLifecycle()
+    val current = account
+    // Log out swaps the controls: the form's first button takes the focus again.
+    LaunchedEffect(current != null) { focus.requestWhenReady() }
+    if (current == null) {
+        com.enigmacast.ui.account.AccountForm(model, focus, onSignedIn = onSignedIn, large = true)
+    } else {
+        Text(
+            stringResource(R.string.setup_account_signed_in, current.email),
+            color = EnigmaColors.Text,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            com.enigmacast.ui.account.planLine(current, model.isPremium(current)),
+            color = EnigmaColors.Accent,
+            fontSize = 15.sp,
+        )
+        TvButton(stringResource(R.string.account_logout), model::logout, Modifier.focusRequester(focus))
+    }
 }

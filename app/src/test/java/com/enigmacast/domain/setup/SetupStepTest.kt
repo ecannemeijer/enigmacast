@@ -8,7 +8,8 @@ import org.junit.Test
 
 class SetupStepTest {
     @Test fun order() {
-        assertEquals(SetupStep.RECEIVER, SetupStep.next(SetupStep.WELCOME))
+        assertEquals(SetupStep.ACCOUNT, SetupStep.next(SetupStep.WELCOME))
+        assertEquals(SetupStep.RECEIVER, SetupStep.next(SetupStep.ACCOUNT))
         assertEquals(SetupStep.PROFILE, SetupStep.next(SetupStep.RECEIVER))
         assertEquals(SetupStep.DONE, SetupStep.next(SetupStep.DONE))
         assertNull(SetupStep.previous(SetupStep.WELCOME))

@@ -97,6 +97,8 @@ fun NavItem(
     onFocus: () -> Unit = {},
     showLabel: Boolean = true,
     staggerIndex: Int = 0,
+    /** Premium-only for this account: a small lock after the label. */
+    locked: Boolean = false,
 ) {
     val spec = com.enigmacast.ui.animation.LocalMotionSpec.current
     val cursor = com.enigmacast.ui.components.LocalNavCursor.current
@@ -161,6 +163,14 @@ fun NavItem(
                     transformOrigin = TransformOrigin(0f, 0.5f)
                 },
             )
+            if (locked) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    EnigmaIcons.Lock,
+                    contentDescription = androidx.compose.ui.res.stringResource(com.enigmacast.R.string.premium_locked),
+                    modifier = Modifier.size(12.dp).graphicsLayer { alpha = labelAlpha },
+                )
+            }
         }
         if (selected && focused && spec.glow && cursor == null) {
             Spacer(Modifier.width(6.dp))

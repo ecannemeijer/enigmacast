@@ -5,6 +5,9 @@ enum class Start { DASHBOARD, SETUP, CONNECTION }
 
 enum class SetupStep(val optional: Boolean = false) {
     WELCOME,
+
+    /** Create an EnigmaCast account or log in (starts the Premium trial). */
+    ACCOUNT,
     RECEIVER,
     PROFILE(optional = true),
     VIEWING,

@@ -349,6 +349,12 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             connectionModel.beginNew()
             appViewModel.openConnection()
         })
+        // The "Premium" dialog for any locked feature (menu items, Red key, player EPG).
+        val accountModel: com.enigmacast.ui.account.AccountViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
+        val premiumPrompt by accountModel.gate.prompt.collectAsState()
+        premiumPrompt?.let { feature ->
+            com.enigmacast.ui.account.PremiumDialog(feature, onDismiss = accountModel.gate::dismiss)
+        }
         val reminderNotice by appViewModel.reminderNotice.collectAsState()
         Column(
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 28.dp),

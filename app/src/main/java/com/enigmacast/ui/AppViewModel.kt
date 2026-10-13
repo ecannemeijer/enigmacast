@@ -58,6 +58,7 @@ class AppViewModel @Inject constructor(
     private val reminders: ReminderScheduler,
     private val autoSwitcher: AutoSwitcher,
     private val recordings: com.enigmacast.live.RecordingBook,
+    private val account: com.enigmacast.data.account.AccountRepository,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
@@ -122,6 +123,15 @@ class AppViewModel @Inject constructor(
                 if (receiver != null) streamRunning = true
             }
         }
+        // Plan check: on start, then every few hours while the app runs. Without network the
+        // cached plan stays valid for Entitlements.OFFLINE_GRACE_MS.
+        viewModelScope.launch {
+            runCatching { account.refresh() }
+            while (true) {
+                delay(com.enigmacast.domain.account.Entitlements.REFRESH_INTERVAL_MS)
+                runCatching { account.refresh() }
+            }
+        }
         viewModelScope.launch {
             val remote = runCatching { updates.check() }.getOrElse { error ->
                 EnigmaLog.connection("update check failed: ${error.javaClass.simpleName}")
@@ -146,6 +156,11 @@ class AppViewModel @Inject constructor(
 
     fun installUpdate() {
         val prompt = updatePrompt ?: return
+        // This release cannot be installed over the current one: only OK is offered.
+        if (prompt.release.reinstallRequired) {
+            dismissUpdate()
+            return
+        }
         // A second press while downloading or installing does nothing.
         if (prompt.progress != null || prompt.installing || downloadJob?.isActive == true) return
         if (!updates.canRequestInstall()) {

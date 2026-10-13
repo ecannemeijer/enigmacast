@@ -35,6 +35,7 @@ class SetupViewModel @Inject constructor(
     private val api: OpenWebifApi,
     private val homeFilms: HomeFilmsRepository,
     private val bouquetStore: HomeBouquetStore,
+    private val account: com.enigmacast.data.account.AccountRepository,
     names: ReceiverNames,
 ) : ViewModel() {
     var step by mutableStateOf(SetupStep.WELCOME)
@@ -49,6 +50,7 @@ class SetupViewModel @Inject constructor(
     val streamMode: StateFlow<StreamMode> = settings.settings.map { it.streamMode }
         .stateIn(viewModelScope, SharingStarted.Eagerly, StreamMode.OWN_TUNER)
     val receiverName: StateFlow<String> = names.active
+    val accountState = account.account
 
     var profileName by mutableStateOf("")
     var avatar by mutableIntStateOf(0)
@@ -65,6 +67,7 @@ class SetupViewModel @Inject constructor(
     private var bouquetsFor: String? = null
 
     fun canGoNext(): Boolean = when (step) {
+        SetupStep.ACCOUNT -> accountState.value != null
         SetupStep.RECEIVER -> receiver.value != null
         SetupStep.PROFILE -> profileName.isNotBlank()
         else -> true

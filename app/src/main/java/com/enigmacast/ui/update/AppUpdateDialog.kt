@@ -49,6 +49,7 @@ import com.enigmacast.R
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.update.RemoteRelease
+import com.enigmacast.update.reinstallText
 import com.enigmacast.util.UiText
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
@@ -94,7 +95,13 @@ fun AppUpdateDialog(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.update_available), color = EnigmaColors.Text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+            val reinstall = release.reinstallRequired
+            Text(
+                stringResource(if (reinstall) R.string.update_reinstall_title else R.string.update_available),
+                color = EnigmaColors.Text,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
             Text(
                 stringResource(
                     R.string.update_versions,
@@ -104,7 +111,15 @@ fun AppUpdateDialog(
                 color = EnigmaColors.Accent,
                 fontSize = 14.sp,
             )
-            if (release.notes.isNotBlank()) {
+            if (reinstall) {
+                val language = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language
+                Text(
+                    release.reinstallText(language).ifBlank { stringResource(R.string.update_reinstall_message) },
+                    color = EnigmaColors.Text,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                )
+            } else if (release.notes.isNotBlank()) {
                 ReleaseNotes(release.notes, Modifier.weight(1f, fill = false))
             }
             if (progress != null) {
@@ -116,7 +131,16 @@ fun AppUpdateDialog(
             if (message != null && message.isNotEmpty()) {
                 Text(message.asString(), color = Color(0xFFFFB4A8), fontSize = 13.sp, lineHeight = 18.sp)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
+            if (reinstall) {
+                // No Update: the new version has to be installed fresh. OK only closes the dialog.
+                DialogButton(
+                    label = stringResource(R.string.ok),
+                    onClick = onCancel,
+                    enabled = true,
+                    primary = true,
+                    modifier = Modifier.focusRequester(updateFocus).padding(top = 4.dp),
+                )
+            } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
                 DialogButton(
                     label = stringResource(R.string.update_action),
                     onClick = onUpdate,

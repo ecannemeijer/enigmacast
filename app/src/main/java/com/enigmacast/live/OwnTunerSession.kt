@@ -98,6 +98,7 @@ class OwnTunerSession @Inject constructor(
     private val endpoints: OpenWebifEndpoints,
     private val streamTargets: StreamTargets,
     private val quality: StreamQualityController,
+    private val premiumGate: PremiumGate,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(OwnTunerState())
@@ -745,6 +746,8 @@ class OwnTunerSession @Inject constructor(
      * the user started on, wrapping around. Returns false when every box has been tried.
      */
     private suspend fun tryNextBox(channel: BouquetEntry): Boolean {
+        // Free accounts use one receiver only: no failover to another box.
+        if (!premiumGate.allows(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)) return false
         val settings = settingsRepository.current()
         if (pinnedReceiverId != null && pinnedReceiverId == settings.activeReceiver()?.id) {
             EnigmaLog.service("tuners full on the chosen box; staying on it")

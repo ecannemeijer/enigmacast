@@ -62,6 +62,7 @@ fun ReceiversSettingsPanel(
     /** OK on the Receivers menu item lands here. */
     contentFocus: FocusRequester,
     connection: ConnectionViewModel = hiltViewModel(),
+    premiumGate: com.enigmacast.live.PremiumGate = hiltViewModel<com.enigmacast.ui.account.AccountViewModel>().gate,
 ) {
     var form by remember { mutableStateOf<ReceiverForm?>(null) }
     val currentForm = rememberUpdatedState(form)
@@ -110,6 +111,11 @@ fun ReceiversSettingsPanel(
         CompactButton(
             label = stringResource(R.string.receivers_add),
             onClick = {
+                // Free accounts keep one receiver; a second one opens the Premium dialog.
+                if (!premiumGate.canAddReceiver(receivers.size)) {
+                    premiumGate.require(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)
+                    return@CompactButton
+                }
                 onFormActive(true)
                 connection.beginNew()
                 form = ReceiverForm.Add

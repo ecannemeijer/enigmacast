@@ -27,6 +27,7 @@ class ReceiverSwitcher @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
     private val ownTuner: OwnTunerSession,
+    private val gate: PremiumGate,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _open = MutableStateFlow(false)
@@ -35,7 +36,10 @@ class ReceiverSwitcher @Inject constructor(
     /** The id of the box that just became active. */
     val switched: SharedFlow<String> = _switched.asSharedFlow()
 
-    fun show() { _open.value = true }
+    /** Free accounts have one receiver: the Premium dialog opens instead. */
+    fun show() {
+        if (gate.require(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)) _open.value = true
+    }
     fun hide() { _open.value = false }
 
     /**
@@ -44,6 +48,7 @@ class ReceiverSwitcher @Inject constructor(
      */
     fun switchTo(id: String) {
         _open.value = false
+        if (!gate.require(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)) return
         scope.launch {
             if (settings.current().activeReceiver()?.id == id) return@launch
             EnigmaLog.service("switch receiver to $id")

@@ -150,6 +150,7 @@ private class DashBack {
 
 /** Settings submenu, in display order (see README "Settings"). */
 private enum class SettingPage {
+    Account,
     Profiles,
     Receivers,
     Receiver,
@@ -240,6 +241,21 @@ fun DashboardScreen(
     val dashBack = remember { DashBack() }
     val retreat: (FocusRequester) -> Unit = { dashBack.target = it }
     val myItemsModel: MyItemsViewModel = hiltViewModel()
+    val accountModel: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
+    val account by accountModel.account.collectAsState()
+    val premium = accountModel.isPremium(account)
+    /** Free accounts: these menu items show a lock and open the Premium dialog. */
+    fun lockedFeature(target: DashSection): com.enigmacast.domain.account.PremiumFeature? = if (premium) null else when (target) {
+        DashSection.Guide -> com.enigmacast.domain.account.PremiumFeature.EPG
+        DashSection.Movies -> com.enigmacast.domain.account.PremiumFeature.MOVIES
+        DashSection.Series -> com.enigmacast.domain.account.PremiumFeature.SERIES
+        DashSection.Soccer -> com.enigmacast.domain.account.PremiumFeature.SOCCER
+        else -> null
+    }
+    // The plan ran out while a Premium section was open: back to Home.
+    LaunchedEffect(premium) {
+        if (lockedFeature(section) != null) section = DashSection.Home
+    }
     fun sectionMenu(): FocusRequester = when (section) {
         DashSection.Home -> homeFocus
         DashSection.Movies -> moviesFocus
@@ -321,12 +337,14 @@ fun DashboardScreen(
         myItemsListFocus.requestWhenReady()
     }
     fun openSection(target: DashSection) {
+        if (lockedFeature(target) != null) return
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
         val keepSettings = settingsFormOpen && target != DashSection.Settings
         if (!keepList && !keepSettings) section = target
     }
     /** OK on a side-menu item opens that section and moves focus to its first entry. */
     fun enterSection(target: DashSection) {
+        lockedFeature(target)?.let { accountModel.gate.require(it); return }
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
         if (keepList || settingsFormOpen) return
         if (target == DashSection.Guide) guideModel.focusFirstInGrid()
@@ -403,11 +421,12 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_guide),
                     selected = section == DashSection.Guide,
                     showLabel = drawerExpanded,
+                    locked = lockedFeature(DashSection.Guide) != null,
                     staggerIndex = 2,
                     modifier = Modifier
                         .focusRequester(guideFocus)
                         .onFocusChanged { guideItemFocused = it.isFocused }
-                        .focusProperties { right = if (section == DashSection.Guide) guideGridFocus else FocusRequester.Cancel },
+                        .focusProperties { right = if (section == DashSection.Guide && lockedFeature(DashSection.Guide) == null) guideGridFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Guide) },
                 )
                 NavItem(
@@ -415,10 +434,11 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_movies),
                     selected = section == DashSection.Movies,
                     showLabel = drawerExpanded,
+                    locked = lockedFeature(DashSection.Movies) != null,
                     staggerIndex = 3,
                     modifier = Modifier
                         .focusRequester(moviesFocus)
-                        .focusProperties { right = if (section == DashSection.Movies) moviesContentFocus else FocusRequester.Cancel },
+                        .focusProperties { right = if (section == DashSection.Movies && lockedFeature(DashSection.Movies) == null) moviesContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Movies) },
                 )
                 NavItem(
@@ -426,10 +446,11 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_series),
                     selected = section == DashSection.Series,
                     showLabel = drawerExpanded,
+                    locked = lockedFeature(DashSection.Series) != null,
                     staggerIndex = 4,
                     modifier = Modifier
                         .focusRequester(seriesFocus)
-                        .focusProperties { right = if (section == DashSection.Series) seriesContentFocus else FocusRequester.Cancel },
+                        .focusProperties { right = if (section == DashSection.Series && lockedFeature(DashSection.Series) == null) seriesContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Series) },
                 )
                 NavItem(
@@ -437,10 +458,11 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_soccer),
                     selected = section == DashSection.Soccer,
                     showLabel = drawerExpanded,
+                    locked = lockedFeature(DashSection.Soccer) != null,
                     staggerIndex = 3,
                     modifier = Modifier
                         .focusRequester(soccerFocus)
-                        .focusProperties { right = if (section == DashSection.Soccer) soccerContentFocus else FocusRequester.Cancel },
+                        .focusProperties { right = if (section == DashSection.Soccer && lockedFeature(DashSection.Soccer) == null) soccerContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Soccer) },
                 )
                 NavItem(
@@ -1123,6 +1145,7 @@ private fun SettingsHub(
         pageEnter += 1
     }
     val formFocus = remember { FocusRequester() }
+    val premiumGate = hiltViewModel<com.enigmacast.ui.account.AccountViewModel>().gate
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val focusScope = androidx.compose.runtime.rememberCoroutineScope()
     Column(
@@ -1146,6 +1169,7 @@ private fun SettingsHub(
                     .verticalBoundary(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_account), page == SettingPage.Account, navFocus.getValue(SettingPage.Account), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Account) }) { enterPage(SettingPage.Account) }
                 SettingNav(Icons.Filled.Person, stringResource(R.string.settings_profiles), page == SettingPage.Profiles, navFocus.getValue(SettingPage.Profiles), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Profiles) }) { enterPage(SettingPage.Profiles) }
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
                 SettingNav(EnigmaIcons.Power, stringResource(R.string.nav_receiver), page == SettingPage.Receiver, navFocus.getValue(SettingPage.Receiver), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receiver) }) { enterPage(SettingPage.Receiver) }
@@ -1199,7 +1223,12 @@ private fun SettingsHub(
                     SettingPage.Receivers -> ReceiversSettingsPanel(
                         receivers = settings.receivers,
                         activeId = settings.activeReceiver()?.id,
-                        onSelect = viewModel::selectReceiver,
+                        onSelect = { id ->
+                            // Free: only the box in use; another one needs Premium.
+                            if (id == settings.activeReceiver()?.id || premiumGate.require(com.enigmacast.domain.account.PremiumFeature.MULTIPLE_RECEIVERS)) {
+                                viewModel.selectReceiver(id)
+                            }
+                        },
                         onDelete = viewModel::removeReceiver,
                         menuAnchor = pageFocus,
                         contentFocus = pageContentFocus,
@@ -1211,6 +1240,7 @@ private fun SettingsHub(
                     )
                     SettingPage.Receiver -> Unit
                     SettingPage.Profiles -> ProfilesSettingsPanel(pageContentFocus)
+                    SettingPage.Account -> com.enigmacast.ui.account.AccountSettingsPanel(pageContentFocus)
                     SettingPage.Remote -> RemoteAccessSettingsPanel(contentFocus = pageContentFocus)
                     SettingPage.Playback -> PlaybackSettingsPanel(
                         settings.streamMode,

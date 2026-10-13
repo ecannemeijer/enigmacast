@@ -210,6 +210,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val osdInfoRepository: OsdInfoRepository,
     private val recordings: com.enigmacast.live.RecordingBook,
     private val switcher: com.enigmacast.live.ReceiverSwitcher,
+    private val premiumGate: com.enigmacast.live.PremiumGate,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -807,6 +808,7 @@ class RemoteDisplayViewModel @Inject constructor(
     /** Right on a channel in the list: that channel's programmes in a panel right of the list. */
     fun openChannelEpg(entry: BouquetEntry) {
         if (listPane() != ListPane.CHANNELS) return
+        if (!premiumGate.require(com.enigmacast.domain.account.PremiumFeature.EPG)) return
         val receiver = settingsSnapshot.activeReceiver() ?: return
         _ui.update { it.copy(epgChannel = entry, epgEvents = emptyList(), epgLoading = true, listFocusReference = entry.reference) }
         applyPane(ChannelListNavigation.right(ListPane.CHANNELS))
