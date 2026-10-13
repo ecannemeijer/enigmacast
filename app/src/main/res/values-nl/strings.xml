@@ -551,7 +551,7 @@
     <string name="record_target_desc">Nieuwe opnames gaan hierheen. Opnames die je al maakte blijven in Mijn items.</string>
     <string name="record_size">Opnamegrootte</string>
     <string name="record_size_original">Origineel</string>
-    <string name="record_size_desc">Op deze tv schrijft de encoder van de receiver een kleinere stream. De poort is die van Streamtype. Wat je kijkt blijft hetzelfde.</string>
+    <string name="record_size_desc">Alleen voor opnames op dit apparaat. Een kleiner formaat neemt de getranscodeerde stream van de receiver op (720p, 576p of 360p) in plaats van de originele uitzending; bestanden zijn dan ongeveer 3 tot 10 keer kleiner. Heeft de receiver geen vrije encoder, dan wordt het origineel opgenomen. Opnames op de receiver blijven altijd origineel.</string>
     <string name="record_no_programme">Voor dit kanaal is geen programma bekend.</string>
     <string name="record_encoder">De receiver antwoordde niet op de transcoder-poort en ook niet op de stream-poort.</string>
     <string name="file_pause">Pauze</string>
@@ -973,4 +973,5 @@
     <string name="conflict_cancel_then">Daarna start %1$s.</string>
     <string name="my_items_section_box_named">Opnames op %1$s</string>
     <string name="my_items_section_box_timers_named">Ingepland op %1$s</string>
+    <string name="record_settings">Opnames</string>
 </resources>

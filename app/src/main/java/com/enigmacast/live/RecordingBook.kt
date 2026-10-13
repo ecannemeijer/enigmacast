@@ -338,11 +338,22 @@ class RecordingBook @Inject constructor(
 
     fun fileFor(item: Recording): File = File(moviesDir(), "${item.id}.ts")
 
-    suspend fun streamFor(item: Recording): Triple<String, String?, String?>? {
+    /**
+     * Where a capture on this device reads from. "Recording size" (Settings › Playback) picks
+     * a transcoded stream from the box's encoder (720p 2.5 Mbit/s, 576p 1.2, 360p 0.6), which
+     * makes the file roughly 3–10× smaller than the original broadcast. When the encoder
+     * port refuses or the box has no encoder, the capture falls back to the stream port and
+     * finally to the original stream, so the programme is still recorded.
+     */
+    suspend fun streamFor(item: Recording): com.enigmacast.domain.recording.CaptureTarget? {
         val receiver = receiverFor(item) ?: return null
         val preset = settingsRepository.current().playback.recordingPreset
         val target = streamTargets.recording(receiver, item.reference, preset)
-        return Triple(target.url, target.authorization, target.fallbackUrl)
+        val direct = if (preset != null) streamTargets.recording(receiver, item.reference, null).url else null
+        return com.enigmacast.domain.recording.CaptureTarget(
+            com.enigmacast.domain.recording.CaptureTarget.order(target.url, target.fallbackUrl, direct),
+            target.authorization,
+        )
     }
 
     private suspend fun scheduleOnReceiver(receiver: ReceiverConfig, recording: Recording): UiText {

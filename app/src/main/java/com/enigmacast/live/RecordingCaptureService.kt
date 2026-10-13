@@ -97,17 +97,30 @@ class RecordingCaptureService : Service() {
             }
             book.markRecording(id)
             val file = book.fileFor(item)
-            val auth = target.second
-            url = target.first
-            val response = try {
-                open(id, url, auth)
-            } catch (error: java.io.IOException) {
-                val fallback = target.third
-                if (fallback.isNullOrBlank() || fallback == url) throw error
-                EnigmaLog.service("recording port refused, trying the stream port")
-                url = fallback
-                open(id, url, auth)
+            val auth = target.authorization
+            // Chosen size, then the stream port, then the original: a busy or missing encoder
+            // must not lose the recording.
+            var response: okhttp3.Response? = null
+            var lastError: java.io.IOException? = null
+            for ((i, candidate) in target.urls.withIndex()) {
+                url = candidate
+                val opened = try {
+                    open(id, candidate, auth)
+                } catch (error: java.io.IOException) {
+                    if (stopping.contains(id)) throw error
+                    lastError = error
+                    EnigmaLog.service("recording source ${i + 1}/${target.urls.size} refused: ${error.javaClass.simpleName}")
+                    continue
+                }
+                if (!opened.isSuccessful && opened.code != 401 && i < target.urls.lastIndex) {
+                    EnigmaLog.service("recording source ${i + 1}/${target.urls.size} answered ${opened.code}")
+                    opened.close()
+                    continue
+                }
+                response = opened
+                break
             }
+            if (response == null) throw lastError ?: java.io.IOException("no recording source")
             response.use { opened ->
                 if (!opened.isSuccessful) {
                     book.markFailed(id, getString(if (opened.code == 401) R.string.record_auth else R.string.record_no_tuner))

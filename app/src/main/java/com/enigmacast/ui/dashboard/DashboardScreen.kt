@@ -1302,15 +1302,8 @@ private fun PlaybackSettingsPanel(
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
     val passthroughActive by remote.audioPassthroughActive.collectAsStateWithLifecycle()
-    SettingsCard(stringResource(R.string.record_target)) {
-        ChoiceRow(
-            title = stringResource(R.string.record_target),
-            description = stringResource(R.string.record_target_desc),
-            options = listOf(stringResource(R.string.record_target_tv), stringResource(R.string.record_target_receiver)),
-            selectedIndex = if (recordingTarget == RecordingTarget.RECEIVER) 1 else 0,
-            onSelect = { viewModel.setRecordingTarget(if (it == 1) RecordingTarget.RECEIVER else RecordingTarget.TV) },
-            firstOptionModifier = Modifier.focusRequester(contentFocus),
-        )
+    // Where to record is asked per recording (box or this device); only the size of captures on this device is set here.
+    SettingsCard(stringResource(R.string.record_settings)) {
         val presets = TranscodePreset.entries
         ChoiceRow(
             title = stringResource(R.string.record_size),
@@ -1319,6 +1312,7 @@ private fun PlaybackSettingsPanel(
                 presets.map { stringResource(R.string.quality_transcoded, it.height, it.bitrateKbps / 1000f) },
             selectedIndex = presets.indexOf(recordingPreset).let { if (it < 0) 0 else it + 1 },
             onSelect = { viewModel.setRecordingPreset(presets.getOrNull(it - 1)) },
+            firstOptionModifier = Modifier.focusRequester(contentFocus),
         )
     }
     SettingsCard(stringResource(R.string.viewing_mode)) {

@@ -554,7 +554,7 @@
     <string name="record_target_desc">New recordings go here. Recordings you already made stay in My Items.</string>
     <string name="record_size">Recording size</string>
     <string name="record_size_original">Original</string>
-    <string name="record_size_desc">On this TV the receiver\'s encoder writes a smaller stream. The port is the one from Stream type. What you watch stays the same.</string>
+    <string name="record_size_desc">For recordings on this device only. A smaller size records the receiver\'s transcoded stream (720p, 576p or 360p) instead of the original broadcast, so files take roughly 3 to 10 times less space. If the receiver has no free encoder, the original stream is recorded. Recordings on the receiver always keep the original.</string>
     <string name="record_no_programme">No programme is known for this channel.</string>
     <string name="record_encoder">The receiver did not answer on the transcoding port or the stream port.</string>
     <string name="file_pause">Pause</string>
@@ -976,4 +976,5 @@
     <string name="conflict_cancel_then">Afterwards %1$s starts.</string>
     <string name="my_items_section_box_named">Recordings on %1$s</string>
     <string name="my_items_section_box_timers_named">Scheduled on %1$s</string>
+    <string name="record_settings">Recordings</string>
 </resources>
