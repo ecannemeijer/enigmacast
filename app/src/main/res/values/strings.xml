@@ -250,7 +250,7 @@
     <string name="receivers_delete_title">Remove receiver</string>
     <string name="receivers_delete_message">Remove %1$s? This app will no longer use that box.</string>
     <string name="settings_receiver">Receiver</string>
-    <string name="settings_playback">Playback</string>
+    <string name="settings_playback">Playback &amp; streaming</string>
     <string name="settings_osd">OSD</string>
     <string name="settings_info">Info</string>
     <string name="settings_language">Language</string>
