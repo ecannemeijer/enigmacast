@@ -62,6 +62,10 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var remoteInputBus: RemoteInputBus
+    @Inject lateinit var receiverSwitcher: com.enigmacast.live.ReceiverSwitcher
+    @Inject lateinit var settingsRepository: com.enigmacast.data.settings.SettingsRepository
+    private var menuKeys: com.enigmacast.domain.remote.Bindings =
+        com.enigmacast.domain.remote.KeyBindings.defaults(com.enigmacast.domain.remote.KeyMode.MENU)
     private val appViewModel: AppViewModel by viewModels()
     private var reminderKeyDown = NO_KEY
     private var backHoldJob: Job? = null
@@ -108,6 +112,11 @@ class MainActivity : ComponentActivity() {
                 if (language != AppLanguageStore.current(this@MainActivity) && !AppLanguageStore.choose(this@MainActivity, language)) recreate()
             }
         }
+        lifecycleScope.launch {
+            settingsRepository.settings.collect { settings ->
+                menuKeys = com.enigmacast.domain.remote.KeyBindings.effective(settings.remote.keyBindings, com.enigmacast.domain.remote.KeyMode.MENU)
+            }
+        }
         handleSearchIntent(intent)
     }
 
@@ -130,11 +139,19 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         appViewModel.setForeground(true)
+        appViewModel.resumeFromBackground()
     }
 
     override fun onStop() {
         appViewModel.setForeground(false)
+        // Not for a language restart (same activity again) or picture-in-picture (still visible).
+        if (!isChangingConfigurations && !isInPictureInPictureMode) appViewModel.stopForBackground()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) appViewModel.stopForBackground()
+        super.onDestroy()
     }
 
     /**
@@ -220,10 +237,22 @@ class MainActivity : ComponentActivity() {
             if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) appViewModel.openStream()
             return true
         }
+        if (handleMenuKey(event)) return true
         if (appViewModel.screen == AppScreen.Remote && remoteInputBus.handler?.invoke(event) == true) {
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Keys from Settings › Remote control keys › Outside the player (Red: Switch receiver). */
+    private fun handleMenuKey(event: KeyEvent): Boolean {
+        val screen = appViewModel.screen
+        if (screen != AppScreen.Dashboard && screen != AppScreen.Settings) return false
+        val action = com.enigmacast.domain.remote.KeyBindings.lookup(menuKeys, event.keyCode, long = false) ?: return false
+        if (event.action == KeyEvent.ACTION_UP && action == com.enigmacast.domain.remote.PlayerAction.SWITCH_RECEIVER) {
+            receiverSwitcher.show()
+        }
+        return true
     }
 
     private fun canHoldBackToStream(): Boolean {
@@ -315,6 +344,11 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             AppScreen.SignalMeter -> com.enigmacast.ui.settings.SignalMeterScreen(onBack = appViewModel::back)
             AppScreen.Oscam -> com.enigmacast.ui.settings.OscamScreen(onBack = appViewModel::back)
         }
+        val connectionModel: com.enigmacast.ui.connection.ConnectionViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
+        com.enigmacast.ui.receivers.ReceiverSwitchHost(onAddReceiver = {
+            connectionModel.beginNew()
+            appViewModel.openConnection()
+        })
         val reminderNotice by appViewModel.reminderNotice.collectAsState()
         Column(
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 28.dp),
@@ -341,6 +375,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 release = prompt.release,
                 progress = prompt.progress,
                 message = prompt.message,
+                installing = prompt.installing,
                 onUpdate = appViewModel::installUpdate,
                 onCancel = appViewModel::dismissUpdate,
             )

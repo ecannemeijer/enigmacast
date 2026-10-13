@@ -28,6 +28,9 @@ class ReceiverNames @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val known = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** Brand and model per receiver id, as far as known. */
+    val labels: StateFlow<Map<String, String>> = known
     private val asked = mutableSetOf<String>()
 
     /** Label of the active box; empty when there is none. */
@@ -37,7 +40,7 @@ class ReceiverNames @Inject constructor(
         map[receiver.id] ?: receiver.name.trim()
     }.stateIn(scope, SharingStarted.Eagerly, "")
 
-    private fun ensure(receiver: com.enigmacast.domain.model.ReceiverConfig) {
+    fun ensure(receiver: com.enigmacast.domain.model.ReceiverConfig) {
         synchronized(asked) { if (!asked.add(receiver.id)) return }
         scope.launch {
             val caps = runCatching { api.about(receiver) }.getOrNull()

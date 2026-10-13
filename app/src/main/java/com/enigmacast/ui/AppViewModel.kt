@@ -42,6 +42,8 @@ data class UpdatePrompt(
     val release: RemoteRelease,
     val progress: Int? = null,
     val message: UiText? = null,
+    /** The APK is downloaded and handed to the installer; Update stays off. */
+    val installing: Boolean = false,
 )
 
 @HiltViewModel
@@ -50,6 +52,7 @@ class AppViewModel @Inject constructor(
     private val updates: AppUpdateClient,
     private val playback: LivePlaybackController,
     private val ownTuner: OwnTunerSession,
+    private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
     private val sleepTimer: AppSleepTimer,
     private val tunnel: WireGuardTunnel,
     private val reminders: ReminderScheduler,
@@ -143,6 +146,8 @@ class AppViewModel @Inject constructor(
 
     fun installUpdate() {
         val prompt = updatePrompt ?: return
+        // A second press while downloading or installing does nothing.
+        if (prompt.progress != null || prompt.installing || downloadJob?.isActive == true) return
         if (!updates.canRequestInstall()) {
             updatePrompt = prompt.copy(message = UiText.res(R.string.update_allow_install))
             runCatching { updates.openInstallPermission() }
@@ -170,9 +175,9 @@ class AppViewModel @Inject constructor(
                 )
                 return@launch
             }
-            updatePrompt = prompt.copy(progress = null, message = null)
+            updatePrompt = prompt.copy(progress = null, message = null, installing = true)
             runCatching { updates.install(apk) }.onFailure { error ->
-                updatePrompt = prompt.copy(message = error.uiMessage(UiText.res(R.string.update_installer_failed)))
+                updatePrompt = prompt.copy(message = error.uiMessage(UiText.res(R.string.update_installer_failed)), installing = false)
             }
         }
     }
@@ -399,7 +404,36 @@ class AppViewModel @Inject constructor(
         exit()
     }
 
+    private var stoppedInBackground = false
+
+    /**
+     * The app left the screen (Home button, another app, Exit). The player is a singleton that
+     * outlives the activity, so without this the sound went on behind the launcher. Everything
+     * that plays is stopped and the box's stream (and so its tuner) is released.
+     */
+    fun stopForBackground() {
+        if (stoppedInBackground) return
+        stoppedInBackground = true
+        EnigmaLog.player("app in background: stopping all playback and releasing the stream")
+        ownTuner.deactivate()
+        recordings.clearNowPlaying()
+        playback.stop()
+    }
+
+    /** Back on screen: playback is allowed again and the player screen restarts its channel. */
+    fun resumeFromBackground() {
+        if (!stoppedInBackground) return
+        stoppedInBackground = false
+        EnigmaLog.player("app in foreground: playback allowed again")
+        playback.allowPlayback()
+        if (screen == AppScreen.Remote) screen = AppScreen.Dashboard
+        playbackLifecycle.resumed()
+    }
+
     fun exit() {
+        EnigmaLog.player("exit: stopping all playback")
+        stoppedInBackground = true
+        recordings.clearNowPlaying()
         ownTuner.deactivate()
         playback.stop()
         streamRunning = false

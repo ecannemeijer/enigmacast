@@ -190,6 +190,7 @@ data class RemoteDisplayUiState(
 class RemoteDisplayViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
     private val endpoints: OpenWebifEndpoints,
     private val osdSource: OsdSource,
     private val remoteSource: RemoteControlSource,
@@ -283,7 +284,8 @@ class RemoteDisplayViewModel @Inject constructor(
                 val signature = listOf(
                     settings.activeReceiver(),
                     settings.osd.copy(debugBorders = false, transparencyPercent = 0),
-                    settings.remote,
+                    // Key choices apply at once; they do not need a new stream.
+                    settings.remote.copy(keyBindings = emptyMap()),
                     settings.streamMode,
                 )
                 if (signature != sessionSignature) {
@@ -294,6 +296,14 @@ class RemoteDisplayViewModel @Inject constructor(
             }
         }
         registerNetwork()
+        viewModelScope.launch {
+            // Back from the background: everything was stopped there; start this channel again.
+            playbackLifecycle.resumes.collect { count ->
+                if (count == 0) return@collect
+                sessionSignature = null
+                restart(settingsSnapshot)
+            }
+        }
         viewModelScope.launch {
             playback.cues.collect { cues -> _ui.update { it.copy(cues = cues) } }
         }
@@ -1181,6 +1191,8 @@ class RemoteDisplayViewModel @Inject constructor(
                 choosePictureMode(next)
                 showNotice(UiText.res(R.string.keys_picture_mode, UiText.res(pictureModeLabel(next))))
             }
+            // Only bound outside the player (MainActivity).
+            PlayerAction.SWITCH_RECEIVER -> Unit
         }
     }
 

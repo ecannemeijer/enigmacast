@@ -1046,4 +1046,11 @@
     <string name="setup_done_body">De app haalt nu de tv-gids en zenderlijsten op. Dat duurt even; je kunt alvast gaan kijken.</string>
     <string name="setup_done_summary">Ontvanger: %1$s
 Profiel: %2$s</string>
+    <string name="update_installing">Gedownload – bezig met installeren…</string>
+    <string name="switch_receiver">Andere ontvanger</string>
+    <string name="switch_receiver_red">Rood</string>
+    <string name="switch_receiver_only_one">Er is maar één ontvanger ingesteld. Voeg er een toe om te wisselen.</string>
+    <string name="switch_receiver_add">Ontvanger toevoegen</string>
+    <string name="keys_mode_menu">Buiten de speler</string>
+    <string name="keys_mode_menu_desc">Home, gids, menu\'s en instellingen. Alleen kort drukken.</string>
 </resources>

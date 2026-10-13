@@ -108,9 +108,11 @@ fun TunerHomePanel(
             val chain = rememberFocusChain()
             // Explicit Up/Down to the neighbouring row on every card: the column is clipped and moved
             // by an offset, so a plain focus search may find nothing below and focus would stay put.
+            val switchFocus = remember { FocusRequester() }
             fun rowNav(key: String) = Modifier.focusProperties {
                 down = chain.neighbourKey(key, 1)?.let(chain::requester) ?: FocusRequester.Cancel
-                up = chain.neighbourKey(key, -1)?.let(chain::requester) ?: FocusRequester.Cancel
+                // Up from the tuner row reaches the Switch receiver button in the title row.
+                up = chain.neighbourKey(key, -1)?.let(chain::requester) ?: switchFocus
             }
             val list = buildList {
                 add(PageSection("tuners") { TunersRow(model, left, rowNav("tuners")) { chosen = it } })
@@ -137,6 +139,19 @@ fun TunerHomePanel(
                         else -> EnigmaColors.Success
                     }
                     Box(Modifier.padding(bottom = 8.dp).size(10.dp).background(dot, androidx.compose.foundation.shape.CircleShape))
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
+                    com.enigmacast.ui.theme.CompactButton(
+                        label = stringResource(R.string.switch_receiver) + "  ·  " + stringResource(R.string.switch_receiver_red),
+                        onClick = model::openSwitcher,
+                        modifier = Modifier
+                            .padding(bottom = 6.dp)
+                            .focusRequester(switchFocus)
+                            .focusProperties {
+                                this.left = menuFocus
+                                up = FocusRequester.Cancel
+                                down = chain.requester("tuners")
+                            },
+                    )
                 }
                 list.forEachIndexed { i, section ->
                     key(section.key) {

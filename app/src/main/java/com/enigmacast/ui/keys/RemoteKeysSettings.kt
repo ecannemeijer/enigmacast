@@ -83,14 +83,14 @@ fun RemoteKeysSettingsPanel(contentFocus: FocusRequester, streamMode: StreamMode
     var capturing by remember { mutableStateOf<Pair<KeyMode, PlayerAction>?>(null) }
     var pending by remember { mutableStateOf<Triple<KeyMode, PlayerAction, KeyBinding>?>(null) }
     var resetMode by remember { mutableStateOf<KeyMode?>(null) }
-    val modes = listOf(active) + KeyMode.entries.filter { it != active }
+    val modes = listOf(active) + KeyMode.entries.filter { it != active && it != KeyMode.MENU } + KeyMode.MENU
     modes.forEachIndexed { modeIndex, mode ->
         val bindings = KeyBindings.effective(stored, mode)
-        val title = stringResource(if (mode == KeyMode.OWN) R.string.keys_mode_own else R.string.keys_mode_follow) +
+        val title = stringResource(mode.title()) +
             if (mode == active) "  ·  " + stringResource(R.string.keys_mode_active) else ""
         SettingsCard(title) {
             Text(
-                stringResource(if (mode == KeyMode.OWN) R.string.keys_mode_own_desc else R.string.keys_mode_follow_desc),
+                stringResource(mode.description()),
                 color = EnigmaColors.Muted,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -138,7 +138,8 @@ fun RemoteKeysSettingsPanel(contentFocus: FocusRequester, streamMode: StreamMode
         val longPressMs by model.longPressMs.collectAsStateWithLifecycle()
         KeyCaptureDialog(
             actionLabel = stringResource(action.label()),
-            longPressMs = longPressMs,
+            // Outside the player only short presses are used (a held key keeps scrolling lists).
+            longPressMs = if (mode == KeyMode.MENU) Long.MAX_VALUE else longPressMs,
             onKey = { key ->
                 capturing = null
                 val other = KeyBindings.conflict(KeyBindings.effective(stored, mode), action, key)
@@ -213,7 +214,11 @@ private fun KeyCaptureDialog(actionLabel: String, longPressMs: Long, onKey: (Key
                         }
                         KeyEventType.KeyUp -> {
                             // The release of the OK press that opened this dialog has no press here.
-                            if (downCode != code) return@onPreviewKeyEvent true
+                            // Other keys (colour keys on some remotes arrive as a lone release) count anyway.
+                            if (downCode != code && (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                                return@onPreviewKeyEvent true
+                            }
+                            if (downCode != code) downAt = native.downTime
                             downCode = null
                             when {
                                 code == KeyEvent.KEYCODE_BACK -> onCancel()
@@ -250,6 +255,19 @@ internal fun PlayerAction.label(): Int = when (this) {
     PlayerAction.AUDIO_TRACK -> R.string.key_action_audio
     PlayerAction.SUBTITLES -> R.string.key_action_subtitles
     PlayerAction.PICTURE_MODE -> R.string.key_action_picture
+    PlayerAction.SWITCH_RECEIVER -> R.string.switch_receiver
+}
+
+private fun KeyMode.title(): Int = when (this) {
+    KeyMode.OWN -> R.string.keys_mode_own
+    KeyMode.FOLLOW -> R.string.keys_mode_follow
+    KeyMode.MENU -> R.string.keys_mode_menu
+}
+
+private fun KeyMode.description(): Int = when (this) {
+    KeyMode.OWN -> R.string.keys_mode_own_desc
+    KeyMode.FOLLOW -> R.string.keys_mode_follow_desc
+    KeyMode.MENU -> R.string.keys_mode_menu_desc
 }
 
 @Composable

@@ -44,6 +44,7 @@ data class CardChannel(val bouquet: String = "", val now: GuideEvent? = null)
 
 @HiltViewModel
 class TunerHomeViewModel @Inject constructor(
+    private val switcher: com.enigmacast.live.ReceiverSwitcher,
     private val settingsRepository: SettingsRepository,
     private val api: OpenWebifApi,
     private val guideCache: GuideCacheReader,
@@ -55,6 +56,8 @@ class TunerHomeViewModel @Inject constructor(
     private val seriesRecorder: com.enigmacast.live.SeriesRecorder,
     private val cacheDao: com.enigmacast.data.db.CacheDao,
 ) : ViewModel() {
+    fun openSwitcher() = switcher.show()
+
     /** Series recordings: one card per series and channel. */
     var series by mutableStateOf<List<com.enigmacast.domain.series.SeriesGroup>>(emptyList()); private set
     var posters by mutableStateOf<Map<String, String?>>(emptyMap()); private set

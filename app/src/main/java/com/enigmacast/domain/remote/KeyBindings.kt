@@ -1,14 +1,14 @@
 package com.enigmacast.domain.remote
 
-/** The two playback screens: this device's own tuner stream, or following the receiver's picture. */
-enum class KeyMode { OWN, FOLLOW }
+/** MENU is everything outside the player (Home, guide, settings). The two playback screens: this device's own tuner stream, or following the receiver's picture. */
+enum class KeyMode { OWN, FOLLOW, MENU }
 
 /**
  * App actions a remote key can be assigned to. Following the receiver, keys that are not
  * assigned to an app action still go to the receiver as before. Back, OK, the arrows in lists
  * and the digits keep their fixed meaning.
  */
-enum class PlayerAction(val own: Boolean, val follow: Boolean) {
+enum class PlayerAction(val own: Boolean, val follow: Boolean, val menu: Boolean = false) {
     CHANNEL_UP(own = true, follow = false),
     CHANNEL_DOWN(own = true, follow = false),
     CHANNEL_LIST(own = true, follow = false),
@@ -22,9 +22,14 @@ enum class PlayerAction(val own: Boolean, val follow: Boolean) {
     AUDIO_TRACK(own = true, follow = true),
     SUBTITLES(own = true, follow = true),
     PICTURE_MODE(own = true, follow = true),
+    SWITCH_RECEIVER(own = false, follow = false, menu = true),
     ;
 
-    fun available(mode: KeyMode) = if (mode == KeyMode.OWN) own else follow
+    fun available(mode: KeyMode) = when (mode) {
+        KeyMode.OWN -> own
+        KeyMode.FOLLOW -> follow
+        KeyMode.MENU -> menu
+    }
 }
 
 /** One key, short press or held ([long]). */
@@ -68,6 +73,9 @@ object KeyBindings {
     const val TV = 170
     const val GUIDE = 172
     const val CAPTIONS = 175
+    const val PROG_RED = 183
+    const val PROG_GREEN = 184
+    const val PROG_YELLOW = 185
     const val PROG_BLUE = 186
     const val MEDIA_AUDIO_TRACK = 222
     const val TV_CONTENTS_MENU = 256
@@ -101,6 +109,8 @@ object KeyBindings {
             PlayerAction.SUBTITLES to listOf(k(CAPTIONS)),
             PlayerAction.PICTURE_MODE to emptyList(),
         )
+        // Outside the player: Red opens Switch receiver.
+        KeyMode.MENU -> mapOf(PlayerAction.SWITCH_RECEIVER to listOf(k(PROG_RED)))
     }
 
     /** Keys that keep their fixed meaning and cannot be assigned. */

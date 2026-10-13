@@ -73,4 +73,22 @@ class KeyBindingsTest {
         assertEquals("186", KeyBinding(186).encode())
         assertNull(KeyBinding.decode("x"))
     }
+
+    @Test fun redOpensSwitchReceiverOutsideThePlayer() {
+        val menu = KeyBindings.effective(none, KeyMode.MENU)
+        assertEquals(listOf(PlayerAction.SWITCH_RECEIVER), menu.keys.toList())
+        assertEquals(PlayerAction.SWITCH_RECEIVER, KeyBindings.lookup(menu, KeyBindings.PROG_RED, false))
+        assertFalse(PlayerAction.SWITCH_RECEIVER in KeyBindings.effective(none, KeyMode.OWN))
+    }
+
+    @Test fun colourKeysCanBeAssigned() {
+        listOf(KeyBindings.PROG_RED, KeyBindings.PROG_GREEN, KeyBindings.PROG_YELLOW, KeyBindings.PROG_BLUE).forEach { code ->
+            assertFalse(KeyBindings.isFixed(code))
+            val stored = KeyBindings.assign(none, KeyMode.FOLLOW, PlayerAction.RECORD, KeyBinding(code))
+            assertEquals(PlayerAction.RECORD, KeyBindings.lookup(KeyBindings.effective(stored, KeyMode.FOLLOW), code, false))
+        }
+        // Blue was the own-tuner options key; giving it to Guide moves it.
+        val stored = KeyBindings.assign(none, KeyMode.OWN, PlayerAction.GUIDE, KeyBinding(KeyBindings.PROG_BLUE))
+        assertEquals(emptyList<KeyBinding>(), KeyBindings.effective(stored, KeyMode.OWN)[PlayerAction.OPTIONS])
+    }
 }

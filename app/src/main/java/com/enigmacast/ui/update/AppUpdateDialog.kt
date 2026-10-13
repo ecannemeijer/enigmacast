@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -64,6 +65,7 @@ fun AppUpdateDialog(
     release: RemoteRelease,
     progress: Int?,
     message: UiText?,
+    installing: Boolean = false,
     onUpdate: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -76,7 +78,7 @@ fun AppUpdateDialog(
         ),
     ) {
         NavigationSoundsForWindow()
-        val downloading = progress != null
+        val downloading = progress != null || installing
         val updateFocus = remember { FocusRequester() }
         val cancelFocus = remember { FocusRequester() }
         LaunchedEffect(downloading) {
@@ -85,6 +87,8 @@ fun AppUpdateDialog(
         Column(
             modifier = Modifier
                 .width(560.dp)
+                // Fits the screen; the notes take what is left and scroll.
+                .heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp)
                 .background(EnigmaColors.Selected, RoundedCornerShape(16.dp))
                 .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(16.dp))
                 .padding(horizontal = 24.dp, vertical = 20.dp),
@@ -101,10 +105,13 @@ fun AppUpdateDialog(
                 fontSize = 14.sp,
             )
             if (release.notes.isNotBlank()) {
-                ReleaseNotes(release.notes)
+                ReleaseNotes(release.notes, Modifier.weight(1f, fill = false))
             }
             if (progress != null) {
                 DownloadProgress(progress)
+            }
+            if (installing) {
+                Text(stringResource(R.string.update_installing), color = EnigmaColors.Text, fontSize = 13.sp)
             }
             if (message != null && message.isNotEmpty()) {
                 Text(message.asString(), color = Color(0xFFFFB4A8), fontSize = 13.sp, lineHeight = 18.sp)
@@ -115,7 +122,8 @@ fun AppUpdateDialog(
                     onClick = onUpdate,
                     enabled = !downloading,
                     primary = true,
-                    modifier = Modifier.focusRequester(updateFocus),
+                    // Off while downloading/installing: greyed out and not focusable.
+                    modifier = Modifier.focusRequester(updateFocus).focusProperties { canFocus = !downloading },
                 )
                 DialogButton(
                     label = stringResource(R.string.cancel),
@@ -134,16 +142,16 @@ fun AppUpdateDialog(
  * (Up from the buttons) and Up/Down scroll it; Down at the end goes back to the buttons.
  */
 @Composable
-private fun ReleaseNotes(notes: String) {
+private fun ReleaseNotes(notes: String, modifier: Modifier = Modifier) {
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val scrollable = scroll.maxValue > 0
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 170.dp)
+            .heightIn(min = 60.dp)
             .background(EnigmaColors.Raised, RoundedCornerShape(10.dp))
             .border(1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
             .onPreviewKeyEvent { event ->
@@ -168,7 +176,7 @@ private fun ReleaseNotes(notes: String) {
             .verticalScroll(scroll)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Text(notes, color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
+        Text(notes, color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp)
     }
 }
 
@@ -213,6 +221,8 @@ private fun DialogButton(
         colors = ButtonDefaults.colors(
             containerColor = EnigmaColors.Raised,
             contentColor = if (primary) EnigmaColors.Accent else EnigmaColors.Text,
+            disabledContainerColor = EnigmaColors.Raised.copy(alpha = 0.4f),
+            disabledContentColor = EnigmaColors.Subtle,
             focusedContainerColor = EnigmaColors.Accent,
             focusedContentColor = EnigmaColors.OnAccent,
             pressedContainerColor = EnigmaColors.Accent,

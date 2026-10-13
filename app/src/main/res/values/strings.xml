@@ -1049,4 +1049,11 @@
     <string name="setup_done_body">The app now fetches the TV guide and channel lists. This takes a minute; you can already start watching.</string>
     <string name="setup_done_summary">Receiver: %1$s
 Profile: %2$s</string>
+    <string name="update_installing">Downloaded – installing…</string>
+    <string name="switch_receiver">Switch receiver</string>
+    <string name="switch_receiver_red">Red</string>
+    <string name="switch_receiver_only_one">Only one receiver is set up. Add another to switch between them.</string>
+    <string name="switch_receiver_add">Add receiver</string>
+    <string name="keys_mode_menu">Outside the player</string>
+    <string name="keys_mode_menu_desc">Home, guide, menus and settings. Short presses only.</string>
 </resources>
