@@ -2,11 +2,15 @@ package com.enigmacast.update
 
 import kotlinx.serialization.Serializable
 
-const val UPDATE_MANIFEST_URL = "https://update.velixatv.com/enigmacast.json"
+/**
+ * Builds from the accounts release on read enigmacast-v2.json. enigmacast.json stays frozen for
+ * older installs and only tells them to reinstall (its apkUrl is not an APK).
+ */
+const val UPDATE_MANIFEST_URL = "https://update.velixatv.com/enigmacast-v2.json"
 const val UPDATE_APK_URL = "https://update.velixatv.com/enigmacast.apk"
 
 /**
- * dist/enigmacast.json. [reinstallRequired] marks a release that cannot be installed over the
+ * dist/enigmacast-v2.json (dist/enigmacast.json for pre-account builds). [reinstallRequired] marks a release that cannot be installed over the
  * running version: the dialog then explains why (in [reinstallMessage] / [reinstallMessageNl],
  * or a built-in text) and offers only OK. Builds that predate the field ignore it and show [notes].
  */

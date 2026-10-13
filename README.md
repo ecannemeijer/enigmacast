@@ -66,6 +66,10 @@ Settings › Account. Accounts live on the VelixaTV API server (`BuildConfig.ACC
 
 ### Update manifest: reinstall required
 
+Since the accounts release the app reads `https://update.velixatv.com/enigmacast-v2.json`
+(`dist/enigmacast-v2.json`). Older builds keep reading `enigmacast.json`, which now only tells
+them to reinstall and never points at an APK.
+
 `dist/enigmacast.json` may mark a release that cannot be installed over the current version:
 
 ```json
