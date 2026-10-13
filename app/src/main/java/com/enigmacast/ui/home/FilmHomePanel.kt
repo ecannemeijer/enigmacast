@@ -129,11 +129,20 @@ fun FilmHomePanel(
         ) {
             Backdrop(shown)
             val sections = remember { PivotState() }
+            // Explicit Up/Down between hero, film rows and recent channels: a plain focus search from
+            // the hero found nothing below in the shifted column and went to the left menu.
+            val chain = com.enigmacast.ui.soccer.rememberFocusChain()
+            val ready = model.state as? HomeFilmsViewModel.State.Ready
+            chain.keys = buildList {
+                add("hero")
+                if (ready != null) model.rows.indices.forEach { add("row-$it") }
+                if (recents.isNotEmpty()) add("recents")
+            }
             PivotColumn(sections, Modifier.fillMaxSize()) {
                 when (val state = model.state) {
                     HomeFilmsViewModel.State.Loading -> Box(sections.section(0)) { LoadingSkeleton(contentFocus, left, sync?.percent, sync?.step?.asString()) }
                     is HomeFilmsViewModel.State.Ready -> {
-                        Box(sections.section(0)) {
+                        Box(sections.section(0).then(chain.section("hero"))) {
                             if (hero != null) {
                                 Hero(
                                     film = hero,
@@ -151,7 +160,7 @@ fun FilmHomePanel(
                             }
                         }
                         model.rows.forEachIndexed { index, row ->
-                            Box(sections.section(index + 1)) {
+                            Box(sections.section(index + 1).then(chain.section("row-$index"))) {
                                 FilmRow(
                                     row = row,
                                     nowSec = nowSec,
@@ -170,7 +179,7 @@ fun FilmHomePanel(
                 if (recents.isNotEmpty()) {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = sections.section(RECENTS_SECTION).padding(start = 24.dp),
+                        modifier = sections.section(RECENTS_SECTION).then(chain.section("recents")).padding(start = 24.dp),
                     ) {
                         RowTitle(stringResource(R.string.home_recent))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(end = 24.dp)) {
