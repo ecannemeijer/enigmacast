@@ -371,7 +371,7 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     private fun loadMediumIfNeeded() {
-        if (bouquets.isNotEmpty() || bouquetLoaded || mediumJob?.isActive == true) return
+        if (!GuideSideLoad.needsBouquetList(bouquets.size, mediumJob?.isActive == true)) return
         val which = medium
         mediumJob = viewModelScope.launch { ensureMediumLoaded(which) }
     }
@@ -381,7 +381,8 @@ class StreamGuideViewModel @Inject constructor(
         val list = runCatching { bouquetsFor(receiver, which) }.getOrDefault(emptyList())
         if (which != medium) return
         bouquets = list
-        if (bouquetPinned && selectedBouquetReference.isNotBlank()) {
+        // The channels already came from the stream or Watch; only the bouquet list was missing.
+        if (!GuideSideLoad.needsChannels(bouquetLoaded) || (bouquetPinned && selectedBouquetReference.isNotBlank())) {
             rememberCurrent()
             return
         }
@@ -1020,3 +1021,13 @@ private data class GuideSide(
     val selectedBouquetReference: String,
     val loaded: Boolean,
 )
+
+/**
+ * When a guide side fetches what. The channels can arrive first (the own-tuner stream or Watch fill
+ * them in), so a loaded channel list must not stop the bouquet list from loading: that left the
+ * TV guide without bouquets.
+ */
+internal object GuideSideLoad {
+    fun needsBouquetList(bouquetCount: Int, loading: Boolean): Boolean = bouquetCount == 0 && !loading
+    fun needsChannels(channelsLoaded: Boolean): Boolean = !channelsLoaded
+}
