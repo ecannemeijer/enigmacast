@@ -1142,7 +1142,8 @@ private fun SettingsHub(
                     .width(220.dp)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
+                    .verticalBoundary(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 SettingNav(Icons.Filled.Person, stringResource(R.string.settings_profiles), page == SettingPage.Profiles, navFocus.getValue(SettingPage.Profiles), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Profiles) }) { enterPage(SettingPage.Profiles) }
@@ -1163,7 +1164,7 @@ private fun SettingsHub(
             }
             if (page == SettingPage.Receiver) {
                 // Receiver (power, details) scrolls itself, so it sits outside the page's scroll column.
-                Box(Modifier.weight(1f).fillMaxHeight()) {
+                Box(Modifier.weight(1f).fillMaxHeight().verticalBoundary()) {
                     LaunchedEffect(pageEnter) {
                         if (pageEnter == 0) return@LaunchedEffect
                         pageContentFocus.requestWhenReady()
@@ -1186,7 +1187,8 @@ private fun SettingsHub(
                     .weight(1f)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
-                    .onFocusChanged { if (it.hasFocus) onRetreatTo(pageFocus) },
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(pageFocus) }
+                    .verticalBoundary(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 LaunchedEffect(pageEnter) {
@@ -1700,3 +1702,18 @@ private fun SoccerSettingsPanel(contentFocus: FocusRequester) {
         com.enigmacast.ui.soccer.SoccerSettingsCard()
     }
 }
+
+/**
+ * Up on the first option (or Down on the last) of a settings column stays there. Without it
+ * the focus search left the column for the main menu, where nothing showed it. Left and Right
+ * still leave the column as before.
+ */
+private fun Modifier.verticalBoundary(): Modifier = this
+    .focusProperties {
+        onExit = {
+            if (requestedFocusDirection == androidx.compose.ui.focus.FocusDirection.Up ||
+                requestedFocusDirection == androidx.compose.ui.focus.FocusDirection.Down
+            ) cancelFocusChange()
+        }
+    }
+    .focusGroup()
