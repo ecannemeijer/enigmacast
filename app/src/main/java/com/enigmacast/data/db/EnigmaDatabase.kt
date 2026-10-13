@@ -14,7 +14,7 @@ import javax.inject.Singleton
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
         SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class],
-    version = 5,
+    version = 7,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
@@ -30,6 +30,18 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE sync_state ADD COLUMN contentHash TEXT NOT NULL DEFAULT ''")
             }
         }
+
+        /** 5 → 7: nothing changed (v6 was a test build). */
+        val MIGRATION_5_7 = object : androidx.room.migration.Migration(5, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) = Unit
+        }
+
+        /** 6 → 7: a test build's XMLTV table (iptv_epg) is dropped; everything else stays. */
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `iptv_epg`")
+            }
+        }
     }
 }
 
@@ -41,7 +53,9 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7)
+            // A cache only: an older build reading a newer database just starts empty instead of crashing.
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
