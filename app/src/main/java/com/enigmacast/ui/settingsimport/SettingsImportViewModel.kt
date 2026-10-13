@@ -287,9 +287,6 @@ class SettingsImportViewModel @Inject constructor(
         confirming = true
     }
 
-    /** The TV guide step goes on in the background; the load finishes now. */
-    fun epgInBackground() = importer.epgInBackground()
-
     fun cancel() {
         choosingReceivers = false
         confirming = false
@@ -312,8 +309,7 @@ class SettingsImportViewModel @Inject constructor(
                 val now = System.currentTimeMillis()
                 targets.forEachIndexed { index, receiver ->
                     val onStep: (ImportStep) -> Unit = { step ->
-                        // A guide that runs on in the background after the load must not bring the bar back.
-                        if (busy) progress = LoadProgress(ImportProgress.overall(index, targets.size, step), receiver.name, index, targets.size, step)
+                        progress = LoadProgress(ImportProgress.overall(index, targets.size, step), receiver.name, index, targets.size, step)
                     }
                     progress = LoadProgress(ImportProgress.overall(index, targets.size, null), receiver.name, index, targets.size)
                     val outcome = when (load) {

@@ -78,8 +78,8 @@ interface CacheDao {
     @Transaction
     suspend fun replaceIptvEpg(receiverKey: String, rows: List<IptvEpgRow>, guide: List<EpgRow>) {
         deleteIptvEpg(receiverKey)
-        rows.chunked(2000).forEach { insertIptvEpg(it) }
-        guide.chunked(2000).forEach { insertEvents(it) }
+        rows.chunked(500).forEach { insertIptvEpg(it) }
+        guide.chunked(500).forEach { insertEvents(it) }
     }
 
     @Query("DELETE FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec")

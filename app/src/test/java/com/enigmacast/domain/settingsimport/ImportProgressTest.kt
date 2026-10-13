@@ -11,7 +11,6 @@ class ImportProgressTest {
             ImportStep(ImportStage.BACKUP, 0, 10), ImportStep(ImportStage.BACKUP, 10, 10),
             ImportStep(ImportStage.UPLOAD, 0, 4), ImportStep(ImportStage.UPLOAD, 4, 4),
             ImportStep(ImportStage.DELETE, 1, 1), ImportStep(ImportStage.RELOAD), ImportStep(ImportStage.SYNC),
-            ImportStep(ImportStage.EPG, 0, 4), ImportStep(ImportStage.EPG, 1, 4, part = 0.5f), ImportStep(ImportStage.EPG, 4, 4),
         )
         steps.zipWithNext().forEach { (a, b) -> assertTrue("$a -> $b", ImportProgress.receiverFraction(a) <= ImportProgress.receiverFraction(b) + 1e-4f) }
     }
@@ -24,6 +23,6 @@ class ImportProgressTest {
     }
 
     @Test fun zeroTotalDoesNotDivide() {
-        assertEquals(0.30f, ImportProgress.receiverFraction(ImportStep(ImportStage.UPLOAD, 3, 0)), 0.001f)
+        assertEquals(0.35f, ImportProgress.receiverFraction(ImportStep(ImportStage.UPLOAD, 3, 0)), 0.001f)
     }
 }

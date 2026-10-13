@@ -1226,8 +1226,4 @@ Profiel: %2$s</string>
     <string name="import_step_epg">Tv-gids inlezen (XMLTV)…</string>
     <string name="import_epg_receiver">Tv-gids voor %1$d IPTV-zenders via EPGImport op de ontvanger (zet de bron \"EnigmaCast IPTV\" eenmalig aan in EPGImport).</string>
     <string name="import_epg_app">Tv-gids voor %1$d IPTV-zenders opgeslagen in de app.</string>
-    <string name="import_step_epg_file">Tv-gids %1$d/%2$d · %3$s · %4$d%% · %5$d programma\'s</string>
-    <string name="import_epg_hint">De zenders staan al op de ontvanger; de tv-gids volgt.</string>
-    <string name="import_epg_background">Op de achtergrond</string>
-    <string name="import_epg_running_background">De tv-gids wordt op de achtergrond ingelezen.</string>
 </resources>

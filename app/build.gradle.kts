@@ -91,8 +91,6 @@ dependencies {
     implementation(libs.wireguard.tunnel)
 
     testImplementation(libs.junit)
-    // XmlPullParser for JVM tests (Android has its own on the device).
-    testImplementation("net.sf.kxml:kxml2:2.3.0")
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
