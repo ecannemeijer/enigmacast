@@ -44,6 +44,11 @@ data class ReceiverConfig(
     val oscamUsername: String = "",
     /** Kept in the Keystore-backed secret store, never in the settings file. */
     val oscamPassword: String = "",
+    /** FTP login for Settings import (channel lists and IPTV bouquets). Enigma2 images default to root without a password. */
+    val ftpPort: Int = 21,
+    val ftpUsername: String = "root",
+    /** Kept in the Keystore-backed secret store, never in the settings file. */
+    val ftpPassword: String = "",
 ) {
     /** Never prints passwords or tunnel keys, so a config that ends up in a log or crash report stays safe. */
     override fun toString(): String =
@@ -52,7 +57,8 @@ data class ReceiverConfig(
             "streamingPort=$streamingPort, remote=${if (remoteHost.isBlank()) "-" else "set"}, accessMode=$accessMode, " +
             "wireGuard=$wireGuard, wireGuardConfig=${if (wireGuardConfig.isEmpty()) "-" else "***"}, " +
             "oscamPort=$oscamPort, oscamUser=${if (oscamUsername.isEmpty()) "-" else "set"}, " +
-            "oscamPassword=${if (oscamPassword.isEmpty()) "-" else "***"})"
+            "oscamPassword=${if (oscamPassword.isEmpty()) "-" else "***"}, ftpPort=$ftpPort, " +
+            "ftpPassword=${if (ftpPassword.isEmpty()) "-" else "***"})"
 }
 
 @Serializable

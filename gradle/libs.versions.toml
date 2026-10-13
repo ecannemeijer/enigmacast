@@ -25,8 +25,10 @@ junit = "4.13.2"
 wireguard = "1.0.20260102"
 room = "2.8.5"
 work = "2.12.0"
+commonsNet = "3.11.1"
 
 [libraries]
+commons-net = { group = "commons-net", name = "commons-net", version.ref = "commonsNet" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }

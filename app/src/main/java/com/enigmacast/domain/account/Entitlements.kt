@@ -13,6 +13,9 @@ enum class PremiumFeature {
 
     /** TV Guide, the EPG grid and the programme list next to the channels in the player. */
     EPG,
+
+    /** Settings import: channel lists from GitHub and IPTV bouquets loaded on the receiver. */
+    SETTINGS_IMPORT,
 }
 
 /**
@@ -55,6 +58,7 @@ object Entitlements {
         PremiumFeature.SERIES,
         PremiumFeature.SOCCER,
         PremiumFeature.EPG,
+        PremiumFeature.SETTINGS_IMPORT,
         -> isPremium(account, nowMs)
     }
 

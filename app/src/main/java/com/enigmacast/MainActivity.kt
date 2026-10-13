@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 when (appViewModel.screen) {
-                    AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam -> appViewModel.back()
+                    AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport -> appViewModel.back()
                     AppScreen.Connection -> appViewModel.askExit()
                     AppScreen.Setup -> appViewModel.leaveSetup()
                     AppScreen.Remote -> {
@@ -320,6 +320,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onSettingsHubShown = appViewModel::settingsHubShown,
                 onSignalMeter = appViewModel::openSignalMeter,
                 onOscam = appViewModel::openOscam,
+                onSettingsImport = appViewModel::openSettingsImport,
                 onRunSetup = appViewModel::openSetup,
                 onChooseLanguage = onChooseLanguage,
                 pendingSearchQuery = appViewModel.pendingSearchQuery,
@@ -345,6 +346,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             AppScreen.Diagnostics -> OsdDiagnosticsScreen(onBack = appViewModel::back)
             AppScreen.SignalMeter -> com.enigmacast.ui.settings.SignalMeterScreen(onBack = appViewModel::back)
             AppScreen.Oscam -> com.enigmacast.ui.settings.OscamScreen(onBack = appViewModel::back)
+            AppScreen.SettingsImport -> com.enigmacast.ui.settingsimport.SettingsImportScreen(onBack = appViewModel::back)
         }
         val connectionModel: com.enigmacast.ui.connection.ConnectionViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
         com.enigmacast.ui.receivers.ReceiverSwitchHost(onAddReceiver = {

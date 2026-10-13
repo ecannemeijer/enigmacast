@@ -346,6 +346,11 @@ class AppViewModel @Inject constructor(
         screen = AppScreen.SignalMeter
     }
 
+    fun openSettingsImport() {
+        toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
+        screen = AppScreen.SettingsImport
+    }
+
     fun openOscam() {
         toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
         screen = AppScreen.Oscam
@@ -357,7 +362,7 @@ class AppViewModel @Inject constructor(
 
     fun back() {
         screen = when (screen) {
-            AppScreen.SignalMeter, AppScreen.Oscam -> {
+            AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport -> {
                 if (toolReturn == AppScreen.Dashboard) returnToSettingsHub = true
                 toolReturn
             }

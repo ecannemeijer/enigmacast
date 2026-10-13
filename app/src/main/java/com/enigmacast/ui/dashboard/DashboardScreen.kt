@@ -183,6 +183,7 @@ fun DashboardScreen(
     onSettingsHubShown: () -> Unit = {},
     onSignalMeter: () -> Unit = {},
     onOscam: () -> Unit = {},
+    onSettingsImport: () -> Unit = {},
     onRunSetup: () -> Unit = {},
     onChooseLanguage: (AppLanguage) -> Unit = {},
     pendingSearchQuery: String? = null,
@@ -740,6 +741,7 @@ fun DashboardScreen(
                             onChooseLanguage,
                             onSignalMeter = onSignalMeter,
                             onOscam = onOscam,
+                            onSettingsImport = onSettingsImport,
                             onRunSetup = onRunSetup,
                             powerModel = powerModel,
                             onFormActive = { settingsFormOpen = it },
@@ -1122,6 +1124,7 @@ private fun SettingsHub(
     onChooseLanguage: (AppLanguage) -> Unit,
     onSignalMeter: () -> Unit,
     onOscam: () -> Unit,
+    onSettingsImport: () -> Unit,
     onRunSetup: () -> Unit,
     powerModel: com.enigmacast.ui.power.ReceiverPowerViewModel,
     onFormActive: (Boolean) -> Unit,
@@ -1183,6 +1186,9 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Soccer, stringResource(R.string.settings_soccer), page == SettingPage.Soccer, navFocus.getValue(SettingPage.Soccer), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Soccer) }) { enterPage(SettingPage.Soccer) }
                 SettingNav(EnigmaIcons.Speed, stringResource(R.string.signal_meter), false, null, null, menuFocus, pageContentFocus, opensPage = false, onSelect = onSignalMeter)
                 SettingNav(EnigmaIcons.Sync, stringResource(R.string.oscam), false, null, null, menuFocus, pageContentFocus, opensPage = false, onSelect = onOscam)
+                SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_import), false, null, null, menuFocus, pageContentFocus, opensPage = false) {
+                    if (premiumGate.require(com.enigmacast.domain.account.PremiumFeature.SETTINGS_IMPORT)) onSettingsImport()
+                }
                 SettingNav(Icons.Filled.Info, stringResource(R.string.settings_about), page == SettingPage.About, navFocus.getValue(SettingPage.About), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.About) }) { enterPage(SettingPage.About) }
             }
             }

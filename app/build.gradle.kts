@@ -81,6 +81,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime)
     implementation(libs.timber)
+    implementation(libs.commons.net)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui.compose)
     implementation(libs.media3.datasource.okhttp)
