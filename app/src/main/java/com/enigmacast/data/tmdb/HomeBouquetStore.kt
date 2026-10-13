@@ -10,7 +10,10 @@ import javax.inject.Singleton
 
 /** The Home bouquet choice per receiver key. Missing = all TV bouquets. */
 @Singleton
-class HomeBouquetStore @Inject constructor(@ApplicationContext context: Context) {
+class HomeBouquetStore @Inject constructor(
+    @ApplicationContext context: Context,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
+) {
     private val prefs = context.getSharedPreferences("home_bouquets", Context.MODE_PRIVATE)
     private val _changes = MutableStateFlow(0)
     /** Bumps on every change, so screens can reload. */
@@ -24,5 +27,9 @@ class HomeBouquetStore @Inject constructor(@ApplicationContext context: Context)
         _changes.value++
     }
 
-    private fun key(receiverKey: String) = "sel|$receiverKey"
+    /** Per profile; the default profile keeps the key from before profiles. */
+    private fun key(receiverKey: String) = "sel|" + com.enigmacast.domain.profile.ProfileRules.scopedKey(profiles.activeId, receiverKey)
+
+    /** A profile switch changes the selection: let Home recompute. */
+    fun profileChanged() { _changes.value++ }
 }

@@ -27,11 +27,16 @@ class ResumeTracker @Inject constructor(
     private val dao: ResumeDao,
     private val book: RecordingBook,
     private val playback: LivePlaybackController,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val points: StateFlow<Map<String, ResumePoint>> = dao.all()
-        .map { rows -> rows.associate { it.key to ResumePoint(it.key, it.positionMs, it.durationMs) } }
+    /** Positions of the active profile, by recording id (rows are stored with a profile-scoped key). */
+    val points: StateFlow<Map<String, ResumePoint>> = combine(dao.all(), profiles.state) { rows, state ->
+        rows.mapNotNull { row ->
+            com.enigmacast.domain.profile.ProfileRules.unscope(state.activeId, row.key)?.let { k -> k to ResumePoint(k, row.positionMs, row.durationMs) }
+        }.toMap()
+    }
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     private var key: String? = null
@@ -61,14 +66,17 @@ class ResumeTracker @Inject constructor(
         }
     }
 
-    suspend fun get(key: String): ResumePoint? = dao.get(key)?.let { ResumePoint(it.key, it.positionMs, it.durationMs) }
+    private fun scoped(key: String) = com.enigmacast.domain.profile.ProfileRules.scopedKey(profiles.activeId, key)
+
+    suspend fun get(key: String): ResumePoint? = dao.get(scoped(key))?.let { ResumePoint(key, it.positionMs, it.durationMs) }
 
     fun forget(key: String) {
-        scope.launch { dao.delete(key) }
+        val k = scoped(key)
+        scope.launch { dao.delete(k) }
     }
 
     private fun save(now: Long) {
-        val k = key ?: return
+        val k = key?.let(::scoped) ?: return
         savedAt = now
         if (positionMs == savedPosition) return
         savedPosition = positionMs

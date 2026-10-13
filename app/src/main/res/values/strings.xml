@@ -977,4 +977,20 @@
     <string name="my_items_section_box_named">Recordings on %1$s</string>
     <string name="my_items_section_box_timers_named">Scheduled on %1$s</string>
     <string name="record_settings">Recordings</string>
+    <string name="profile_default_name">Me</string>
+    <string name="profile_who">Who\'s watching?</string>
+    <string name="profile_manage">Manage profiles</string>
+    <string name="profile_done">Done</string>
+    <string name="profile_add">Add profile</string>
+    <string name="profile_edit">Edit profile</string>
+    <string name="profile_name">Name</string>
+    <string name="profile_avatar">Avatar</string>
+    <string name="profile_save">Save</string>
+    <string name="profile_delete">Delete</string>
+    <string name="profile_delete_title">Delete profile %1$s?</string>
+    <string name="profile_delete_message">Its settings and resume positions are removed. Recordings and receivers stay.</string>
+    <string name="profile_switch">Switch profile</string>
+    <string name="profile_receiver_state">Receiver: %1$s</string>
+    <string name="profile_receiver_standby">Receiver to standby</string>
+    <string name="profile_receiver_wake">Turn receiver on</string>
 </resources>

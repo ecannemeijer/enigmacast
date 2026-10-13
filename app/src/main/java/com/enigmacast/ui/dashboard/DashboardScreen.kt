@@ -342,6 +342,17 @@ fun DashboardScreen(
             }
         }
     }
+    val profileModel: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()
+    if (profileModel.menuOpen) {
+        val standby = powerModel.powerState == com.enigmacast.domain.power.ReceiverPowerState.STANDBY
+        com.enigmacast.ui.profile.ProfileMenu(
+            profileModel,
+            powerLabel = stringResource(R.string.profile_receiver_state, powerModel.stateLabel.asString()),
+            powerAction = stringResource(if (standby) R.string.profile_receiver_wake else R.string.profile_receiver_standby),
+            onPower = { powerModel.request(if (standby) PowerAction.WAKE_UP else PowerAction.STANDBY) },
+        )
+    }
+    if (profileModel.pickerOpen) com.enigmacast.ui.profile.ProfilePicker(profileModel)
     Box(modifier = Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         val drawerExpanded = navFocused || !contentFocused
         Row(modifier = Modifier.fillMaxSize()) {
@@ -350,13 +361,11 @@ fun DashboardScreen(
                 modifier = Modifier.onFocusChanged { navFocused = it.hasFocus },
             ) {
                 EnigmaCastLogo(expanded = drawerExpanded)
-                if (drawerExpanded) {
-                    StatusPill(
-                        text = powerModel.stateLabel.asString(),
-                        color = powerStateColor(powerModel.powerState, powerModel.restarting),
-                        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
-                    )
-                }
+                // Who is watching (avatar + name); OK opens switch / manage / receiver standby.
+                com.enigmacast.ui.profile.ProfileChip(
+                    profileModel, drawerExpanded,
+                    Modifier.focusProperties { right = FocusRequester.Cancel },
+                )
                 NavItem(
                     icon = Icons.Filled.Home,
                     label = stringResource(R.string.nav_home),

@@ -974,4 +974,20 @@
     <string name="my_items_section_box_named">Opnames op %1$s</string>
     <string name="my_items_section_box_timers_named">Ingepland op %1$s</string>
     <string name="record_settings">Opnames</string>
+    <string name="profile_default_name">Ik</string>
+    <string name="profile_who">Wie kijkt er?</string>
+    <string name="profile_manage">Profielen beheren</string>
+    <string name="profile_done">Klaar</string>
+    <string name="profile_add">Profiel toevoegen</string>
+    <string name="profile_edit">Profiel bewerken</string>
+    <string name="profile_name">Naam</string>
+    <string name="profile_avatar">Avatar</string>
+    <string name="profile_save">Opslaan</string>
+    <string name="profile_delete">Verwijderen</string>
+    <string name="profile_delete_title">Profiel %1$s verwijderen?</string>
+    <string name="profile_delete_message">De instellingen en hervatposities ervan worden verwijderd. Opnames en ontvangers blijven.</string>
+    <string name="profile_switch">Ander profiel</string>
+    <string name="profile_receiver_state">Ontvanger: %1$s</string>
+    <string name="profile_receiver_standby">Ontvanger naar stand-by</string>
+    <string name="profile_receiver_wake">Ontvanger aanzetten</string>
 </resources>

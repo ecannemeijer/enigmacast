@@ -100,6 +100,13 @@ class MainActivity : ComponentActivity() {
             }
         })
         setContent { EnigmaCastAppContent(appViewModel, ::chooseLanguage) }
+        // A profile switch applies that profile's language (the activity restarts when it changes).
+        lifecycleScope.launch {
+            profileStore.switched.collect { profile ->
+                val language = AppLanguage.fromTag(profile.language) ?: return@collect
+                if (language != AppLanguageStore.current(this@MainActivity) && !AppLanguageStore.choose(this@MainActivity, language)) recreate()
+            }
+        }
         handleSearchIntent(intent)
     }
 
@@ -161,7 +168,11 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Applies a new app language at once; the recreated screen returns to Settings › Language. */
+    @javax.inject.Inject lateinit var profileStore: com.enigmacast.data.profile.ProfileStore
+
     private fun chooseLanguage(language: AppLanguage) {
+        // The language belongs to the active profile.
+        profileStore.setLanguage(language.tag)
         if (language == AppLanguageStore.current(this)) return
         appViewModel.requestLanguageFocus()
         if (!AppLanguageStore.choose(this, language)) recreate()
