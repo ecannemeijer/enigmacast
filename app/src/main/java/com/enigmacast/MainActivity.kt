@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
                 when (appViewModel.screen) {
                     AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam -> appViewModel.back()
                     AppScreen.Connection -> appViewModel.askExit()
+                    AppScreen.Setup -> appViewModel.leaveSetup()
                     AppScreen.Remote -> {
                         remoteInputBus.handler?.invoke(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
                     }
@@ -228,7 +229,7 @@ class MainActivity : ComponentActivity() {
     private fun canHoldBackToStream(): Boolean {
         if (!appViewModel.streamRunning || appViewModel.exitPrompt || appViewModel.updatePrompt != null) return false
         return when (appViewModel.screen) {
-            AppScreen.Remote, AppScreen.Loading, AppScreen.Connection -> false
+            AppScreen.Remote, AppScreen.Loading, AppScreen.Connection, AppScreen.Setup -> false
             else -> true
         }
     }
@@ -262,6 +263,11 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
         }
         when (appViewModel.screen) {
             AppScreen.Loading -> com.enigmacast.ui.components.EnigmaCastBootLogo()
+            AppScreen.Setup -> com.enigmacast.ui.setup.SetupWizard(
+                onChooseLanguage = onChooseLanguage,
+                onDone = appViewModel::finishSetup,
+                onLeave = appViewModel::leaveSetup,
+            )
             AppScreen.Connection -> ConnectionScreen(
                 onConnected = appViewModel::openDashboard,
                 onSettings = appViewModel::openSettings,
@@ -283,6 +289,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onSettingsHubShown = appViewModel::settingsHubShown,
                 onSignalMeter = appViewModel::openSignalMeter,
                 onOscam = appViewModel::openOscam,
+                onRunSetup = appViewModel::openSetup,
                 onChooseLanguage = onChooseLanguage,
                 pendingSearchQuery = appViewModel.pendingSearchQuery,
                 pendingSearchPlay = appViewModel.pendingSearchPlay,

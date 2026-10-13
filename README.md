@@ -23,7 +23,7 @@ That is the "Follow receiver" mode. The default mode is "Own tuner": each Androi
 - **Movies:** today's films with TMDB artwork (the former Home page, described under [Dashboard](#dashboard)).
 - **TV Series:** the same page for series, matched against TMDB TV. Series are recognised from the DVB genre, episode labels (S1E4, "Afl. 12") and titles that recur in the guide.
 - **Soccer:** football-data.org for fixtures, standings and live minutes, plus PitchAPI for Eredivisie and Eerste Divisie details, lineups, statistics, club and player pages (see [Soccer](#soccer)).
-- **Room cache and sync settings:** bouquets, channels, guide and TMDB data are cached per receiver, refreshed in the background, and controlled from Settings › General › Data & sync.
+- **Room cache and sync settings:** bouquets, channels, guide and TMDB data are cached per receiver, refreshed in the background, and controlled from Settings › Guide & Home › Data & sync.
 - **Bouquet selection:** choose which TV bouquets feed Movies, TV Series and Home.
 - **Record:** the choice dialog is compact and puts the box first, named after the receiver ("Record on SF8008", focused by default), then "Record on this device", then Cancel. **Record all upcoming** records every coming episode on the same channel: on the box through an AutoTimer (`/autotimer/edit`), or with an app rule that keeps scheduling new episodes. If an episode is already set to record, the dialog still offers Record all upcoming. Upcoming episodes are taken from the cache and from the box's guide, up to 8 days ahead.
 - **My Items:** recordings show posters, a resume position with a progress bar, and seeking. Recordings on the box are listed alongside the app's own.
@@ -306,14 +306,28 @@ AutoDetect leaves out a host that is already in the list, so the same box cannot
 
 ## Settings
 
-Right from Settings opens a submenu with Receivers, Remote access, Playback, OSD, RC Info, General, Info, and Language. Each page groups its options on cards, and every switch row toggles with OK.
+Right from Settings opens a submenu, in this order. Each page groups its options on cards, and every switch row toggles with OK.
 
+- Profiles: who is watching (switch) and Manage profiles (add, rename, avatar, delete).
 - Receivers: the list of boxes. OK selects one, Edit changes its address and login, Remove deletes it. See [Several receivers](#several-receivers).
-- Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel (switch, paste or import the config, Allow VPN, Test tunnel)
-- Playback: recording destination (this TV or the receiver) and recording size, viewing mode, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stable or Fast, Stereo or HDMI, audio sync per output, DVB subtitles on or off, auto-reconnect
-- OSD: channel-banner switches (signal, satellite, encryption, tuner, transponder details), transparency of the channel banner, channel list, search list, quick options and the receiver OSD (0% solid, 100% fully clear, steps of 10, default 10%), PNG or JPG, and the fast poll after a key. OSD skins (the look of the banner, channel list and notices that EnigmaCast draws itself) are stored as `osdSkin` and for now stay `STANDARD`.
-- General: Navigation sounds (the click when moving with the remote; on by default)
-- Info: version and build, debug overlay, verbose logging, OSD border
+- Receiver: power (standby, wake, restart), details.
+- Playback & streaming: Stable or Fast buffer, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stereo or HDMI, DVB subtitles, auto-reconnect, audio sync per output.
+- Viewing mode: own tuner (multi-user) or follow the receiver.
+- Remote control keys: see below.
+- Guide & Home: Home country, Home bouquets, own TMDB key, data & sync (guide days, sync frequency, Sync now).
+- Recordings: recording size of captures on this device (where to record is asked per recording).
+- Appearance: language, navigation sounds, motion quality, OSD (transparency, skins, banner fields, receiver OSD).
+- Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel.
+- Soccer: competitions/country and API keys.
+- Signal meter and Oscam (tools, open full screen).
+- About: Run setup wizard again, version and build, debug overlay, verbose logging, OSD border.
+
+The old RC Info page is gone; the keys are now listed (and changeable) under Remote control keys.
+
+**Remote control keys.** One card per viewing mode (the mode in use first). Each action shows its keys: channel up/down, channel list, programme info, channel banner, options bar, TV guide, search, record, pause/resume, next audio track, next subtitles, next picture mode (own tuner); options bar, guide, search, record, audio, subtitles and picture mode (follow receiver). OK on an action offers Assign a key, Remove keys, Default keys. Assign waits for a key press; holding the key past the long-press time assigns a long press (so Info and held Info can do different things). A key already used by another action asks before it moves. Reset to default keys restores a mode. OK, Back and the number keys are fixed. Following the receiver, keys without an app action still go to the receiver. Stored in `remote.keyBindings`; defaults equal the previous behaviour (plus Play/Pause, Rec, Audio, Captions, Search and Blue = options bar on the own tuner).
+
+**First-run setup wizard.** A fresh install (no receiver) starts a wizard with progress dots and Back / Skip / Next: Welcome + language → find the receiver (AutoDetect or manual, test, Connect; shows brand and model) → your profile (name + avatar; "Who's watching" then does not ask again) → viewing mode in plain words → Home bouquets fetched from the receiver (all/none) → data sync → football country (optional) → Done, which starts the first full sync. Existing users never see it; Settings › About › Run setup wizard again opens it any time.
+
 - Signal meter: the satellites configured on the tuner (from `/etc/enigma2/settings`, or from the television bouquets when that file cannot be read). A spinner is shown while the list loads. OK on a satellite stops this TV's stream, so the dish can move, and zaps the first television channel on that orbital position. The meter then polls `/api/tunersignal` about once a second (strength, quality, SNR in dB, BER, tuner). Back restores the channel that was on before and allows playback again; it does not restart the stream by itself.
 - Oscam: the Oscam web interface on the active receiver, default port 8888 (not OpenWebif). It shows the version and uptime, each reader or proxy with its connection, current channel and ECM time, and the dvbapi users. The live log comes from `logpoll.html` (Oscam 2.26 stores each line as base64 under `oscam.lines`). Restart and Stop ask first. Stop ends the process; Oscam can then only be started on the receiver, because the web interface stops with it. A reader can be restarted on its own, and reader or user ECM statistics can be reset. The log can be paused or cleared, and the debug level can be set (off, errors, DVBAPI, ECM, or all). Login and password, when the web interface requires them, are stored with the other secrets.
 
@@ -330,7 +344,7 @@ Audio sync corrects sound that runs behind or ahead of the picture, from -500 to
 1. Enable OpenWebif on the receiver (OpenATV: menu, plugins, OpenWebif).
 2. Note the receiver IP, the HTTP port (usually 80), and whether a username and password are set.
 3. Leave the streaming server on port 8001 unless the image uses another port.
-4. Start EnigmaCast. The first launch opens the connection screen.
+4. Start EnigmaCast. The first launch opens the setup wizard; its second step is the connection screen.
 5. Enter the receiver name, host, ports, and optional credentials (move to a field, press OK to type, then Done or Back).
 6. Test connection, then Connect.
 

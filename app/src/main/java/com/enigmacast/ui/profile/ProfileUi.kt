@@ -54,7 +54,7 @@ import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.requestWhenReady
 
 /** Bundled avatars (DiceBear, CC0: Lorelei, Notionists, Pixel Art, Thumbs). */
-private val Avatars = intArrayOf(
+internal val Avatars = intArrayOf(
     R.drawable.avatar_01, R.drawable.avatar_02, R.drawable.avatar_03, R.drawable.avatar_04,
     R.drawable.avatar_05, R.drawable.avatar_06, R.drawable.avatar_07, R.drawable.avatar_08,
     R.drawable.avatar_09, R.drawable.avatar_10, R.drawable.avatar_11, R.drawable.avatar_12,

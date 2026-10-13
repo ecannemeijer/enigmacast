@@ -111,7 +111,7 @@ class AppViewModel @Inject constructor(
             if (!decided) {
                 decided = true
                 val receiver = settings.activeReceiver()
-                screen = if (receiver != null) AppScreen.Dashboard else AppScreen.Connection
+                screen = if (!com.enigmacast.domain.setup.SetupStep.showOnStart(settings.receivers.size)) AppScreen.Dashboard else AppScreen.Setup
                 if (receiver != null) streamRunning = true
             }
         }
@@ -176,6 +176,33 @@ class AppViewModel @Inject constructor(
     fun openDashboard() {
         decided = true
         screen = AppScreen.Dashboard
+    }
+
+    /** Settings › About › Run setup wizard again. */
+    var setupAgain by mutableStateOf(false)
+        private set
+
+    fun openSetup() {
+        decided = true
+        setupAgain = true
+        screen = AppScreen.Setup
+    }
+
+    /** Wizard finished: on a first run the stream starts now; a re-run returns to the dashboard. */
+    fun finishSetup() {
+        setupAgain = false
+        streamRunning = true
+        openDashboard()
+    }
+
+    /** Back on the wizard's first step: a re-run returns to the dashboard; a first run asks to exit. */
+    fun leaveSetup() {
+        if (setupAgain) {
+            setupAgain = false
+            openDashboard()
+        } else {
+            askExit()
+        }
     }
 
     /**
@@ -321,7 +348,7 @@ class AppViewModel @Inject constructor(
 
     /** The countdown ended: zap the way the viewer watches and go full screen. */
     private suspend fun autoSwitch(reminder: Reminder) {
-        if (updatePrompt != null || screen == AppScreen.Loading || screen == AppScreen.Connection) {
+        if (updatePrompt != null || screen == AppScreen.Loading || screen == AppScreen.Connection || screen == AppScreen.Setup) {
             EnigmaLog.service("autoswitch skipped on ${screen.name}")
             return
         }
