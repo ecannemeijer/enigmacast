@@ -515,7 +515,6 @@ private fun LoadProgressCard(progress: LoadProgress?) {
             name == null -> stringResource(R.string.import_progress_preparing)
             step == null -> stringResource(R.string.import_step_connect, name)
             else -> when (step.stage) {
-                ImportStage.EPG -> stringResource(R.string.import_step_epg)
                 ImportStage.CONNECT -> stringResource(R.string.import_step_connect, name)
                 ImportStage.BACKUP -> stringResource(R.string.import_step_backup, step.done, step.total, name)
                 ImportStage.UPLOAD -> stringResource(R.string.import_step_upload, step.done, step.total, name)
@@ -763,9 +762,6 @@ private fun Results(viewModel: SettingsImportViewModel) {
                             FailureText(outcome.failure!!)
                         }
                         outcome.backupLabel?.let { Muted(stringResource(R.string.import_backup_made, it)) }
-                        if (outcome.ok && outcome.epgChannels > 0) {
-                            Muted(stringResource(if (outcome.epgOnReceiver) R.string.import_epg_receiver else R.string.import_epg_app, outcome.epgChannels))
-                        }
                         outcome.warnings.forEach { Muted(stringResource(R.string.import_warning, failureMessage(it))) }
                     }
                 }

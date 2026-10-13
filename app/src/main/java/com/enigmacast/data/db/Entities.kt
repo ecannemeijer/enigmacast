@@ -113,23 +113,3 @@ data class SyncStateRow(
     /** CHANNELS only: ChannelListHash of the lists last stored for this receiver. */
     @androidx.room.ColumnInfo(defaultValue = "") val contentHash: String = "",
 )
-
-/**
- * Programmes for imported IPTV services from XMLTV (used when the receiver has no EPGImport).
- * Kept apart from [EpgRow] so a receiver EPG sync, which replaces its window, cannot lose them;
- * the sync merges them back in.
- */
-@Entity(
-    tableName = "iptv_epg",
-    primaryKeys = ["receiverKey", "serviceKey", "beginSec"],
-    indices = [Index("receiverKey", "endSec")],
-)
-data class IptvEpgRow(
-    val receiverKey: String,
-    val serviceKey: String,
-    val reference: String,
-    val beginSec: Long,
-    val endSec: Long,
-    val title: String,
-    val description: String,
-)

@@ -15,14 +15,12 @@ class IptvBouquetsTest {
 
     @Test fun serviceLineFormat() {
         val line = IptvBouquets.serviceLine(entry("NPO 1: HD", "https://a.example/live.m3u8", "NL"))
-        val (sid, tsid) = IptvBouquets.identity("https://a.example/live.m3u8")
-        val base = "4097:0:1:${sid.toString(16).uppercase()}:${tsid.toString(16).uppercase()}:EC:0:0:0:0:"
-        assertEquals("#SERVICE ${base}https%3a//a.example/live.m3u8:NPO 1 HD", line)
+        assertEquals("#SERVICE 4097:0:1:0:0:0:0:0:0:0:https%3a//a.example/live.m3u8:NPO 1  HD".replace("  ", " "), line)
     }
 
     @Test fun serviceTypeAndUserAgent() {
         val line = IptvBouquets.serviceLine(entry("X", "http://a/b", "G", ua = "Mozilla/5.0"), 5002)
-        assertTrue(line, line.startsWith("#SERVICE 5002:0:1:") && line.contains(":EC:0:0:0:0:http"))
+        assertTrue(line.startsWith("#SERVICE 5002:0:1:0:0:0:0:0:0:0:"))
         assertTrue(line.contains("http%3a//a/b#User-Agent=Mozilla/5.0:X"))
     }
 
@@ -45,7 +43,7 @@ class IptvBouquetsTest {
         assertEquals(1, bouquets[1].channels) // duplicate URL once
         val lines = bouquets[1].content.trimEnd().lines()
         assertEquals("#NAME IPTV · News", lines[0])
-        assertTrue(lines[1], lines[1].startsWith("#SERVICE 4097:0:1:") && lines[1].endsWith(":EC:0:0:0:0:http%3a//a:A"))
+        assertEquals("#SERVICE 4097:0:1:0:0:0:0:0:0:0:http%3a//a:A", lines[1])
         assertEquals("#DESCRIPTION A", lines[2])
     }
 

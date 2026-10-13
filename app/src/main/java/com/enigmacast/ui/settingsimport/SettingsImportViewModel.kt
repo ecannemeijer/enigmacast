@@ -314,7 +314,7 @@ class SettingsImportViewModel @Inject constructor(
                     progress = LoadProgress(ImportProgress.overall(index, targets.size, null), receiver.name, index, targets.size)
                     val outcome = when (load) {
                         is PendingLoad.Package -> importer.loadPackage(load.pkg, files!!, receiver, onStep)
-                        PendingLoad.Iptv -> importer.loadIptv(bouquets, receiver, onStep, importer.epgHeaders(iptvSources.map { it.name }))
+                        PendingLoad.Iptv -> importer.loadIptv(bouquets, receiver, onStep)
                         is PendingLoad.Restore -> importer.restore(load.backup, receiver, onStep)
                     }
                     status = status + (receiver.id to ReceiverStatus.Done(outcome))

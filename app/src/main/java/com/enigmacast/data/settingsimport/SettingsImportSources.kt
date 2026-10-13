@@ -83,13 +83,7 @@ class SettingsImportSources @Inject constructor() {
         }.awaitAll().toMap()
     }
 
-    private val epgHeaders = ConcurrentHashMap<IptvSource, List<String>>()
-
-    suspend fun playlist(source: IptvSource): String =
-        String(get(source.url, github = false), Charsets.UTF_8).also { epgHeaders[source] = com.enigmacast.domain.settingsimport.IptvEpg.headerUrls(it) }
-
-    /** EPG URLs from the header of the last downloaded copy of [source]. */
-    fun epgHeader(source: IptvSource): List<String> = epgHeaders[source].orEmpty()
+    suspend fun playlist(source: IptvSource): String = String(get(source.url, github = false), Charsets.UTF_8)
 
     private suspend fun get(url: String, github: Boolean): ByteArray = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).header("User-Agent", "EnigmaCast")
