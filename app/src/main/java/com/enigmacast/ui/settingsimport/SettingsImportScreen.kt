@@ -26,7 +26,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Icon
+import com.enigmacast.ui.theme.ChoiceChip
+import com.enigmacast.ui.theme.CompactButton
+import com.enigmacast.ui.theme.CompactListRow
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -75,11 +91,11 @@ fun SettingsImportScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(EnigmaColors.Canvas)
-            .padding(horizontal = 36.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 32.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         PanelHeader(stringResource(R.string.import_title), stringResource(R.string.import_hint))
-        Row(Modifier.fillMaxWidth().focusGroup(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth().focusGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val tabs = listOf(
                 Triple(ImportTab.LIST, EnigmaIcons.Layers, R.string.import_tab_lists),
                 Triple(ImportTab.IPTV, EnigmaIcons.Tv, R.string.import_tab_iptv),
@@ -87,21 +103,21 @@ fun SettingsImportScreen(
                 Triple(ImportTab.ACCESS, EnigmaIcons.Lock, R.string.import_tab_access),
             )
             tabs.forEachIndexed { index, (target, icon, label) ->
-                ActionTile(
-                    icon,
+                CompactButton(
                     stringResource(label),
                     { viewModel.showTab(target) },
-                    modifier = Modifier.weight(1f).then(if (index == 0) Modifier.focusRequester(firstTab) else Modifier),
-                    tone = if (viewModel.tab == target) TileTone.Primary else TileTone.Normal,
+                    modifier = if (index == 0) Modifier.focusRequester(firstTab) else Modifier,
+                    icon = icon,
+                    selected = viewModel.tab == target,
                 )
             }
-            ActionTile(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), onBack, modifier = Modifier.weight(0.8f))
+            CompactButton(stringResource(R.string.back), onBack, icon = Icons.AutoMirrored.Filled.ArrowBack)
         }
         if (viewModel.receivers.isEmpty()) {
             Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = 16.sp)
             return@Column
         }
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             when (viewModel.tab) {
                 ImportTab.LIST -> ListTab(viewModel)
                 ImportTab.IPTV -> IptvTab(viewModel)
@@ -137,56 +153,96 @@ fun SettingsImportScreen(
     }
 }
 
+/**
+ * Focus routes between the panels. Left from the right panel goes back to the row that was
+ * focused last in the list (or the list's first row), Left from the list goes to the
+ * provider / source chooser, so the D-pad never hits a dead end.
+ */
+private class PanelFocus {
+    val chooser = FocusRequester()
+    val lastRow = FocusRequester()
+    val panel = FocusRequester()
+    var lastRowKey by mutableStateOf<String?>(null)
+}
+
+/** Attaches [PanelFocus.lastRow] to the row the right panel returns to. */
+private fun Modifier.listRow(focus: PanelFocus, key: String, isTarget: Boolean): Modifier =
+    this
+        .then(if (isTarget) Modifier.focusRequester(focus.lastRow) else Modifier)
+        .onFocusChanged { if (it.isFocused) focus.lastRowKey = key }
+        .focusProperties {
+            left = focus.chooser
+            right = focus.panel
+        }
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: SettingsImportViewModel) {
-    Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ChoiceRow(
+    val focus = remember { PanelFocus() }
+    val packages = viewModel.packages
+    val targetKey = focus.lastRowKey?.takeIf { key -> packages.any { it.id == key } }
+        ?: viewModel.selected?.id?.takeIf { key -> packages.any { it.id == key } }
+        ?: packages.firstOrNull()?.id
+    // With no rows yet, Left from the right panel lands on the provider chooser.
+    val backTarget = if (targetKey != null) focus.lastRow else focus.chooser
+    Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        CompactChoice(
             title = stringResource(R.string.import_provider),
             options = SettingsProvider.entries.map { it.title },
             selectedIndex = viewModel.provider.ordinal,
             onSelect = { viewModel.chooseProvider(SettingsProvider.entries[it]) },
+            selectedModifier = Modifier.focusRequester(focus.chooser),
+            lastRight = focus.panel,
         )
         when {
             viewModel.packagesLoading -> Muted(stringResource(R.string.import_loading))
             viewModel.packagesError != null -> {
                 FailureText(viewModel.packagesError!!)
-                TvButton(stringResource(R.string.import_retry), { viewModel.loadPackages(reload = true) })
+                CompactButton(stringResource(R.string.import_retry), { viewModel.loadPackages(reload = true) })
             }
         }
         LazyColumn(
             Modifier.fillMaxWidth().weight(1f).focusRestorer(),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            items(viewModel.packages, key = { it.id }) { pkg ->
-                ListItem(
-                    selected = viewModel.selected?.id == pkg.id,
+            items(packages, key = { it.id }) { pkg ->
+                CompactListRow(
                     onClick = { viewModel.select(pkg) },
-                    headlineContent = { Text(pkg.displayName, fontSize = 15.sp) },
-                    supportingContent = { Text(stringResource(R.string.import_package_line, pkg.tvBouquets, pkg.radioBouquets), fontSize = 12.sp) },
-                )
+                    selected = viewModel.selected?.id == pkg.id,
+                    modifier = Modifier.listRow(focus, pkg.id, pkg.id == targetKey),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+                ) { _ ->
+                    Text(pkg.displayName, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.import_package_short, pkg.tvBouquets, pkg.radioBouquets), fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+                }
             }
         }
     }
     Column(
         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val pkg = viewModel.selected
         SettingsCard(stringResource(R.string.import_preview)) {
             if (pkg == null) {
                 Muted(stringResource(R.string.import_choose_list))
             } else {
-                Text(pkg.displayName, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(pkg.displayName, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
                 InfoRow(stringResource(R.string.import_source), "${pkg.provider.title} · ${pkg.folder}")
                 InfoRow(stringResource(R.string.import_updated), viewModel.selectedDate?.let { DATE.format(it.atZone(ZoneId.systemDefault())) } ?: "–")
-                InfoRow(stringResource(R.string.import_tv_bouquets), pkg.tvBouquets.toString())
-                InfoRow(stringResource(R.string.import_radio_bouquets), pkg.radioBouquets.toString())
-                InfoRow(stringResource(R.string.import_satellites_xml), stringResource(if (pkg.hasSatellitesXml) R.string.import_yes else R.string.import_no))
+                InfoRow(
+                    stringResource(R.string.import_bouquets),
+                    stringResource(
+                        R.string.import_bouquets_line,
+                        pkg.tvBouquets,
+                        pkg.radioBouquets,
+                        stringResource(if (pkg.hasSatellitesXml) R.string.import_yes else R.string.import_no),
+                    ),
+                )
             }
         }
-        RefreshChoice(viewModel.listRefresh, viewModel::changeListRefresh)
-        TvButton(stringResource(R.string.import_load_list), viewModel::askLoadPackage, enabled = pkg != null && !viewModel.busy)
+        RefreshChoice(viewModel.listRefresh, viewModel::changeListRefresh, backTarget, focus.panel)
+        LoadButton(stringResource(R.string.import_load_list), viewModel::askLoadPackage, pkg != null && !viewModel.busy, backTarget)
         Results(viewModel)
     }
 }
@@ -194,48 +250,168 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: SettingsImportViewModel) {
-    Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        IptvSource.entries.forEach { source ->
-            ToggleRow(source.title, source in viewModel.iptvSources, { viewModel.toggleSource(source) })
+    val focus = remember { PanelFocus() }
+    val groups = if (viewModel.groups.isNotEmpty()) viewModel.visibleGroups() else emptyList()
+    val targetKey = focus.lastRowKey?.takeIf { key -> groups.any { it.name == key } } ?: groups.firstOrNull()?.name
+    val backTarget = if (targetKey != null) focus.lastRow else focus.chooser
+    val leftOut = Modifier.focusProperties { right = focus.panel }
+    Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        IptvSource.entries.forEachIndexed { index, source ->
+            CompactToggle(
+                source.title,
+                source in viewModel.iptvSources,
+                { viewModel.toggleSource(source) },
+                modifier = (if (index == 0) Modifier.focusRequester(focus.chooser) else Modifier).then(leftOut),
+            )
         }
-        TvButton(stringResource(R.string.import_load_groups), viewModel::loadGroups, enabled = viewModel.iptvSources.isNotEmpty() && !viewModel.groupsLoading)
-        when {
-            viewModel.groupsLoading -> Muted(stringResource(R.string.import_loading))
-            viewModel.groupsError != null -> FailureText(viewModel.groupsError!!)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CompactButton(
+                stringResource(R.string.import_load_groups),
+                viewModel::loadGroups,
+                modifier = leftOut,
+                icon = EnigmaIcons.Sync,
+            )
+            when {
+                viewModel.groupsLoading -> Muted(stringResource(R.string.import_loading))
+                viewModel.groupsError != null -> FailureText(viewModel.groupsError!!)
+            }
         }
         if (viewModel.groups.isNotEmpty()) {
-            TvTextField(stringResource(R.string.import_filter_groups), viewModel.groupFilter, viewModel::setFilter)
-            LazyColumn(Modifier.fillMaxWidth().weight(1f).focusRestorer(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                items(viewModel.visibleGroups(), key = { it.name }) { group ->
-                    ToggleRow("${group.name} (${group.count})", group.name in viewModel.chosenGroups, { viewModel.toggleGroup(group.name) })
+            TvTextField(stringResource(R.string.import_filter_groups), viewModel.groupFilter, viewModel::setFilter, modifier = leftOut)
+            LazyColumn(Modifier.fillMaxWidth().weight(1f).focusRestorer(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                items(groups, key = { it.name }) { group ->
+                    CompactToggle(
+                        "${group.name} (${group.count})",
+                        group.name in viewModel.chosenGroups,
+                        { viewModel.toggleGroup(group.name) },
+                        modifier = Modifier.listRow(focus, group.name, group.name == targetKey),
+                    )
                 }
             }
         }
     }
     Column(
         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         SettingsCard(stringResource(R.string.import_iptv_summary)) {
             Muted(stringResource(R.string.import_iptv_explain))
             InfoRow(stringResource(R.string.import_groups_chosen), viewModel.chosenGroups.size.toString())
             if (viewModel.groups.isNotEmpty()) InfoRow(stringResource(R.string.import_channels), viewModel.iptvChannelCount().toString())
         }
-        ChoiceRow(
+        CompactChoice(
             title = stringResource(R.string.import_service_type),
-            description = stringResource(R.string.import_service_type_desc),
             options = IptvBouquets.SERVICE_TYPES.map { it.toString() },
             selectedIndex = IptvBouquets.SERVICE_TYPES.indexOf(viewModel.serviceType).coerceAtLeast(0),
             onSelect = { viewModel.changeServiceType(IptvBouquets.SERVICE_TYPES[it]) },
+            firstLeft = backTarget,
+            selectedModifier = Modifier.focusRequester(focus.panel),
         )
-        RefreshChoice(viewModel.iptvRefresh, viewModel::changeIptvRefresh)
-        TvButton(
+        Muted(stringResource(R.string.import_service_type_desc))
+        RefreshChoice(viewModel.iptvRefresh, viewModel::changeIptvRefresh, backTarget, null)
+        LoadButton(
             stringResource(R.string.import_load_iptv),
             viewModel::askLoadIptv,
-            enabled = viewModel.chosenGroups.isNotEmpty() && viewModel.groups.isNotEmpty() && !viewModel.busy,
+            viewModel.chosenGroups.isNotEmpty() && viewModel.groups.isNotEmpty() && !viewModel.busy,
+            backTarget,
         )
         Results(viewModel)
     }
+}
+
+/** The Load action: compact, right under the auto-refresh chooser; Left goes back to the list. */
+@Composable
+private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, left: FocusRequester) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.padding(start = 6.dp).focusProperties { this.left = left },
+        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.06f),
+        colors = ButtonDefaults.colors(
+            containerColor = EnigmaColors.Raised,
+            contentColor = EnigmaColors.Text,
+            focusedContainerColor = EnigmaColors.Accent,
+            focusedContentColor = EnigmaColors.OnAccent,
+        ),
+    ) {
+        Icon(EnigmaIcons.Layers, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+    }
+}
+
+/** A single-line toggle row for dense lists. */
+@Composable
+private fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    CompactListRow(
+        onClick = onToggle,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+    ) { focused ->
+        Text(title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(
+            if (checked) "●" else "○",
+            fontSize = 14.sp,
+            color = if (focused) EnigmaColors.OnFocus else if (checked) EnigmaColors.Accent else EnigmaColors.Muted,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+}
+
+/** Title and segmented choices on one line. */
+@Composable
+private fun CompactChoice(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    firstLeft: FocusRequester? = null,
+    lastRight: FocusRequester? = null,
+    selectedModifier: Modifier = Modifier,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(title, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.widthIn(max = 130.dp))
+        options.forEachIndexed { index, label ->
+            ChoiceChip(
+                label = label,
+                selected = index == selectedIndex,
+                onClick = { onSelect(index) },
+                modifier = Modifier
+                    .then(if (index == selectedIndex) selectedModifier else Modifier)
+                    .focusProperties {
+                        if (index == 0 && firstLeft != null) left = firstLeft
+                        if (index == options.lastIndex && lastRight != null) right = lastRight
+                    },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun RefreshChoice(value: RefreshInterval, onChange: (RefreshInterval) -> Unit, left: FocusRequester, entry: FocusRequester?) {
+    CompactChoice(
+        title = stringResource(R.string.import_auto_refresh),
+        options = RefreshInterval.entries.map { stringResource(refreshShortLabel(it)) },
+        selectedIndex = value.ordinal,
+        onSelect = { onChange(RefreshInterval.entries[it]) },
+        firstLeft = left,
+        selectedModifier = if (entry != null) Modifier.focusRequester(entry) else Modifier,
+    )
+}
+
+private fun refreshShortLabel(value: RefreshInterval): Int = when (value) {
+    RefreshInterval.OFF -> R.string.import_refresh_off
+    RefreshInterval.DAILY -> R.string.import_refresh_daily_short
+    RefreshInterval.WEEKLY -> R.string.import_refresh_7_short
+    RefreshInterval.TWO_WEEKS -> R.string.import_refresh_14_short
+    RefreshInterval.MONTHLY -> R.string.import_refresh_month_short
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -289,24 +465,6 @@ private fun androidx.compose.foundation.layout.RowScope.AccessTab(viewModel: Set
             if (viewModel.accessSaved) StatusPill(stringResource(R.string.import_saved), EnigmaColors.Success)
         }
     }
-}
-
-@Composable
-private fun RefreshChoice(value: RefreshInterval, onChange: (RefreshInterval) -> Unit) {
-    ChoiceRow(
-        title = stringResource(R.string.import_auto_refresh),
-        options = RefreshInterval.entries.map { stringResource(refreshLabel(it)) },
-        selectedIndex = value.ordinal,
-        onSelect = { onChange(RefreshInterval.entries[it]) },
-    )
-}
-
-private fun refreshLabel(value: RefreshInterval): Int = when (value) {
-    RefreshInterval.OFF -> R.string.import_refresh_off
-    RefreshInterval.DAILY -> R.string.import_refresh_daily
-    RefreshInterval.WEEKLY -> R.string.import_refresh_7
-    RefreshInterval.TWO_WEEKS -> R.string.import_refresh_14
-    RefreshInterval.MONTHLY -> R.string.import_refresh_month
 }
 
 /** Per receiver: running, loaded, or what went wrong and why. */

@@ -730,6 +730,7 @@ fun CompactButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    selected: Boolean = false,
 ) {
     Button(
         onClick = onClick,
@@ -738,8 +739,8 @@ fun CompactButton(
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
         scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
-            containerColor = EnigmaColors.Raised,
-            contentColor = EnigmaColors.Text,
+            containerColor = if (selected) EnigmaColors.Selected else EnigmaColors.Raised,
+            contentColor = if (selected) EnigmaColors.Accent else EnigmaColors.Text,
             focusedContainerColor = EnigmaColors.Accent,
             focusedContentColor = EnigmaColors.OnAccent,
             pressedContainerColor = EnigmaColors.Accent,

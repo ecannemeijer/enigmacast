@@ -246,8 +246,8 @@
     <string name="receivers_edit">Edit</string>
     <string name="receivers_empty">No receivers yet. Add one to watch its channels.</string>
     <string name="receivers_in_use">In use</string>
-    <string name="receivers_refresh_channels">Refresh channels &amp; bouquets now</string>
-    <string name="receivers_refresh_running">Refreshing…</string>
+    <string name="receivers_refresh_channels">Reload settings</string>
+    <string name="receivers_refresh_running">Reloading…</string>
     <string name="receivers_refresh_updated">Updated: %1$d bouquets, %2$d channels</string>
     <string name="receivers_refresh_unchanged">Up to date: %1$d bouquets, %2$d channels (no changes on the receiver)</string>
     <string name="receivers_refresh_failed">Refresh failed: %1$s</string>
@@ -1171,6 +1171,13 @@ Profile: %2$s</string>
     <string name="import_refresh_7">Every 7 days</string>
     <string name="import_refresh_14">Every 14 days</string>
     <string name="import_refresh_month">Every month</string>
+    <string name="import_refresh_daily_short">1 day</string>
+    <string name="import_refresh_7_short">7 days</string>
+    <string name="import_refresh_14_short">14 days</string>
+    <string name="import_refresh_month_short">1 month</string>
+    <string name="import_bouquets">Bouquets</string>
+    <string name="import_bouquets_line">%1$d TV · %2$d radio · satellites.xml: %3$s</string>
+    <string name="import_package_short">%1$d TV · %2$d radio</string>
     <string name="import_results">Result</string>
     <string name="import_running">Busy: backup, copy and reload…</string>
     <string name="import_done">Loaded and activated: %1$d bouquets.</string>

@@ -160,6 +160,7 @@ fun ReceiversSettingsPanel(
                         else R.string.receivers_refresh_channels,
                     ),
                     onClick = { onRefreshChannels(receiver.id) },
+                    icon = com.enigmacast.ui.theme.EnigmaIcons.Sync,
                 )
                 CompactButton(
                     label = stringResource(R.string.receivers_edit),
