@@ -1105,4 +1105,16 @@ Profile: %2$s</string>
     <string name="premium_feature_epg">The TV Guide (EPG)</string>
     <string name="update_reinstall_title">Reinstall EnigmaCast</string>
     <string name="update_reinstall_message">This version cannot be installed as an update. Because the features have changed too much, please uninstall EnigmaCast and install the new version again.</string>
+    <string name="video_decoder_card">Video</string>
+    <string name="video_decoder">Video decoder</string>
+    <string name="video_decoder_desc">Automatic uses the hardware decoder and falls back to software if it fails. Try Software if the picture is garbled.</string>
+    <string name="video_decoder_auto">Automatic</string>
+    <string name="video_decoder_hardware">Hardware</string>
+    <string name="video_decoder_software">Software</string>
+    <string name="video_compat">Compatibility mode</string>
+    <string name="video_compat_desc">Safe video output: no refresh-rate switching or tunneling. Off uses the old TextureView output.</string>
+    <string name="video_compat_desc_detected">This device needs the safe video output, so Automatic turns it on. Off uses the old TextureView output.</string>
+    <string name="video_compat_auto">Automatic</string>
+    <string name="video_compat_on">On</string>
+    <string name="video_compat_off">Off</string>
 </resources>

@@ -776,13 +776,28 @@ class LivePlaybackController @Inject constructor(
 
     @OptIn(ExperimentalApi::class)
     private fun buildPlayer(): ExoPlayer {
+        val surfaceView = VideoOutput.useSurfaceView(settings.videoCompatibility)
+        val compatibility = VideoOutput.compatibilityActive(settings.videoCompatibility, VideoQuirks.thisDevice)
+        VideoOutput.surfaceView = surfaceView
+        val decoderMode = settings.videoDecoder
+        val selector = MediaCodecSelector { mime, secure, tunneling ->
+            val infos = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
+            if (!MimeTypes.isVideo(mime)) return@MediaCodecSelector infos
+            val byName = infos.associateBy { it.name }
+            VideoOutput.order(decoderMode, infos.map { it.name to it.hardwareAccelerated }).mapNotNull { byName[it] }
+        }
         val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync)
             .setEnableDecoderFallback(true)
+            .setMediaCodecSelector(selector)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-            .setVideoRendererEarlySchedulingThresholdUs(TEXTURE_VIEW_EARLY_SCHEDULING_US)
+        // The early-render window only helps a TextureView; a SurfaceView keeps the default timing.
+        if (!surfaceView) renderers.setVideoRendererEarlySchedulingThresholdUs(TEXTURE_VIEW_EARLY_SCHEDULING_US)
+        EnigmaLog.player("video decoder=$decoderMode surface=${if (surfaceView) "SurfaceView" else "TextureView"} compatibility=$compatibility quirk=${VideoQuirks.thisDevice}")
         val trackSelector = DefaultTrackSelector(context)
         val preferredAudio = if (settings.hdmiPassthrough) PASSTHROUGH_AUDIO else STEREO_AUDIO
         trackSelector.parameters = trackSelector.buildUponParameters()
+            // Tunneled playback is broken on several Amlogic/Realtek sticks; TiviMate leaves it off too.
+            .setTunnelingEnabled(false)
             .setPreferredAudioMimeTypes(*preferredAudio)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !settings.subtitlesEnabled)
             .setSelectUndeterminedTextLanguage(settings.subtitlesEnabled)
@@ -828,6 +843,8 @@ class LivePlaybackController @Inject constructor(
             true,
         )
         exo.videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
+        // Display refresh-rate switching re-inits the video layer on some sticks; compatibility leaves the mode alone.
+        if (compatibility) exo.videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
         exo.addListener(listener)
         exo.addAnalyticsListener(loadErrors)
         EnigmaLog.player(if (settings.hdmiPassthrough) "audio HDMI passthrough" else "audio stereo downmix")

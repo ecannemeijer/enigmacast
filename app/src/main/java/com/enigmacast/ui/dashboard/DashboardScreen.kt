@@ -1392,6 +1392,7 @@ private fun PlaybackSettingsPanel(
             onSelect = { viewModel.setLowLatency(it == 1) },
         )
     }
+    VideoDecoderCard(viewModel)
     StreamTypeCard()
     SettingsCard(stringResource(R.string.sound)) {
         ChoiceRow(
@@ -1747,3 +1748,38 @@ private fun Modifier.verticalBoundary(): Modifier = this
         }
     }
     .focusGroup()
+
+@Composable
+private fun VideoDecoderCard(viewModel: SettingsViewModel) {
+    val all by viewModel.settings.collectAsStateWithLifecycle()
+    val decoder = all.playback.videoDecoder
+    val compat = all.playback.videoCompatibility
+    SettingsCard(stringResource(R.string.video_decoder_card)) {
+        val decoders = com.enigmacast.domain.model.VideoDecoderMode.entries
+        ChoiceRow(
+            title = stringResource(R.string.video_decoder),
+            description = stringResource(R.string.video_decoder_desc),
+            options = listOf(
+                stringResource(R.string.video_decoder_auto),
+                stringResource(R.string.video_decoder_hardware),
+                stringResource(R.string.video_decoder_software),
+            ),
+            selectedIndex = decoders.indexOf(decoder),
+            onSelect = { viewModel.setVideoDecoder(decoders[it]) },
+        )
+        val modes = com.enigmacast.domain.model.VideoCompatibility.entries
+        ChoiceRow(
+            title = stringResource(R.string.video_compat),
+            description = stringResource(
+                if (com.enigmacast.playback.VideoQuirks.thisDevice) R.string.video_compat_desc_detected else R.string.video_compat_desc,
+            ),
+            options = listOf(
+                stringResource(R.string.video_compat_auto),
+                stringResource(R.string.video_compat_on),
+                stringResource(R.string.video_compat_off),
+            ),
+            selectedIndex = modes.indexOf(compat),
+            onSelect = { viewModel.setVideoCompatibility(modes[it]) },
+        )
+    }
+}

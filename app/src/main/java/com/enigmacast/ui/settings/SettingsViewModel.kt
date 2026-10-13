@@ -32,6 +32,8 @@ class SettingsViewModel @Inject constructor(
     fun setRecordingPreset(preset: TranscodePreset?) = update { it.copy(playback = it.playback.copy(recordingPreset = preset)) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }
     fun setAutoReconnect(enabled: Boolean) = update { it.copy(playback = it.playback.copy(autoReconnect = enabled)) }
+    fun setVideoDecoder(mode: com.enigmacast.domain.model.VideoDecoderMode) = update { it.copy(playback = it.playback.copy(videoDecoder = mode)) }
+    fun setVideoCompatibility(mode: com.enigmacast.domain.model.VideoCompatibility) = update { it.copy(playback = it.playback.copy(videoCompatibility = mode)) }
     fun setHdmiPassthrough(enabled: Boolean) = update { it.copy(playback = it.playback.copy(hdmiPassthrough = enabled)) }
     fun stepAudioDelay(passthrough: Boolean, direction: Int) = update { current ->
         val playback = current.playback

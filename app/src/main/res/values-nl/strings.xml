@@ -1102,4 +1102,16 @@ Profiel: %2$s</string>
     <string name="premium_feature_epg">De tv-gids (EPG)</string>
     <string name="update_reinstall_title">EnigmaCast opnieuw installeren</string>
     <string name="update_reinstall_message">Deze versie kan niet als update worden geïnstalleerd. Omdat de functies te veel zijn veranderd, moet je EnigmaCast verwijderen en de nieuwe versie opnieuw installeren.</string>
+    <string name="video_decoder_card">Video</string>
+    <string name="video_decoder">Videodecoder</string>
+    <string name="video_decoder_desc">Automatisch gebruikt de hardwaredecoder en valt terug op software als die faalt. Probeer Software als het beeld vervormd is.</string>
+    <string name="video_decoder_auto">Automatisch</string>
+    <string name="video_decoder_hardware">Hardware</string>
+    <string name="video_decoder_software">Software</string>
+    <string name="video_compat">Compatibiliteitsmodus</string>
+    <string name="video_compat_desc">Veilige video-uitvoer: geen wisseling van verversingssnelheid en geen tunneling. Uit gebruikt de oude TextureView-uitvoer.</string>
+    <string name="video_compat_desc_detected">Dit apparaat heeft de veilige video-uitvoer nodig, dus Automatisch zet die aan. Uit gebruikt de oude TextureView-uitvoer.</string>
+    <string name="video_compat_auto">Automatisch</string>
+    <string name="video_compat_on">Aan</string>
+    <string name="video_compat_off">Uit</string>
 </resources>

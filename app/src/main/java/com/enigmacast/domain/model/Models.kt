@@ -77,7 +77,17 @@ data class PlaybackSettings(
      * Missing in older settings, so those stay original. Receiver timers ignore this.
      */
     val recordingPreset: TranscodePreset? = null,
+    /** Which video decoder to use. Missing in older settings, so Automatic applies. */
+    val videoDecoder: VideoDecoderMode = VideoDecoderMode.AUTO,
+    /** Safe video output for devices that garble the picture. Automatic turns it on for known devices. */
+    val videoCompatibility: VideoCompatibility = VideoCompatibility.AUTO,
 )
+
+@Serializable
+enum class VideoDecoderMode { AUTO, HARDWARE, SOFTWARE }
+
+@Serializable
+enum class VideoCompatibility { AUTO, ON, OFF }
 
 @Serializable
 data class OsdSettings(

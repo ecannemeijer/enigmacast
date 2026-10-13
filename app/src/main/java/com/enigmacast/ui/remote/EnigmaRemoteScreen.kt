@@ -4,6 +4,8 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import android.view.Gravity
+import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -24,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import com.enigmacast.playback.VideoOutput
 import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.Text
@@ -213,35 +217,60 @@ fun EnigmaRemoteScreen(
     }
 }
 
+/** Attaches [player] to a SurfaceView or a TextureView. */
+private fun Player.bindVideo(view: View) {
+    when (view) {
+        is SurfaceView -> setVideoSurfaceView(view)
+        is TextureView -> setVideoTextureView(view)
+    }
+}
+
+private fun Player.unbindVideo(view: View) {
+    when (view) {
+        is SurfaceView -> clearVideoSurfaceView(view)
+        is TextureView -> clearVideoTextureView(view)
+    }
+}
+
+/**
+ * A SurfaceView by default: frames stay on the hardware video overlay, as in TiviMate and Netflix.
+ * A TextureView sends them through the GPU, which garbles the picture on Amlogic sticks.
+ */
+private fun videoView(context: android.content.Context, surface: Boolean): View =
+    if (surface) SurfaceView(context) else TextureView(context)
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Modifier) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            val texture = TextureView(context).apply { isFocusable = false }
-            val subtitles = CueOverlayView(context)
-            FrameLayout(context).apply {
-                addView(texture, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                addView(subtitles, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                tag = MiniVideoLayer(texture, subtitles, boundPlayer = null)
-            }
-        },
-        update = { layout ->
-            val layer = layout.tag as MiniVideoLayer
-            if (layer.boundPlayer !== player) {
-                layer.boundPlayer?.clearVideoTextureView(layer.texture)
-                player.setVideoTextureView(layer.texture)
-                layer.boundPlayer = player
-            }
-            layer.subtitles.cues = cues
-        },
-        onRelease = { layout ->
-            val layer = layout.tag as MiniVideoLayer
-            layer.boundPlayer?.clearVideoTextureView(layer.texture)
-            layer.boundPlayer = null
-        },
-    )
+    val surface = VideoOutput.surfaceView
+    key(surface) {
+        AndroidView(
+            modifier = modifier,
+            factory = { context ->
+                val video = videoView(context, surface).apply { isFocusable = false }
+                val subtitles = CueOverlayView(context)
+                FrameLayout(context).apply {
+                    addView(video, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                    addView(subtitles, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                    tag = MiniVideoLayer(video, subtitles, boundPlayer = null)
+                }
+            },
+            update = { layout ->
+                val layer = layout.tag as MiniVideoLayer
+                if (layer.boundPlayer !== player) {
+                    layer.boundPlayer?.unbindVideo(layer.video)
+                    player.bindVideo(layer.video)
+                    layer.boundPlayer = player
+                }
+                layer.subtitles.cues = cues
+            },
+            onRelease = { layout ->
+                val layer = layout.tag as MiniVideoLayer
+                layer.boundPlayer?.unbindVideo(layer.video)
+                layer.boundPlayer = null
+            },
+        )
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -255,13 +284,15 @@ private fun EnigmaVideoPlayer(
     osdAlpha: Float = 1f,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
-    // Compose draws into the parent canvas. An Android child such as TextureView is
-    // composited above that canvas, so an OSD Image in Compose stays hidden behind the video.
+    // Compose draws into the parent canvas. Android child views are composited above that
+    // canvas, so the OSD is an ImageView in the same FrameLayout, above the video.
     // Subtitles sit above the video and under the tuner OSD.
+    val surface = VideoOutput.surfaceView
+    key(surface) {
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            val texture = TextureView(context)
+            val video = videoView(context, surface)
             val subtitles = CueOverlayView(context)
             val osd = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -269,19 +300,21 @@ private fun EnigmaVideoPlayer(
                 isClickable = false
             }
             FrameLayout(context).apply {
-                addView(texture, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(video, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT, Gravity.CENTER))
                 addView(subtitles, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 addView(osd, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                val layer = VideoLayer(texture, subtitles, osd, boundPlayer = null)
+                val layer = VideoLayer(this, video, subtitles, osd, boundPlayer = null)
                 tag = layer
-                texture.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layer.applyPicture() }
+                addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+                    if (r - l != or - ol || b - t != ob - ot) post { layer.applyPicture() }
+                }
             }
         },
         update = { layout ->
             val layer = layout.tag as VideoLayer
             if (layer.boundPlayer !== player) {
-                layer.boundPlayer?.clearVideoTextureView(layer.texture)
-                player.setVideoTextureView(layer.texture)
+                layer.boundPlayer?.unbindVideo(layer.video)
+                player.bindVideo(layer.video)
                 layer.boundPlayer = player
             }
             layer.subtitles.cues = cues
@@ -309,15 +342,17 @@ private fun EnigmaVideoPlayer(
         },
         onRelease = { layout ->
             val layer = layout.tag as VideoLayer
-            layer.boundPlayer?.clearVideoTextureView(layer.texture)
+            layer.boundPlayer?.unbindVideo(layer.video)
             layer.boundPlayer = null
             layer.osd.setImageBitmap(null)
         },
     )
+    }
 }
 
 private class VideoLayer(
-    val texture: TextureView,
+    val frame: FrameLayout,
+    val video: View,
     val subtitles: CueOverlayView,
     val osd: ImageView,
     var boundPlayer: Player?,
@@ -327,14 +362,30 @@ private class VideoLayer(
     /** Scales the frame around the centre of the view for the chosen picture mode. */
     fun applyPicture() {
         val shape = picture ?: return
-        val width = texture.width
-        val height = texture.height
+        val width = frame.width
+        val height = frame.height
         if (width <= 0 || height <= 0) return
         val scale = VideoScaling.scale(shape.mode, shape.videoWidth, shape.videoHeight, shape.pixelRatio, width, height)
-        val matrix = Matrix()
-        matrix.setScale(scale.x, scale.y, width / 2f, height / 2f)
-        texture.setTransform(matrix)
-        texture.invalidate()
+        when (video) {
+            is TextureView -> {
+                val matrix = Matrix()
+                matrix.setScale(scale.x, scale.y, width / 2f, height / 2f)
+                video.setTransform(matrix)
+                video.invalidate()
+            }
+            else -> {
+                // A SurfaceView cannot take a matrix; it is sized instead, centred and clipped by the frame.
+                val w = (width * scale.x).toInt().coerceAtLeast(1)
+                val h = (height * scale.y).toInt().coerceAtLeast(1)
+                val params = video.layoutParams as FrameLayout.LayoutParams
+                if (params.width != w || params.height != h) {
+                    params.width = w
+                    params.height = h
+                    params.gravity = Gravity.CENTER
+                    video.layoutParams = params
+                }
+            }
+        }
     }
 }
 
@@ -342,7 +393,7 @@ private class VideoLayer(
 data class VideoShape(val mode: PictureMode, val videoWidth: Int, val videoHeight: Int, val pixelRatio: Float)
 
 private class MiniVideoLayer(
-    val texture: TextureView,
+    val video: View,
     val subtitles: CueOverlayView,
     var boundPlayer: Player?,
 )
