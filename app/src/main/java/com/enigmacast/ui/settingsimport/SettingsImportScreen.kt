@@ -1,6 +1,13 @@
 package com.enigmacast.ui.settingsimport
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.clip
+import com.enigmacast.domain.settingsimport.ImportStage
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -218,10 +225,7 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
             }
         }
     }
-    Column(
-        Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    RightPanel {
         val pkg = viewModel.selected
         SettingsCard(stringResource(R.string.import_preview)) {
             if (pkg == null) {
@@ -241,8 +245,21 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
                 )
             }
         }
-        RefreshChoice(viewModel.listRefresh, viewModel::changeListRefresh, backTarget, focus.panel)
-        LoadButton(stringResource(R.string.import_load_list), viewModel::askLoadPackage, pkg != null && !viewModel.busy, backTarget)
+        SettingsCard(null) {
+            RefreshChoice(viewModel.listRefresh, viewModel::changeListRefresh, backTarget, focus.panel)
+        }
+        LoadButton(
+            label = stringResource(R.string.import_load_list),
+            onClick = viewModel::askLoadPackage,
+            enabled = pkg != null && !viewModel.busy,
+            left = backTarget,
+            disabledHint = when {
+                viewModel.busy -> stringResource(R.string.import_busy)
+                pkg == null -> stringResource(R.string.import_load_disabled_list)
+                else -> null
+            },
+        )
+        LoadProgressCard(viewModel.progress)
         Results(viewModel)
     }
 }
@@ -256,6 +273,7 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
     val backTarget = if (targetKey != null) focus.lastRow else focus.chooser
     val leftOut = Modifier.focusProperties { right = focus.panel }
     Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SectionLabel(stringResource(R.string.import_sources_title))
         IptvSource.entries.forEachIndexed { index, source ->
             CompactToggle(
                 source.title,
@@ -264,103 +282,253 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                 modifier = (if (index == 0) Modifier.focusRequester(focus.chooser) else Modifier).then(leftOut),
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CompactButton(
                 stringResource(R.string.import_load_groups),
                 viewModel::loadGroups,
                 modifier = leftOut,
                 icon = EnigmaIcons.Sync,
             )
-            when {
-                viewModel.groupsLoading -> Muted(stringResource(R.string.import_loading))
-                viewModel.groupsError != null -> FailureText(viewModel.groupsError!!)
-            }
+            if (viewModel.groupsError != null && !viewModel.groupsLoading) FailureText(viewModel.groupsError!!)
+        }
+        if (viewModel.groupsLoading) {
+            val p = viewModel.groupsProgress
+            val text = if (p == null || p.done >= p.total) stringResource(R.string.import_groups_parsing)
+            else stringResource(R.string.import_groups_downloading, p.done + 1, p.total, p.current)
+            ProgressLine(fraction = p?.takeIf { it.total > 0 && it.done < it.total }?.let { it.done.toFloat() / it.total }, text = text)
         }
         if (viewModel.groups.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.import_groups_count, viewModel.chosenGroups.size, viewModel.groups.size),
+                    color = EnigmaColors.Text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(start = 6.dp),
+                )
+                CompactButton(stringResource(R.string.import_select_all), viewModel::selectAllGroups, modifier = leftOut, icon = Icons.Filled.Check)
+                CompactButton(stringResource(R.string.import_select_none), viewModel::selectNoGroups, modifier = leftOut)
+            }
             TvTextField(stringResource(R.string.import_filter_groups), viewModel.groupFilter, viewModel::setFilter, modifier = leftOut)
-            LazyColumn(Modifier.fillMaxWidth().weight(1f).focusRestorer(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(EnigmaColors.Card, RoundedCornerShape(10.dp))
+                    .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                    .padding(4.dp)
+                    .focusRestorer(),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
                 items(groups, key = { it.name }) { group ->
                     CompactToggle(
-                        "${group.name} (${group.count})",
+                        group.name,
                         group.name in viewModel.chosenGroups,
                         { viewModel.toggleGroup(group.name) },
                         modifier = Modifier.listRow(focus, group.name, group.name == targetKey),
+                        trailing = group.count.toString(),
                     )
                 }
             }
+        } else if (!viewModel.groupsLoading) {
+            Muted(stringResource(R.string.import_groups_none_loaded))
         }
     }
-    Column(
-        Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).focusGroup(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    RightPanel {
         SettingsCard(stringResource(R.string.import_iptv_summary)) {
             Muted(stringResource(R.string.import_iptv_explain))
-            InfoRow(stringResource(R.string.import_groups_chosen), viewModel.chosenGroups.size.toString())
+            InfoRow(
+                stringResource(R.string.import_groups_chosen),
+                if (viewModel.groups.isNotEmpty()) "${viewModel.chosenGroups.size} / ${viewModel.groups.size}" else viewModel.chosenGroups.size.toString(),
+            )
             if (viewModel.groups.isNotEmpty()) InfoRow(stringResource(R.string.import_channels), viewModel.iptvChannelCount().toString())
         }
-        CompactChoice(
-            title = stringResource(R.string.import_service_type),
-            options = IptvBouquets.SERVICE_TYPES.map { it.toString() },
-            selectedIndex = IptvBouquets.SERVICE_TYPES.indexOf(viewModel.serviceType).coerceAtLeast(0),
-            onSelect = { viewModel.changeServiceType(IptvBouquets.SERVICE_TYPES[it]) },
-            firstLeft = backTarget,
-            selectedModifier = Modifier.focusRequester(focus.panel),
-        )
-        Muted(stringResource(R.string.import_service_type_desc))
-        RefreshChoice(viewModel.iptvRefresh, viewModel::changeIptvRefresh, backTarget, null)
+        SettingsCard(null) {
+            OptionLabel(stringResource(R.string.import_service_type))
+            Segmented(
+                options = IptvBouquets.SERVICE_TYPES.map { it.toString() },
+                selectedIndex = IptvBouquets.SERVICE_TYPES.indexOf(viewModel.serviceType).coerceAtLeast(0),
+                onSelect = { viewModel.changeServiceType(IptvBouquets.SERVICE_TYPES[it]) },
+                left = backTarget,
+                selectedModifier = Modifier.focusRequester(focus.panel),
+            )
+            Muted(stringResource(R.string.import_service_type_desc))
+            Spacer(Modifier.size(4.dp))
+            RefreshChoice(viewModel.iptvRefresh, viewModel::changeIptvRefresh, backTarget, null)
+        }
+        val canLoad = viewModel.chosenGroups.isNotEmpty() && viewModel.groups.isNotEmpty() && !viewModel.busy
         LoadButton(
-            stringResource(R.string.import_load_iptv),
-            viewModel::askLoadIptv,
-            viewModel.chosenGroups.isNotEmpty() && viewModel.groups.isNotEmpty() && !viewModel.busy,
-            backTarget,
+            label = stringResource(R.string.import_load_iptv),
+            onClick = viewModel::askLoadIptv,
+            enabled = canLoad,
+            left = backTarget,
+            disabledHint = when {
+                viewModel.busy -> stringResource(R.string.import_busy)
+                viewModel.groups.isEmpty() -> stringResource(R.string.import_groups_none_loaded)
+                viewModel.chosenGroups.isEmpty() -> stringResource(R.string.import_load_disabled_groups)
+                else -> null
+            },
         )
+        LoadProgressCard(viewModel.progress)
         Results(viewModel)
     }
 }
 
-/** The Load action: compact, right under the auto-refresh chooser; Left goes back to the list. */
+/** The right-hand column: scrolls, and a focused item is brought into view automatically. */
 @Composable
-private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, left: FocusRequester) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.padding(start = 6.dp).focusProperties { this.left = left },
-        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.06f),
-        colors = ButtonDefaults.colors(
-            containerColor = EnigmaColors.Raised,
-            contentColor = EnigmaColors.Text,
-            focusedContainerColor = EnigmaColors.Accent,
-            focusedContentColor = EnigmaColors.OnAccent,
-        ),
-    ) {
-        Icon(EnigmaIcons.Layers, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+private fun androidx.compose.foundation.layout.RowScope.RightPanel(content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .focusGroup()
+            .padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(),
+        color = EnigmaColors.Accent,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp,
+        modifier = Modifier.padding(start = 6.dp, top = 2.dp),
+    )
+}
+
+@Composable
+private fun OptionLabel(text: String) {
+    Text(text, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+}
+
+/** The Load action: full width and accent coloured; when it cannot run, the reason shows under it. */
+@Composable
+private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, left: FocusRequester, disabledHint: String?) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().focusProperties { this.left = left },
+            shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+            scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.03f),
+            colors = ButtonDefaults.colors(
+                containerColor = EnigmaColors.Accent.copy(alpha = 0.85f),
+                contentColor = EnigmaColors.OnAccent,
+                focusedContainerColor = EnigmaColors.Accent,
+                focusedContentColor = EnigmaColors.OnAccent,
+                disabledContainerColor = EnigmaColors.Raised,
+                disabledContentColor = EnigmaColors.Subtle,
+            ),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Icon(EnigmaIcons.Layers, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
+        if (!enabled && disabledHint != null) {
+            Text(disabledHint, color = EnigmaColors.Subtle, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
+        }
     }
 }
 
-/** A single-line toggle row for dense lists. */
+/** A progress bar with its step text; [fraction] null = indeterminate. */
 @Composable
-private fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+private fun ProgressLine(fraction: Float?, text: String) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(text, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val barModifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+        if (fraction == null) {
+            LinearProgressIndicator(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
+        } else {
+            val animated by animateFloatAsState(fraction.coerceIn(0f, 1f), label = "importProgress")
+            LinearProgressIndicator(progress = { animated }, modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
+        }
+    }
+}
+
+/** Per receiver and per file while a list or bouquets are loaded on the receivers. */
+@Composable
+private fun LoadProgressCard(progress: LoadProgress?) {
+    if (progress == null) return
+    SettingsCard(stringResource(R.string.import_progress_title)) {
+        val name = progress.receiverName
+        val step = progress.step
+        val text = when {
+            name == null -> stringResource(R.string.import_progress_preparing)
+            step == null -> stringResource(R.string.import_step_connect, name)
+            else -> when (step.stage) {
+                ImportStage.CONNECT -> stringResource(R.string.import_step_connect, name)
+                ImportStage.BACKUP -> stringResource(R.string.import_step_backup, step.done, step.total, name)
+                ImportStage.UPLOAD -> stringResource(R.string.import_step_upload, step.done, step.total, name)
+                ImportStage.DELETE -> stringResource(R.string.import_step_delete, step.done, step.total, name)
+                ImportStage.RELOAD -> stringResource(R.string.import_step_reload, name)
+                ImportStage.SYNC -> stringResource(R.string.import_step_sync, name)
+            }
+        }
+        ProgressLine(progress.fraction, text)
+        if (progress.receiverCount > 1 && name != null) {
+            Muted(stringResource(R.string.import_progress_receiver, progress.receiverIndex + 1, progress.receiverCount, name))
+        }
+    }
+}
+
+/** A single-line row with a checkbox, for dense lists. */
+@Composable
+private fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, trailing: String? = null) {
     CompactListRow(
         onClick = onToggle,
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
     ) { focused ->
+        CheckBox(checked, focused)
+        Spacer(Modifier.width(10.dp))
         Text(title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(
-            if (checked) "●" else "○",
-            fontSize = 14.sp,
-            color = if (focused) EnigmaColors.OnFocus else if (checked) EnigmaColors.Accent else EnigmaColors.Muted,
-            modifier = Modifier.padding(start = 8.dp),
-        )
+        if (trailing != null) {
+            Text(
+                trailing,
+                fontSize = 12.sp,
+                color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Subtle,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
 }
 
-/** Title and segmented choices on one line. */
+@Composable
+private fun CheckBox(checked: Boolean, focused: Boolean) {
+    val shape = RoundedCornerShape(4.dp)
+    val fill = when {
+        checked && focused -> EnigmaColors.OnFocus
+        checked -> EnigmaColors.Accent
+        else -> androidx.compose.ui.graphics.Color.Transparent
+    }
+    val edge = when {
+        focused -> EnigmaColors.OnFocus
+        checked -> EnigmaColors.Accent
+        else -> EnigmaColors.Subtle
+    }
+    Box(
+        Modifier.size(18.dp).background(fill, shape).border(1.5.dp, edge, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (checked) Icon(Icons.Filled.Check, contentDescription = null, tint = if (focused) EnigmaColors.Focus else EnigmaColors.OnAccent, modifier = Modifier.size(14.dp))
+    }
+}
+
+/** Title and choices on one line (provider chooser). */
 @Composable
 private fun CompactChoice(
     title: String,
@@ -393,15 +561,75 @@ private fun CompactChoice(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+/**
+ * Segmented control: equal-width segments on one line inside a track, so labels never wrap.
+ * Left from the first segment goes to [left]; Right stops at the last one.
+ */
+@Composable
+private fun Segmented(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    left: FocusRequester,
+    selectedModifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(EnigmaColors.Raised, shape)
+            .border(1.dp, EnigmaColors.CardBorder, shape)
+            .padding(3.dp)
+            .focusGroup(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            Button(
+                onClick = { onSelect(index) },
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 34.dp)
+                    .then(if (selected) selectedModifier else Modifier)
+                    .focusProperties {
+                        if (index == 0) this.left = left
+                        if (index == options.lastIndex) right = FocusRequester.Cancel
+                    },
+                shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.04f),
+                colors = ButtonDefaults.colors(
+                    containerColor = if (selected) EnigmaColors.Selected else androidx.compose.ui.graphics.Color.Transparent,
+                    contentColor = if (selected) EnigmaColors.Accent else EnigmaColors.Muted,
+                    focusedContainerColor = EnigmaColors.Focus,
+                    focusedContentColor = EnigmaColors.OnFocus,
+                    pressedContainerColor = EnigmaColors.Focus,
+                    pressedContentColor = EnigmaColors.OnFocus,
+                ),
+            ) {
+                Text(
+                    label,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RefreshChoice(value: RefreshInterval, onChange: (RefreshInterval) -> Unit, left: FocusRequester, entry: FocusRequester?) {
-    CompactChoice(
-        title = stringResource(R.string.import_auto_refresh),
+    OptionLabel(stringResource(R.string.import_auto_refresh))
+    Segmented(
         options = RefreshInterval.entries.map { stringResource(refreshShortLabel(it)) },
         selectedIndex = value.ordinal,
         onSelect = { onChange(RefreshInterval.entries[it]) },
-        firstLeft = left,
+        left = left,
         selectedModifier = if (entry != null) Modifier.focusRequester(entry) else Modifier,
     )
 }

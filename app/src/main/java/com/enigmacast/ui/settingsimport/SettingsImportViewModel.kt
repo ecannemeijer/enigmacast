@@ -16,6 +16,8 @@ import com.enigmacast.data.settingsimport.SettingsBackup
 import com.enigmacast.data.settingsimport.SettingsBackupStore
 import com.enigmacast.data.settingsimport.SettingsImportSources
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.settingsimport.ImportProgress
+import com.enigmacast.domain.settingsimport.ImportStep
 import com.enigmacast.domain.settingsimport.IptvBouquets
 import com.enigmacast.domain.settingsimport.M3uEntry
 import com.enigmacast.domain.settingsimport.M3uParser
@@ -49,6 +51,18 @@ sealed interface ReceiverStatus {
 
 data class GroupInfo(val name: String, val count: Int)
 
+/** Progress of a running load. [fraction] null = indeterminate (e.g. downloading the package). */
+data class LoadProgress(
+    val fraction: Float?,
+    val receiverName: String? = null,
+    val receiverIndex: Int = 0,
+    val receiverCount: Int = 0,
+    val step: ImportStep? = null,
+)
+
+/** Progress of 'Load groups': playlist [done] of [total], [current] is being downloaded. */
+data class GroupsProgress(val done: Int, val total: Int, val current: String)
+
 @HiltViewModel
 class SettingsImportViewModel @Inject constructor(
     private val sources: SettingsImportSources,
@@ -78,6 +92,7 @@ class SettingsImportViewModel @Inject constructor(
     var groupFilter by mutableStateOf(""); private set
     var groupsLoading by mutableStateOf(false); private set
     var groupsError by mutableStateOf<TransferException?>(null); private set
+    var groupsProgress by mutableStateOf<GroupsProgress?>(null); private set
     var serviceType by mutableStateOf(IptvBouquets.DEFAULT_SERVICE_TYPE); private set
     var iptvRefresh by mutableStateOf(RefreshInterval.OFF); private set
     private var entries: List<M3uEntry> = emptyList()
@@ -89,6 +104,7 @@ class SettingsImportViewModel @Inject constructor(
     var confirming by mutableStateOf(false); private set
     var status by mutableStateOf<Map<String, ReceiverStatus>>(emptyMap()); private set
     var busy by mutableStateOf(false); private set
+    var progress by mutableStateOf<LoadProgress?>(null); private set
     var backupList by mutableStateOf<Map<String, List<SettingsBackup>>>(emptyMap()); private set
 
     // FTP login form
@@ -182,21 +198,42 @@ class SettingsImportViewModel @Inject constructor(
         groupsError = null
         viewModelScope.launch {
             try {
-                entries = importer.playlists(iptvSources.map { it.name })
+                val chosen = IptvSource.entries.filter { it in iptvSources }
+                val all = mutableListOf<M3uEntry>()
+                chosen.forEachIndexed { i, source ->
+                    groupsProgress = GroupsProgress(i, chosen.size, source.title)
+                    all += importer.playlist(source)
+                }
+                groupsProgress = GroupsProgress(chosen.size, chosen.size, "")
+                entries = all
                 groups = M3uParser.groupCounts(entries).map { (name, count) -> GroupInfo(name, count) }.sortedBy { it.name.lowercase() }
-                chosenGroups = chosenGroups.filter { chosen -> groups.any { it.name == chosen } }
+                // Freshly loaded groups all start selected; the user narrows them down.
+                chosenGroups = groups.map { it.name }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 groupsError = TransferErrors.map(e, TransferStage.DOWNLOAD)
             } finally {
                 groupsLoading = false
+                groupsProgress = null
             }
         }
     }
 
     fun toggleGroup(name: String) {
         chosenGroups = if (name in chosenGroups) chosenGroups - name else chosenGroups + name
+    }
+
+    /** Selects every group that the filter shows (all groups without a filter). */
+    fun selectAllGroups() {
+        val visible = visibleGroups().map { it.name }
+        chosenGroups = chosenGroups + visible.filter { it !in chosenGroups }
+    }
+
+    /** Clears the groups that the filter shows (all groups without a filter). */
+    fun selectNoGroups() {
+        val visible = visibleGroups().map { it.name }.toSet()
+        chosenGroups = chosenGroups.filter { it !in visible }
     }
 
     fun setFilter(text: String) { groupFilter = text }
@@ -264,16 +301,21 @@ class SettingsImportViewModel @Inject constructor(
         if (targets.isEmpty()) return
         busy = true
         status = targets.associate { it.id to ReceiverStatus.Running }
+        progress = LoadProgress(fraction = null, receiverCount = targets.size)
         viewModelScope.launch {
             try {
                 val files = (load as? PendingLoad.Package)?.let { packageFiles(it.pkg, targets) ?: return@launch }
                 val bouquets = if (load is PendingLoad.Iptv) IptvBouquets.build(entries, chosenGroups, serviceType) else emptyList()
                 val now = System.currentTimeMillis()
-                targets.forEach { receiver ->
+                targets.forEachIndexed { index, receiver ->
+                    val onStep: (ImportStep) -> Unit = { step ->
+                        progress = LoadProgress(ImportProgress.overall(index, targets.size, step), receiver.name, index, targets.size, step)
+                    }
+                    progress = LoadProgress(ImportProgress.overall(index, targets.size, null), receiver.name, index, targets.size)
                     val outcome = when (load) {
-                        is PendingLoad.Package -> importer.loadPackage(load.pkg, files!!, receiver)
-                        PendingLoad.Iptv -> importer.loadIptv(bouquets, receiver)
-                        is PendingLoad.Restore -> importer.restore(load.backup, receiver)
+                        is PendingLoad.Package -> importer.loadPackage(load.pkg, files!!, receiver, onStep)
+                        PendingLoad.Iptv -> importer.loadIptv(bouquets, receiver, onStep)
+                        is PendingLoad.Restore -> importer.restore(load.backup, receiver, onStep)
                     }
                     status = status + (receiver.id to ReceiverStatus.Done(outcome))
                     if (outcome.ok) remember(load, receiver.id, now)
@@ -281,6 +323,7 @@ class SettingsImportViewModel @Inject constructor(
                 ImportRefreshScheduler.update(context, configs.state.value)
             } finally {
                 busy = false
+                progress = null
                 refreshBackups()
             }
         }

@@ -3,6 +3,8 @@ package com.enigmacast.data.settingsimport
 import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.settingsimport.ImportStage
+import com.enigmacast.domain.settingsimport.ImportStep
 import com.enigmacast.domain.settingsimport.ImportPlan
 import com.enigmacast.domain.settingsimport.ImportPlans
 import com.enigmacast.domain.settingsimport.IptvBouquets
@@ -54,19 +56,28 @@ class ReceiverListImporter @Inject constructor(
     /** One receiver at a time: two writes to the same /etc/enigma2 must never interleave. */
     private val gate = Mutex()
 
-    suspend fun loadPackage(pkg: TunerPackage, files: Map<String, ByteArray>, receiver: ReceiverConfig): ReceiverOutcome =
-        run(receiver) { box, boxFiles, bouquetsTv ->
+    suspend fun loadPackage(
+        pkg: TunerPackage,
+        files: Map<String, ByteArray>,
+        receiver: ReceiverConfig,
+        onStep: (ImportStep) -> Unit = {},
+    ): ReceiverOutcome =
+        run(receiver, onStep = onStep) { box, boxFiles, bouquetsTv ->
             ImportPlans.settingsImport(files, boxFiles, bouquetsTv) to pkg.tvBouquets
         }
 
-    suspend fun loadIptv(bouquets: List<IptvBouquets.Bouquet>, receiver: ReceiverConfig): ReceiverOutcome =
-        run(receiver) { _, boxFiles, bouquetsTv ->
+    suspend fun loadIptv(
+        bouquets: List<IptvBouquets.Bouquet>,
+        receiver: ReceiverConfig,
+        onStep: (ImportStep) -> Unit = {},
+    ): ReceiverOutcome =
+        run(receiver, onStep = onStep) { _, boxFiles, bouquetsTv ->
             ImportPlans.iptv(bouquets, boxFiles, bouquetsTv.orEmpty()) to bouquets.size
         }
 
     /** Puts a backup back: its files are written and list files it did not have are removed. */
-    suspend fun restore(backup: SettingsBackup, receiver: ReceiverConfig): ReceiverOutcome =
-        run(receiver, takeBackup = false) { _, boxFiles, _ ->
+    suspend fun restore(backup: SettingsBackup, receiver: ReceiverConfig, onStep: (ImportStep) -> Unit = {}): ReceiverOutcome =
+        run(receiver, takeBackup = false, onStep = onStep) { _, boxFiles, _ ->
             val saved = backups.read(backup)
             val deletions = boxFiles.filter { SettingsFiles.isEnigmaListFile(it) && it !in saved }
             ImportPlan(saved, deletions) to saved.keys.count { it.startsWith("userbouquet.") && it.endsWith(".tv") }
@@ -90,20 +101,29 @@ class ReceiverListImporter @Inject constructor(
     suspend fun playlists(names: List<String>): List<M3uEntry> = names.mapNotNull { IptvSource.byName(it) }
         .flatMap { M3uParser.parse(sources.playlist(it)) }
 
+    /** Downloads and parses one playlist. */
+    suspend fun playlist(source: IptvSource): List<M3uEntry> = M3uParser.parse(sources.playlist(source))
+
     private suspend fun run(
         receiver: ReceiverConfig,
         takeBackup: Boolean = true,
+        onStep: (ImportStep) -> Unit = {},
         plan: (FtpReceiverClient, List<String>, String?) -> Pair<ImportPlan, Int>,
     ): ReceiverOutcome = gate.withLock {
         val warnings = mutableListOf<TransferException>()
         var backupLabel: String? = null
         try {
+            onStep(ImportStep(ImportStage.CONNECT))
             val count = withContext(Dispatchers.IO) {
                 FtpReceiverClient.open(receiver).use { box ->
                     val boxFiles = box.list(SettingsFiles.ENIGMA_DIR).filter { SettingsFiles.isEnigmaListFile(it) }
                     // Backup first. Without a complete copy nothing is overwritten.
                     val current = LinkedHashMap<String, ByteArray>()
-                    boxFiles.forEach { name -> box.download(SettingsFiles.remotePath(name))?.let { current[name] = it } }
+                    boxFiles.forEachIndexed { i, name ->
+                        onStep(ImportStep(ImportStage.BACKUP, i, boxFiles.size))
+                        box.download(SettingsFiles.remotePath(name))?.let { current[name] = it }
+                    }
+                    onStep(ImportStep(ImportStage.BACKUP, boxFiles.size, boxFiles.size))
                     if (takeBackup) {
                         if (current.isEmpty()) throw TransferException(TransferFailure.BACKUP_FAILED, SettingsFiles.ENIGMA_DIR)
                         runCatching { box.download(SettingsFiles.remotePath(SettingsFiles.SATELLITES)) }.getOrNull()
@@ -116,7 +136,9 @@ class ReceiverListImporter @Inject constructor(
                     }
                     val bouquetsTv = current["bouquets.tv"]?.toString(Charsets.UTF_8)
                     val (work, count) = plan(box, boxFiles, bouquetsTv)
-                    work.uploads.forEach { (name, bytes) ->
+                    val uploads = work.uploads.entries.toList()
+                    uploads.forEachIndexed { i, (name, bytes) ->
+                        onStep(ImportStep(ImportStage.UPLOAD, i + 1, uploads.size))
                         try {
                             box.upload(SettingsFiles.remotePath(name), bytes)
                         } catch (e: TransferException) {
@@ -124,13 +146,18 @@ class ReceiverListImporter @Inject constructor(
                             if (name == SettingsFiles.SATELLITES) warnings += e else throw e
                         }
                     }
-                    work.deletions.forEach { box.delete(SettingsFiles.remotePath(it)) }
+                    work.deletions.forEachIndexed { i, name ->
+                        onStep(ImportStep(ImportStage.DELETE, i + 1, work.deletions.size))
+                        box.delete(SettingsFiles.remotePath(name))
+                    }
                     count
                 }
             }
+            onStep(ImportStep(ImportStage.RELOAD))
             reload(receiver)
             // Enigma2 reloads on its own thread; give it a moment before the app reads the new list.
             kotlinx.coroutines.delay(1_500)
+            onStep(ImportStep(ImportStage.SYNC))
             try {
                 sync.refreshChannelsNow(receiver)
             } catch (e: CancellationException) {

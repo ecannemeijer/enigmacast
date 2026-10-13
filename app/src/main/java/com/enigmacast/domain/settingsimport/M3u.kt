@@ -129,6 +129,12 @@ object IptvBouquets {
     fun cleanName(name: String): String =
         name.replace(Regex("[\\r\\n\\t]+"), " ").replace(':', ' ').replace(Regex(" {2,}"), " ").trim().ifEmpty { "Stream" }
 
+    const val NAME_PREFIX = "IPTV · "
+    private val oldPrefix = Regex("^(?:IPTV\\s*[·\\-–:|]\\s*)+", RegexOption.IGNORE_CASE)
+
+    /** "IPTV · News": the prefix shows these are internet streams; never doubled on refresh. */
+    fun bouquetName(group: String): String = NAME_PREFIX + cleanName(group).replace(oldPrefix, "").trim().ifEmpty { "Stream" }
+
     /** `#SERVICE 4097:0:1:0:0:0:0:0:0:0:<url>:<name>`; a user agent rides along as `#User-Agent=` (servicemp3/gstplayer). */
     fun serviceLine(entry: M3uEntry, serviceType: Int = DEFAULT_SERVICE_TYPE): String {
         var url = entry.url.trim()
@@ -150,7 +156,7 @@ object IptvBouquets {
             var file = "$FILE_PREFIX$base.tv"
             while (!used.add(file)) { file = "$FILE_PREFIX${base}_${n++}.tv" }
             val content = buildString {
-                append("#NAME IPTV - ").append(cleanName(group)).append('\n')
+                append("#NAME ").append(bouquetName(group)).append('\n')
                 members.forEach { e ->
                     append(serviceLine(e, serviceType)).append('\n')
                     append("#DESCRIPTION ").append(cleanName(e.name)).append('\n')

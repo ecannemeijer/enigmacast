@@ -1206,4 +1206,24 @@ Profile: %2$s</string>
     <string name="import_all_receivers">All receivers</string>
     <string name="import_active">active</string>
     <string name="import_next">Next</string>
+    <string name="import_select_all">Select all</string>
+    <string name="import_select_none">Select none</string>
+    <string name="import_groups_count">Groups chosen %1$d / %2$d</string>
+    <string name="import_groups_none_loaded">Choose one or more sources and press Load groups.</string>
+    <string name="import_groups_title">Groups</string>
+    <string name="import_sources_title">Sources</string>
+    <string name="import_load_disabled_groups">Choose at least one group to load.</string>
+    <string name="import_load_disabled_list">Choose a channel list on the left.</string>
+    <string name="import_busy">A load is running…</string>
+    <string name="import_progress_title">Progress</string>
+    <string name="import_progress_preparing">Preparing…</string>
+    <string name="import_progress_receiver">Receiver %1$d/%2$d · %3$s</string>
+    <string name="import_step_connect">Connecting · %1$s</string>
+    <string name="import_step_backup">Backing up %1$d/%2$d · %3$s</string>
+    <string name="import_step_upload">Uploading %1$d/%2$d · %3$s</string>
+    <string name="import_step_delete">Removing old files %1$d/%2$d · %3$s</string>
+    <string name="import_step_reload">Reloading channel list · %1$s</string>
+    <string name="import_step_sync">Refreshing the app · %1$s</string>
+    <string name="import_groups_downloading">Downloading %1$d/%2$d · %3$s</string>
+    <string name="import_groups_parsing">Reading groups…</string>
 </resources>

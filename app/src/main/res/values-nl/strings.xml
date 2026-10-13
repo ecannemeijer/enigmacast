@@ -1203,4 +1203,24 @@ Profiel: %2$s</string>
     <string name="import_all_receivers">Alle ontvangers</string>
     <string name="import_active">actief</string>
     <string name="import_next">Volgende</string>
+    <string name="import_select_all">Alles selecteren</string>
+    <string name="import_select_none">Niets selecteren</string>
+    <string name="import_groups_count">Gekozen groepen %1$d / %2$d</string>
+    <string name="import_groups_none_loaded">Kies een of meer bronnen en druk op Groepen laden.</string>
+    <string name="import_groups_title">Groepen</string>
+    <string name="import_sources_title">Bronnen</string>
+    <string name="import_load_disabled_groups">Kies minstens één groep om te laden.</string>
+    <string name="import_load_disabled_list">Kies links een zenderlijst.</string>
+    <string name="import_busy">Er loopt een laadactie…</string>
+    <string name="import_progress_title">Voortgang</string>
+    <string name="import_progress_preparing">Voorbereiden…</string>
+    <string name="import_progress_receiver">Ontvanger %1$d/%2$d · %3$s</string>
+    <string name="import_step_connect">Verbinden · %1$s</string>
+    <string name="import_step_backup">Back-up maken %1$d/%2$d · %3$s</string>
+    <string name="import_step_upload">Uploaden %1$d/%2$d · %3$s</string>
+    <string name="import_step_delete">Oude bestanden verwijderen %1$d/%2$d · %3$s</string>
+    <string name="import_step_reload">Zenderlijst herladen · %1$s</string>
+    <string name="import_step_sync">App bijwerken · %1$s</string>
+    <string name="import_groups_downloading">Downloaden %1$d/%2$d · %3$s</string>
+    <string name="import_groups_parsing">Groepen inlezen…</string>
 </resources>

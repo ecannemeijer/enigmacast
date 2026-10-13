@@ -42,7 +42,7 @@ class IptvBouquetsTest {
         assertEquals("userbouquet.enigmacast_iptv_kids.tv", bouquets[0].fileName)
         assertEquals(1, bouquets[1].channels) // duplicate URL once
         val lines = bouquets[1].content.trimEnd().lines()
-        assertEquals("#NAME IPTV - News", lines[0])
+        assertEquals("#NAME IPTV · News", lines[0])
         assertEquals("#SERVICE 4097:0:1:0:0:0:0:0:0:0:http%3a//a:A", lines[1])
         assertEquals("#DESCRIPTION A", lines[2])
     }
