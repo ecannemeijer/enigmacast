@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -62,6 +63,12 @@ fun CompactListRow(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
+    // The menu's focus rail moves on placement. Focus that returns without a new layout
+    // (back from Live TV) placed nothing, so the rail stayed hidden and no highlight showed.
+    var lastCoords by remember { androidx.compose.runtime.mutableStateOf<LayoutCoordinates?>(null) }
+    androidx.compose.runtime.LaunchedEffect(focused) {
+        if (focused) lastCoords?.takeIf { it.isAttached }?.let(onPlaced)
+    }
     val spec = LocalMotionSpec.current
     val background by animateColorAsState(
         targetValue = when {
@@ -90,7 +97,7 @@ fun CompactListRow(
                 scaleY = grow
                 transformOrigin = TransformOrigin(0f, 0.5f)
             }
-            .onGloballyPositioned { if (focused) onPlaced(it) }
+            .onGloballyPositioned { lastCoords = it; if (focused) onPlaced(it) }
             .background(background, CompactShape)
             .edgeLeft()
             .onKeyEvent { event ->
