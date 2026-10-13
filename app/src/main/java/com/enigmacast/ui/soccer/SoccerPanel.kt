@@ -1,5 +1,6 @@
 package com.enigmacast.ui.soccer
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -169,7 +170,7 @@ fun SoccerPanel(
                 list.forEachIndexed { i, section ->
                     key(section.key) {
                         // The page's entry point (Right / OK on the Soccer menu item) is the top-most section.
-                        val entry = if (i == 0) Modifier.focusRequester(contentFocus) else Modifier
+                        val entry = Modifier.focusRequesterIf(i == 0, contentFocus)
                         Box(sections.section(i).then(entry).then(chain.section(section.key))) { section.content() }
                     }
                 }

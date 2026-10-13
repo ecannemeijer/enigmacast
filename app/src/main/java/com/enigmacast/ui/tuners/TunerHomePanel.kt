@@ -124,17 +124,23 @@ fun TunerHomePanel(
             }
             chain.keys = list.map { it.key }
             PivotColumn(sections, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
-                PanelHeader(
-                    stringResource(R.string.home_tuners_title),
-                    when {
-                        model.failed && !model.loading -> stringResource(R.string.home_unreachable)
-                        model.inStandby -> stringResource(R.string.home_standby)
-                        else -> stringResource(R.string.home_tuners_subtitle)
-                    },
-                )
+                // Box state as a coloured dot (same colours as the power pill in the menu), not as text.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PanelHeader(
+                        stringResource(R.string.home_tuners_title),
+                        if (model.failed && !model.loading) stringResource(R.string.home_unreachable) else stringResource(R.string.home_tuners_subtitle),
+                    )
+                    val dot = when {
+                        model.failed && !model.loading -> EnigmaColors.Danger
+                        model.inStandby -> EnigmaColors.Accent
+                        model.cards.isEmpty() -> EnigmaColors.Subtle
+                        else -> EnigmaColors.Success
+                    }
+                    Box(Modifier.padding(bottom = 8.dp).size(10.dp).background(dot, androidx.compose.foundation.shape.CircleShape))
+                }
                 list.forEachIndexed { i, section ->
                     key(section.key) {
-                        val entry = if (i == 0) Modifier.focusRequester(contentFocus) else Modifier
+                        val entry = Modifier.focusRequesterIf(i == 0, contentFocus)
                         Box(sections.section(i).then(entry).then(chain.section(section.key))) { section.content() }
                     }
                 }
@@ -238,9 +244,9 @@ private fun useLine(use: TunerUse): String = when (use.kind) {
 
 @Composable
 private fun TunersRow(model: TunerHomeViewModel, left: Modifier, nav: Modifier, onOpen: (TunerCard) -> Unit) {
-    // Centred across the page, all cards as tall as the tallest.
+    // Left-aligned, all cards as tall as the tallest.
     Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Min).padding(vertical = 6.dp),
     ) {
         model.cards.forEachIndexed { i, card ->
