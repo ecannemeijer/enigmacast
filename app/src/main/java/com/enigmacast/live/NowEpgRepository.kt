@@ -19,6 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class NowEpgRepository @Inject constructor(
     private val tunerSource: TunerStatusSource,
+    private val guideCache: com.enigmacast.domain.sync.GuideCacheReader,
 ) {
     private class Entry(val fetchedAtSec: Long, val events: List<NowEvent>, val index: Map<String, NowEvent>)
 
@@ -44,9 +45,23 @@ class NowEpgRepository @Inject constructor(
                 EnigmaLog.service("epgnow failed: ${error.javaClass.simpleName}")
                 return@withLock entry?.index.orEmpty()
             }
-            val fresh = Entry(nowSec, events, NowEvents.index(events))
+            val all = events + borrowed(receiver, bouquetReference, events, nowSec)
+            val fresh = Entry(nowSec, all, NowEvents.index(all))
             cache[key] = fresh
             fresh.index
+        }
+    }
+
+    /** IPTV channels without a programme of their own: now on the satellite channel with the same name. */
+    private suspend fun borrowed(receiver: ReceiverConfig, bouquetReference: String, own: List<NowEvent>, nowSec: Long): List<NowEvent> {
+        val streams = runCatching { guideCache.channelsInBouquet(receiver, bouquetReference) }.getOrNull().orEmpty()
+            .filter { com.enigmacast.domain.service.ServiceStreams.isInternet(it.reference) }
+        if (streams.isEmpty()) return emptyList()
+        val known = own.map { NowEvents.key(it.reference) }.toSet()
+        return streams.filter { NowEvents.key(it.reference) !in known }.mapNotNull { channel ->
+            val events = runCatching { guideCache.serviceEvents(receiver, channel.reference) }.getOrNull() ?: return@mapNotNull null
+            val now = events.firstOrNull { it.beginEpochSec <= nowSec && it.endEpochSec > nowSec } ?: return@mapNotNull null
+            NowEvent(channel.reference, now.title, now.beginEpochSec, now.endEpochSec - now.beginEpochSec, now.eventId)
         }
     }
 

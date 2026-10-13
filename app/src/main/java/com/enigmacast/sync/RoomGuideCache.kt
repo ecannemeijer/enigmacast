@@ -27,6 +27,7 @@ class RoomGuideCache @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: CacheDao,
     private val settings: SyncSettings,
+    private val aliases: IptvEpgAliases,
 ) : GuideCacheReader {
     @Volatile private var lastSyncAskMs = 0L
 
@@ -38,7 +39,7 @@ class RoomGuideCache @Inject constructor(
         val today = DayWindow.of(now, ZoneId.systemDefault())
         val horizon = today.startSec + settings.values.value.epgDays * 24 * 3600L
         return when (GuideCachePolicy.decide(rows.size, fromSec, toSec, today.startSec, horizon)) {
-            GuideCachePolicy.Decision.CACHE -> rows.map(CacheMappers::event)
+            GuideCachePolicy.Decision.CACHE -> rows.map(CacheMappers::event) + aliasEvents(receiver, bouquetReference, fromSec, toSec)
             GuideCachePolicy.Decision.NETWORK_AND_SYNC -> { askSync(now); null }
             GuideCachePolicy.Decision.NETWORK -> null
         }
@@ -46,10 +47,24 @@ class RoomGuideCache @Inject constructor(
 
     override suspend fun serviceEvents(receiver: ReceiverConfig, serviceReference: String): List<GuideEvent>? {
         val now = System.currentTimeMillis()
-        val rows = runCatching { dao.serviceEvents(key(receiver), NowEvents.key(serviceReference), now / 1000) }.getOrNull()
+        // An IPTV channel reads the guide of the satellite channel with the same name.
+        val source = aliases.resolve(key(receiver), serviceReference) ?: serviceReference
+        val rows = runCatching { dao.serviceEvents(key(receiver), NowEvents.key(source), now / 1000) }.getOrNull()
         if (rows.isNullOrEmpty()) return null
         // Programmes that started earlier today are kept by the query (it filters on end time).
         return rows.map(CacheMappers::event).map { it.copy(reference = serviceReference) }
+    }
+
+    override suspend fun aliasEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent> {
+        val rk = key(receiver)
+        val map = aliases.map(rk)
+        if (map.isEmpty()) return emptyList()
+        val channels = runCatching { dao.channelsIn(rk, bouquetReference) }.getOrDefault(emptyList())
+        return channels.mapNotNull { c -> map[c.reference]?.let { c.reference to it } }.flatMap { (iptv, sat) ->
+            runCatching { dao.serviceEvents(rk, NowEvents.key(sat), fromSec) }.getOrDefault(emptyList())
+                .filter { it.beginSec < toSec }
+                .map { CacheMappers.event(it).copy(reference = iptv) }
+        }
     }
 
     override suspend fun televisionBouquets(receiver: ReceiverConfig): List<BouquetEntry>? =

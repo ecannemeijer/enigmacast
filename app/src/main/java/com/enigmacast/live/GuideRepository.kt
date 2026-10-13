@@ -61,8 +61,10 @@ class GuideRepository @Inject constructor(
         cachedFresh(chunks, key, nowMs, CHUNK_TTL_MS)?.let { return it }
         val minutes = (GuideTimeline.CHUNK_SEC / 60).toInt()
         cache.bouquetEvents(receiver, bouquetReference, chunkStartSec, chunkStartSec + GuideTimeline.CHUNK_SEC)?.let { return it }
-        val events = fetch("epgmulti") { source.bouquetEvents(receiver, bouquetReference, chunkStartSec, minutes) }
+        val fetched = fetch("epgmulti") { source.bouquetEvents(receiver, bouquetReference, chunkStartSec, minutes) }
             ?: return mutex.withLock { chunks[key]?.events }
+        // IPTV channels: the guide of the satellite channel with the same name.
+        val events = fetched + runCatching { cache.aliasEvents(receiver, bouquetReference, chunkStartSec, chunkStartSec + GuideTimeline.CHUNK_SEC) }.getOrDefault(emptyList())
         store(chunks, key, Entry(nowMs, events), MAX_CHUNKS)
         return events
     }

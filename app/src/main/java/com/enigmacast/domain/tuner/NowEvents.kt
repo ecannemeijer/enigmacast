@@ -55,7 +55,12 @@ object NowEvents {
             }
             fields[2] = "0"
         }
-        return fields.joinToString(":")
+        val base = fields.joinToString(":")
+        // Internet streams share their ten fields: the stream address keeps them apart.
+        if (fields.firstOrNull() != "1" || reference.contains("%3a", true) || reference.contains("://")) {
+            ServiceStreams.internetUrl(reference)?.let { return "$base|$it" }
+        }
+        return base
     }
 
     fun index(events: List<NowEvent>): Map<String, NowEvent> {

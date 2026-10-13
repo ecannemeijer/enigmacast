@@ -14,6 +14,12 @@ interface GuideCacheReader {
     /** The first synced TV bouquet (menu order) that contains [serviceReference], or null. */
     suspend fun bouquetOf(receiver: ReceiverConfig, serviceReference: String): BouquetEntry? = null
 
+    /**
+     * Borrowed EPG for the IPTV channels of [bouquetReference] (from satellite channels with the
+     * same name), with each event's reference set to the IPTV channel.
+     */
+    suspend fun aliasEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent> = emptyList()
+
     object None : GuideCacheReader {
         override suspend fun bouquetEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent>? = null
         override suspend fun serviceEvents(receiver: ReceiverConfig, serviceReference: String): List<GuideEvent>? = null
