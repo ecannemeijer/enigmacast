@@ -78,7 +78,16 @@ class KeyBindingsTest {
         val menu = KeyBindings.effective(none, KeyMode.MENU)
         assertEquals(listOf(PlayerAction.SWITCH_RECEIVER), menu.keys.toList())
         assertEquals(PlayerAction.SWITCH_RECEIVER, KeyBindings.lookup(menu, KeyBindings.PROG_RED, false))
-        assertFalse(PlayerAction.SWITCH_RECEIVER in KeyBindings.effective(none, KeyMode.OWN))
+    }
+
+    @Test fun redOpensSwitchReceiverInTheOwnTunerPlayer() {
+        val own = KeyBindings.effective(none, KeyMode.OWN)
+        assertEquals(PlayerAction.SWITCH_RECEIVER, KeyBindings.lookup(own, KeyBindings.PROG_RED, false))
+        // Following the receiver, Red still goes to the box; Switch receiver can be assigned.
+        val follow = KeyBindings.effective(none, KeyMode.FOLLOW)
+        assertEquals(emptyList<KeyBinding>(), follow[PlayerAction.SWITCH_RECEIVER])
+        val stored = KeyBindings.assign(none, KeyMode.FOLLOW, PlayerAction.SWITCH_RECEIVER, KeyBinding(KeyBindings.PROG_GREEN))
+        assertEquals(PlayerAction.SWITCH_RECEIVER, KeyBindings.lookup(KeyBindings.effective(stored, KeyMode.FOLLOW), KeyBindings.PROG_GREEN, false))
     }
 
     @Test fun colourKeysCanBeAssigned() {

@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.Text
+import androidx.compose.material.icons.filled.Refresh
 import com.enigmacast.R
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.tuner.ScheduleItem
@@ -140,14 +141,14 @@ fun TunerHomePanel(
                     }
                     Box(Modifier.padding(bottom = 8.dp).size(10.dp).background(dot, androidx.compose.foundation.shape.CircleShape))
                     androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp))
-                    com.enigmacast.ui.theme.CompactButton(
-                        label = stringResource(R.string.switch_receiver) + "  ·  " + stringResource(R.string.switch_receiver_red),
+                    SwitchReceiverButton(
                         onClick = model::openSwitcher,
                         modifier = Modifier
                             .padding(bottom = 6.dp)
                             .focusRequester(switchFocus)
                             .focusProperties {
                                 this.left = menuFocus
+                                right = FocusRequester.Cancel
                                 up = FocusRequester.Cancel
                                 down = chain.requester("tuners")
                             },
@@ -534,5 +535,39 @@ private fun SeriesEpisodesDialog(
             onChoose = { i -> askAll = false; if (i == 0) onCancelAll() },
             onDismiss = { askAll = false },
         )
+    }
+}
+
+/** Home's "Switch receiver" button: a real button with the Red-key hint, focus colour like the other buttons. */
+@Composable
+private fun SwitchReceiverButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    androidx.tv.material3.Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = androidx.tv.material3.ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+        scale = androidx.tv.material3.ButtonDefaults.scale(scale = 1f, focusedScale = 1.06f),
+        border = androidx.tv.material3.ButtonDefaults.border(
+            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.dp, EnigmaColors.CardBorder), shape = RoundedCornerShape(8.dp)),
+            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, EnigmaColors.Text), shape = RoundedCornerShape(8.dp)),
+        ),
+        colors = androidx.tv.material3.ButtonDefaults.colors(
+            containerColor = EnigmaColors.Raised,
+            contentColor = EnigmaColors.Text,
+            focusedContainerColor = EnigmaColors.Accent,
+            focusedContentColor = EnigmaColors.OnAccent,
+        ),
+    ) {
+        androidx.tv.material3.Icon(
+            androidx.compose.material.icons.Icons.Filled.Refresh,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.switch_receiver), fontSize = 14.sp, maxLines = 1)
+        androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
+        Box(Modifier.size(10.dp).background(Color(0xFFE53935), androidx.compose.foundation.shape.CircleShape))
+        androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
+        Text(stringResource(R.string.switch_receiver_red), fontSize = 12.sp, maxLines = 1)
     }
 }

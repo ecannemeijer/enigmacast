@@ -115,6 +115,11 @@ class OwnTunerSession @Inject constructor(
     private var gaveUp = false
     /** The box the user zapped on. Failover walks the others and comes back here when every box is full. */
     private var failoverOriginId: String? = null
+    /**
+     * Box the user picked in Switch receiver. While set, a full box does not hand the stream to
+     * another box (that would undo the choice); it clears once a stream plays there.
+     */
+    private var pinnedReceiverId: String? = null
     private var failoverTried: Set<String> = emptySet()
 
     init {
@@ -508,6 +513,17 @@ class OwnTunerSession @Inject constructor(
         _state.update { it.copy(tuner = TunerState()) }
     }
 
+    /**
+     * The user picked another box: stop this device's stream (the old box's tuner is freed),
+     * forget the tuner failover of the old box and keep the next starts on [receiverId].
+     */
+    fun prepareReceiverSwitch(receiverId: String) {
+        deactivate()
+        failoverOriginId = null
+        failoverTried = emptySet()
+        pinnedReceiverId = receiverId
+    }
+
     /** Called periodically: restarts a stream that stopped because the receiver was away. */
     fun retryIfReceiverWasAway() {
         if (active && _state.value.tuner.autoRetry && startJob?.isActive != true) restartAutomatically("receiver away")
@@ -653,6 +669,7 @@ class OwnTunerSession @Inject constructor(
             StreamHealth.IDLE -> return
             StreamHealth.STARTING -> TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))
             StreamHealth.PLAYING -> {
+                pinnedReceiverId = null
                 restarts.reset()
                 gaveUp = false
                 TunerState(TunerStatus.PLAYING)
@@ -729,6 +746,10 @@ class OwnTunerSession @Inject constructor(
      */
     private suspend fun tryNextBox(channel: BouquetEntry): Boolean {
         val settings = settingsRepository.current()
+        if (pinnedReceiverId != null && pinnedReceiverId == settings.activeReceiver()?.id) {
+            EnigmaLog.service("tuners full on the chosen box; staying on it")
+            return false
+        }
         val next = ReceiverList.nextAfter(settings.receivers, failoverOriginId, failoverTried) ?: return false
         failoverTried = failoverTried + next.id
         EnigmaLog.service("tuners full, trying ${next.name}")

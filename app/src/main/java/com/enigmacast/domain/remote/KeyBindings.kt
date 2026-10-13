@@ -22,7 +22,7 @@ enum class PlayerAction(val own: Boolean, val follow: Boolean, val menu: Boolean
     AUDIO_TRACK(own = true, follow = true),
     SUBTITLES(own = true, follow = true),
     PICTURE_MODE(own = true, follow = true),
-    SWITCH_RECEIVER(own = false, follow = false, menu = true),
+    SWITCH_RECEIVER(own = true, follow = true, menu = true),
     ;
 
     fun available(mode: KeyMode) = when (mode) {
@@ -98,6 +98,8 @@ object KeyBindings {
             PlayerAction.AUDIO_TRACK to listOf(k(MEDIA_AUDIO_TRACK)),
             PlayerAction.SUBTITLES to listOf(k(CAPTIONS)),
             PlayerAction.PICTURE_MODE to emptyList(),
+            // Red is free in the own-tuner player: it opens Switch receiver, as on Home.
+            PlayerAction.SWITCH_RECEIVER to listOf(k(PROG_RED)),
         )
         KeyMode.FOLLOW -> mapOf(
             // Info goes to the receiver; holding it opens the app's options bar (as before).
@@ -108,6 +110,8 @@ object KeyBindings {
             PlayerAction.AUDIO_TRACK to emptyList(),
             PlayerAction.SUBTITLES to listOf(k(CAPTIONS)),
             PlayerAction.PICTURE_MODE to emptyList(),
+            // Red belongs to the receiver while following it; Switch receiver can be assigned.
+            PlayerAction.SWITCH_RECEIVER to emptyList(),
         )
         // Outside the player: Red opens Switch receiver.
         KeyMode.MENU -> mapOf(PlayerAction.SWITCH_RECEIVER to listOf(k(PROG_RED)))

@@ -209,6 +209,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val reminders: ReminderScheduler,
     private val osdInfoRepository: OsdInfoRepository,
     private val recordings: com.enigmacast.live.RecordingBook,
+    private val switcher: com.enigmacast.live.ReceiverSwitcher,
 ) : ViewModel() {
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
@@ -1191,8 +1192,9 @@ class RemoteDisplayViewModel @Inject constructor(
                 choosePictureMode(next)
                 showNotice(UiText.res(R.string.keys_picture_mode, UiText.res(pictureModeLabel(next))))
             }
-            // Only bound outside the player (MainActivity).
-            PlayerAction.SWITCH_RECEIVER -> Unit
+            // The dialog stops this stream, frees the tuner and switches; the player then starts
+            // the remembered (or first) channel of the new box (see restart()).
+            PlayerAction.SWITCH_RECEIVER -> switcher.show()
         }
     }
 

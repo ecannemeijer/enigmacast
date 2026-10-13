@@ -99,16 +99,7 @@ class ReceiverSwitchViewModel @Inject constructor(
      * is freed), then the player, guide, bouquets and Home follow the new receiver, and a sync
      * fills the cache for that box.
      */
-    fun choose(id: String) {
-        switcher.hide()
-        if (id == activeId.value) return
-        EnigmaLog.service("switch receiver to $id")
-        ownTuner.deactivate()
-        viewModelScope.launch {
-            settings.update { ReceiverList.select(it, id) }
-            SyncScheduler.runNow(context, force = false)
-        }
-    }
+    fun choose(id: String) = switcher.switchTo(id)
 }
 
 /** Compact list of the receivers: status dot, name, brand/model and address; the current one is checked. */

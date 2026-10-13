@@ -31,6 +31,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
@@ -58,6 +61,23 @@ class TunerHomeViewModel @Inject constructor(
 ) : ViewModel() {
     fun openSwitcher() = switcher.show()
 
+    init {
+        // Another box was chosen: drop the old box's cards at once and load the new one,
+        // instead of showing the old box until the next poll.
+        viewModelScope.launch {
+            settingsRepository.settings.map { it.activeReceiver()?.id }.distinctUntilChanged().drop(1).collect {
+                cards = emptyList()
+                channelInfo = emptyMap()
+                schedule = emptyList()
+                series = emptyList()
+                failed = false
+                inStandby = false
+                loading = true
+                refresh()
+            }
+        }
+    }
+
     /** Series recordings: one card per series and channel. */
     var series by mutableStateOf<List<com.enigmacast.domain.series.SeriesGroup>>(emptyList()); private set
     var posters by mutableStateOf<Map<String, String?>>(emptyMap()); private set
@@ -83,6 +103,8 @@ class TunerHomeViewModel @Inject constructor(
         if (receiver == null) { loading = false; failed = true; return }
         val timers = runCatching { api.timers(receiver) }.getOrDefault(emptyList())
         val snapshot = runCatching { api.tunerSnapshot(receiver) }.getOrNull()
+        // The box changed while this box was asked: its answer no longer belongs on Home.
+        if (settingsRepository.current().activeReceiver()?.id != receiver.id) return
         if (snapshot == null) {
             failed = true
         } else {
