@@ -98,7 +98,33 @@ object IptvBouquets {
     const val DEFAULT_SERVICE_TYPE = 4097
     val SERVICE_TYPES = listOf(4097, 5001, 5002)
 
-    data class Bouquet(val group: String, val fileName: String, val content: String, val channels: Int)
+    data class Bouquet(
+        val group: String,
+        val fileName: String,
+        val content: String,
+        val channels: Int,
+        /** EPG keys per service in this bouquet (for XMLTV / EPGImport). */
+        val links: List<EpgLink> = emptyList(),
+    )
+
+    /** Marks our IPTV services in the ONID field ("EC"), so they never clash with DVB services. */
+    const val ONID = 0xEC
+
+    /**
+     * Service id and transport id from the stream URL: every IPTV line gets its own EPG key
+     * (Enigma2 keys EPG on SID:TSID:ONID). Stable across refreshes, never 0.
+     */
+    fun identity(url: String, salt: Int = 0): Pair<Int, Int> {
+        var h = 0x811C9DC5.toInt()
+        (url.trim() + if (salt > 0) "#$salt" else "").forEach { c -> h = (h xor c.code) * 0x01000193 }
+        val sid = (h and 0xFFFF).let { if (it == 0) 1 else it }
+        val tsid = ((h ushr 16) and 0xFFFF).let { if (it == 0) 1 else it }
+        return sid to tsid
+    }
+
+    /** `4097:0:1:SID:TSID:EC:0:0:0:0:` without URL and name. */
+    fun baseReference(serviceType: Int, sid: Int, tsid: Int): String =
+        "$serviceType:0:1:${sid.toString(16).uppercase()}:${tsid.toString(16).uppercase()}:${ONID.toString(16).uppercase()}:0:0:0:0:"
 
     fun isIptvFile(name: String): Boolean = name.startsWith(FILE_PREFIX) && (name.endsWith(".tv") || name.endsWith(".radio"))
 
@@ -136,10 +162,11 @@ object IptvBouquets {
     fun bouquetName(group: String): String = NAME_PREFIX + cleanName(group).replace(oldPrefix, "").trim().ifEmpty { "Stream" }
 
     /** `#SERVICE 4097:0:1:0:0:0:0:0:0:0:<url>:<name>`; a user agent rides along as `#User-Agent=` (servicemp3/gstplayer). */
-    fun serviceLine(entry: M3uEntry, serviceType: Int = DEFAULT_SERVICE_TYPE): String {
+    fun serviceLine(entry: M3uEntry, serviceType: Int = DEFAULT_SERVICE_TYPE, salt: Int = 0): String {
         var url = entry.url.trim()
         entry.userAgent?.let { if (!url.contains("#User-Agent=")) url += "#User-Agent=$it" }
-        return "#SERVICE $serviceType:0:1:0:0:0:0:0:0:0:${encodeUrl(url)}:${cleanName(entry.name)}"
+        val (sid, tsid) = identity(entry.url, salt)
+        return "#SERVICE ${baseReference(serviceType, sid, tsid)}${encodeUrl(url)}:${cleanName(entry.name)}"
     }
 
     /**
@@ -148,6 +175,8 @@ object IptvBouquets {
      */
     fun build(entries: List<M3uEntry>, groups: List<String>, serviceType: Int = DEFAULT_SERVICE_TYPE): List<Bouquet> {
         val used = HashSet<String>()
+        // Key → URL: the same stream in two bouquets shares its key, two streams never do.
+        val owners = HashMap<Pair<Int, Int>, String>()
         return groups.distinct().mapNotNull { group ->
             val members = entries.filter { group in it.groups }.distinctBy { it.url.trim() }
             if (members.isEmpty()) return@mapNotNull null
@@ -155,14 +184,23 @@ object IptvBouquets {
             var n = 2
             var file = "$FILE_PREFIX$base.tv"
             while (!used.add(file)) { file = "$FILE_PREFIX${base}_${n++}.tv" }
+            val links = ArrayList<EpgLink>()
             val content = buildString {
                 append("#NAME ").append(bouquetName(group)).append('\n')
                 members.forEach { e ->
-                    append(serviceLine(e, serviceType)).append('\n')
+                    // Two different URLs with the same hash get another salt, so keys stay unique.
+                    val url = e.url.trim()
+                    var salt = 0
+                    var id = identity(url)
+                    while (owners[id].let { it != null && it != url } && salt < 50) id = identity(url, ++salt)
+                    owners[id] = url
+                    val line = serviceLine(e, serviceType, salt)
+                    append(line).append('\n')
                     append("#DESCRIPTION ").append(cleanName(e.name)).append('\n')
+                    links += EpgLink(e.attributes["tvg-id"].orEmpty(), e.tvgName ?: e.name, baseReference(serviceType, id.first, id.second), e.country)
                 }
             }
-            Bouquet(group, file, content, members.size)
+            Bouquet(group, file, content, members.size, links)
         }
     }
 }

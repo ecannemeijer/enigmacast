@@ -13,8 +13,8 @@ import javax.inject.Singleton
 
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
-        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class],
-    version = 5,
+        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvEpgRow::class],
+    version = 6,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
@@ -30,6 +30,18 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE sync_state ADD COLUMN contentHash TEXT NOT NULL DEFAULT ''")
             }
         }
+
+        /** 5 → 6: XMLTV programmes for imported IPTV services. */
+        val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `iptv_epg` (`receiverKey` TEXT NOT NULL, `serviceKey` TEXT NOT NULL, `reference` TEXT NOT NULL, " +
+                        "`beginSec` INTEGER NOT NULL, `endSec` INTEGER NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`receiverKey`, `serviceKey`, `beginSec`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_iptv_epg_receiverKey_endSec` ON `iptv_epg` (`receiverKey`, `endSec`)")
+            }
+        }
     }
 }
 
@@ -41,7 +53,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_6)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 

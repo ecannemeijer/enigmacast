@@ -4,6 +4,7 @@ import com.enigmacast.data.network.OkHttpClientFactory
 import com.enigmacast.data.openwebif.OpenWebifEndpoints
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.settingsimport.ImportStage
+import com.enigmacast.domain.settingsimport.IptvEpg
 import com.enigmacast.domain.settingsimport.ImportStep
 import com.enigmacast.domain.settingsimport.ImportPlan
 import com.enigmacast.domain.settingsimport.ImportPlans
@@ -38,6 +39,9 @@ data class ReceiverOutcome(
     val warnings: List<TransferException> = emptyList(),
     val bouquets: Int = 0,
     val backupLabel: String? = null,
+    /** IPTV services that got EPG, and whether the receiver's EPGImport fetches it (else the app keeps it). */
+    val epgChannels: Int = 0,
+    val epgOnReceiver: Boolean = false,
 ) {
     val ok: Boolean get() = failure == null
 }
@@ -53,6 +57,7 @@ class ReceiverListImporter @Inject constructor(
     private val http: OkHttpClientFactory,
     private val endpoints: OpenWebifEndpoints,
     private val sync: SyncEngine,
+    private val epg: IptvEpgService,
 ) {
     /** One receiver at a time: two writes to the same /etc/enigma2 must never interleave. */
     private val gate = Mutex()
@@ -67,14 +72,60 @@ class ReceiverListImporter @Inject constructor(
             ImportPlans.settingsImport(files, boxFiles, bouquetsTv) to pkg.tvBouquets
         }
 
+    /**
+     * IPTV bouquets plus their EPG ([epgUrls] from the playlists' headers): with EPGImport on the box
+     * its source and channel files are written, so the box fetches the guide itself; without it the
+     * app keeps the XMLTV programmes for these services.
+     */
     suspend fun loadIptv(
         bouquets: List<IptvBouquets.Bouquet>,
         receiver: ReceiverConfig,
         onStep: (ImportStep) -> Unit = {},
-    ): ReceiverOutcome =
-        run(receiver, onStep = onStep) { _, boxFiles, bouquetsTv ->
+        epgUrls: List<String> = emptyList(),
+    ): ReceiverOutcome {
+        val links = bouquets.flatMap { it.links }.distinctBy { it.reference }
+        val urls = IptvEpg.chooseUrls(epgUrls, links)
+        var scan: IptvEpgScan? = null
+        if (urls.isNotEmpty()) {
+            onStep(ImportStep(ImportStage.EPG))
+            scan = runCatching { epg.scan(urls, links) }.getOrElse { if (it is CancellationException) throw it; null }
+        }
+        var onReceiver = false
+        val outcome = run(
+            receiver,
+            onStep = onStep,
+            after = { box ->
+                onReceiver = runCatching { box.list(IptvEpg.EPGIMPORT_DIR); true }.getOrDefault(false)
+                if (onReceiver) {
+                    val found = scan
+                    val sources = "${IptvEpg.EPGIMPORT_DIR}/${IptvEpg.SOURCES_FILE}"
+                    val channels = "${IptvEpg.EPGIMPORT_DIR}/${IptvEpg.CHANNELS_FILE}"
+                    if (found != null && found.matches.isNotEmpty()) {
+                        box.upload(channels, IptvEpg.channelsXml(found.matches).toByteArray(Charsets.UTF_8))
+                        box.upload(sources, IptvEpg.sourcesXml(found.urls).toByteArray(Charsets.UTF_8))
+                    } else {
+                        box.delete(sources)
+                        box.delete(channels)
+                    }
+                }
+            },
+        ) { _, boxFiles, bouquetsTv ->
             ImportPlans.iptv(bouquets, boxFiles, bouquetsTv.orEmpty()) to bouquets.size
         }
+        if (!outcome.ok) return outcome
+        val rk = sync.receiverKey(receiver)
+        val found = scan
+        runCatching {
+            if (!onReceiver && found != null && found.matches.isNotEmpty()) epg.store(rk, found) else epg.clear(rk)
+        }.onFailure { if (it is CancellationException) throw it }
+        val count = found?.matches?.size ?: 0
+        EnigmaLog.service("iptv epg on ${receiver.name}: $count channels, ${if (onReceiver) "EPGImport" else "app"}")
+        return outcome.copy(epgChannels = count, epgOnReceiver = onReceiver)
+    }
+
+    /** The EPG URLs in the headers of the playlists downloaded before (x-tvg-url / url-tvg). */
+    fun epgHeaders(names: List<String>): List<String> =
+        names.mapNotNull { IptvSource.byName(it) }.flatMap { sources.epgHeader(it) }.distinct()
 
     /** Puts a backup back: its files are written and list files it did not have are removed. */
     suspend fun restore(backup: SettingsBackup, receiver: ReceiverConfig, onStep: (ImportStep) -> Unit = {}): ReceiverOutcome =
@@ -109,6 +160,7 @@ class ReceiverListImporter @Inject constructor(
         receiver: ReceiverConfig,
         takeBackup: Boolean = true,
         onStep: (ImportStep) -> Unit = {},
+        after: (FtpReceiverClient) -> Unit = {},
         plan: (FtpReceiverClient, List<String>, String?) -> Pair<ImportPlan, Int>,
     ): ReceiverOutcome = gate.withLock {
         val warnings = mutableListOf<TransferException>()
@@ -154,6 +206,10 @@ class ReceiverListImporter @Inject constructor(
                     work.deletions.forEachIndexed { i, name ->
                         onStep(ImportStep(ImportStage.DELETE, i + 1, work.deletions.size))
                         box.delete(SettingsFiles.remotePath(name))
+                    }
+                    // Extras (EPGImport files) never fail a load that already went through.
+                    runCatching { after(box) }.onFailure { e ->
+                        warnings += (e as? TransferException) ?: TransferException(TransferFailure.UNKNOWN, "epg: ${e.message.orEmpty()}", e)
                     }
                     count
                 }

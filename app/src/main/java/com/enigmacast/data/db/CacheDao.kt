@@ -64,6 +64,24 @@ interface CacheDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvents(rows: List<EpgRow>)
 
+    // IPTV EPG from XMLTV
+    @Query("DELETE FROM iptv_epg WHERE receiverKey = :receiverKey")
+    suspend fun deleteIptvEpg(receiverKey: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertIptvEpg(rows: List<IptvEpgRow>)
+
+    @Query("SELECT * FROM iptv_epg WHERE receiverKey = :receiverKey AND endSec > :fromSec AND beginSec < :toSec")
+    suspend fun iptvEpg(receiverKey: String, fromSec: Long, toSec: Long): List<IptvEpgRow>
+
+    /** Replaces this receiver's XMLTV programmes and puts them in the guide cache right away. */
+    @Transaction
+    suspend fun replaceIptvEpg(receiverKey: String, rows: List<IptvEpgRow>, guide: List<EpgRow>) {
+        deleteIptvEpg(receiverKey)
+        rows.chunked(500).forEach { insertIptvEpg(it) }
+        guide.chunked(500).forEach { insertEvents(it) }
+    }
+
     @Query("DELETE FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec")
     suspend fun deleteEvents(receiverKey: String, fromSec: Long, toSec: Long)
 

@@ -27,6 +27,21 @@ object CacheMappers {
         genre = event.genre,
     )
 
+    /** An XMLTV programme as a guide row; the event id is derived from service and start (XMLTV has none). */
+    fun iptvGuideRow(row: IptvEpgRow) = EpgRow(
+        receiverKey = row.receiverKey,
+        serviceKey = row.serviceKey,
+        reference = row.reference,
+        beginSec = row.beginSec,
+        endSec = row.endSec,
+        eventId = ((row.serviceKey.hashCode() * 31 + row.beginSec.toInt()) and 0x7FFFFFFF),
+        title = row.title,
+        shortDescription = "",
+        longDescription = row.description,
+        genreId = 0,
+        genre = "",
+    )
+
     fun event(row: EpgRow) = GuideEvent(
         eventId = row.eventId,
         reference = row.reference,

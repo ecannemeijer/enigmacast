@@ -1,7 +1,7 @@
 package com.enigmacast.domain.settingsimport
 
 /** What a receiver load is doing right now. */
-enum class ImportStage { CONNECT, BACKUP, UPLOAD, DELETE, RELOAD, SYNC }
+enum class ImportStage { EPG, CONNECT, BACKUP, UPLOAD, DELETE, RELOAD, SYNC }
 
 /** One step inside a receiver load; [total] is 0 when the step has no countable parts. */
 data class ImportStep(val stage: ImportStage, val done: Int = 0, val total: Int = 0)
@@ -11,6 +11,7 @@ object ImportProgress {
     fun receiverFraction(step: ImportStep): Float {
         val part = if (step.total > 0) step.done.coerceIn(0, step.total).toFloat() / step.total else 0f
         return when (step.stage) {
+            ImportStage.EPG -> 0.01f
             ImportStage.CONNECT -> 0.02f
             ImportStage.BACKUP -> 0.05f + 0.30f * part
             ImportStage.UPLOAD -> 0.35f + 0.45f * part

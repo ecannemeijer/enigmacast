@@ -1226,4 +1226,7 @@ Profile: %2$s</string>
     <string name="import_step_sync">Refreshing the app · %1$s</string>
     <string name="import_groups_downloading">Downloading %1$d/%2$d · %3$s</string>
     <string name="import_groups_parsing">Reading groups…</string>
+    <string name="import_step_epg">Reading the TV guide (XMLTV)…</string>
+    <string name="import_epg_receiver">TV guide for %1$d IPTV channels via EPGImport on the receiver (enable the source \"EnigmaCast IPTV\" in EPGImport once).</string>
+    <string name="import_epg_app">TV guide for %1$d IPTV channels stored in the app.</string>
 </resources>

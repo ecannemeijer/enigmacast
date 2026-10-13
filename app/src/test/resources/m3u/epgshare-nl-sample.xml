@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+
+<tv generator-info-name="none">
+  <channel id="RTV.Noord.nl">
+    <display-name lang="nl">RTV Noord</display-name>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/intent/NL_000136_019583/channelLogo?type=channel" />
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/intent/NL_000136_019583/channelLogo?type=channel" />
+    <url>http://www.ziggogo.tv</url>
+  </channel>
+  <channel id="RTV.Drenthe.nl">
+    <display-name lang="nl">RTV Drenthe</display-name>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/intent/NL_000138_019591/channelLogo?type=channel" />
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/intent/NL_000138_019591/channelLogo?type=channel" />
+    <url>http://www.ziggogo.tv</url>
+  </channel>
+  <channel id="24Kitchen.nl">
+    <display-name lang="nl">24Kitchen</display-name>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/intent/NL_000024_019701/channelLogo?type=channel" />
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/intent/NL_000024_019701/channelLogo?type=channel" />
+    <url>http://www.ziggogo.tv</url>
+  </channel>
+  <programme start="20261013001200 +0000" stop="20261013001800 +0000" channel="RTV.Noord.nl">
+    <title lang="nl">Weerbericht</title>
+    <desc lang="nl">Het Weerbericht in het Gronings.</desc>
+    <credits>
+      <actor>Harma Boer</actor>
+    </credits>
+    <category lang="nl">Weer</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p18590560_b_v11_ab.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+  </programme>
+  <programme start="20261013001800 +0000" stop="20261013002600 +0000" channel="RTV.Noord.nl">
+    <title lang="nl">De Koffiecorner</title>
+    <date>2026</date>
+    <category lang="nl">Entertainment</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p33805379_b_v8_aa.jpg?supportsTransparency=false" />
+  </programme>
+  <programme start="20261013002600 +0000" stop="20261013003000 +0000" channel="RTV.Noord.nl">
+    <title lang="nl">Kiek!</title>
+    <desc lang="nl">Kiek noar de schierste ploatjes, moakt deur Grunnegers zulf. Elke dag kiezen we vijftien pareltjes en leren we onze provincie kennen door de ogen van anderen.</desc>
+    <date>2026</date>
+    <category lang="nl">Samenleving</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p29156236_b_v8_aa.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+  </programme>
+  <programme start="20261013001100 +0000" stop="20261013002000 +0000" channel="RTV.Drenthe.nl">
+    <title lang="nl">NOS Journaal in Makkelijke Taal</title>
+    <desc lang="nl">Een dagelijks journaal bedoeld voor mensen die moeite hebben met lezen en schrijven.</desc>
+    <category lang="nl">Nieuws</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p28047447_b_v11_ac.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+  </programme>
+  <programme start="20261013002000 +0000" stop="20261013003300 +0000" channel="RTV.Drenthe.nl">
+    <title lang="nl">Drenthe Nu</title>
+    <desc lang="nl">Het laatste nieuws uit de regio Drenthe wordt belicht en er wordt ingegaan op actualiteiten.</desc>
+    <category lang="nl">Nieuws</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p18606393_b_v8_ac.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+  </programme>
+  <programme start="20261013003300 +0000" stop="20261013004600 +0000" channel="RTV.Drenthe.nl">
+    <title lang="nl">Rate de Keet</title>
+    <desc lang="nl">Dennis en Sander brengen in deze aflevering een bezoek aan de keet in Mantinge, een keet met een geheime zender en bijzondere versieringen aan de muren.</desc>
+    <credits>
+      <actor>Dennis Polling</actor>
+      <actor>Sander Foekens</actor>
+    </credits>
+    <date>2025</date>
+    <category lang="nl">Samenleving</category>
+    <category lang="nl">Documentaire</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p31272848_b_v8_aa.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+  </programme>
+  <programme start="20261013002500 +0000" stop="20261013011500 +0000" channel="24Kitchen.nl">
+    <title lang="nl">Gordon, Gino and Fred's Road Trip</title>
+    <sub-title lang="nl">Aflevering 5</sub-title>
+    <desc lang="nl">De mannen sluiten hun roadtrip af in Texas. Ze worden o.m. houthakkers, proberen een monstervis te vangen, gaan dansen in een countrybar, bezoeken een rodeo en organiseren de perfecte barbecue.</desc>
+    <credits>
+      <actor>Gordon Ramsay</actor>
+      <actor>Gino D'Acampo</actor>
+      <actor>Fred Sirieix</actor>
+      <producer>"Gordon Ramsay</producer>
+      <producer>Chris Brogden</producer>
+      <producer>Steph Weatherill</producer>
+    </credits>
+    <date>2020</date>
+    <category lang="nl">Miniseries</category>
+    <category lang="nl">Reality</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p18120984_b_v8_ag.jpg?supportsTransparency=false" />
+    <country lang="nl">GB</country>
+    <episode-num system="onscreen">S2 E5</episode-num>
+  </programme>
+  <programme start="20261013011500 +0000" stop="20261013014500 +0000" channel="24Kitchen.nl">
+    <title lang="nl">Miljuschka's Food Trucks</title>
+    <sub-title lang="nl">Aflevering 1</sub-title>
+    <desc lang="nl">Miljuschka reist naar Amerika en ontdekt hier de uitgebreide foodtruck scene. In Austin likt ze haar vingers af bij Chicken karaage, eet ze een vette tosti en proeft ze MoonPie, een klassiek Zuiders koekje.</desc>
+    <date>2015</date>
+    <category lang="nl">Culinair</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p18024865_b_v8_ab.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+    <episode-num system="onscreen">S1 E1</episode-num>
+  </programme>
+  <programme start="20261013014500 +0000" stop="20261013021000 +0000" channel="24Kitchen.nl">
+    <title lang="nl">Miljuschka's Food Trucks</title>
+    <sub-title lang="nl">Aflevering 2</sub-title>
+    <desc lang="nl">Miljuschka ontdekt in Austin smult ze mee met Texaanse brisket, Thai food en New York cheesecake.</desc>
+    <date>2015</date>
+    <category lang="nl">Culinair</category>
+    <icon src="https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service/ImagesEPG/EventImages/p18024865_b_v8_ab.jpg?supportsTransparency=false" />
+    <country lang="nl">NL</country>
+    <episode-num system="onscreen">S1 E2</episode-num>
+  </programme>
+</tv>

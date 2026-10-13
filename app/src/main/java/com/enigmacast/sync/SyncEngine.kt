@@ -226,6 +226,10 @@ class SyncEngine @Inject constructor(
                 val row = CacheMappers.epgRow(rk, event)
                 rows.putIfAbsent(row.serviceKey to row.beginSec, row)
             }
+        // XMLTV programmes of imported IPTV services (no EPGImport on the box): the receiver has none for them.
+        runCatching { dao.iptvEpg(rk, fromSec, toSec) }.getOrDefault(emptyList()).forEach { row ->
+            rows.putIfAbsent(row.serviceKey to row.beginSec, CacheMappers.iptvGuideRow(row))
+        }
         require(rows.isNotEmpty() || bouquets.isEmpty()) { "receiver sent no guide" }
         dao.replaceEvents(rk, fromSec, toSec, rows.values.toList())
         EnigmaLog.service("sync epg receiver=$rk events=${rows.size}")

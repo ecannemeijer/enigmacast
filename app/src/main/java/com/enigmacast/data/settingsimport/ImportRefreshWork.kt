@@ -56,7 +56,7 @@ class ImportRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
             if (config.iptvGroups.isNotEmpty() && config.iptvRefresh.isDue(config.iptvLastRunMs, now)) {
                 val outcome = runCatching {
                     val entries = importer.playlists(config.iptvSources)
-                    importer.loadIptv(IptvBouquets.build(entries, config.iptvGroups, config.iptvServiceType), receiver)
+                    importer.loadIptv(IptvBouquets.build(entries, config.iptvGroups, config.iptvServiceType), receiver, epgUrls = importer.epgHeaders(config.iptvSources))
                 }.getOrNull()
                 if (outcome?.ok == true) configs.update(receiver.id) { it.copy(iptvLastRunMs = now) }
             }
