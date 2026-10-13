@@ -168,6 +168,8 @@ data class LastChannel(
 @Serializable
 data class AppSettings(
     val receivers: List<ReceiverConfig> = emptyList(),
+    /** The setup wizard was finished once (Done); a later start without receivers opens the connection screen. */
+    val setupCompleted: Boolean = false,
     val activeReceiverId: String? = null,
     val playback: PlaybackSettings = PlaybackSettings(),
     val osd: OsdSettings = OsdSettings(),

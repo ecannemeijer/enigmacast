@@ -23,4 +23,12 @@ class SetupStepTest {
         assertTrue(SetupStep.showOnStart(0))
         assertFalse(SetupStep.showOnStart(1))
     }
+
+    @Test fun startGate() {
+        assertEquals(Start.SETUP, SetupStep.startScreen(receiverCount = 0, completed = false))
+        assertEquals(Start.CONNECTION, SetupStep.startScreen(receiverCount = 0, completed = true))
+        assertEquals(Start.DASHBOARD, SetupStep.startScreen(receiverCount = 1, completed = false))
+        assertEquals(Start.DASHBOARD, SetupStep.startScreen(receiverCount = 2, completed = true))
+        assertFalse(SetupStep.showOnStart(0, completed = true))
+    }
 }

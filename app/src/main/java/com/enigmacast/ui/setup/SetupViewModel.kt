@@ -71,6 +71,7 @@ class SetupViewModel @Inject constructor(
     }
 
     fun next() {
+        if (step == SetupStep.DONE) return
         when (step) {
             SetupStep.PROFILE -> saveProfile()
             SetupStep.BOUQUETS -> saveBouquets()
@@ -162,6 +163,7 @@ class SetupViewModel @Inject constructor(
     /** Done: the first full sync of guide, channels and Home starts now. */
     fun finish() {
         profiles.confirmActive()
+        viewModelScope.launch { settings.update { it.copy(setupCompleted = true) } }
         SyncScheduler.runNow(context, force = true)
         step = SetupStep.WELCOME
         profileLoaded = false

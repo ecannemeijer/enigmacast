@@ -111,7 +111,11 @@ class AppViewModel @Inject constructor(
             if (!decided) {
                 decided = true
                 val receiver = settings.activeReceiver()
-                screen = if (!com.enigmacast.domain.setup.SetupStep.showOnStart(settings.receivers.size)) AppScreen.Dashboard else AppScreen.Setup
+                screen = when (com.enigmacast.domain.setup.SetupStep.startScreen(settings.receivers.size, settings.setupCompleted)) {
+                    com.enigmacast.domain.setup.Start.DASHBOARD -> AppScreen.Dashboard
+                    com.enigmacast.domain.setup.Start.SETUP -> AppScreen.Setup
+                    com.enigmacast.domain.setup.Start.CONNECTION -> AppScreen.Connection
+                }
                 if (receiver != null) streamRunning = true
             }
         }
@@ -190,8 +194,10 @@ class AppViewModel @Inject constructor(
 
     /** Wizard finished: on a first run the stream starts now; a re-run returns to the dashboard. */
     fun finishSetup() {
+        val again = setupAgain
         setupAgain = false
         streamRunning = true
+        if (again) returnToSettingsHub = true
         openDashboard()
     }
 
@@ -199,6 +205,7 @@ class AppViewModel @Inject constructor(
     fun leaveSetup() {
         if (setupAgain) {
             setupAgain = false
+            returnToSettingsHub = true
             openDashboard()
         } else {
             askExit()

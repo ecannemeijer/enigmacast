@@ -73,11 +73,15 @@ fun SetupWizard(
     val stepFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
     LaunchedEffect(model.stepToken) {
-        if (!stepFocus.requestWhenReady()) nextFocus.requestWhenReady()
+        // Done has no control of its own: its Start watching button takes the focus.
+        if (model.step == SetupStep.DONE || !stepFocus.requestWhenReady(attempts = 4)) nextFocus.requestWhenReady()
     }
     BackHandler { if (!model.back()) onLeave() }
+    // Decided on the model's current step at click time, never on a value captured by an
+    // earlier composition: the button keeps its node across steps, and a stale "step" made
+    // Done run next() (staying on Done) instead of finishing.
     fun next() {
-        if (step == SetupStep.DONE) {
+        if (model.step == SetupStep.DONE) {
             model.finish()
             onDone()
         } else {

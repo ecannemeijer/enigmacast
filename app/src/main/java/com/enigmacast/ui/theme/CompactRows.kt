@@ -123,7 +123,9 @@ fun CompactListRow(
 suspend fun FocusRequester.requestWhenReady(attempts: Int = 10): Boolean {
     repeat(attempts) {
         withFrameNanos { }
-        if (runCatching { requestFocus() }.isSuccess) return true
+        // The Boolean overload says whether focus really moved; the plain requestFocus() only logs
+        // "FocusRequester is not initialized" for a target that is not attached yet and returns.
+        if (runCatching { requestFocus(androidx.compose.ui.focus.FocusDirection.Enter) }.getOrDefault(false)) return true
     }
     return false
 }

@@ -1,6 +1,8 @@
 package com.enigmacast.domain.setup
 
 /** The first-run wizard, in order. [optional] steps have a Skip button. */
+enum class Start { DASHBOARD, SETUP, CONNECTION }
+
 enum class SetupStep(val optional: Boolean = false) {
     WELCOME,
     RECEIVER,
@@ -17,6 +19,13 @@ enum class SetupStep(val optional: Boolean = false) {
         fun previous(step: SetupStep): SetupStep? = entries.getOrNull(step.ordinal - 1)
 
         /** Only a fresh install sees the wizard by itself: no receiver set up yet. */
-        fun showOnStart(receiverCount: Int): Boolean = receiverCount == 0
+        fun showOnStart(receiverCount: Int, completed: Boolean = false): Boolean = receiverCount == 0 && !completed
+
+        /** Where the app opens: dashboard with a receiver; otherwise the wizard, or the connection screen after it was done once. */
+        fun startScreen(receiverCount: Int, completed: Boolean): Start = when {
+            receiverCount > 0 -> Start.DASHBOARD
+            completed -> Start.CONNECTION
+            else -> Start.SETUP
+        }
     }
 }
