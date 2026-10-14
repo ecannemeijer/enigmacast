@@ -80,6 +80,7 @@ import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.data.settingsimport.CancelState
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
@@ -134,6 +135,7 @@ fun SettingsImportScreen(
         }
     }
     if (viewModel.choosingReceivers) ReceiverChoiceDialog(viewModel)
+    if (viewModel.loadDialog) LoadDialog(viewModel)
     if (viewModel.confirming) {
         val pending = viewModel.pending
         val names = viewModel.chosenReceivers.joinToString(", ") { viewModel.receiverName(it) }
@@ -268,8 +270,6 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
                 else -> null
             },
         )
-        LoadProgressCard(viewModel.progress)
-        Results(viewModel)
     }
 }
 
@@ -420,8 +420,6 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                 else -> null
             },
         )
-        LoadProgressCard(viewModel.progress)
-        Results(viewModel)
     }
 }
 
@@ -508,7 +506,7 @@ private fun ProgressLine(fraction: Float?, text: String) {
 @Composable
 private fun LoadProgressCard(progress: LoadProgress?) {
     if (progress == null) return
-    SettingsCard(stringResource(R.string.import_progress_title)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val name = progress.receiverName
         val step = progress.step
         val text = when {
@@ -712,7 +710,7 @@ private fun androidx.compose.foundation.layout.RowScope.RestoreTab(viewModel: Se
             }
         }
     }
-    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).focusGroup()) { Results(viewModel) }
+    Spacer(Modifier.weight(1f))
 }
 
 @Composable
@@ -746,7 +744,7 @@ private fun androidx.compose.foundation.layout.RowScope.AccessTab(viewModel: Set
 @Composable
 private fun Results(viewModel: SettingsImportViewModel) {
     if (viewModel.status.isEmpty()) return
-    SettingsCard(stringResource(R.string.import_results)) {
+    Column(Modifier.fillMaxWidth()) {
         viewModel.status.forEach { (id, state) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 when (state) {
@@ -754,10 +752,33 @@ private fun Results(viewModel: SettingsImportViewModel) {
                         StatusPill(viewModel.receiverName(id), EnigmaColors.Cyan)
                         Muted(stringResource(R.string.import_running))
                     }
+                    ReceiverStatus.Skipped -> {
+                        StatusPill(viewModel.receiverName(id), EnigmaColors.Muted)
+                        Muted(stringResource(R.string.import_skipped))
+                    }
                     is ReceiverStatus.Done -> {
                         val outcome = state.outcome
-                        StatusPill(outcome.receiverName, if (outcome.ok) EnigmaColors.Success else EnigmaColors.Danger)
-                        if (outcome.ok) {
+                        val cancelled = outcome.cancelled
+                        val tone = when {
+                            outcome.ok -> EnigmaColors.Success
+                            cancelled == CancelState.ROLLBACK_FAILED || cancelled == null -> EnigmaColors.Danger
+                            else -> EnigmaColors.Accent
+                        }
+                        StatusPill(outcome.receiverName, tone)
+                        if (cancelled != null) {
+                            Text(
+                                stringResource(
+                                    when (cancelled) {
+                                        CancelState.UNCHANGED -> R.string.import_cancelled_unchanged
+                                        CancelState.ROLLED_BACK -> R.string.import_cancelled_rolled_back
+                                        CancelState.ROLLBACK_FAILED -> R.string.import_cancelled_rollback_failed
+                                        CancelState.LOADED -> R.string.import_cancelled_loaded
+                                    },
+                                ),
+                                color = if (cancelled == CancelState.ROLLBACK_FAILED) EnigmaColors.Danger else EnigmaColors.Text,
+                                fontSize = 14.sp,
+                            )
+                        } else if (outcome.ok) {
                             Text(stringResource(R.string.import_done, outcome.bouquets), color = EnigmaColors.Text, fontSize = 14.sp)
                         } else {
                             FailureText(outcome.failure!!)
@@ -799,6 +820,68 @@ private fun failureMessage(error: TransferException): String {
 @Composable
 private fun Muted(text: String) {
     Text(text, color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 17.sp)
+}
+
+/**
+ * The load runs in this dialog: steps and a bar while it runs, Cancel to stop it (a receiver
+ * stopped mid-write gets its old lists back), then the result with Close. Focus stays in the
+ * dialog until the load has ended; Back does nothing while it runs.
+ */
+@Composable
+private fun LoadDialog(viewModel: SettingsImportViewModel) {
+    val busy = viewModel.busy
+    Dialog(
+        onDismissRequest = { if (!busy) viewModel.closeLoad() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+    ) {
+        NavigationSoundsForWindow()
+        val cancel = remember { FocusRequester() }
+        val close = remember { FocusRequester() }
+        LaunchedEffect(busy) { (if (busy) cancel else close).requestWhenReady() }
+        Column(
+            modifier = Modifier
+                .widthIn(min = 420.dp, max = 560.dp)
+                .heightIn(max = 520.dp)
+                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .padding(16.dp)
+                .focusGroup(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                stringResource(
+                    when (viewModel.loadTitle) {
+                        is PendingLoad.Restore -> R.string.import_confirm_restore_title
+                        PendingLoad.Iptv -> R.string.import_confirm_iptv_title
+                        else -> R.string.import_confirm_list_title
+                    },
+                ),
+                color = EnigmaColors.Text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (busy) {
+                LoadProgressCard(viewModel.progress)
+                if (viewModel.cancelling) Muted(stringResource(R.string.import_cancelling))
+            } else {
+                Text(stringResource(R.string.import_results), color = EnigmaColors.Muted, fontSize = 13.sp)
+            }
+            Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                if (!busy) Results(viewModel)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (busy) {
+                    TvButton(
+                        stringResource(R.string.cancel),
+                        viewModel::cancelLoad,
+                        modifier = Modifier.focusRequester(cancel),
+                    )
+                } else {
+                    TvButton(stringResource(R.string.close), viewModel::closeLoad, modifier = Modifier.focusRequester(close))
+                }
+            }
+        }
+    }
 }
 
 /** Which receivers get the list: the active one, all, or any mix. */

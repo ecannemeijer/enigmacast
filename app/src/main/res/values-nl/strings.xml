@@ -1223,4 +1223,10 @@ Profiel: %2$s</string>
     <string name="import_step_sync">App bijwerken · %1$s</string>
     <string name="import_groups_downloading">Downloaden %1$d/%2$d · %3$s</string>
     <string name="import_groups_parsing">Groepen inlezen…</string>
+    <string name="import_cancelling">Annuleren… een ontvanger die net beschreven werd, krijgt eerst zijn oude lijsten terug.</string>
+    <string name="import_skipped">Niet gestart: het laden is geannuleerd.</string>
+    <string name="import_cancelled_unchanged">Geannuleerd voordat er iets geschreven was. De ontvanger heeft zijn lijsten behouden.</string>
+    <string name="import_cancelled_rolled_back">Geannuleerd tijdens het schrijven. De vorige lijsten zijn teruggezet en opnieuw geladen.</string>
+    <string name="import_cancelled_rollback_failed">Geannuleerd tijdens het schrijven, en het terugzetten van de vorige lijsten is mislukt. Zet de back-up terug bij Terugzetten.</string>
+    <string name="import_cancelled_loaded">Geannuleerd nadat alle bestanden geschreven waren. De nieuwe lijsten staan op de ontvanger.</string>
 </resources>

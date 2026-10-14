@@ -46,6 +46,9 @@ sealed interface PendingLoad {
 
 sealed interface ReceiverStatus {
     data object Running : ReceiverStatus
+
+    /** Not started: the load was cancelled before this receiver's turn. */
+    data object Skipped : ReceiverStatus
     data class Done(val outcome: ReceiverOutcome) : ReceiverStatus
 }
 
@@ -105,6 +108,12 @@ class SettingsImportViewModel @Inject constructor(
     var status by mutableStateOf<Map<String, ReceiverStatus>>(emptyMap()); private set
     var busy by mutableStateOf(false); private set
     var progress by mutableStateOf<LoadProgress?>(null); private set
+
+    /** The load dialog: open from Load until the user closes it after the result. */
+    var loadDialog by mutableStateOf(false); private set
+    var cancelling by mutableStateOf(false); private set
+    var loadTitle by mutableStateOf<PendingLoad?>(null); private set
+    private var loadJob: Job? = null
     var backupList by mutableStateOf<Map<String, List<SettingsBackup>>>(emptyMap()); private set
 
     // FTP login form
@@ -300,9 +309,12 @@ class SettingsImportViewModel @Inject constructor(
         pending = null
         if (targets.isEmpty()) return
         busy = true
+        cancelling = false
+        loadTitle = load
+        loadDialog = true
         status = targets.associate { it.id to ReceiverStatus.Running }
         progress = LoadProgress(fraction = null, receiverCount = targets.size)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             try {
                 val files = (load as? PendingLoad.Package)?.let { packageFiles(it.pkg, targets) ?: return@launch }
                 val bouquets = if (load is PendingLoad.Iptv) IptvBouquets.build(entries, chosenGroups, serviceType) else emptyList()
@@ -318,18 +330,48 @@ class SettingsImportViewModel @Inject constructor(
                         is PendingLoad.Restore -> importer.restore(load.backup, receiver, onStep)
                     }
                     status = status + (receiver.id to ReceiverStatus.Done(outcome))
-                    if (outcome.ok) remember(load, receiver.id, now)
+                    if (outcome.ok || outcome.cancelled == com.enigmacast.data.settingsimport.CancelState.LOADED) remember(load, receiver.id, now)
+                    // The importer finishes a cancelled receiver itself (rollback); the rest is skipped.
+                    if (outcome.cancelled != null) {
+                        markSkipped()
+                        return@launch
+                    }
                 }
                 ImportRefreshScheduler.update(context, configs.state.value)
                 // The channel cache is already replaced; the guide and Home films follow for the active box.
                 val activeLoaded = status[activeId].let { it is ReceiverStatus.Done && it.outcome.ok }
                 if (activeLoaded) com.enigmacast.sync.SyncScheduler.runNow(context, force = true)
+            } catch (e: CancellationException) {
+                // Cancelled outside a receiver's turn (download, waiting for the receiver lock).
+                markSkipped()
+                throw e
             } finally {
                 busy = false
+                cancelling = false
                 progress = null
+                loadJob = null
                 refreshBackups()
             }
         }
+    }
+
+    private fun markSkipped() {
+        status = status.mapValues { (_, state) -> if (state == ReceiverStatus.Running) ReceiverStatus.Skipped else state }
+    }
+
+    /** Cancel in the load dialog: stops the load; a receiver stopped mid-write gets its old lists back. */
+    fun cancelLoad() {
+        val job = loadJob ?: return
+        if (cancelling) return
+        cancelling = true
+        job.cancel()
+    }
+
+    /** Close in the load dialog, once the load has ended. */
+    fun closeLoad() {
+        if (busy) return
+        loadDialog = false
+        loadTitle = null
     }
 
     private suspend fun packageFiles(pkg: TunerPackage, targets: List<ReceiverConfig>): Map<String, ByteArray>? = try {

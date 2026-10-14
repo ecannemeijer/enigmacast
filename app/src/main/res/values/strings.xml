@@ -1226,4 +1226,10 @@ Profile: %2$s</string>
     <string name="import_step_sync">Refreshing the app · %1$s</string>
     <string name="import_groups_downloading">Downloading %1$d/%2$d · %3$s</string>
     <string name="import_groups_parsing">Reading groups…</string>
+    <string name="import_cancelling">Cancelling… a receiver that was being written gets its old lists back first.</string>
+    <string name="import_skipped">Not started: the load was cancelled.</string>
+    <string name="import_cancelled_unchanged">Cancelled before anything was written. The receiver kept its lists.</string>
+    <string name="import_cancelled_rolled_back">Cancelled while writing. The previous lists were put back and reloaded.</string>
+    <string name="import_cancelled_rollback_failed">Cancelled while writing, and putting the previous lists back failed. Restore the backup under Restore.</string>
+    <string name="import_cancelled_loaded">Cancelled after all files were written. The new lists are on the receiver.</string>
 </resources>

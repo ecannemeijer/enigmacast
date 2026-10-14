@@ -23,6 +23,8 @@ import com.enigmacast.util.EnigmaLog
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,8 +40,25 @@ data class ReceiverOutcome(
     val warnings: List<TransferException> = emptyList(),
     val bouquets: Int = 0,
     val backupLabel: String? = null,
+    /** Set when the user cancelled this receiver's load: what the receiver holds now. */
+    val cancelled: CancelState? = null,
 ) {
-    val ok: Boolean get() = failure == null
+    val ok: Boolean get() = failure == null && cancelled == null
+}
+
+/** Where a cancelled load left the receiver. */
+enum class CancelState {
+    /** Stopped before anything was written: the receiver kept its lists. */
+    UNCHANGED,
+
+    /** Stopped while writing: the files from before the load were put back and reloaded. */
+    ROLLED_BACK,
+
+    /** Stopped while writing and putting the old files back failed: restore a backup by hand. */
+    ROLLBACK_FAILED,
+
+    /** Stopped after every file was written: the new lists are on the receiver. */
+    LOADED,
 }
 
 /**
@@ -115,6 +134,11 @@ class ReceiverListImporter @Inject constructor(
         var backupLabel: String? = null
         var expected: Set<String>? = null
         var removed: List<String> = emptyList()
+        // The lists as they were before this load, kept in memory to put back on cancel.
+        val before = LinkedHashMap<String, ByteArray>()
+        val written = mutableListOf<String>()
+        var writing = false
+        var allWritten = false
         try {
             onStep(ImportStep(ImportStage.CONNECT))
             val count = withContext(Dispatchers.IO) {
@@ -123,6 +147,7 @@ class ReceiverListImporter @Inject constructor(
                     // Backup first. Without a complete copy nothing is overwritten.
                     val current = LinkedHashMap<String, ByteArray>()
                     boxFiles.forEachIndexed { i, name ->
+                        ensureActive()
                         onStep(ImportStep(ImportStage.BACKUP, i, boxFiles.size))
                         box.download(SettingsFiles.remotePath(name))?.let { current[name] = it }
                     }
@@ -137,13 +162,18 @@ class ReceiverListImporter @Inject constructor(
                             throw TransferException(TransferFailure.BACKUP_FAILED, e.message.orEmpty(), e)
                         }
                     }
+                    before.putAll(current)
+                    ensureActive()
                     val bouquetsTv = current["bouquets.tv"]?.toString(Charsets.UTF_8)
                     val (work, count) = plan(box, boxFiles, bouquetsTv)
                     expected = ReloadCheck.expectedFiles(work.uploads)
                     removed = work.deletions
                     val uploads = work.uploads.entries.toList()
+                    writing = true
                     uploads.forEachIndexed { i, (name, bytes) ->
+                        ensureActive()
                         onStep(ImportStep(ImportStage.UPLOAD, i + 1, uploads.size))
+                        written += name
                         try {
                             box.upload(SettingsFiles.remotePath(name), bytes)
                         } catch (e: TransferException) {
@@ -152,6 +182,7 @@ class ReceiverListImporter @Inject constructor(
                         }
                     }
                     work.deletions.forEachIndexed { i, name ->
+                        ensureActive()
                         onStep(ImportStep(ImportStage.DELETE, i + 1, work.deletions.size))
                         box.delete(SettingsFiles.remotePath(name))
                     }
@@ -162,6 +193,7 @@ class ReceiverListImporter @Inject constructor(
             reload(receiver)
             // Enigma2 reloads on its own thread: wait until OpenWebif lists the new bouquets.
             awaitReload(receiver, expected, removed)
+            allWritten = true
             onStep(ImportStep(ImportStage.SYNC))
             try {
                 // Forced: the cache and every screen showing this box take the new lists now.
@@ -174,12 +206,43 @@ class ReceiverListImporter @Inject constructor(
             EnigmaLog.service("settings import on ${receiver.name}: ok, $count bouquets")
             ReceiverOutcome(receiver.id, receiver.name, null, warnings, count, backupLabel)
         } catch (e: CancellationException) {
-            throw e
+            val state = when {
+                allWritten -> CancelState.LOADED
+                !writing -> CancelState.UNCHANGED
+                else -> withContext(NonCancellable) { rollBack(receiver, before, written) }
+            }
+            EnigmaLog.service("settings import on ${receiver.name}: cancelled, $state")
+            ReceiverOutcome(receiver.id, receiver.name, null, warnings, backupLabel = backupLabel, cancelled = state)
         } catch (e: Exception) {
             val mapped = TransferErrors.map(e, TransferStage.UPLOAD)
             EnigmaLog.service("settings import on ${receiver.name}: ${mapped.failure}")
             ReceiverOutcome(receiver.id, receiver.name, mapped, warnings, backupLabel = backupLabel)
         }
+    }
+
+    /**
+     * Puts the lists from before a cancelled load back: the old files are written again, files
+     * the load added are removed, and the receiver reloads. Runs to the end, even when cancelled.
+     */
+    private suspend fun rollBack(receiver: ReceiverConfig, before: Map<String, ByteArray>, written: List<String>): CancelState = try {
+        withContext(Dispatchers.IO) {
+            FtpReceiverClient.open(receiver).use { box ->
+                before.forEach { (name, bytes) ->
+                    try {
+                        box.upload(SettingsFiles.remotePath(name), bytes)
+                    } catch (e: TransferException) {
+                        if (name != SettingsFiles.SATELLITES) throw e
+                    }
+                }
+                written.filter { it !in before && it != SettingsFiles.SATELLITES }.forEach { box.delete(SettingsFiles.remotePath(it)) }
+            }
+        }
+        reload(receiver)
+        runCatching { sync.refreshChannelsNow(receiver, force = true) }
+        CancelState.ROLLED_BACK
+    } catch (e: Exception) {
+        EnigmaLog.service("settings import on ${receiver.name}: rollback failed: ${e.message}")
+        CancelState.ROLLBACK_FAILED
     }
 
     /** Polls the bouquet list (up to ~20 s) until it shows [expected]; without a bouquets.tv upload a short pause. */
