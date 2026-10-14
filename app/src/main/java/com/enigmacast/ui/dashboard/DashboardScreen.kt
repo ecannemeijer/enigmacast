@@ -265,7 +265,6 @@ fun DashboardScreen(
     /** The TV / Library flyout, open for that group (null when closed), and where it sits. */
     var flyout by remember { mutableStateOf<DashGroup?>(null) }
     val flyoutAnchor = remember { androidx.compose.runtime.mutableStateMapOf<DashGroup, androidx.compose.ui.geometry.Offset>() }
-    val libraryMenuFocus = remember { FocusRequester() }
     val tabContext = androidx.compose.ui.platform.LocalContext.current
     val tabMemory = remember { DashTabMemory(tabContext) }
     /** The tab of [target] in its group's tab row (the old menu item's requester moved there). */
@@ -313,15 +312,13 @@ fun DashboardScreen(
     }
     fun sectionMenu(): FocusRequester = when (DashGroups.groupOf(section)) {
         DashGroup.TV -> tvMenuFocus
-        DashGroup.LIBRARY -> libraryMenuFocus
         null -> sectionMenuOf()
     }
     DisposableEffect(contentFocused, section, guideModel.askWake, flyout) {
         onBindBack {
             if (flyout != null) {
-                val group = flyout
                 flyout = null
-                runCatching { (if (group == DashGroup.LIBRARY) libraryMenuFocus else tvMenuFocus).requestFocus() }
+                runCatching { tvMenuFocus.requestFocus() }
                 true
             } else if (guideModel.askWake) {
                 guideModel.declineWake()
@@ -511,25 +508,48 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Soccer && lockedFeature(DashSection.Soccer) == null) soccerContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Soccer) },
                 )
-                // Library: My items · Search in the same flyout.
+                // Search and My items: own items again (no flyout for a single page).
                 NavItem(
-                    icon = EnigmaIcons.Record,
-                    label = stringResource(R.string.nav_library),
-                    subtitle = DashGroups.current(DashGroup.LIBRARY, section, tabMemory.last(DashGroup.LIBRARY))?.let { stringResource(DashGroups.label(it)) },
-                    selected = DashGroups.groupOf(section) == DashGroup.LIBRARY,
+                    icon = Icons.Filled.Search,
+                    label = stringResource(R.string.nav_search),
+                    selected = section == DashSection.Search,
                     showLabel = drawerExpanded,
                     staggerIndex = 4,
                     modifier = Modifier
-                        .focusRequester(libraryMenuFocus)
-                        .focusRequester(myItemsMenuFocus).focusRequester(searchMenuFocus)
-                        .onGloballyPositioned { flyoutAnchor[DashGroup.LIBRARY] = it.positionInRoot().let { p -> androidx.compose.ui.geometry.Offset(p.x + it.size.width, p.y) } }
-                        .onPreviewKeyEvent { e ->
-                            if (e.key != Key.DirectionRight) return@onPreviewKeyEvent false
-                            if (e.type == KeyEventType.KeyDown) flyout = DashGroup.LIBRARY
+                        .focusRequester(searchMenuFocus)
+                        .onFocusChanged { if (it.isFocused) searchActive = false }
+                        .focusProperties { right = FocusRequester.Cancel }
+                        .onPreviewKeyEvent { event ->
+                            if (section != DashSection.Search) return@onPreviewKeyEvent false
+                            if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            searchActive = true
+                            searchEnterToken += 1
                             true
+                        },
+                    onClick = { enterSection(DashSection.Search) },
+                )
+                NavItem(
+                    icon = EnigmaIcons.Record,
+                    label = stringResource(R.string.nav_my_items),
+                    selected = section == DashSection.MyItems,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 5,
+                    modifier = Modifier
+                        .focusRequester(myItemsMenuFocus)
+                        .onFocusChanged {
+                            if (it.isFocused && !myItemsModel.holdList && returnToMyItemsId == null) {
+                                myItemsListActive = false
+                            }
                         }
-                        .focusProperties { right = FocusRequester.Cancel },
-                    onClick = { flyout = DashGroup.LIBRARY },
+                        .focusProperties { right = FocusRequester.Cancel }
+                        .onPreviewKeyEvent { event ->
+                            if (section != DashSection.MyItems) return@onPreviewKeyEvent false
+                            if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            myItemsListActive = true
+                            myItemsEnterToken += 1
+                            true
+                        },
+                    onClick = { enterSection(DashSection.MyItems) },
                 )
                 Spacer(Modifier.weight(1f))
                 // Settings and Exit sit at the bottom, under the five sections (Down from Library).
@@ -786,7 +806,7 @@ fun DashboardScreen(
         }
         flyout?.let { group ->
             val anchor = flyoutAnchor[group] ?: androidx.compose.ui.geometry.Offset.Zero
-            val menu = if (group == DashGroup.TV) tvMenuFocus else libraryMenuFocus
+            val menu = tvMenuFocus
             fun close() { flyout = null; runCatching { menu.requestFocus() } }
             DashFlyout(
                 entries = DashGroups.tabs(group).map { target ->

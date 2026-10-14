@@ -8,7 +8,8 @@ class DashGroupsTest {
     @Test fun groups() {
         assertEquals(DashGroup.TV, DashGroups.groupOf(DashSection.Movies))
         assertEquals(DashGroup.TV, DashGroups.groupOf(DashSection.Stream))
-        assertEquals(DashGroup.LIBRARY, DashGroups.groupOf(DashSection.Search))
+        assertNull(DashGroups.groupOf(DashSection.Search))
+        assertNull(DashGroups.groupOf(DashSection.MyItems))
         assertNull(DashGroups.groupOf(DashSection.Soccer))
         assertNull(DashGroups.groupOf(DashSection.Settings))
     }
@@ -28,7 +29,6 @@ class DashGroupsTest {
     }
 
     @Test fun libraryDefault() {
-        assertEquals(DashSection.MyItems, DashGroups.entry(DashGroup.LIBRARY, null) { true })
     }
 
     @Test fun subtitleShowsOpenPageElseLastUsed() {

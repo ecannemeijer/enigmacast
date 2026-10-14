@@ -43,19 +43,17 @@ import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 
 /** Main-menu groups whose pages are tabs. */
-internal enum class DashGroup { TV, LIBRARY }
+internal enum class DashGroup { TV }
 
 internal object DashGroups {
     private val TV = listOf(DashSection.Stream, DashSection.Guide, DashSection.Movies, DashSection.Series, DashSection.Radio)
-    private val LIBRARY = listOf(DashSection.MyItems, DashSection.Search)
 
     fun groupOf(section: DashSection): DashGroup? = when (section) {
         in TV -> DashGroup.TV
-        in LIBRARY -> DashGroup.LIBRARY
         else -> null
     }
 
-    fun tabs(group: DashGroup): List<DashSection> = if (group == DashGroup.TV) TV else LIBRARY
+    fun tabs(@Suppress("UNUSED_PARAMETER") group: DashGroup): List<DashSection> = TV
 
     /**
      * The page OK on a group opens: the last-used tab, else the first open one. Live TV is a
