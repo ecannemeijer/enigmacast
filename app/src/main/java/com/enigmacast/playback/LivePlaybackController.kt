@@ -96,7 +96,20 @@ class LiveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(8) {
 class LivePlaybackController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val clientFactory: OkHttpClientFactory,
+    private val owner: PlaybackOwner,
 ) {
+    init {
+        // IPTV started: this player stops, but may play again when asked (not disabled).
+        owner.register(PlaybackOwner.Owner.ENIGMA2) { yieldToOther() }
+    }
+
+    /** Stops for the other player without blocking later [play] calls. */
+    fun yieldToOther() {
+        val enabled = playbackEnabled
+        stop()
+        playbackEnabled = enabled
+    }
+
     private var player: ExoPlayer? = null
     private var currentUrl: String? = null
     /** A recording file, not a live tuner stream. It must not be restarted when it ends. */
@@ -331,6 +344,7 @@ class LivePlaybackController @Inject constructor(
     ) {
         if (!playbackEnabled) return
         if (!hold.admit(StreamRequest(url, authorization, checkStart, internet))) return
+        owner.claim(PlaybackOwner.Owner.ENIGMA2)
         val exo = ensurePlayer()
         if (!force && url == currentUrl && exo.playerError == null && exo.playbackState != Player.STATE_IDLE) {
             return
@@ -442,6 +456,7 @@ class LivePlaybackController @Inject constructor(
     /** Plays a recording file; [startMs] > 0 resumes there (Media3 seeks once the TS duration is known). */
     fun playRecording(url: String, authorization: String?, durationMs: Long = 0L, startMs: Long = 0L) {
         if (!playbackEnabled) return
+        owner.claim(PlaybackOwner.Owner.ENIGMA2)
         val exo = ensurePlayer()
         filePlayback = true
         fileDurationMs = durationMs.coerceAtLeast(0L)

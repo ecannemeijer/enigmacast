@@ -59,6 +59,7 @@ class XtreamViewModel @Inject constructor(
     private val playlistStore: IptvPlaylistStore,
     private val playlistSync: IptvPlaylistSync,
     private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
+    private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -480,6 +481,9 @@ class XtreamViewModel @Inject constructor(
         // Playlist addresses can carry a login anywhere: only the section is logged for those.
         if (account === M3U_ACCOUNT) EnigmaLog.network("IPTV play playlist entry (${what.item?.section})")
         else EnigmaLog.network("Xtream play ${XtreamUrls.redact(url, account).substringAfter("://").substringAfter('/')}")
+        // One player at a time: a running Enigma2 channel, film or mini player stops first.
+        playbackOwner.register(com.enigmacast.playback.PlaybackOwner.Owner.IPTV) { stop() }
+        playbackOwner.claim(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         playerError = null
         playing = what
         playerState = com.enigmacast.domain.model.PlayerState(filePlayback = !live)
@@ -529,12 +533,14 @@ class XtreamViewModel @Inject constructor(
 
     /** Leaving the page: the stream stops, the lists stay for next time. */
     fun stop() {
+        playbackOwner.release(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         player?.stop()
         player?.clearMediaItems()
         playing = null
     }
 
     override fun onCleared() {
+        playbackOwner.unregister(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         player?.release()
         player = null
     }
