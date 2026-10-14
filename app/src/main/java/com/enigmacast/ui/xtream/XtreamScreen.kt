@@ -164,6 +164,11 @@ fun XtreamScreen(onBack: () -> Unit) {
             PanelColumn.VOD_GRID -> if (!gridFocus.requestWhenReady(4)) { column = PanelColumn.VOD_CATEGORIES }
         }
     }
+    // The IPTV page is in front: background Enigma2 starts may not take the decoder from it.
+    DisposableEffect(Unit) {
+        model.setForeground(true)
+        onDispose { model.setForeground(false) }
+    }
     BackHandler {
         when {
             quickBar -> { quickBar = false; vodBar = false; bannerUntil = 0L; openRequest++ }
@@ -224,6 +229,7 @@ fun XtreamScreen(onBack: () -> Unit) {
     ) {
         if (model.playing != null) {
             val ps = model.playerState
+            @Suppress("UNUSED_EXPRESSION") model.playerVersion
             com.enigmacast.ui.remote.EnigmaVideoPlayer(
                 player = model.player(),
                 frame = null,

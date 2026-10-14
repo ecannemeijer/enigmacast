@@ -101,6 +101,7 @@ class LivePlaybackController @Inject constructor(
     init {
         // IPTV started: this player stops, but may play again when asked (not disabled).
         owner.register(PlaybackOwner.Owner.ENIGMA2) { yieldToOther() }
+        if (com.enigmacast.BuildConfig.DEBUG) owner.log = { EnigmaLog.player(it) }
     }
 
     /** Stops for the other player without blocking later [play] calls. */
@@ -343,6 +344,9 @@ class LivePlaybackController @Inject constructor(
         internet: Boolean = false,
     ) {
         if (!playbackEnabled) return
+        // The IPTV page plays in front: a background Enigma2 start (reconnect, mini player) must not
+        // take the decoder and the output from it (black IPTV picture with Enigma2 sound).
+        if (!owner.mayStart(PlaybackOwner.Owner.ENIGMA2)) { EnigmaLog.player("enigma2 start refused: IPTV in front"); return }
         if (!hold.admit(StreamRequest(url, authorization, checkStart, internet))) return
         owner.claim(PlaybackOwner.Owner.ENIGMA2)
         val exo = ensurePlayer()
@@ -456,6 +460,7 @@ class LivePlaybackController @Inject constructor(
     /** Plays a recording file; [startMs] > 0 resumes there (Media3 seeks once the TS duration is known). */
     fun playRecording(url: String, authorization: String?, durationMs: Long = 0L, startMs: Long = 0L) {
         if (!playbackEnabled) return
+        if (!owner.mayStart(PlaybackOwner.Owner.ENIGMA2)) { EnigmaLog.player("enigma2 recording start refused: IPTV in front"); return }
         owner.claim(PlaybackOwner.Owner.ENIGMA2)
         val exo = ensurePlayer()
         filePlayback = true

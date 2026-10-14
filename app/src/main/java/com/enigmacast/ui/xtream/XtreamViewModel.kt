@@ -752,7 +752,8 @@ class XtreamViewModel @Inject constructor(
         if (account === M3U_ACCOUNT) EnigmaLog.network("IPTV play playlist entry (${what.item?.section})")
         else EnigmaLog.network("Xtream play ${XtreamUrls.redact(url, account).substringAfter("://").substringAfter('/')}")
         // One player at a time: a running Enigma2 channel, film or mini player stops first.
-        playbackOwner.register(com.enigmacast.playback.PlaybackOwner.Owner.IPTV) { stop() }
+        // Enigma2 is stopped and its ExoPlayer released (decoder freed) before this one prepares.
+        playbackOwner.register(com.enigmacast.playback.PlaybackOwner.Owner.IPTV) { yieldToOther() }
         playbackOwner.claim(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         playerError = null
         playing = what
@@ -812,6 +813,23 @@ class XtreamViewModel @Inject constructor(
         player?.clearMediaItems()
         playing = null
     }
+
+    fun setForeground(front: Boolean) {
+        val o = com.enigmacast.playback.PlaybackOwner.Owner.IPTV
+        if (front) playbackOwner.foreground = o else if (playbackOwner.foreground == o) playbackOwner.foreground = null
+    }
+
+    /** Enigma2 takes over: stop and release the IPTV ExoPlayer too, so its decoder is free. */
+    private fun yieldToOther() {
+        stop()
+        player?.release()
+        player = null
+        playerVersion++
+    }
+
+    /** Bumped when the ExoPlayer instance is replaced, so the video view binds the new one. */
+    var playerVersion by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
 
     override fun onCleared() {
         playbackOwner.unregister(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)

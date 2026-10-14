@@ -18,6 +18,12 @@ class PlaybackOwner @Inject constructor() {
     var current: Owner? = null
         private set
 
+    /** Which player's screen is in front (IPTV page); background starts of the other are refused. */
+    var foreground: Owner? = null
+
+    /** Debug log hook (owner transitions only; never URLs). */
+    var log: (String) -> Unit = {}
+
     fun register(owner: Owner, stop: () -> Unit) {
         stoppers[owner] = stop
     }
@@ -27,16 +33,36 @@ class PlaybackOwner @Inject constructor() {
         if (current == owner) current = null
     }
 
-    /** [owner] starts playing: every other registered player stops. */
+    /**
+     * [owner] starts playing: every other registered player stops (and releases its decoder)
+     * first, synchronously, before the caller prepares its own player. A zap inside the same
+     * owner stops nothing.
+     */
     fun claim(owner: Owner) {
+        log("owner claim $owner (was $current, front $foreground)")
         if (current != owner) {
-            stoppers.filterKeys { it != owner }.values.toList().forEach { stop -> runCatching { stop() } }
+            stoppers.filterKeys { it != owner }.forEach { (other, stop) ->
+                log("owner stop $other for $owner")
+                runCatching { stop() }
+            }
         }
         current = owner
     }
 
+    /**
+     * A start that the user didn't ask for on this screen (reconnect, resume, preview) may not
+     * take over while the other player owns the output and its screen is in front.
+     */
+    fun mayStart(owner: Owner): Boolean = PlaybackRules.mayStart(owner, current, foreground)
+
     /** [owner] stopped by itself. */
     fun release(owner: Owner) {
+        log("owner release $owner (was $current)")
         if (current == owner) current = null
     }
+}
+
+object PlaybackRules {
+    fun mayStart(owner: PlaybackOwner.Owner, current: PlaybackOwner.Owner?, foreground: PlaybackOwner.Owner?): Boolean =
+        current == null || current == owner || foreground != current
 }
