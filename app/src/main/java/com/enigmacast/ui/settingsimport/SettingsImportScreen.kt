@@ -707,6 +707,7 @@ private fun androidx.compose.foundation.layout.RowScope.RestoreTab(viewModel: Se
                     onClick = { if (!viewModel.busy) viewModel.askRestore(backup) },
                     headlineContent = { Text(stringResource(R.string.import_restore_item, backup.label), fontSize = 15.sp) },
                     supportingContent = { Text(stringResource(R.string.import_backup_files, backup.files.size), fontSize = 12.sp) },
+                    scale = androidx.tv.material3.ListItemDefaults.scale(scale = 1f, focusedScale = 1f),
                 )
             }
         }

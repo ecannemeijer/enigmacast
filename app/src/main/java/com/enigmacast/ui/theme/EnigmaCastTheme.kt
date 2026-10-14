@@ -79,13 +79,14 @@ fun TvButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    compact: Boolean = false,
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp),
-        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
+        contentPadding = if (compact) PaddingValues(horizontal = 14.dp, vertical = 4.dp) else PaddingValues(horizontal = 28.dp, vertical = 16.dp),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = if (compact) 1.04f else 1.08f),
         colors = ButtonDefaults.colors(
             containerColor = Surface,
             contentColor = Color.White,
@@ -93,6 +94,6 @@ fun TvButton(
             focusedContentColor = Color.White,
         ),
     ) {
-        Text(text = text, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        Text(text = text, fontSize = if (compact) 13.sp else 20.sp, fontWeight = FontWeight.Medium)
     }
 }

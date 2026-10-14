@@ -23,6 +23,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -39,7 +40,7 @@ import com.enigmacast.domain.sync.HomeBouquets
 import com.enigmacast.live.HomeFilmsRepository
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
-import com.enigmacast.ui.theme.ToggleRow
+import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.ui.theme.ValueRow
 import com.enigmacast.ui.theme.requestWhenReady
@@ -116,26 +117,36 @@ private fun HomeBouquetsDialog(choice: BouquetChoice, model: HomeBouquetsViewMod
                 .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
                 .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(stringResource(R.string.home_bouquets), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.home_bouquets), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text(
                 stringResource(R.string.home_bouquets_count, choice.selected.size, choice.bouquets.size),
                 color = EnigmaColors.Muted,
                 fontSize = 13.sp,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TvButton(stringResource(R.string.home_bouquets_all), model::selectAll, Modifier.focusRequester(first))
-                TvButton(stringResource(R.string.home_bouquets_none), model::deselectAll)
-                TvButton(stringResource(R.string.home_close), onClose)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton(stringResource(R.string.home_bouquets_all), model::selectAll, Modifier.focusRequester(first), compact = true)
+                TvButton(stringResource(R.string.home_bouquets_none), model::deselectAll, compact = true)
+                TvButton(stringResource(R.string.home_close), onClose, compact = true)
             }
-            LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 itemsIndexed(choice.bouquets, key = { _, b -> b.reference }) { _, bouquet ->
-                    ToggleRow(
-                        title = bouquet.name.ifBlank { bouquet.reference },
-                        checked = bouquet.reference in choice.selected,
-                        onCheckedChange = { model.toggle(bouquet.reference) },
-                    )
+                    val checked = bouquet.reference in choice.selected
+                    CompactListRow(onClick = { model.toggle(bouquet.reference) }) { focused ->
+                        Text(
+                            bouquet.name.ifBlank { bouquet.reference },
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            if (checked) "●" else "○",
+                            fontSize = 14.sp,
+                            color = if (checked && !focused) EnigmaColors.Accent else androidx.compose.ui.graphics.Color.Unspecified,
+                        )
+                    }
                 }
             }
         }

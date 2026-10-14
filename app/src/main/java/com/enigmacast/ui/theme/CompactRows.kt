@@ -80,7 +80,7 @@ fun CompactListRow(
         label = "rowBackground",
     )
     val grow by animateFloatAsState(
-        targetValue = if (focused && drawFocus && spec.animate) 1.06f else 1f,
+        targetValue = if (focused && drawFocus && spec.animate) 1.02f else 1f,
         animationSpec = spec.focusTween(),
         label = "rowGrow",
     )

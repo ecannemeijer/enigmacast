@@ -275,7 +275,8 @@ fun ToggleRow(
         },
         colors = rowColors(),
         shape = ListItemDefaults.shape(shape = RowShape),
-        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.06f),
+        // Full-width rows sit inside cards: no growth past the card edge, the highlight shows focus.
+        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1f),
     )
 }
 
@@ -442,7 +443,7 @@ fun ActionTile(
         enabled = enabled,
         shape = ButtonDefaults.shape(shape = TileShape),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.03f),
         colors = ButtonDefaults.colors(
             containerColor = container,
             contentColor = content,
@@ -804,7 +805,7 @@ fun ValueRow(
         },
         colors = rowColors(),
         shape = ListItemDefaults.shape(shape = RowShape),
-        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.03f),
+        scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1f),
     )
 }
 

@@ -6,6 +6,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,7 +52,8 @@ import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.TvConfirmDialog
-import com.enigmacast.ui.theme.ValueRow
+import com.enigmacast.ui.theme.CompactListRow
+import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.requestWhenReady
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -92,22 +100,40 @@ fun RemoteKeysSettingsPanel(contentFocus: FocusRequester, streamMode: StreamMode
             Text(
                 stringResource(mode.description()),
                 color = EnigmaColors.Muted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 6.dp),
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                modifier = Modifier.padding(horizontal = 8.dp),
             )
-            KeyBindings.actions(mode).forEachIndexed { index, action ->
-                ValueRow(
-                    title = stringResource(action.label()),
-                    value = keysText(bindings[action].orEmpty()),
-                    onClick = { editing = mode to action },
-                    modifier = if (modeIndex == 0 && index == 0) Modifier.focusRequester(contentFocus) else Modifier,
-                )
+            // Two dense columns: a key row is one short line, so a whole mode fits on screen.
+            KeyBindings.actions(mode).chunked(2).forEachIndexed { rowIndex, pair ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    pair.forEachIndexed { column, action ->
+                        val first = modeIndex == 0 && rowIndex == 0 && column == 0
+                        val cell = @Composable {
+                            KeyRow(
+                                label = stringResource(action.label()),
+                                value = keysText(bindings[action].orEmpty()),
+                                onClick = { editing = mode to action },
+                                modifier = Modifier.weight(1f).let { if (first) it.focusRequester(contentFocus) else it },
+                            )
+                        }
+                        // Left from the right column goes to the left column, not straight to the menu.
+                        if (column == 0) cell() else CompositionLocalProvider(LocalEdgeLeft provides null) { cell() }
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
-            ValueRow(
-                title = stringResource(R.string.keys_reset_all),
-                value = "",
-                description = stringResource(R.string.keys_fixed_note),
+            KeyRow(
+                label = stringResource(R.string.keys_reset_all),
+                value = "›",
                 onClick = { resetMode = mode },
+            )
+            Text(
+                stringResource(R.string.keys_fixed_note),
+                color = EnigmaColors.Muted,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                modifier = Modifier.padding(horizontal = 8.dp),
             )
         }
     }
@@ -181,6 +207,20 @@ fun RemoteKeysSettingsPanel(contentFocus: FocusRequester, streamMode: StreamMode
             onDismiss = { resetMode = null },
             compact = true,
         )
+    }
+}
+
+/** One dense key assignment: action on the left, its keys on the right. OK edits. */
+@Composable
+private fun KeyRow(label: String, value: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    CompactListRow(
+        onClick = onClick,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+    ) { _ ->
+        Text(label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
