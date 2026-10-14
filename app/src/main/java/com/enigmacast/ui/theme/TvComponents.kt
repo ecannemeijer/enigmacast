@@ -99,6 +99,8 @@ fun NavItem(
     staggerIndex: Int = 0,
     /** Premium-only for this account: a small lock after the label. */
     locked: Boolean = false,
+    /** The small "current" dot after a focused, selected item. Off where focus itself selects (settings sections). */
+    showSelectedDot: Boolean = true,
 ) {
     val spec = com.enigmacast.ui.animation.LocalMotionSpec.current
     val cursor = com.enigmacast.ui.components.LocalNavCursor.current
@@ -172,7 +174,7 @@ fun NavItem(
                 )
             }
         }
-        if (selected && focused && spec.glow && cursor == null) {
+        if (showSelectedDot && selected && focused && spec.glow && cursor == null) {
             Spacer(Modifier.width(6.dp))
             Box(
                 Modifier

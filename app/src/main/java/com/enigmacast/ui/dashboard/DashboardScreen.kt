@@ -1332,6 +1332,8 @@ private fun SettingNav(
         selected = selected,
         onClick = onSelect,
         onFocus = onFocus,
+        // Focusing a section opens it, so every focused section was also "selected" and got the dot.
+        showSelectedDot = false,
         modifier = Modifier
             .focusRequesterIf(true, itemFocus)
             .focusRequesterIf(selected && entryFocus != null, entryFocus)
