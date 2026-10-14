@@ -9,6 +9,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CacheDao {
+    /** Names of the receiver's channels, for matching IPTV channels to the satellite guide. */
+    @Query("SELECT DISTINCT name, serviceKey FROM channels WHERE receiverKey = :receiverKey AND serviceKey != ''")
+    suspend fun channelNames(receiverKey: String): List<ChannelNameRow>
+
+    @Query("SELECT * FROM epg_events WHERE receiverKey = :receiverKey AND serviceKey IN (:serviceKeys) AND endSec > :fromSec AND beginSec < :toSec ORDER BY beginSec")
+    suspend fun eventsFor(receiverKey: String, serviceKeys: List<String>, fromSec: Long, toSec: Long): List<EpgRow>
+
     // Bouquets and channels: replaced as a whole per receiver.
     @Query("DELETE FROM bouquets WHERE receiverKey = :receiverKey")
     suspend fun deleteBouquets(receiverKey: String)

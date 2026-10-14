@@ -44,7 +44,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.domain.xtream.IptvKeyAction
+import com.enigmacast.domain.xtream.IptvPlayerKeys
 import com.enigmacast.domain.xtream.XtreamEpg
+import com.enigmacast.domain.xtream.XtreamItem
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.enigmacast.domain.xtream.XtreamSection
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
 import com.enigmacast.ui.components.EnigmaProgramProgress
@@ -62,41 +67,79 @@ import kotlinx.coroutines.delay
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private fun time(sec: Long) = TimeFormat.format(Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()))
 
+/** Which columns the side panel shows, as in the Enigma2 channel list. */
+private enum class PanelColumn { SECTIONS, CATEGORIES, CHANNELS, GUIDE }
+
 /**
- * IPTV (XStreamity playlists) in full screen. The side panel has three columns like the
- * player's bouquet panel: Live/Films/Series, the Xtream categories, and the channels, films,
- * series or episodes. Left walks out one column, Right walks in; Up/Down stay in a column.
- * With the panel closed, Left or OK opens it and Channel up/down zap live channels.
+ * IPTV in full screen, laid out and driven like the Enigma2 channel player. The list opens on
+ * the channels only; Right shows the focused channel's programmes, Left the categories, Left
+ * again Live TV / Films / Series. Categories still load on OK. With the list closed the keys
+ * follow [IptvPlayerKeys]: Up/Down zap (Up = next), OK shows the banner, Down on that banner
+ * opens the options row.
  */
 @Composable
 fun XtreamScreen(onBack: () -> Unit) {
     val model: XtreamViewModel = hiltViewModel()
     val detection by model.detection.collectAsStateWithLifecycle()
+    val bindings by model.keyBindings.collectAsStateWithLifecycle()
     var panelOpen by remember { mutableStateOf(true) }
+    var column by remember { mutableStateOf(PanelColumn.CHANNELS) }
     var bannerUntil by remember { mutableStateOf(0L) }
+    var bannerFromZap by remember { mutableStateOf(false) }
+    var details by remember { mutableStateOf(false) }
     val sectionFocus = remember { FocusRequester() }
     val categoryFocus = remember { FocusRequester() }
     val itemFocus = remember { FocusRequester() }
+    val guideFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
     var quickBar by remember { mutableStateOf(false) }
     var quickToken by remember { mutableIntStateOf(0) }
 
+    fun showBanner(fromZap: Boolean, withDetails: Boolean = false) {
+        bannerFromZap = fromZap
+        details = withDetails
+        bannerUntil = System.currentTimeMillis() + if (withDetails) 10_000 else 5_000
+    }
+    fun openPanel() {
+        column = when {
+            model.items.isNotEmpty() || model.series != null -> PanelColumn.CHANNELS
+            model.categories.isNotEmpty() -> PanelColumn.CATEGORIES
+            else -> PanelColumn.SECTIONS
+        }
+        model.closeGuide()
+        panelOpen = true
+        openRequest++
+    }
+
     LaunchedEffect(detection) { model.open() }
     DisposableEffect(Unit) { onDispose { model.stop() } }
     // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
-    LaunchedEffect(model.categoriesReady) { if (model.categoriesReady > 0 && panelOpen) categoryFocus.requestWhenReady() }
-    LaunchedEffect(model.itemsReady) { if (model.itemsReady > 0 && panelOpen) itemFocus.requestWhenReady() }
-    LaunchedEffect(panelOpen, openRequest) {
-        if (panelOpen) {
-            if (!itemFocus.requestWhenReady(4) && !categoryFocus.requestWhenReady(4)) sectionFocus.requestWhenReady()
-        } else {
-            rootFocus.requestWhenReady()
+    LaunchedEffect(model.categoriesReady) {
+        if (model.categoriesReady > 0 && panelOpen) {
+            if (column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE) column = PanelColumn.CATEGORIES
+            categoryFocus.requestWhenReady()
+        }
+    }
+    LaunchedEffect(model.itemsReady) {
+        if (model.itemsReady > 0 && panelOpen) {
+            column = PanelColumn.CHANNELS
+            itemFocus.requestWhenReady()
+        }
+    }
+    LaunchedEffect(panelOpen, openRequest, column) {
+        if (!panelOpen) { rootFocus.requestWhenReady(); return@LaunchedEffect }
+        when (column) {
+            PanelColumn.GUIDE -> guideFocus.requestWhenReady()
+            PanelColumn.CHANNELS -> if (!itemFocus.requestWhenReady(4)) { column = PanelColumn.CATEGORIES }
+            PanelColumn.CATEGORIES -> if (!categoryFocus.requestWhenReady(4)) { column = PanelColumn.SECTIONS }
+            PanelColumn.SECTIONS -> sectionFocus.requestWhenReady()
         }
     }
     BackHandler {
         when {
             quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
+            panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS }
             model.series != null && panelOpen -> model.closeSeries()
             panelOpen && model.playing != null -> panelOpen = false
             else -> { model.stop(); onBack() }
@@ -110,21 +153,24 @@ fun XtreamScreen(onBack: () -> Unit) {
             .focusRequester(rootFocus)
             .onPreviewKeyEvent { e ->
                 if (panelOpen || quickBar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val code = e.nativeKeyEvent.keyCode
+                if (code == android.view.KeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
                 val bannerShown = model.playing != null && System.currentTimeMillis() < bannerUntil
-                when (e.key) {
-                    Key.DirectionDown, Key.DirectionCenter, Key.Enter -> if (bannerShown) {
-                        if (e.key == Key.DirectionDown) { quickBar = true; quickToken++ } else { model.togglePause(); bannerUntil = System.currentTimeMillis() + 5_000 }
-                        return@onPreviewKeyEvent true
+                val playing = model.playing
+                val vod = playing != null && (playing.episode != null || playing.item?.section == XtreamSection.MOVIES)
+                val repeat = e.nativeKeyEvent.repeatCount
+                when (val action = IptvPlayerKeys.action(code, bindings, bannerShown, bannerFromZap, vod)) {
+                    is IptvKeyAction.Zap -> if (repeat % 4 == 0) { model.zap(action.step); showBanner(fromZap = true) }
+                    IptvKeyAction.Banner -> if (repeat == 0 && model.playing != null) showBanner(fromZap = false)
+                    IptvKeyAction.Details -> if (repeat == 0 && model.playing != null) {
+                        if (bannerShown && details) bannerUntil = 0L else showBanner(fromZap = false, withDetails = true)
                     }
-                    else -> Unit
+                    IptvKeyAction.Options -> if (repeat == 0 && model.playing != null) { quickBar = true; quickToken++ }
+                    IptvKeyAction.ChannelList -> if (repeat == 0) openPanel()
+                    IptvKeyAction.Pause -> if (repeat == 0) { model.togglePause(); showBanner(fromZap = false) }
+                    IptvKeyAction.None -> return@onPreviewKeyEvent false
                 }
-                when (e.key) {
-                    Key.DirectionLeft, Key.DirectionCenter, Key.Enter, Key.Menu -> { panelOpen = true; openRequest++; true }
-                    Key.DirectionUp, Key.ChannelUp -> { model.zap(-1); bannerUntil = System.currentTimeMillis() + 5_000; true }
-                    Key.DirectionDown, Key.ChannelDown -> { model.zap(1); bannerUntil = System.currentTimeMillis() + 5_000; true }
-                    Key.Info, Key.DirectionRight -> { bannerUntil = System.currentTimeMillis() + 5_000; true }
-                    else -> false
-                }
+                true
             }
             .focusable(),
     ) {
@@ -152,14 +198,22 @@ fun XtreamScreen(onBack: () -> Unit) {
                 onDismiss = onBack,
                 stacked = true,
             )
-            panelOpen -> SidePanel(model, sectionFocus, categoryFocus, itemFocus) { panelOpen = false; bannerUntil = System.currentTimeMillis() + 5_000 }
+            panelOpen -> SidePanel(
+                model = model,
+                column = column,
+                onColumn = { column = it },
+                sectionFocus = sectionFocus,
+                categoryFocus = categoryFocus,
+                itemFocus = itemFocus,
+                guideFocus = guideFocus,
+            ) { panelOpen = false; model.closeGuide(); showBanner(fromZap = true) }
         }
 
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
             LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay(500) } }
             if (!panelOpen && (quickBar || now < bannerUntil)) {
-                IptvOsd(model, playing, quickBar, quickToken, Modifier.align(Alignment.BottomCenter))
+                IptvOsd(model, playing, quickBar, quickToken, details, Modifier.align(Alignment.BottomCenter))
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
             model.playerError?.let {
@@ -179,14 +233,28 @@ private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas), contentAlignment = Alignment.Center) { content() }
 }
 
+/** Left/Right of one column, handled before the focus search (like the Enigma2 list). */
+private fun Modifier.columnKeys(onLeft: (() -> Unit)?, onRight: (() -> Unit)?): Modifier = onPreviewKeyEvent { e ->
+    if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent e.key == Key.DirectionLeft && onLeft != null || e.key == Key.DirectionRight && onRight != null
+    when (e.key) {
+        Key.DirectionLeft -> { onLeft?.invoke(); true }
+        Key.DirectionRight -> { onRight?.invoke(); true }
+        else -> false
+    }
+}
+
 @Composable
 private fun SidePanel(
     model: XtreamViewModel,
+    column: PanelColumn,
+    onColumn: (PanelColumn) -> Unit,
     sectionFocus: FocusRequester,
     categoryFocus: FocusRequester,
     itemFocus: FocusRequester,
+    guideFocus: FocusRequester,
     onPlayed: () -> Unit,
 ) {
+    val hasList = if (model.series != null) model.episodes.isNotEmpty() else model.items.isNotEmpty()
     Row(
         Modifier
             .fillMaxHeight()
@@ -194,8 +262,10 @@ private fun SidePanel(
             .padding(horizontal = EnigmaColors.SafeHorizontal / 2, vertical = EnigmaColors.SafeVertical),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Column 1: Live / Films / Series and the playlist name.
-        Column(Modifier.width(150.dp)) {
+        // Column 1: Live / Films / Series and the playlist name (Left from the categories).
+        if (column == PanelColumn.SECTIONS) Column(
+            Modifier.width(150.dp).columnKeys(onLeft = {}, onRight = { onColumn(PanelColumn.CATEGORIES) }),
+        ) {
             Text(model.account?.name.orEmpty(), color = EnigmaColors.Accent, fontSize = 13.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
             XtreamSection.entries.forEachIndexed { index, s ->
                 val label = stringResource(
@@ -210,26 +280,26 @@ private fun SidePanel(
                     selected = s == model.section,
                     modifier = Modifier
                         .then(if (s == model.section) Modifier.focusRequester(sectionFocus) else Modifier)
-                        .focusProperties {
-                            left = FocusRequester.Cancel
-                            right = categoryFocus
-                            if (index == 0) up = FocusRequester.Cancel
-                            if (index == XtreamSection.entries.lastIndex) down = FocusRequester.Cancel
-                        },
+                        .focusProperties { if (index == 0) up = FocusRequester.Cancel },
                 ) { Text(label, fontSize = 15.sp, modifier = Modifier.padding(vertical = 4.dp)) }
             }
             Spacer(Modifier.height(16.dp))
             CompactListRow(
                 onClick = model::refresh,
-                modifier = Modifier.focusProperties { left = FocusRequester.Cancel; right = categoryFocus; down = FocusRequester.Cancel },
+                modifier = Modifier.focusProperties { down = FocusRequester.Cancel },
             ) { Text(stringResource(R.string.xtream_refresh), fontSize = 13.sp, color = EnigmaColors.Muted) }
         }
-        // Column 2: categories.
-        Column(Modifier.width(240.dp)) {
+        // Column 2: categories (Left from the channels). OK loads one.
+        if (column == PanelColumn.SECTIONS || column == PanelColumn.CATEGORIES) Column(
+            Modifier.width(240.dp).columnKeys(
+                onLeft = { onColumn(PanelColumn.SECTIONS) },
+                // Right only enters a list that is already there.
+                onRight = { if (hasList) onColumn(PanelColumn.CHANNELS) },
+            ),
+        ) {
             Header(stringResource(R.string.xtream_categories), model.loading && model.categories.isEmpty())
             val state = rememberLazyListState()
             val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
-            val hasList = if (model.series != null) model.episodes.isNotEmpty() else model.items.isNotEmpty()
             LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
             LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
                 itemsIndexed(model.categories, key = { _, c -> c.id }) { index, c ->
@@ -239,9 +309,6 @@ private fun SidePanel(
                         modifier = Modifier
                             .then(if (index == selectedIndex) Modifier.focusRequester(categoryFocus) else Modifier)
                             .focusProperties {
-                                left = sectionFocus
-                                // Right only enters a list that is already there; OK loads one.
-                                right = if (hasList) itemFocus else FocusRequester.Cancel
                                 if (index == 0) up = FocusRequester.Cancel
                                 if (index == model.categories.lastIndex) down = FocusRequester.Cancel
                             },
@@ -253,7 +320,25 @@ private fun SidePanel(
             }
         }
         // Column 3: channels, films, series or the episodes of the opened series.
-        Column(Modifier.width(380.dp)) {
+        var focused by remember { mutableStateOf<XtreamItem?>(null) }
+        Column(
+            Modifier.width(420.dp).columnKeys(
+                onLeft = {
+                    when {
+                        model.series != null -> model.closeSeries()
+                        column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE -> onColumn(PanelColumn.CATEGORIES)
+                        else -> runCatching { categoryFocus.requestFocus() }
+                    }
+                },
+                onRight = {
+                    val item = focused
+                    if (model.series == null && item != null && item.section == XtreamSection.LIVE) {
+                        model.openGuide(item)
+                        onColumn(PanelColumn.GUIDE)
+                    }
+                },
+            ),
+        ) {
             val series = model.series
             Header(series?.name ?: model.category?.name.orEmpty(), model.loading)
             if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
@@ -267,8 +352,6 @@ private fun SidePanel(
                             modifier = Modifier
                                 .then(if (index == 0) Modifier.focusRequester(itemFocus) else Modifier)
                                 .focusProperties {
-                                    left = categoryFocus
-                                    right = FocusRequester.Cancel
                                     if (index == 0) up = FocusRequester.Cancel
                                     if (index == model.episodes.lastIndex) down = FocusRequester.Cancel
                                 },
@@ -281,17 +364,23 @@ private fun SidePanel(
             } else {
                 val playingIndex = model.items.indexOfFirst { it.id == model.playing?.item?.id }.coerceAtLeast(0)
                 LaunchedEffect(model.items) { if (model.items.isNotEmpty()) state.scrollToItem(playingIndex) }
+                // Now/next for the rows on screen only; a scroll cancels the batch that was waiting.
+                LaunchedEffect(state, model.items) {
+                    snapshotFlow { state.layoutInfo.visibleItemsInfo.map { it.index } }
+                        .distinctUntilChanged()
+                        .collect { rows -> model.requestEpg(rows.mapNotNull { model.items.getOrNull(it) }) }
+                }
+                var nowSec by remember { mutableStateOf(System.currentTimeMillis() / 1000) }
+                LaunchedEffect(Unit) { while (true) { delay(30_000); nowSec = System.currentTimeMillis() / 1000 } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
                     itemsIndexed(model.items, key = { _, i -> i.id }) { index, item ->
                         CompactListRow(
                             onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
-                            selected = model.playing?.item?.id == item.id,
+                            selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
                             modifier = Modifier
                                 .then(if (index == playingIndex) Modifier.focusRequester(itemFocus) else Modifier)
-                                .onFocusChanged { if (it.isFocused) model.focusLive(item) }
+                                .onFocusChanged { if (it.isFocused) { focused = item; model.focusLive(item) } }
                                 .focusProperties {
-                                    left = categoryFocus
-                                    right = FocusRequester.Cancel
                                     if (index == 0) up = FocusRequester.Cancel
                                     if (index == model.items.lastIndex) down = FocusRequester.Cancel
                                 },
@@ -303,10 +392,43 @@ private fun SidePanel(
                                     }
                                     Text(item.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                model.epg[item.id]?.let { nowNext(it) }?.first?.let { now ->
+                                model.epg[item.id]?.let { nowNext(it, nowSec) }?.first?.let { now ->
                                     Text("${time(now.startSec)} ${now.title}", fontSize = 11.sp, color = EnigmaColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    val total = (now.endSec - now.startSec).coerceAtLeast(1)
+                                    EnigmaProgramProgress(((nowSec - now.startSec).toFloat() / total).coerceIn(0f, 1f))
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+        // Column 4: the programmes of the channel Right was pressed on.
+        if (column == PanelColumn.GUIDE) Column(
+            Modifier.width(380.dp).columnKeys(onLeft = { model.closeGuide(); onColumn(PanelColumn.CHANNELS) }, onRight = {}),
+        ) {
+            Header(model.guideItem?.name.orEmpty(), model.guideLoading)
+            val events = model.guideEvents
+            if (events.isEmpty() && !model.guideLoading) {
+                Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp).focusRequester(guideFocus).focusable())
+            }
+            LazyColumn(Modifier.fillMaxHeight()) {
+                itemsIndexed(events, key = { i, e -> "${e.startSec}/$i" }) { index, e ->
+                    CompactListRow(
+                        onClick = { model.guideItem?.let { model.play(it) }; onPlayed() },
+                        modifier = Modifier
+                            .then(if (index == 0) Modifier.focusRequester(guideFocus) else Modifier)
+                            .focusProperties {
+                                if (index == 0) up = FocusRequester.Cancel
+                                if (index == events.lastIndex) down = FocusRequester.Cancel
+                            },
+                    ) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Row {
+                                Text("${time(e.startSec)} – ${time(e.endSec)}", fontSize = 13.sp, color = EnigmaColors.Accent, modifier = Modifier.width(110.dp))
+                                Text(e.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (e.description.isNotBlank()) Text(e.description, fontSize = 11.sp, color = EnigmaColors.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -336,7 +458,7 @@ internal fun nowNext(list: List<XtreamEpg>, nowSec: Long = System.currentTimeMil
  * options row only has the player's own options.
  */
 @Composable
-private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Boolean, quickToken: Int, modifier: Modifier) {
+private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Boolean, quickToken: Int, details: Boolean, modifier: Modifier) {
     val look by model.osdLook.collectAsStateWithLifecycle()
     val scrim = EnigmaColors.scrim(look.second)
     val item = playing.item
@@ -356,7 +478,7 @@ private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Bo
                 guide = guide,
                 player = model.playerState,
                 tuner = com.enigmacast.live.TunerState(),
-                details = false,
+                details = details,
                 optionsHint = true,
                 recording = false,
                 osdInfo = IptvOsdModel.INFO,

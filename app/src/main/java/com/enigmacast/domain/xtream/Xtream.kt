@@ -48,7 +48,7 @@ data class XtreamItem(
 
 data class XtreamEpisode(val id: String, val season: Int, val episode: Int, val title: String, val extension: String)
 
-data class XtreamEpg(val title: String, val startSec: Long, val endSec: Long)
+data class XtreamEpg(val title: String, val startSec: Long, val endSec: Long, val description: String = "")
 
 /** XStreamity's `playlists.txt` and `x-playlists.json`. */
 private val NAME_MARK = Regex("\\s#")
@@ -207,7 +207,7 @@ object XtreamJson {
             val o = e as? JsonObject ?: return@mapNotNull null
             val start = o.str("start_timestamp")?.toLongOrNull() ?: return@mapNotNull null
             val end = o.str("stop_timestamp")?.toLongOrNull() ?: o.str("end_timestamp")?.toLongOrNull() ?: start
-            XtreamEpg(b64(o.str("title").orEmpty()), start, end)
+            XtreamEpg(b64(o.str("title").orEmpty()), start, end, b64(o.str("description").orEmpty()))
         }.sortedBy { it.startSec }
     }
 

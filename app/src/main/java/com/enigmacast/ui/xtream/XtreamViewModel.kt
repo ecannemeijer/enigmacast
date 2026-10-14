@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** What plays: a live channel, a film or an episode. */
@@ -57,6 +58,7 @@ class XtreamViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val playlistStore: IptvPlaylistStore,
     private val playlistSync: IptvPlaylistSync,
+    private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -140,6 +142,80 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
+
+    /** Settings › Remote control keys of the own-tuner player; the IPTV player uses the same. */
+    val keyBindings: StateFlow<com.enigmacast.domain.remote.Bindings> = settingsRepository.settings
+        .map { com.enigmacast.domain.remote.KeyBindings.effective(it.remote.keyBindings, com.enigmacast.domain.remote.KeyMode.OWN) }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.enigmacast.domain.remote.KeyBindings.defaults(com.enigmacast.domain.remote.KeyMode.OWN))
+
+    /** The channel whose programme column is open (Right on a channel), and its events. */
+    var guideItem by mutableStateOf<XtreamItem?>(null)
+        private set
+    var guideEvents by mutableStateOf<List<XtreamEpg>>(emptyList())
+        private set
+    var guideLoading by mutableStateOf(false)
+        private set
+    private var guideJob: Job? = null
+    private var visibleJob: Job? = null
+
+    /**
+     * Now/next for the rows on screen: called on every scroll, the previous batch is cancelled,
+     * so only rows that stay visible for a moment are fetched, at most 4 requests at a time.
+     * Xtream channels use get_short_epg; M3U channels (and Xtream ones without data) the
+     * receiver's satellite guide matched by name. Rows without any guide are remembered too.
+     */
+    fun requestEpg(visible: List<XtreamItem>) {
+        visibleJob?.cancel()
+        visibleJob = viewModelScope.launch {
+            delay(250)
+            val todo = visible.filter { it.section == XtreamSection.LIVE && !epg.containsKey(it.id) }.take(EPG_BATCH)
+            if (todo.isEmpty()) return@launch
+            val xtream = account?.takeIf { it !== M3U_ACCOUNT }
+            val found = HashMap<String, List<XtreamEpg>>()
+            if (xtream != null) {
+                val gate = kotlinx.coroutines.sync.Semaphore(4)
+                kotlinx.coroutines.coroutineScope {
+                    todo.map { item -> async { gate.withPermitCompat { item.id to repository.shortEpg(xtream, item.id) } } }
+                        .map { it.await() }
+                }.forEach { (id, list) -> found[id] = list }
+            }
+            val missing = todo.filter { found[it.id].isNullOrEmpty() }
+            if (missing.isNotEmpty()) {
+                val sat = runCatching { satelliteEpg.byName(missing.map { it.name }) }.getOrDefault(emptyMap())
+                missing.forEach { found[it.id] = sat[it.name].orEmpty() }
+            }
+            epg = epg + found
+        }
+    }
+
+    private suspend fun <T> kotlinx.coroutines.sync.Semaphore.withPermitCompat(block: suspend () -> T): T {
+        acquire()
+        try { return block() } finally { release() }
+    }
+
+    /** Right on a channel: its programme column. */
+    fun openGuide(item: XtreamItem) {
+        guideItem = item
+        guideEvents = epg[item.id].orEmpty()
+        guideJob?.cancel()
+        guideJob = viewModelScope.launch {
+            guideLoading = true
+            try {
+                val xtream = account?.takeIf { it !== M3U_ACCOUNT }
+                var list = if (xtream != null) repository.guide(xtream, item.id) else emptyList()
+                if (list.isEmpty()) list = runCatching { satelliteEpg.byName(listOf(item.name), hours = 24)[item.name] }.getOrNull().orEmpty()
+                if (list.isNotEmpty()) guideEvents = list
+            } finally {
+                guideLoading = false
+            }
+        }
+    }
+
+    fun closeGuide() {
+        guideJob?.cancel()
+        guideItem = null
+        guideEvents = emptyList()
+    }
 
     private var player: ExoPlayer? = null
     private var loadJob: Job? = null
@@ -303,11 +379,12 @@ class XtreamViewModel @Inject constructor(
     /** Loads now/next for a live channel once focus rests on it. */
     fun focusLive(item: XtreamItem) {
         if (item.section != XtreamSection.LIVE || epg.containsKey(item.id)) return
-        val account = account?.takeIf { it !== M3U_ACCOUNT } ?: return
+        val account = account ?: return
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
             delay(350)
-            val list = repository.shortEpg(account, item.id)
+            var list = if (account === M3U_ACCOUNT) emptyList() else repository.shortEpg(account, item.id)
+            if (list.isEmpty()) list = runCatching { satelliteEpg.byName(listOf(item.name))[item.name] }.getOrNull().orEmpty()
             epg = epg + (item.id to list)
         }
     }
@@ -463,6 +540,7 @@ class XtreamViewModel @Inject constructor(
     }
 
     private companion object {
+        const val EPG_BATCH = 24
         /** Stand-in account of an M3U playlist: every entry has its own address. */
         val M3U_ACCOUNT = XtreamAccount("Playlist", "http://playlist.invalid", "", "", "ts")
     }

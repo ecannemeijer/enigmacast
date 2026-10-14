@@ -114,6 +114,11 @@ class XtreamRepository @Inject constructor(
         cached(account, "get_short_epg/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "4")) }
     }.getOrDefault(emptyList())
 
+    /** The programme column of one channel: up to 12 events. */
+    suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
+        cached(account, "get_short_epg12/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "12")) }
+    }.getOrDefault(emptyList())
+
     private suspend fun <T : Any> cached(account: XtreamAccount, key: String, force: Boolean, ttl: Long = TTL_MS, load: suspend () -> T): T {
         val full = "${account.key}/$key"
         val now = System.currentTimeMillis()

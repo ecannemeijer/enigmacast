@@ -142,3 +142,6 @@ data class IptvItemRow(
     val url: String,
     val sort: Int,
 )
+
+/** A receiver channel name and its guide key (not a table). */
+data class ChannelNameRow(val name: String, val serviceKey: String)

@@ -35,7 +35,7 @@ object IptvOsdModel {
             EpgEvent(
                 title = it.title,
                 shortDescription = "",
-                plot = "",
+                plot = it.description,
                 beginLabel = label(it.startSec),
                 endLabel = label(it.endSec),
                 beginEpochSec = it.startSec,
