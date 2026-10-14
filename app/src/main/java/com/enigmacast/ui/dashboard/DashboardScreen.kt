@@ -1,5 +1,7 @@
 package com.enigmacast.ui.dashboard
 
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -160,6 +162,7 @@ private enum class SettingPage {
     Viewing,
     Keys,
     Guide,
+    Iptv,
     Recordings,
     Appearance,
     Remote,
@@ -243,6 +246,9 @@ fun DashboardScreen(
     var settingsFormOpen by remember { mutableStateOf(false) }
     val bouquetFocus = remember { FocusRequester() }
     val tvMenuFocus = remember { FocusRequester() }
+    /** The TV / Library flyout, open for that group (null when closed), and where it sits. */
+    var flyout by remember { mutableStateOf<DashGroup?>(null) }
+    val flyoutAnchor = remember { androidx.compose.runtime.mutableStateMapOf<DashGroup, androidx.compose.ui.geometry.Offset>() }
     val libraryMenuFocus = remember { FocusRequester() }
     val tabContext = androidx.compose.ui.platform.LocalContext.current
     val tabMemory = remember { DashTabMemory(tabContext) }
@@ -294,9 +300,14 @@ fun DashboardScreen(
         DashGroup.LIBRARY -> libraryMenuFocus
         null -> sectionMenuOf()
     }
-    DisposableEffect(contentFocused, section, guideModel.askWake) {
+    DisposableEffect(contentFocused, section, guideModel.askWake, flyout) {
         onBindBack {
-            if (guideModel.askWake) {
+            if (flyout != null) {
+                val group = flyout
+                flyout = null
+                runCatching { (if (group == DashGroup.LIBRARY) libraryMenuFocus else tvMenuFocus).requestFocus() }
+                true
+            } else if (guideModel.askWake) {
                 guideModel.declineWake()
                 true
             } else if (contentFocused) {
@@ -430,17 +441,32 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Home) homeContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Home) },
                 )
-                // TV: Live TV · TV Guide · Movies · TV Series · Radio as tabs at the top of the page.
+                // TV: Live TV · TV Guide · Movies · TV Series · Radio in a flyout right of the item.
+                // The pages' Left/Back requesters all land on this item.
                 NavItem(
                     icon = EnigmaIcons.Tv,
                     label = stringResource(R.string.nav_tv),
+                    subtitle = DashGroups.current(DashGroup.TV, section, tabMemory.last(DashGroup.TV))?.let { stringResource(DashGroups.label(it)) },
                     selected = DashGroups.groupOf(section) == DashGroup.TV,
                     showLabel = drawerExpanded,
                     staggerIndex = 1,
                     modifier = Modifier
                         .focusRequester(tvMenuFocus)
-                        .focusProperties { right = if (DashGroups.groupOf(section) == DashGroup.TV) tabFocus(section) else FocusRequester.Cancel },
-                    onClick = { enterSection(DashGroups.entry(DashGroup.TV, tabMemory.last(DashGroup.TV)) { lockedFeature(it) == null }) },
+                        .focusRequester(streamFocus).focusRequester(guideFocus).focusRequester(moviesFocus)
+                        .focusRequester(seriesFocus).focusRequester(radioFocus)
+                        .onGloballyPositioned { flyoutAnchor[DashGroup.TV] = it.positionInRoot().let { p -> androidx.compose.ui.geometry.Offset(p.x + it.size.width, p.y) } }
+                        .onFocusChanged {
+                            streamItemFocused = it.isFocused && section == DashSection.Stream
+                            guideItemFocused = it.isFocused && section == DashSection.Guide
+                            radioItemFocused = it.isFocused && section == DashSection.Radio
+                        }
+                        .onPreviewKeyEvent { e ->
+                            if (e.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            if (e.type == KeyEventType.KeyDown) flyout = DashGroup.TV
+                            true
+                        }
+                        .focusProperties { right = FocusRequester.Cancel },
+                    onClick = { flyout = DashGroup.TV },
                 )
                 if (xtreamAvailable) {
                     NavItem(
@@ -468,17 +494,25 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Soccer && lockedFeature(DashSection.Soccer) == null) soccerContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Soccer) },
                 )
-                // Library: My items · Search as tabs.
+                // Library: My items · Search in the same flyout.
                 NavItem(
                     icon = EnigmaIcons.Record,
                     label = stringResource(R.string.nav_library),
+                    subtitle = DashGroups.current(DashGroup.LIBRARY, section, tabMemory.last(DashGroup.LIBRARY))?.let { stringResource(DashGroups.label(it)) },
                     selected = DashGroups.groupOf(section) == DashGroup.LIBRARY,
                     showLabel = drawerExpanded,
                     staggerIndex = 4,
                     modifier = Modifier
                         .focusRequester(libraryMenuFocus)
-                        .focusProperties { right = if (DashGroups.groupOf(section) == DashGroup.LIBRARY) tabFocus(section) else FocusRequester.Cancel },
-                    onClick = { enterSection(DashGroups.entry(DashGroup.LIBRARY, tabMemory.last(DashGroup.LIBRARY)) { true }) },
+                        .focusRequester(myItemsMenuFocus).focusRequester(searchMenuFocus)
+                        .onGloballyPositioned { flyoutAnchor[DashGroup.LIBRARY] = it.positionInRoot().let { p -> androidx.compose.ui.geometry.Offset(p.x + it.size.width, p.y) } }
+                        .onPreviewKeyEvent { e ->
+                            if (e.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                            if (e.type == KeyEventType.KeyDown) flyout = DashGroup.LIBRARY
+                            true
+                        }
+                        .focusProperties { right = FocusRequester.Cancel },
+                    onClick = { flyout = DashGroup.LIBRARY },
                 )
                 Spacer(Modifier.weight(1f))
                 // Settings and Exit sit at the bottom, under the five sections (Down from Library).
@@ -526,52 +560,6 @@ fun DashboardScreen(
                         .onFocusChanged { contentFocused = it.hasFocus },
                 ) {
                     Column(Modifier.fillMaxSize()) {
-                    DashGroups.groupOf(section)?.let { group ->
-                        val tabs = DashGroups.tabs(group)
-                        DashTabRow(
-                            tabs = tabs.map { target ->
-                                DashTab(
-                                    section = target,
-                                    label = stringResource(DashGroups.label(target)),
-                                    focus = tabFocus(target),
-                                    locked = lockedFeature(target) != null,
-                                )
-                            },
-                            active = section,
-                            menuFocus = if (group == DashGroup.TV) tvMenuFocus else libraryMenuFocus,
-                            onFocused = { tab ->
-                                retreat(if (group == DashGroup.TV) tvMenuFocus else libraryMenuFocus)
-                                when (tab.section) {
-                                    DashSection.Stream -> streamItemFocused = true
-                                    DashSection.Guide -> guideItemFocused = true
-                                    DashSection.Radio -> radioItemFocused = true
-                                    else -> Unit
-                                }
-                                // Moving along the tabs switches the page; Live TV only on OK (it opens the player).
-                                if (tab.section != DashSection.Stream && !tab.locked) openSection(tab.section)
-                            },
-                            onUnfocused = { streamItemFocused = false; guideItemFocused = false; radioItemFocused = false },
-                            onClick = { tab ->
-                                when {
-                                    tab.section == DashSection.Stream -> guideModel.openLive(onStream)
-                                    else -> enterSection(tab.section)
-                                }
-                            },
-                            onDown = { tab ->
-                                if (tab.locked) return@DashTabRow
-                                when (tab.section) {
-                                    DashSection.Stream -> if (section == DashSection.Stream) runCatching { bouquetFocus.requestFocus() }
-                                    DashSection.Guide -> { guideModel.focusFirstInGrid(); runCatching { guideGridFocus.requestFocus() } }
-                                    DashSection.Movies -> runCatching { moviesContentFocus.requestFocus() }
-                                    DashSection.Series -> runCatching { seriesContentFocus.requestFocus() }
-                                    DashSection.Radio -> runCatching { bouquetFocus.requestFocus() }
-                                    DashSection.MyItems -> { myItemsListActive = true; myItemsEnterToken += 1 }
-                                    DashSection.Search -> { searchActive = true; searchEnterToken += 1 }
-                                    else -> Unit
-                                }
-                            },
-                        )
-                    }
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                     EnigmaScreenTransition(targetState = section, modifier = Modifier.fillMaxSize()) { shown ->
                     when (shown) {
@@ -764,6 +752,31 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+        flyout?.let { group ->
+            val anchor = flyoutAnchor[group] ?: androidx.compose.ui.geometry.Offset.Zero
+            val menu = if (group == DashGroup.TV) tvMenuFocus else libraryMenuFocus
+            fun close() { flyout = null; runCatching { menu.requestFocus() } }
+            DashFlyout(
+                entries = DashGroups.tabs(group).map { target ->
+                    DashFlyoutEntry(target, stringResource(DashGroups.label(target)), lockedFeature(target) != null)
+                },
+                active = DashGroups.current(group, section, tabMemory.last(group)),
+                anchorPx = anchor,
+                onClose = ::close,
+                onChoose = { entry ->
+                    flyout = null
+                    when (entry.section) {
+                        // Live TV still opens the full player.
+                        DashSection.Stream -> { runCatching { menu.requestFocus() }; guideModel.openLive(onStream) }
+                        else -> {
+                            enterSection(entry.section)
+                            // A locked entry stays closed (the gate asked); focus goes back to the item.
+                            if (entry.locked) runCatching { menu.requestFocus() }
+                        }
+                    }
+                },
+            )
         }
         if (guideModel.loadingChannels) {
             ChannelsLoadingDialog(
@@ -1191,6 +1204,7 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_viewing), page == SettingPage.Viewing, navFocus.getValue(SettingPage.Viewing), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Viewing) }) { enterPage(SettingPage.Viewing) }
                 SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_keys), page == SettingPage.Keys, navFocus.getValue(SettingPage.Keys), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Keys) }) { enterPage(SettingPage.Keys) }
                 SettingNav(EnigmaIcons.Guide, stringResource(R.string.settings_guide_home), page == SettingPage.Guide, navFocus.getValue(SettingPage.Guide), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Guide) }) { enterPage(SettingPage.Guide) }
+                SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
                 SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
                 SettingNav(EnigmaIcons.Palette, stringResource(R.string.settings_appearance), page == SettingPage.Appearance, navFocus.getValue(SettingPage.Appearance), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Appearance) }) { enterPage(SettingPage.Appearance) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
@@ -1289,6 +1303,7 @@ private fun SettingsHub(
                     )
                     SettingPage.Keys -> com.enigmacast.ui.keys.RemoteKeysSettingsPanel(pageContentFocus, settings.streamMode)
                     SettingPage.Guide -> GuideHomeSettingsPanel(pageContentFocus)
+                    SettingPage.Iptv -> IptvSettingsPanel(pageContentFocus)
                     SettingPage.Recordings -> PlaybackSettingsPanel(
                         settings.streamMode,
                         settings.playback.lowLatency,
@@ -1739,6 +1754,13 @@ private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         com.enigmacast.ui.home.HomeFilmSettingsCard()
         com.enigmacast.ui.home.DataSyncSettingsCard()
+    }
+}
+
+/** Settings › IPTV: source (XStreamity / playlist), M3U or Xtream login, Save & load, status. */
+@Composable
+private fun IptvSettingsPanel(contentFocus: FocusRequester) {
+    Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         com.enigmacast.ui.xtream.IptvSettingsCard()
     }
 }

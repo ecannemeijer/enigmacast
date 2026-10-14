@@ -30,4 +30,18 @@ class DashGroupsTest {
     @Test fun libraryDefault() {
         assertEquals(DashSection.MyItems, DashGroups.entry(DashGroup.LIBRARY, null) { true })
     }
+
+    @Test fun subtitleShowsOpenPageElseLastUsed() {
+        assertEquals(DashSection.Movies, DashGroups.current(DashGroup.TV, DashSection.Movies, DashSection.Guide))
+        assertEquals(DashSection.Guide, DashGroups.current(DashGroup.TV, DashSection.Home, DashSection.Guide))
+        assertEquals(DashSection.Guide, DashGroups.current(DashGroup.TV, DashSection.Stream, DashSection.Guide))
+        assertNull(DashGroups.current(DashGroup.TV, DashSection.Home, null))
+        assertNull(DashGroups.current(DashGroup.TV, DashSection.Home, DashSection.Search))
+    }
+
+    @Test fun flyoutStartsOnCurrentEntry() {
+        val tv = DashGroups.tabs(DashGroup.TV)
+        assertEquals(2, DashGroups.flyoutStart(tv, DashSection.Movies))
+        assertEquals(0, DashGroups.flyoutStart(tv, null))
+    }
 }

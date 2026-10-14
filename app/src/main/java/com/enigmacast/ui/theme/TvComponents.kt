@@ -101,6 +101,8 @@ fun NavItem(
     locked: Boolean = false,
     /** The small "current" dot after a focused, selected item. Off where focus itself selects (settings sections). */
     showSelectedDot: Boolean = true,
+    /** A second, smaller line under the label (e.g. the chosen sub-page). */
+    subtitle: String? = null,
 ) {
     val spec = com.enigmacast.ui.animation.LocalMotionSpec.current
     val cursor = com.enigmacast.ui.components.LocalNavCursor.current
@@ -152,6 +154,7 @@ fun NavItem(
         )
         if (labelAlpha > 0.02f) {
             Spacer(Modifier.width(8.dp))
+            Column {
             Text(
                 label,
                 color = LocalContentColor.current,
@@ -165,6 +168,17 @@ fun NavItem(
                     transformOrigin = TransformOrigin(0f, 0.5f)
                 },
             )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    subtitle,
+                    color = LocalContentColor.current.copy(alpha = 0.65f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.graphicsLayer { alpha = labelAlpha },
+                )
+            }
+            }
             if (locked) {
                 Spacer(Modifier.width(6.dp))
                 Icon(

@@ -1282,4 +1282,5 @@ Profiel: %2$s</string>
     <string name="nav_tv">TV</string>
     <string name="nav_sport">Sport</string>
     <string name="nav_library">Bibliotheek</string>
+    <string name="settings_iptv">IPTV</string>
 </resources>

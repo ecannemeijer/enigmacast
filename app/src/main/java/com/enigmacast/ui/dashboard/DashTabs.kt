@@ -1,5 +1,10 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.requestWhenReady
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -62,6 +67,16 @@ internal object DashGroups {
         return order.firstOrNull(open) ?: pages.last()
     }
 
+    /** The entry shown under the item: the open page of the group, else the last one used. */
+    fun current(group: DashGroup, section: DashSection, last: DashSection?): DashSection? = when {
+        groupOf(section) == group && section != DashSection.Stream -> section
+        last != null && groupOf(last) == group -> last
+        else -> null
+    }
+
+    /** Where focus starts in the flyout: the current entry, else the first. */
+    fun flyoutStart(entries: List<DashSection>, active: DashSection?): Int = entries.indexOf(active).coerceAtLeast(0)
+
     @StringRes
     fun label(section: DashSection): Int = when (section) {
         DashSection.Stream -> R.string.nav_live
@@ -88,69 +103,70 @@ internal class DashTabMemory(context: Context) {
     }
 }
 
-internal data class DashTab(val section: DashSection, val label: String, val focus: FocusRequester, val locked: Boolean)
+internal data class DashFlyoutEntry(val section: DashSection, val label: String, val locked: Boolean)
 
 /**
- * The tab row at the top of a grouped page. Left/Right walk the tabs (Left on the first goes
- * back to the main menu, Right on the last stays), Down enters the page, Up stays.
+ * The small submenu right of TV / Library in the drawer. Up/Down choose (stopping at the ends),
+ * OK opens, Left and Back close it back to the item. Focus starts on the current entry.
  */
 @Composable
-internal fun DashTabRow(
-    tabs: List<DashTab>,
-    active: DashSection,
-    menuFocus: FocusRequester,
-    onFocused: (DashTab) -> Unit,
-    onUnfocused: () -> Unit,
-    onClick: (DashTab) -> Unit,
-    onDown: (DashTab) -> Unit,
+internal fun DashFlyout(
+    entries: List<DashFlyoutEntry>,
+    active: DashSection?,
+    anchorPx: androidx.compose.ui.geometry.Offset,
+    onClose: () -> Unit,
+    onChoose: (DashFlyoutEntry) -> Unit,
 ) {
-    Row(
-        Modifier.padding(start = 12.dp, bottom = 12.dp).focusGroup().onFocusChanged { if (!it.hasFocus) onUnfocused() },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    val focus = remember(entries.size) { List(entries.size) { FocusRequester() } }
+    val start = DashGroups.flyoutStart(entries.map { it.section }, active)
+    LaunchedEffect(Unit) { focus[start].requestWhenReady() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.foundation.layout.Column(
+        Modifier
+            .offset { androidx.compose.ui.unit.IntOffset(anchorPx.x.toInt() + with(density) { 6.dp.roundToPx() }, anchorPx.y.toInt()) }
+            .width(220.dp)
+            .background(EnigmaColors.Raised, skinShape(12.dp))
+            .border(1.dp, EnigmaColors.CardBorder, skinShape(12.dp))
+            .padding(6.dp)
+            .focusGroup(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        tabs.forEachIndexed { index, tab ->
+        entries.forEachIndexed { index, entry ->
             val interaction = remember { MutableInteractionSource() }
             val focused by interaction.collectIsFocusedAsState()
-            LaunchedEffect(focused) { if (focused) onFocused(tab) }
-            val selected = tab.section == active
-            val shape = skinShape(18.dp)
+            val selected = entry.section == active
             Row(
                 Modifier
-                    .focusRequester(tab.focus)
+                    .fillMaxWidth()
+                    .focusRequester(focus[index])
                     .focusProperties {
-                        up = FocusRequester.Cancel
-                        if (index == 0) left = menuFocus
-                        if (index == tabs.lastIndex) right = FocusRequester.Cancel
+                        right = FocusRequester.Cancel
+                        left = FocusRequester.Cancel
+                        if (index == 0) up = FocusRequester.Cancel
+                        if (index == entries.lastIndex) down = FocusRequester.Cancel
                     }
                     .onPreviewKeyEvent { e ->
                         val confirm = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
                         when {
-                            confirm -> { if (e.type == KeyEventType.KeyUp) onClick(tab); true }
-                            e.key == Key.DirectionDown -> { if (e.type == KeyEventType.KeyDown) onDown(tab); true }
+                            confirm -> { if (e.type == KeyEventType.KeyUp) onChoose(entry); true }
+                            e.key == Key.DirectionLeft -> { if (e.type == KeyEventType.KeyDown) onClose(); true }
                             else -> false
                         }
                     }
                     .focusable(interactionSource = interaction)
-                    .background(
-                        when {
-                            focused -> EnigmaColors.Focus
-                            selected -> EnigmaColors.Selected
-                            else -> EnigmaColors.Raised
-                        },
-                        shape,
-                    )
-                    .border(1.dp, if (focused || selected) EnigmaColors.Accent else EnigmaColors.CardBorder, shape)
-                    .padding(horizontal = 16.dp, vertical = 7.dp),
+                    .background(if (focused) EnigmaColors.Focus else androidx.compose.ui.graphics.Color.Transparent, skinShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (tab.locked) Icon(Icons.Filled.Lock, contentDescription = null, tint = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted, modifier = Modifier.padding(end = 2.dp))
                 Text(
-                    tab.label,
-                    color = if (focused) EnigmaColors.OnFocus else if (selected) EnigmaColors.Text else EnigmaColors.Muted,
-                    fontSize = 15.sp,
+                    entry.label,
+                    color = if (focused) EnigmaColors.OnFocus else if (selected) EnigmaColors.Accent else EnigmaColors.Text,
+                    fontSize = 14.sp,
                     fontWeight = if (selected) EnigmaType.Strong else null,
+                    modifier = Modifier.weight(1f),
                 )
+                if (entry.locked) Icon(Icons.Filled.Lock, contentDescription = null, tint = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted, modifier = Modifier.size(14.dp))
             }
         }
     }
