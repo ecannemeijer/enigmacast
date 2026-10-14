@@ -66,6 +66,16 @@ object ChannelMemory {
         return settings.copy(
             lastChannels = settings.lastChannels + (receiverId to last),
             recentByReceiver = settings.recentByReceiver + (receiverId to recent),
+            lastLiveSource = LastLiveSource.ENIGMA2,
+        )
+    }
+
+    /** An IPTV live channel started: remember it, and start this one next time the app opens. */
+    fun rememberIptv(settings: AppSettings, channel: LastIptvChannel): AppSettings {
+        if (channel.source.isBlank() || channel.streamId.isBlank()) return settings
+        return settings.copy(
+            lastLiveSource = LastLiveSource.IPTV,
+            lastIptvChannels = settings.lastIptvChannels + (channel.source to channel),
         )
     }
 

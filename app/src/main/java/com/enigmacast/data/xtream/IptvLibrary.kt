@@ -19,10 +19,18 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** What Library asks the IPTV page to open: a film to play (resume dialog) or a series info page. */
+/** What Library or Search asks the IPTV page to open. */
 /** [origin] = where it was started ("home/<card key>" or "<row>/<card key>" in Library), to return there afterwards. */
-/** [detail]: a film opens its info page instead of playing (Search). Live items always play. */
-data class IptvOpenRequest(val source: String, val item: XtreamItem, val origin: String? = null, val detail: Boolean = false, val token: Long = System.nanoTime())
+/** [detail]: a film or series opens its info page instead of playing (Search, Library info). Live items always play. */
+/** [episode]: a series from Continue watching plays this episode. */
+data class IptvOpenRequest(
+    val source: String,
+    val item: XtreamItem,
+    val origin: String? = null,
+    val detail: Boolean = false,
+    val episode: com.enigmacast.domain.xtream.XtreamEpisode? = null,
+    val token: Long = System.nanoTime(),
+)
 
 /**
  * IPTV favorites and resume positions in the user database (Library rows work offline).

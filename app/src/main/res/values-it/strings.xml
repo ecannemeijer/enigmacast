@@ -1282,6 +1282,7 @@ Profilo: %2$s</string>
     <string name="iptv_err_unreachable">Il server non è raggiungibile.</string>
     <string name="iptv_err_empty">La playlist non contiene voci.</string>
     <string name="iptv_play">Riproduci</string>
+    <string name="iptv_info">Pagina info</string>
     <string name="iptv_play_start">Dall\'inizio</string>
     <string name="iptv_resume">Riprendi da %1$s</string>
     <string name="iptv_resume_badge">Continua a guardare</string>

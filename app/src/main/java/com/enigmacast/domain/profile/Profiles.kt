@@ -2,6 +2,8 @@ package com.enigmacast.domain.profile
 
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.model.LastIptvChannel
+import com.enigmacast.domain.model.LastLiveSource
 import com.enigmacast.domain.model.MotionQuality
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.OsdSkinId
@@ -20,6 +22,8 @@ data class Profile(val id: String, val name: String, val avatar: Int = 0, val la
 data class ProfileScope(
     val lastChannels: Map<String, LastChannel> = emptyMap(),
     val recentByReceiver: Map<String, List<LastChannel>> = emptyMap(),
+    val lastLiveSource: LastLiveSource = LastLiveSource.ENIGMA2,
+    val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     val pictureModes: Map<String, PictureMode> = emptyMap(),
     val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
     val osdInfo: OsdInfoFields = OsdInfoFields(),
@@ -29,6 +33,8 @@ data class ProfileScope(
     fun applyTo(settings: AppSettings): AppSettings = settings.copy(
         lastChannels = lastChannels,
         recentByReceiver = recentByReceiver,
+        lastLiveSource = lastLiveSource,
+        lastIptvChannels = lastIptvChannels,
         pictureModes = pictureModes,
         osdSkin = osdSkin,
         osdInfo = osdInfo,
@@ -38,8 +44,8 @@ data class ProfileScope(
 
     companion object {
         fun of(settings: AppSettings) = ProfileScope(
-            settings.lastChannels, settings.recentByReceiver, settings.pictureModes,
-            settings.osdSkin, settings.osdInfo, settings.navigationSounds, settings.motionQuality,
+            settings.lastChannels, settings.recentByReceiver, settings.lastLiveSource, settings.lastIptvChannels,
+            settings.pictureModes, settings.osdSkin, settings.osdInfo, settings.navigationSounds, settings.motionQuality,
         )
     }
 }

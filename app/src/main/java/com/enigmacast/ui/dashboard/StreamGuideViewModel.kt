@@ -74,6 +74,7 @@ class StreamGuideViewModel @Inject constructor(
     private val quality: StreamQualityController,
     private val reminders: ReminderScheduler,
     private val recordings: com.enigmacast.live.RecordingBook,
+    private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
 ) : ViewModel() {
     private var medium = GuideMedium.Television
     private val remembered = mutableMapOf<GuideMedium, GuideSide>()
@@ -164,6 +165,10 @@ class StreamGuideViewModel @Inject constructor(
         }
         viewModelScope.launch {
             session.state.collect(::mirror)
+        }
+        viewModelScope.launch {
+            // Back from the background: start the last Enigma2 channel again (IPTV is left to its own player).
+            playbackLifecycle.resumes.collect { count -> if (count > 0) refresh() }
         }
         viewModelScope.launch {
             listEvents.changed.collect { id -> if (id == settingsRepository.current().activeReceiver()?.id) onListsChanged() }

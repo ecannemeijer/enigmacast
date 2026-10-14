@@ -71,8 +71,48 @@ class MyItemsViewModel @Inject constructor(
 
     fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String? = null) {
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
-        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, origin)
+        val episode = rememberedEpisode(card)
+        if (card.open.section == com.enigmacast.domain.xtream.XtreamSection.SERIES && episode == null) {
+            infoIptv(card, onXtream, origin)
+            return
+        }
+        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, origin, episode = episode)
         onXtream()
+    }
+
+    /** OK on a My items card: play, the info page, or remove. */
+    private var iptvOrigin: String? = null
+    fun optionsIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, origin: String) {
+        iptvOrigin = origin
+        iptvOptions = card
+    }
+
+    fun playChosenIptv(onXtream: () -> Unit) {
+        val card = iptvOptions ?: return
+        val origin = iptvOrigin
+        iptvOptions = null
+        openIptv(card, onXtream, origin)
+    }
+
+    fun infoChosenIptv(onXtream: () -> Unit) {
+        val card = iptvOptions ?: return
+        val origin = iptvOrigin
+        iptvOptions = null
+        infoIptv(card, onXtream, origin)
+    }
+
+    private fun infoIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String?) {
+        if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
+        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, origin, detail = true)
+        onXtream()
+    }
+
+    /** Latest saved episode of a series, or the Continue watching episode itself. */
+    private fun rememberedEpisode(card: com.enigmacast.domain.xtream.IptvLibraryCard): com.enigmacast.domain.xtream.XtreamEpisode? {
+        if (card.open.section != com.enigmacast.domain.xtream.XtreamSection.SERIES) return null
+        val row = if (card.kind == "e") iptv.resumeMap.value["${card.source}/e/${card.id}"]
+        else iptv.resumes.value.filter { it.source == card.source && it.seriesId == card.id }.maxByOrNull { it.updatedMs }
+        return row?.let { com.enigmacast.domain.xtream.XtreamEpisode(it.id, it.season, it.episode, it.title, it.extension) }
     }
 
     /** Options on an IPTV card, then the confirmation, as for recordings. */
@@ -80,7 +120,6 @@ class MyItemsViewModel @Inject constructor(
         private set
     var iptvPendingRemove by mutableStateOf<com.enigmacast.domain.xtream.IptvLibraryCard?>(null)
         private set
-    fun optionsIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard) { iptvOptions = card }
     fun dismissIptvOptions() { iptvOptions = null }
     fun askRemoveIptv() { iptvPendingRemove = iptvOptions; iptvOptions = null }
     fun dismissRemoveIptv() { iptvPendingRemove = null }

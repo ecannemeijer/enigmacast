@@ -7,7 +7,9 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.model.LastLiveSource
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.model.ReceiverList
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.ServiceStreams
@@ -268,7 +270,10 @@ class OwnTunerSession @Inject constructor(
         active = true
         if (startJob?.isActive == true) return
         scope.launch {
-            val id = settingsRepository.current().activeReceiver()?.id
+            val settings = settingsRepository.current()
+            val id = settings.activeReceiver()?.id
+            // The last picture was IPTV: keep the bouquet list, but do not take the decoder.
+            val play = settings.streamMode == StreamMode.OWN_TUNER && settings.lastLiveSource != LastLiveSource.IPTV
             if (id != boundReceiverId) {
                 val switching = boundReceiverId != null
                 bind(id)
@@ -282,9 +287,10 @@ class OwnTunerSession @Inject constructor(
             // A remembered service is not playable until this box's channel list is in.
             // Starting earlier opens a stream the receiver rejects, which shows as an error.
             if (current.channels.isEmpty()) {
-                loadInitial(startPlayback = true)
+                loadInitial(startPlayback = play)
                 return@launch
             }
+            if (!play) return@launch
             if (current.channel != null) {
                 if (current.tuner.status == TunerStatus.IDLE) start(current.channel)
                 return@launch

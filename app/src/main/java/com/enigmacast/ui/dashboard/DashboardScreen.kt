@@ -287,6 +287,8 @@ fun DashboardScreen(
     val premium = accountModel.isPremium(account)
     val xtreamModel: com.enigmacast.ui.xtream.XtreamViewModel = hiltViewModel()
     val xtreamAvailable = xtreamModel.detection.collectAsState().value?.available == true
+    val iptvLive = xtreamModel.playing?.let { it.episode == null && it.item?.section == com.enigmacast.domain.xtream.XtreamSection.LIVE } == true
+    val showStream = showMiniPlayer || iptvLive
     /** Free accounts: these menu items show a lock and open the Premium dialog. */
     fun lockedFeature(target: DashSection): com.enigmacast.domain.account.PremiumFeature? = if (premium) null else when (target) {
         DashSection.Guide -> com.enigmacast.domain.account.PremiumFeature.EPG
@@ -350,6 +352,7 @@ fun DashboardScreen(
             else -> homeFocus.requestWhenReady()
         }
     }
+    LaunchedEffect(Unit) { guideModel.refresh() }
     LaunchedEffect(returnToMyItemsId) {
         val id = returnToMyItemsId ?: return@LaunchedEffect
         myItemsListActive = true
@@ -627,6 +630,7 @@ fun DashboardScreen(
                             onWatch = { entry -> guideModel.tune(entry, onStream, onStream) },
                             onXtream = onXtream,
                             library = myItemsModel,
+                            showStream = showStream,
                         )
                         }
                         DashSection.Movies -> {
@@ -694,7 +698,7 @@ fun DashboardScreen(
                         )
                         }
                         DashSection.Stream -> LiveBrowser(
-                            showMiniPlayer = showMiniPlayer,
+                            showMiniPlayer = showStream,
                             listFocus = channelFocus,
                             bouquetFocus = bouquetFocus,
                             menuFocus = streamFocus,
@@ -715,7 +719,7 @@ fun DashboardScreen(
                             guideGridFocus.requestWhenReady()
                         }
                         GuidePanel(
-                            showMiniPlayer,
+                            showStream,
                             guideGridFocus,
                             bouquetFocus,
                             { guideItemFocused },
@@ -729,7 +733,7 @@ fun DashboardScreen(
                         )
                         }
                         DashSection.Radio -> LiveBrowser(
-                            showMiniPlayer = showMiniPlayer,
+                            showMiniPlayer = showStream,
                             listFocus = radioListFocus,
                             bouquetFocus = bouquetFocus,
                             menuFocus = radioFocus,
@@ -1782,6 +1786,13 @@ internal fun MiniStreamPlayer(
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    val xtream: com.enigmacast.ui.xtream.XtreamViewModel = hiltViewModel()
+    @Suppress("UNUSED_EXPRESSION") xtream.playerVersion
+    val iptv = xtream.playing?.takeIf { it.episode == null && it.item?.section == com.enigmacast.domain.xtream.XtreamSection.LIVE }
+    if (iptv != null) {
+        com.enigmacast.ui.remote.EnigmaVideoTexture(xtream.player(), emptyList(), modifier)
+        return
+    }
     val radio = ui.own.channel?.takeIf {
         !ui.playerState.filePlayback && BouquetChannels.isRadioBouquet(ui.own.bouquetReference)
     }

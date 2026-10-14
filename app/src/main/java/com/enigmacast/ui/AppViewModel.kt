@@ -53,6 +53,7 @@ class AppViewModel @Inject constructor(
     private val playback: LivePlaybackController,
     private val ownTuner: OwnTunerSession,
     private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
+    private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
     private val sleepTimer: AppSleepTimer,
     private val tunnel: WireGuardTunnel,
     private val reminders: ReminderScheduler,
@@ -451,6 +452,7 @@ class AppViewModel @Inject constructor(
         ownTuner.deactivate()
         recordings.clearNowPlaying()
         playback.stop()
+        playbackOwner.stopCurrent()
     }
 
     /** Back on screen: playback is allowed again and the player screen restarts its channel. */
@@ -469,6 +471,7 @@ class AppViewModel @Inject constructor(
         recordings.clearNowPlaying()
         ownTuner.deactivate()
         playback.stop()
+        playbackOwner.stopCurrent()
         streamRunning = false
         tunnel.shutdown()
         requestFinish?.invoke()

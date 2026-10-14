@@ -1281,6 +1281,7 @@ Profile: %2$s</string>
     <string name="iptv_err_unreachable">The server could not be reached.</string>
     <string name="iptv_err_empty">The playlist has no entries.</string>
     <string name="iptv_play">Play</string>
+    <string name="iptv_info">Info page</string>
     <string name="iptv_play_start">Play from start</string>
     <string name="iptv_resume">Resume from %1$s</string>
     <string name="iptv_resume_badge">Continue watching</string>

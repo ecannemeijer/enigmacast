@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -92,6 +93,7 @@ fun TunerHomePanel(
     model: TunerHomeViewModel = hiltViewModel(),
     onXtream: () -> Unit = {},
     library: com.enigmacast.ui.dashboard.MyItemsViewModel = hiltViewModel(),
+    showStream: Boolean = false,
 ) {
     val iptvContinue by library.iptvContinue.collectAsStateWithLifecycle()
     // Back from an IPTV film started on Home: focus that card again.
@@ -162,7 +164,7 @@ fun TunerHomePanel(
             chain.keys = list.map { it.key }
             PivotColumn(sections, Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
                 // Box state as a coloured dot (same colours as the power pill in the menu), not as text.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PanelHeader(
                         stringResource(R.string.home_tuners_title),
                         if (model.failed && !model.loading) stringResource(R.string.home_unreachable) else stringResource(R.string.home_tuners_subtitle),
@@ -187,6 +189,18 @@ fun TunerHomePanel(
                                 down = chain.requester("tuners")
                             },
                     )
+                    if (showStream) {
+                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                        Box(
+                            Modifier
+                                .padding(bottom = 6.dp)
+                                .width(220.dp)
+                                .aspectRatio(16f / 9f)
+                                .background(Color.Black, skinShape(8.dp)),
+                        ) {
+                            com.enigmacast.ui.dashboard.MiniStreamPlayer(Modifier.fillMaxSize())
+                        }
+                    }
                 }
                 list.forEachIndexed { i, section ->
                     key(section.key) {

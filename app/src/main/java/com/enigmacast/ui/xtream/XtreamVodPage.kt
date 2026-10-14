@@ -211,35 +211,35 @@ internal fun XtreamVodPage(
         }
         }
     }
+}
 
-    val item = model.detail
-    val film = model.detailFilm
-    if (item != null && film != null) {
-        val resume = model.resumeOf(item)
-        val isSeries = item.section == XtreamSection.SERIES
-        FilmInfoDialog(
-            film = film,
-            nowSec = System.currentTimeMillis() / 1000,
-            autoSwitchSet = false,
-            recordingSet = false,
-            onWatch = {},
-            onSchedule = {},
-            onRecord = {},
-            onClose = model::closeDetail,
-            picon = { null },
-            cachedPicon = { null },
-            channel = BouquetEntry(item.name, "iptv:${item.id}"),
-            vod = VodDetail(
-                // A saved place is offered in the same "Resume playback?" dialog as recordings.
-                onPlay = if (isSeries) null else ({ model.closeDetail(); model.requestFilm(item, onPlayed) }),
-                resumeLabel = null,
-                onResume = null,
-                below = if (isSeries) ({ Episodes(model, item, onPlayed) }) else null,
-                favorite = remember(item, model.favoriteVersion) { model.isFavorite(item) },
-                onFavorite = { model.toggleFavorite(item) },
-            ),
-        )
-    }
+/** Info page of a film or series, above the grid so Search can open it at once. */
+@Composable
+internal fun IptvInfoDialog(model: XtreamViewModel, onPlayed: () -> Unit) {
+    val item = model.detail ?: return
+    val film = model.detailFilm ?: return
+    val isSeries = item.section == XtreamSection.SERIES
+    FilmInfoDialog(
+        film = film,
+        nowSec = System.currentTimeMillis() / 1000,
+        autoSwitchSet = false,
+        recordingSet = false,
+        onWatch = {},
+        onSchedule = {},
+        onRecord = {},
+        onClose = model::closeDetail,
+        picon = { null },
+        cachedPicon = { null },
+        channel = BouquetEntry(item.name, "iptv:${item.id}"),
+        vod = VodDetail(
+            onPlay = if (isSeries) null else ({ model.closeDetail(); model.requestFilm(item, onPlayed) }),
+            resumeLabel = null,
+            onResume = null,
+            below = if (isSeries) ({ Episodes(model, item, onPlayed) }) else null,
+            favorite = remember(item, model.favoriteVersion) { model.isFavorite(item) },
+            onFavorite = { model.toggleFavorite(item) },
+        ),
+    )
 }
 
 /** Seasons as chips, then that season's episodes as a row; OK plays (resuming where left). */

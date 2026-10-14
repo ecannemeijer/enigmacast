@@ -185,6 +185,20 @@ data class LastChannel(
     val bouquetReference: String = "",
 )
 
+/** Which live picture was on last: the Enigma2 tuner, or an IPTV live channel. */
+@Serializable
+enum class LastLiveSource { ENIGMA2, IPTV }
+
+/** The last live IPTV channel of one playlist (source = the account key). */
+@Serializable
+data class LastIptvChannel(
+    val source: String = "",
+    val categoryId: String = "",
+    val streamId: String = "",
+    val name: String = "",
+    val url: String = "",
+)
+
 @Serializable
 data class AppSettings(
     val receivers: List<ReceiverConfig> = emptyList(),
@@ -212,6 +226,10 @@ data class AppSettings(
     val recentChannels: List<LastChannel> = emptyList(),
     /** Recent channels per receiver id, newest first. */
     val recentByReceiver: Map<String, List<LastChannel>> = emptyMap(),
+    /** Live picture that was on last. Own tuner starts this one when the app opens. */
+    val lastLiveSource: LastLiveSource = LastLiveSource.ENIGMA2,
+    /** Last live IPTV channel per playlist source key. */
+    val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */
     val navigationSounds: Boolean = true,
     /**

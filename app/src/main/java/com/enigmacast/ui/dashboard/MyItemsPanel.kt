@@ -136,8 +136,8 @@ fun MyItemsPanel(
                                     if (i == 0) left = menuFocus
                                     if (i == cards.lastIndex) right = FocusRequester.Cancel
                                 },
-                            onClick = { viewModel.openIptv(card, onXtream, "$header/${card.key}") },
-                            onOptions = { viewModel.optionsIptv(card) },
+                            onClick = { viewModel.optionsIptv(card, "$header/${card.key}") },
+                            onOptions = { viewModel.optionsIptv(card, "$header/${card.key}") },
                         )
                     }
                 }
@@ -292,14 +292,20 @@ fun MyItemsPanel(
         )
     }
     viewModel.iptvOptions?.let { card ->
+        val play = stringResource(R.string.iptv_play)
+        val info = stringResource(R.string.iptv_info)
+        val remove = stringResource(if (card.key.startsWith("fav/")) R.string.iptv_library_remove else R.string.library_remove_continue)
         TvChoiceDialog(
             title = card.title,
             message = card.subtitle,
-            choices = listOf(
-                stringResource(if (card.key.startsWith("fav/")) R.string.iptv_library_remove else R.string.library_remove_continue),
-                stringResource(R.string.cancel),
-            ),
-            onChoose = { i -> if (i == 0) viewModel.askRemoveIptv() else viewModel.dismissIptvOptions() },
+            choices = listOf(play, info, remove),
+            onChoose = { i ->
+                when (i) {
+                    0 -> viewModel.playChosenIptv(onXtream)
+                    1 -> viewModel.infoChosenIptv(onXtream)
+                    else -> viewModel.askRemoveIptv()
+                }
+            },
             onDismiss = viewModel::dismissIptvOptions,
             compact = true,
         )

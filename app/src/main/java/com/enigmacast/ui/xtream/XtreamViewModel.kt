@@ -62,6 +62,7 @@ class XtreamViewModel @Inject constructor(
     private val playlistSync: IptvPlaylistSync,
     private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
     private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
+    private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
     private val library: com.enigmacast.data.xtream.IptvLibrary,
@@ -400,10 +401,14 @@ class XtreamViewModel @Inject constructor(
         library.openRequest.value = null
         launchOrigin = request.origin
         val item = request.item
+        val episode = request.episode
         if (item.section == XtreamSection.LIVE) {
             selectSection(XtreamSection.LIVE)
             play(item)
             libraryPlayed++
+        } else if (episode != null) {
+            selectSection(XtreamSection.SERIES)
+            requestEpisode(episode, item) { libraryPlayed++ }
         } else if (item.section == XtreamSection.SERIES || request.detail) {
             selectSection(item.section)
             openDetail(item)
@@ -478,6 +483,9 @@ class XtreamViewModel @Inject constructor(
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(library.openRequest, snapshotFlow { account }) { r, a -> r to a }.collect { handleOpenRequest() }
         }
+        viewModelScope.launch {
+            playbackLifecycle.resumes.collect { count -> if (count > 0) startRememberedLive(force = true) }
+        }
         // Categories changed in Settings: the open section is read again (from the cache).
         viewModelScope.launch {
             hiddenCategories.changes.drop(1).collect { if (account != null && categories.isNotEmpty()) selectSection(section, force = true) }
@@ -546,7 +554,10 @@ class XtreamViewModel @Inject constructor(
         val accounts = _detection.value?.accounts.orEmpty()
         when {
             account == null && accounts.size == 1 -> choose(accounts.first())
-            account != null -> applyRequested()
+            account != null -> {
+                applyRequested()
+                startRememberedLive()
+            }
         }
     }
 
@@ -557,9 +568,31 @@ class XtreamViewModel @Inject constructor(
         this.account = account
         if (same) {
             if (start != null && start != section) selectSection(start)
+            startRememberedLive()
             return
         }
         selectSection(start ?: XtreamSection.LIVE, force = true)
+        startRememberedLive()
+    }
+
+    /**
+     * Own tuner, and the last picture was IPTV live: play that channel again.
+     * Follow-the-receiver keeps the box's picture and does not start IPTV on its own.
+     * Once per start; coming back from the background ([force]) starts it again.
+     */
+    private var rememberedLive = false
+    private fun startRememberedLive(force: Boolean = false) {
+        if (!force && rememberedLive) return
+        if (account == null) return
+        rememberedLive = true
+        viewModelScope.launch {
+            val settings = settingsRepository.current()
+            if (settings.streamMode != com.enigmacast.domain.model.StreamMode.OWN_TUNER) return@launch
+            if (settings.lastLiveSource != com.enigmacast.domain.model.LastLiveSource.IPTV) return@launch
+            val last = settings.lastIptvChannels[account?.key] ?: return@launch
+            if (playing?.item?.id == last.streamId && playing?.item?.section == XtreamSection.LIVE) return@launch
+            play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url))
+        }
     }
 
     private fun applyRequested() {
@@ -581,11 +614,14 @@ class XtreamViewModel @Inject constructor(
                     categories = list
                     loadCounts(account, section)
                     categoriesReady++
+                    val preferred = if (section == XtreamSection.LIVE) {
+                        settingsRepository.current().lastIptvChannels[account.key]?.categoryId
+                    } else null
+                    val pick = list.firstOrNull { it.id == preferred } ?: list.firstOrNull()
+                    pick?.let { loadCategory(account, it) }
                 }
                 .onFailure { error = true }
             loading = false
-            // Every section shows its first category right away, with focus on its first card / channel.
-            categories.firstOrNull()?.let { loadCategory(account, it) }
         }
     }
 
@@ -800,6 +836,17 @@ class XtreamViewModel @Inject constructor(
             playWhenReady = true
         }
         if (live) { tickJob?.cancel(); tickJob = null } else startTicker()
+        val item = what.item
+        if (live && item != null) {
+            viewModelScope.launch {
+                settingsRepository.update { settings ->
+                    com.enigmacast.domain.model.ChannelMemory.rememberIptv(
+                        settings,
+                        com.enigmacast.domain.model.LastIptvChannel(account.key, item.categoryId, item.id, item.name, url),
+                    )
+                }
+            }
+        }
     }
 
     fun chooseAudio(id: String) {

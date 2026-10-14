@@ -127,7 +127,10 @@ fun XtreamScreen(onBack: () -> Unit) {
         }
     }
     LaunchedEffect(model.libraryPlayed) { if (model.libraryPlayed > 0) { panelOpen = false; showBanner(fromZap = false) } }
-    LaunchedEffect(model.libraryDetail) { if (model.libraryDetail > 0) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ } }
+    LaunchedEffect(model.libraryDetail) {
+        // Search and Library info open the page itself; the grid must not take that focus.
+        if (model.libraryDetail > 0 && model.detail == null) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ }
+    }
     DisposableEffect(Unit) { onDispose { model.stop() } }
     // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
     LaunchedEffect(model.categoriesReady) {
@@ -148,7 +151,8 @@ fun XtreamScreen(onBack: () -> Unit) {
             }
         }
     }
-    LaunchedEffect(panelOpen, openRequest, column) {
+    LaunchedEffect(panelOpen, openRequest, column, model.detail) {
+        if (model.detail != null) return@LaunchedEffect
         if (!panelOpen) { rootFocus.requestWhenReady(); return@LaunchedEffect }
         when (column) {
             PanelColumn.GUIDE -> guideFocus.requestWhenReady()
@@ -288,6 +292,8 @@ fun XtreamScreen(onBack: () -> Unit) {
                 guideFocus = guideFocus,
             ) { panelOpen = false; model.closeGuide(); showBanner(fromZap = true) }
         }
+
+        IptvInfoDialog(model) { panelOpen = false; showBanner(fromZap = false) }
 
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }

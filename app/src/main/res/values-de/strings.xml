@@ -1278,6 +1278,7 @@ Profil: %2$s</string>
     <string name="iptv_err_unreachable">Der Server ist nicht erreichbar.</string>
     <string name="iptv_err_empty">Die Playlist enthält keine Einträge.</string>
     <string name="iptv_play">Abspielen</string>
+    <string name="iptv_info">Infoseite</string>
     <string name="iptv_play_start">Von vorne</string>
     <string name="iptv_resume">Fortsetzen ab %1$s</string>
     <string name="iptv_resume_badge">Weiterschauen</string>

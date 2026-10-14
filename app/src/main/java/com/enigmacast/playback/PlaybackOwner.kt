@@ -49,6 +49,13 @@ class PlaybackOwner @Inject constructor() {
         current = owner
     }
 
+    /** The app left the screen: stop whoever is playing so the sound does not continue. */
+    fun stopCurrent() {
+        val owner = current ?: return
+        log("owner stop $owner (background)")
+        runCatching { stoppers[owner]?.invoke() }
+    }
+
     /**
      * A start that the user didn't ask for on this screen (reconnect, resume, preview) may not
      * take over while the other player owns the output and its screen is in front.
