@@ -457,7 +457,7 @@ private fun actionsFor(item: Recording, box: Boolean, boxTimer: Boolean): List<I
  * options (remove from favorites / from Continue watching).
  */
 @Composable
-private fun IptvCard(
+internal fun IptvCard(
     card: com.enigmacast.domain.xtream.IptvLibraryCard,
     modifier: Modifier,
     onClick: () -> Unit,

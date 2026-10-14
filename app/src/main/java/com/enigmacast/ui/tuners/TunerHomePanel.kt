@@ -1,5 +1,6 @@
 package com.enigmacast.ui.tuners
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -88,7 +89,10 @@ fun TunerHomePanel(
     onRetreatTo: (FocusRequester) -> Unit,
     onWatch: (BouquetEntry) -> Unit,
     model: TunerHomeViewModel = hiltViewModel(),
+    onXtream: () -> Unit = {},
+    library: com.enigmacast.ui.dashboard.MyItemsViewModel = hiltViewModel(),
 ) {
+    val iptvContinue by library.iptvContinue.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { model.whileVisible() }
     val left = Modifier.focusProperties { left = menuFocus }
     var chosen by remember { mutableStateOf<TunerCard?>(null) }
@@ -119,6 +123,24 @@ fun TunerHomePanel(
             }
             val list = buildList {
                 add(PageSection("tuners") { TunersRow(model, left, rowNav("tuners")) { chosen = it } })
+                // IPTV Continue watching (Home has no recordings resume row): OK plays with the resume dialog / opens the series.
+                if (iptvContinue.isNotEmpty() && library.iptvAllowed()) add(PageSection("iptv") {
+                    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stringResource(R.string.library_continue), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
+                        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
+                            items(iptvContinue.size, key = { iptvContinue[it].key }) { i ->
+                                val card = iptvContinue[i]
+                                com.enigmacast.ui.dashboard.IptvCard(
+                                    card = card,
+                                    modifier = (if (i == 0) left else Modifier).then(rowNav("iptv"))
+                                        .focusProperties { if (i == iptvContinue.lastIndex) right = FocusRequester.Cancel },
+                                    onClick = { library.openIptv(card, onXtream) },
+                                    onOptions = {},
+                                )
+                            }
+                        }
+                    }
+                })
                 if (model.series.isNotEmpty()) add(PageSection("series") { SeriesRow(model, left, rowNav("series")) { openSeries = it } })
                 add(PageSection("today") {
                     ScheduleRow(stringResource(R.string.home_schedule_title), model.schedule, model, left, rowNav("today"), emptyText = stringResource(R.string.home_schedule_empty)) { openItem = it }

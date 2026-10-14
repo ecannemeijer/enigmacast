@@ -573,6 +573,8 @@ fun DashboardScreen(
                             menuFocus = homeFocus,
                             onRetreatTo = retreat,
                             onWatch = { entry -> guideModel.tune(entry, onStream, onStream) },
+                            onXtream = onXtream,
+                            library = myItemsModel,
                         )
                         }
                         DashSection.Movies -> {
