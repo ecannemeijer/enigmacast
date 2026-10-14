@@ -36,10 +36,12 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
             if (allowInsecureCertificates) {
                 EnigmaLog.connection("Insecure certificates enabled for the configured receiver")
             }
+            var poolRef: okhttp3.ConnectionPool? = null
             val built = baseBuilder(timeoutSeconds.coerceIn(1, 60).toLong())
-                .addInterceptor(RedactingLogInterceptor())
+                .addInterceptor(RedactingLogInterceptor { poolRef })
                 .apply { if (allowInsecureCertificates) trustInsecureCertificates() }
                 .build()
+            poolRef = built.connectionPool
             webifClient = built
             webifAllowsInsecure = allowInsecureCertificates
             return built
@@ -103,22 +105,63 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
     }
 }
 
-private class RedactingLogInterceptor : Interceptor {
+/**
+ * Logs OpenWebif calls, caps how many run at once per receiver and retries a failed GET once.
+ *
+ * OpenWebif serves few requests in parallel and a receiver (or a network switch to another box)
+ * leaves pooled keep-alive sockets dead: the next call on one fails within milliseconds with an
+ * IOException. A GET is idempotent, so it is tried once more on a fresh connection.
+ */
+private class RedactingLogInterceptor(private val pool: () -> okhttp3.ConnectionPool?) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
         val request = chain.request()
         val url = EnigmaLog.sanitizeUrl(request.url.toString())
         if (com.enigmacast.util.DebugFlags.verbose) {
             EnigmaLog.network("${request.method} $url")
         }
-        return try {
+        val gate = WebifGates.forHost(request.url.host)
+        gate.acquire()
+        try {
+            return try {
+                proceedLogged(chain, request, url)
+            } catch (error: java.io.IOException) {
+                if (chain.call().isCanceled()) {
+                    EnigmaLog.networkError("cancelled $url")
+                    throw error
+                }
+                if (request.method != "GET") throw error
+                // A stale pooled socket: drop idle connections and try once on a new one.
+                pool()?.evictAll()
+                EnigmaLog.network("retry on a fresh connection: $url")
+                proceedLogged(chain, request.newBuilder().header("Connection", "close").build(), url)
+            }
+        } finally {
+            gate.release()
+        }
+    }
+
+    private fun proceedLogged(chain: Interceptor.Chain, request: okhttp3.Request, url: String): okhttp3.Response {
+        val started = System.nanoTime()
+        try {
             val response = chain.proceed(request)
             if (!response.isSuccessful) {
                 EnigmaLog.networkError("${response.code} $url")
             }
-            response
+            return response
         } catch (error: Exception) {
-            EnigmaLog.networkError("failed $url ${error.javaClass.simpleName}")
+            val ms = (System.nanoTime() - started) / 1_000_000
+            val cause = error.cause?.let { " cause=${it.javaClass.simpleName}: ${it.message}" }.orEmpty()
+            EnigmaLog.networkError("failed $url after ${ms}ms ${error.javaClass.simpleName}: ${error.message}$cause")
             throw error
         }
     }
+}
+
+/** At most [PER_HOST] OpenWebif calls at once per receiver; the rest wait their turn. */
+internal object WebifGates {
+    const val PER_HOST = 4
+    private val gates = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.Semaphore>()
+
+    fun forHost(host: String): java.util.concurrent.Semaphore =
+        gates.getOrPut(host.lowercase()) { java.util.concurrent.Semaphore(PER_HOST, true) }
 }
