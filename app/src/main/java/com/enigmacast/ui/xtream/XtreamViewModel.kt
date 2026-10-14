@@ -588,10 +588,12 @@ class XtreamViewModel @Inject constructor(
         viewModelScope.launch {
             val settings = settingsRepository.current()
             if (settings.streamMode != com.enigmacast.domain.model.StreamMode.OWN_TUNER) return@launch
-            if (settings.lastLiveSource != com.enigmacast.domain.model.LastLiveSource.IPTV) return@launch
+            val startupIptv = !force && settings.startupLive == com.enigmacast.domain.model.StartupLive.IPTV
+            if (settings.lastLiveSource != com.enigmacast.domain.model.LastLiveSource.IPTV && !startupIptv) return@launch
             val last = settings.lastIptvChannels[account?.key] ?: return@launch
             if (playing?.item?.id == last.streamId && playing?.item?.section == XtreamSection.LIVE) return@launch
             play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url))
+            libraryPlayed++
         }
     }
 

@@ -10,6 +10,7 @@ import com.enigmacast.R
 import com.enigmacast.data.network.WireGuardTunnel
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.MotionQuality
+import com.enigmacast.domain.model.StartupLive
 import com.enigmacast.domain.reminder.Reminder
 import com.enigmacast.domain.reminder.ReminderNotice
 import com.enigmacast.live.AutoSwitcher
@@ -130,6 +131,13 @@ class AppViewModel @Inject constructor(
                     com.enigmacast.domain.setup.Start.CONNECTION -> AppScreen.Connection
                 }
                 if (receiver != null) streamRunning = true
+                if (screen == AppScreen.Dashboard) {
+                    when (settings.startupLive) {
+                        StartupLive.SATELLITE -> if (receiver != null) openStream()
+                        StartupLive.IPTV -> screen = AppScreen.Xtream
+                        StartupLive.OFF -> Unit
+                    }
+                }
             }
         }
         // Plan check: on start, then every few hours while the app runs. Without network the

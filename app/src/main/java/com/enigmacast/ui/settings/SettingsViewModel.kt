@@ -7,6 +7,7 @@ import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.MotionQuality
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.ReceiverList
+import com.enigmacast.domain.model.StartupLive
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.model.RecordingTarget
 import com.enigmacast.domain.network.TranscodePreset
@@ -61,6 +62,7 @@ class SettingsViewModel @Inject constructor(
     )
 
     fun setStreamMode(mode: StreamMode) = update { it.copy(streamMode = mode) }
+    fun setStartupLive(mode: StartupLive) = update { it.copy(startupLive = mode) }
     fun setRecordingTarget(target: RecordingTarget) = update { it.copy(playback = it.playback.copy(recordingTarget = target)) }
     fun setRecordingPreset(preset: TranscodePreset?) = update { it.copy(playback = it.playback.copy(recordingPreset = preset)) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }

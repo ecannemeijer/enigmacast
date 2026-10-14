@@ -1511,9 +1511,35 @@ private fun PlaybackSettingsPanel(
         )
     }
     if (part != PlaybackPart.STREAMING) return
-    SettingsCard(stringResource(R.string.picture)) {
+    val startupLive = viewModel.settings.collectAsStateWithLifecycle().value.startupLive
+    SettingsCard(stringResource(R.string.startup_live)) {
         ChoiceRow(
             firstOptionModifier = Modifier.focusRequester(contentFocus),
+            title = stringResource(R.string.startup_live),
+            description = stringResource(R.string.startup_live_desc),
+            options = listOf(
+                stringResource(R.string.startup_live_off),
+                stringResource(R.string.startup_live_satellite),
+                stringResource(R.string.startup_live_iptv),
+            ),
+            selectedIndex = when (startupLive) {
+                com.enigmacast.domain.model.StartupLive.SATELLITE -> 1
+                com.enigmacast.domain.model.StartupLive.IPTV -> 2
+                com.enigmacast.domain.model.StartupLive.OFF -> 0
+            },
+            onSelect = { index ->
+                viewModel.setStartupLive(
+                    when (index) {
+                        1 -> com.enigmacast.domain.model.StartupLive.SATELLITE
+                        2 -> com.enigmacast.domain.model.StartupLive.IPTV
+                        else -> com.enigmacast.domain.model.StartupLive.OFF
+                    },
+                )
+            },
+        )
+    }
+    SettingsCard(stringResource(R.string.picture)) {
+        ChoiceRow(
             title = stringResource(R.string.buffer),
             description = if (fast) stringResource(R.string.buffer_fast_desc) else stringResource(R.string.buffer_stable_desc),
             options = listOf(stringResource(R.string.buffer_stable), stringResource(R.string.buffer_fast)),

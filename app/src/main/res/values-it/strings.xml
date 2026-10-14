@@ -253,6 +253,11 @@
     <string name="receivers_delete_message">Rimuovere %1$s? Questa app non userà più quel box.</string>
     <string name="settings_receiver">Ricevitore</string>
     <string name="settings_playback">Riproduzione e streaming</string>
+    <string name="startup_live">Avvia in TV live</string>
+    <string name="startup_live_desc">Apre a schermo intero l\'ultimo canale di questa sorgente all\'avvio di EnigmaCast.</string>
+    <string name="startup_live_off">Disattivato</string>
+    <string name="startup_live_satellite">Satellite</string>
+    <string name="startup_live_iptv">IPTV</string>
     <string name="settings_osd">OSD</string>
     <string name="settings_info">Info</string>
     <string name="settings_language">Lingua</string>

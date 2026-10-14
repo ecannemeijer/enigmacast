@@ -253,6 +253,11 @@
     <string name="receivers_delete_message">%1$s verwijderen? De app gebruikt die box dan niet meer.</string>
     <string name="settings_receiver">Ontvanger</string>
     <string name="settings_playback">Afspelen &amp; streaming</string>
+    <string name="startup_live">Starten in live tv</string>
+    <string name="startup_live_desc">Open fullscreen op het laatst bewaarde kanaal van deze bron wanneer EnigmaCast start.</string>
+    <string name="startup_live_off">Uit</string>
+    <string name="startup_live_satellite">Satelliet</string>
+    <string name="startup_live_iptv">IPTV</string>
     <string name="settings_osd">OSD</string>
     <string name="settings_info">Info</string>
     <string name="settings_language">Taal</string>

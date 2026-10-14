@@ -189,6 +189,13 @@ data class LastChannel(
 @Serializable
 enum class LastLiveSource { ENIGMA2, IPTV }
 
+/**
+ * What opens when the app starts. [OFF] keeps the dashboard.
+ * Missing in older settings, so the dashboard stays the start screen.
+ */
+@Serializable
+enum class StartupLive { OFF, SATELLITE, IPTV }
+
 /** The last live IPTV channel of one playlist (source = the account key). */
 @Serializable
 data class LastIptvChannel(
@@ -228,6 +235,8 @@ data class AppSettings(
     val recentByReceiver: Map<String, List<LastChannel>> = emptyMap(),
     /** Live picture that was on last. Own tuner starts this one when the app opens. */
     val lastLiveSource: LastLiveSource = LastLiveSource.ENIGMA2,
+    /** Settings › Playback: open fullscreen live TV on this source when the app starts. */
+    val startupLive: StartupLive = StartupLive.OFF,
     /** Last live IPTV channel per playlist source key. */
     val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */

@@ -9,6 +9,7 @@ import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.LastLiveSource
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.model.StartupLive
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.model.ReceiverList
 import com.enigmacast.domain.service.BouquetChannels
@@ -272,8 +273,13 @@ class OwnTunerSession @Inject constructor(
         scope.launch {
             val settings = settingsRepository.current()
             val id = settings.activeReceiver()?.id
-            // The last picture was IPTV: keep the bouquet list, but do not take the decoder.
-            val play = settings.streamMode == StreamMode.OWN_TUNER && settings.lastLiveSource != LastLiveSource.IPTV
+            // IPTV startup leaves the decoder free. Satellite startup plays the saved channel
+            // even when the last picture was IPTV. Off keeps the previous rule.
+            val play = settings.streamMode == StreamMode.OWN_TUNER && when (settings.startupLive) {
+                StartupLive.IPTV -> false
+                StartupLive.SATELLITE -> true
+                StartupLive.OFF -> settings.lastLiveSource != LastLiveSource.IPTV
+            }
             if (id != boundReceiverId) {
                 val switching = boundReceiverId != null
                 bind(id)

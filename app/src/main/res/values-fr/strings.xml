@@ -253,6 +253,11 @@
     <string name="receivers_delete_message">Supprimer %1$s ? Cette application n\'utilisera plus ce boîtier.</string>
     <string name="settings_receiver">Récepteur</string>
     <string name="settings_playback">Lecture et streaming</string>
+    <string name="startup_live">Démarrer en TV en direct</string>
+    <string name="startup_live_desc">Ouvre le plein écran sur la dernière chaîne de cette source au démarrage d\'EnigmaCast.</string>
+    <string name="startup_live_off">Désactivé</string>
+    <string name="startup_live_satellite">Satellite</string>
+    <string name="startup_live_iptv">IPTV</string>
     <string name="settings_osd">OSD</string>
     <string name="settings_info">Infos</string>
     <string name="settings_language">Langue</string>
