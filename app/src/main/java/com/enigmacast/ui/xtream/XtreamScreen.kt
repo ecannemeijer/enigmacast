@@ -1,15 +1,18 @@
 package com.enigmacast.ui.xtream
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,7 +23,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,7 +39,12 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,8 +68,10 @@ import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.ui.theme.skinShape
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
@@ -429,12 +441,19 @@ private fun SidePanel(
         if (model.section == XtreamSection.LIVE && (column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)) {
         // Column 3: channels, films, series or the episodes of the opened series.
         var focused by remember { mutableStateOf<XtreamItem?>(null) }
+        val guideOpen = column == PanelColumn.GUIDE
         Column(
-            Modifier.width(420.dp).columnKeys(
+            Modifier
+                .width(if (model.series != null) 420.dp else if (guideOpen) 460.dp else 600.dp)
+                .then(if (model.series == null) Modifier.padding(horizontal = 12.dp, vertical = 20.dp) else Modifier)
+                .columnKeys(
                 onLeft = {
                     when {
                         model.series != null -> model.closeSeries()
-                        column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE -> onColumn(PanelColumn.CATEGORIES)
+                        column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE -> {
+                            model.closeGuide()
+                            onColumn(PanelColumn.CATEGORIES)
+                        }
                         else -> runCatching { categoryFocus.requestFocus() }
                     }
                 },
@@ -448,7 +467,8 @@ private fun SidePanel(
             ),
         ) {
             val series = model.series
-            Header(series?.name ?: model.category?.name.orEmpty(), model.loading)
+            if (series != null) Header(series.name, model.loading)
+            else LiveListHeader(model.category?.name.orEmpty(), model.loading, guideOpen)
             if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
             val state = rememberLazyListState()
             if (series != null) {
@@ -480,12 +500,13 @@ private fun SidePanel(
                         .distinctUntilChanged()
                         .collect { rows -> model.requestEpg(rows.mapNotNull { model.items.getOrNull(it) }) }
                 }
-                var nowSec by remember { mutableStateOf(System.currentTimeMillis() / 1000) }
+                var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
                 LaunchedEffect(Unit) { while (true) { delay(30_000); nowSec = System.currentTimeMillis() / 1000 } }
                 val keyedItems = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
-                LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
+                LazyColumn(state = state, modifier = Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     itemsIndexed(keyedItems, key = { _, k -> k.key }) { index, k ->
                         val item = k.value
+                        val now = model.epg[item.id]?.let { nowNext(it, nowSec) }?.first
                         CompactListRow(
                             onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
                             selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
@@ -496,56 +517,21 @@ private fun SidePanel(
                                     if (index == 0) up = FocusRequester.Cancel
                                     if (index == model.items.lastIndex) down = FocusRequester.Cancel
                                 },
-                        ) {
-                            Column(Modifier.fillMaxWidth()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (item.number > 0 && item.section == XtreamSection.LIVE) {
-                                        Text("${item.number}", fontSize = 13.sp, color = EnigmaColors.Accent, modifier = Modifier.width(44.dp))
-                                    }
-                                    Text(item.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                model.epg[item.id]?.let { nowNext(it, nowSec) }?.first?.let { now ->
-                                    Text("${time(now.startSec)} ${now.title}", fontSize = 11.sp, color = EnigmaColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    val total = (now.endSec - now.startSec).coerceAtLeast(1)
-                                    EnigmaProgramProgress(((nowSec - now.startSec).toFloat() / total).coerceIn(0f, 1f))
-                                }
-                            }
+                        ) { rowFocused ->
+                            IptvChannelRow(model, item, now, nowSec, rowFocused)
                         }
                     }
                 }
             }
         }
         }
-        // Column 4: the programmes of the channel Right was pressed on.
-        if (column == PanelColumn.GUIDE) Column(
-            Modifier.width(380.dp).columnKeys(onLeft = { model.closeGuide(); onColumn(PanelColumn.CHANNELS) }, onRight = {}),
-        ) {
-            Header(model.guideItem?.name.orEmpty(), model.guideLoading)
-            val events = model.guideEvents
-            if (events.isEmpty() && !model.guideLoading) {
-                Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp).focusRequester(guideFocus).focusable())
-            }
-            LazyColumn(Modifier.fillMaxHeight()) {
-                itemsIndexed(events, key = { i, e -> "${e.startSec}/$i" }) { index, e ->
-                    CompactListRow(
-                        onClick = { model.guideItem?.let { model.play(it) }; onPlayed() },
-                        modifier = Modifier
-                            .then(if (index == 0) Modifier.focusRequester(guideFocus) else Modifier)
-                            .focusProperties {
-                                if (index == 0) up = FocusRequester.Cancel
-                                if (index == events.lastIndex) down = FocusRequester.Cancel
-                            },
-                    ) {
-                        Column(Modifier.fillMaxWidth()) {
-                            Row {
-                                Text("${time(e.startSec)} – ${time(e.endSec)}", fontSize = 13.sp, color = EnigmaColors.Accent, modifier = Modifier.width(110.dp))
-                                Text(e.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            if (e.description.isNotBlank()) Text(e.description, fontSize = 11.sp, color = EnigmaColors.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
+        if (column == PanelColumn.GUIDE) {
+            Box(Modifier.fillMaxHeight().width(1.dp).background(EnigmaColors.Raised))
+            IptvEpgPanel(
+                model,
+                guideFocus,
+                onLeft = { model.closeGuide(); onColumn(PanelColumn.CHANNELS) },
+            ) { model.guideItem?.let { model.play(it) }; onPlayed() }
         }
     }
 }
@@ -556,6 +542,236 @@ private fun Header(text: String, loading: Boolean) {
         Text(text, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (loading) EnigmaLoadingIndicator(Modifier.padding(start = 8.dp))
     }
+}
+
+/** Same header as the Enigma2 channel list: title, category, and the Left/Right hint. */
+@Composable
+private fun LiveListHeader(category: String, loading: Boolean, guideOpen: Boolean) {
+    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 8.dp)) {
+        Text(stringResource(R.string.osd_channels), color = Color.White, fontSize = 17.sp, fontWeight = EnigmaType.Strong)
+        Text(
+            category,
+            color = EnigmaColors.Muted,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 10.dp, bottom = 2.dp),
+        )
+        if (loading) EnigmaLoadingIndicator(Modifier.padding(end = 8.dp, bottom = 2.dp))
+        if (!guideOpen) {
+            Text(stringResource(R.string.osd_bouquets_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 2.dp))
+        }
+    }
+}
+
+/** One dense channel row: number, logo, name, start time, title and the progress bar. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.IptvChannelRow(
+    model: XtreamViewModel,
+    item: XtreamItem,
+    now: XtreamEpg?,
+    nowSec: Long,
+    focused: Boolean,
+) {
+    val secondary = if (focused) EnigmaColors.OnFocus.copy(alpha = 0.8f) else EnigmaColors.Muted
+    Text(
+        if (item.number > 0) "${item.number}" else "",
+        fontSize = 12.sp,
+        maxLines = 1,
+        modifier = Modifier.width(34.dp),
+    )
+    ChannelLogo(model, item.icon, item.name)
+    Spacer(Modifier.width(8.dp))
+    Text(
+        item.name,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(0.38f),
+    )
+    Spacer(Modifier.width(8.dp))
+    Column(modifier = Modifier.weight(0.62f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                now?.let { time(it.startSec) }.orEmpty(),
+                color = secondary,
+                fontSize = 11.sp,
+                maxLines = 1,
+                modifier = Modifier.width(36.dp),
+            )
+            Text(
+                now?.title.orEmpty(),
+                color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (now != null) {
+            val total = (now.endSec - now.startSec).coerceAtLeast(1)
+            EnigmaProgramProgress(
+                fraction = ((nowSec - now.startSec).toFloat() / total).coerceIn(0f, 1f),
+                modifier = Modifier.padding(start = 36.dp, top = 2.dp),
+                emphasized = !focused,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelLogo(model: XtreamViewModel, url: String, name: String) {
+    val bitmap by produceState<ImageBitmap?>(model.cachedLogo(url), url) {
+        if (value == null && url.isNotBlank()) value = model.logo(url)
+    }
+    Box(Modifier.width(36.dp).height(22.dp), contentAlignment = Alignment.Center) {
+        val image = bitmap
+        if (image != null) {
+            Image(image, contentDescription = name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        } else {
+            Text(name.take(10), color = EnigmaColors.Muted, fontSize = 8.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * The channel's programmes, laid out like the Enigma2 panel. Left closes it.
+ * OK plays the channel; IPTV has no receiver recording from this list.
+ */
+@Composable
+private fun IptvEpgPanel(
+    model: XtreamViewModel,
+    guideFocus: FocusRequester,
+    onLeft: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    val events = model.guideEvents
+    var focusedIndex by remember(model.guideItem?.id) { mutableIntStateOf(0) }
+    var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            nowSec = System.currentTimeMillis() / 1000
+        }
+    }
+    Column(
+        Modifier
+            .fillMaxHeight()
+            .width(480.dp)
+            .padding(horizontal = 12.dp, vertical = 20.dp)
+            .columnKeys(onLeft = onLeft, onRight = {}),
+    ) {
+        Text(
+            model.guideItem?.name.orEmpty(),
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = EnigmaType.Strong,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+            Text(stringResource(R.string.epg_panel_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            if (model.guideLoading) EnigmaLoadingIndicator(Modifier.padding(start = 8.dp))
+        }
+        if (events.isEmpty()) {
+            CompactListRow(onClick = {}, modifier = Modifier.focusRequester(guideFocus)) {
+                Text(
+                    stringResource(if (model.guideLoading) R.string.epg_loading else R.string.osd_no_programme_data),
+                    fontSize = 13.sp,
+                )
+            }
+            return@Column
+        }
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            itemsIndexed(events, key = { i, e -> "${e.startSec}/$i" }) { index, event ->
+                val airing = event.startSec <= nowSec && nowSec < event.endSec
+                CompactListRow(
+                    onClick = onPlay,
+                    selected = airing,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier
+                        .then(if (index == 0) Modifier.focusRequester(guideFocus) else Modifier)
+                        .onFocusChanged { if (it.isFocused) focusedIndex = index }
+                        .focusProperties {
+                            if (index == 0) up = FocusRequester.Cancel
+                            if (index == events.lastIndex) down = FocusRequester.Cancel
+                        },
+                ) { rowFocused ->
+                    val secondary = if (rowFocused) EnigmaColors.OnFocus.copy(alpha = 0.8f) else EnigmaColors.Muted
+                    Text(time(event.startSec), color = secondary, fontSize = 12.sp, modifier = Modifier.width(44.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                event.title,
+                                fontSize = 13.sp,
+                                fontWeight = if (airing) EnigmaType.Strong else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                stringResource(R.string.quick_minutes, ((event.endSec - event.startSec) / 60).toInt()),
+                                color = secondary,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(start = 6.dp),
+                            )
+                        }
+                        if (airing) {
+                            val total = (event.endSec - event.startSec).coerceAtLeast(1)
+                            GuideBar(((nowSec - event.startSec).toFloat() / total).coerceIn(0f, 1f), Modifier.fillMaxWidth().padding(top = 3.dp))
+                        }
+                    }
+                }
+            }
+        }
+        val selected = events.getOrNull(focusedIndex) ?: events.first()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .padding(top = 10.dp)
+                .background(EnigmaColors.Card, skinShape(8.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(selected.title, color = Color.White, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(programmeWhen(selected, nowSec), color = EnigmaColors.Accent, fontSize = 12.sp)
+            Text(
+                selected.description,
+                color = EnigmaColors.Muted,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuideBar(fraction: Float, modifier: Modifier = Modifier) {
+    Box(modifier.height(3.dp).background(EnigmaColors.Raised, skinShape(2.dp))) {
+        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(3.dp).background(EnigmaColors.Accent, skinShape(2.dp)))
+    }
+}
+
+@Composable
+private fun programmeWhen(event: XtreamEpg, nowSec: Long): String {
+    val range = stringResource(
+        R.string.epg_time_range,
+        time(event.startSec),
+        time(event.endSec),
+        ((event.endSec - event.startSec) / 60).toInt(),
+    )
+    val zone = ZoneId.systemDefault()
+    val day = Instant.ofEpochSecond(event.startSec).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochSecond(nowSec).atZone(zone).toLocalDate()
+    val label = when (day) {
+        today -> stringResource(R.string.epg_today)
+        today.plusDays(1) -> stringResource(R.string.epg_tomorrow)
+        else -> day.format(DateTimeFormatter.ofPattern("EEE d MMM", LocalConfiguration.current.locales[0] ?: Locale.getDefault()))
+    }
+    return label + "  " + range
 }
 
 /** The programme on now and the next one. */
