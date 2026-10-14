@@ -12,6 +12,12 @@ data class BouquetRow(
     val position: Int,
 )
 
+/** One bouquet name, so a service lookup does not materialise the channel table. */
+data class BouquetNameRow(val name: String, val reference: String)
+
+/** A channel row that was stored before its service key was filled in. */
+data class UnkeyedChannelRow(val reference: String, val bouquetReference: String)
+
 @Entity(tableName = "channels", primaryKeys = ["receiverKey", "bouquetReference", "reference"])
 data class ChannelRow(
     val receiverKey: String,

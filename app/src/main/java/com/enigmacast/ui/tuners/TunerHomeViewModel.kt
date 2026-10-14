@@ -127,13 +127,21 @@ class TunerHomeViewModel @Inject constructor(
     private suspend fun loadChannelInfo(receiver: ReceiverConfig) {
         val nowSec = System.currentTimeMillis() / 1000
         val next = mutableMapOf<String, CardChannel>()
-        for (ref in cards.flatMap { c -> c.uses.map { it.reference } }.filter { it.isNotBlank() }.distinct()) {
+        val refs = cards.flatMap { c -> c.uses.map { it.reference } }.filter { it.isNotBlank() }.distinct()
+        val started = System.nanoTime()
+        for (ref in refs) {
             val bouquet = runCatching { guideCache.bouquetOf(receiver, ref)?.name }.getOrNull().orEmpty()
             val events = runCatching { guideCache.serviceEvents(receiver, ref) }.getOrNull()
                 ?.takeIf { list -> list.any { it.covers(nowSec) } }
                 ?: runCatching { api.serviceEvents(receiver, ref) }.getOrDefault(emptyList())
             next[ref] = CardChannel(bouquet, events.firstOrNull { it.covers(nowSec) })
         }
+        // #region agent log
+        android.util.Log.i(
+            "DBG-ee9576",
+            """{"sessionId":"ee9576","runId":"post-fix","hypothesisId":"D","location":"TunerHomeViewModel.kt:loadChannelInfo","message":"home channel info","data":{"refs":${refs.size},"ms":${(System.nanoTime() - started) / 1_000_000}},"timestamp":${System.currentTimeMillis()}}""",
+        )
+        // #endregion
         channelInfo = next
     }
 

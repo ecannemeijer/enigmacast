@@ -61,6 +61,21 @@ interface CacheDao {
     @Query("SELECT * FROM bouquets WHERE receiverKey = :receiverKey ORDER BY position")
     suspend fun bouquets(receiverKey: String): List<BouquetRow>
 
+    /**
+     * Bouquet that contains this service, earliest in the bouquet list.
+     * Reading every channel (tens of thousands of rows, about 13 MB) refills the 2 MB cursor window.
+     */
+    @Query(
+        "SELECT b.name AS name, b.reference AS reference FROM bouquets b " +
+            "INNER JOIN channels c ON c.receiverKey = b.receiverKey AND c.bouquetReference = b.reference " +
+            "WHERE c.receiverKey = :receiverKey AND c.serviceKey = :serviceKey " +
+            "ORDER BY b.position LIMIT 1",
+    )
+    suspend fun bouquetHolding(receiverKey: String, serviceKey: String): BouquetNameRow?
+
+    @Query("SELECT reference, bouquetReference FROM channels WHERE receiverKey = :receiverKey AND serviceKey = ''")
+    suspend fun channelsWithoutServiceKey(receiverKey: String): List<UnkeyedChannelRow>
+
     @Query("SELECT * FROM channels WHERE receiverKey = :receiverKey ORDER BY position")
     suspend fun channels(receiverKey: String): List<ChannelRow>
 
