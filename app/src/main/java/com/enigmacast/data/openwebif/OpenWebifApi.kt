@@ -478,6 +478,19 @@ class OpenWebifApi @Inject constructor(
         """{"events":[]}"""
     }
 
+    /**
+     * A text file on the receiver through OpenWebif `/file?file=` (read-only), or null when it
+     * does not exist: OpenWebif answers 200 with "File '<path>' not found" then.
+     */
+    suspend fun receiverTextFile(config: ReceiverConfig, path: String): String? {
+        val response = execute(config, endpoints.recordedFile(config, path), accept = "*/*")
+        if (response.code == 404) return null
+        if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
+        if (response.code !in 200..299) throw OpenWebifException("HTTP ${response.code}", response.code)
+        val text = response.bytes.toString(Charsets.UTF_8)
+        return text.takeUnless { OpenWebifFiles.isNotFound(text, path) }
+    }
+
     private suspend fun get(config: ReceiverConfig, url: String): String {
         val response = execute(config, url, accept = "application/json")
         if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
@@ -556,4 +569,12 @@ class OpenWebifApi @Inject constructor(
         val capabilities: ReceiverCapabilities?,
         val failure: String?,
     )
+}
+
+/** OpenWebif's answer for a missing file in `/file?file=`. */
+object OpenWebifFiles {
+    fun isNotFound(body: String, path: String): Boolean {
+        val head = body.trimStart().take(path.length + 40)
+        return head.startsWith("File ") && head.contains(path) && head.contains("not found", ignoreCase = true)
+    }
 }

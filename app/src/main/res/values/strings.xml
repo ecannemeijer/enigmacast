@@ -1239,4 +1239,17 @@ Profile: %2$s</string>
     <string name="skin_midnight" translatable="false">Midnight</string>
     <string name="skin_metrix" translatable="false">Metrix</string>
     <string name="skin_aurora" translatable="false">Aurora</string>
+    <string name="nav_iptv">IPTV</string>
+    <string name="premium_feature_xtream">IPTV (XStreamity playlists)</string>
+    <string name="xtream_none">No XStreamity playlists found on this receiver.</string>
+    <string name="xtream_choose_playlist">Choose a playlist</string>
+    <string name="xtream_choose_playlist_desc">The XStreamity plugin on your receiver has several playlists.</string>
+    <string name="xtream_live">Live TV</string>
+    <string name="xtream_movies">Films</string>
+    <string name="xtream_series">Series</string>
+    <string name="xtream_refresh">Refresh</string>
+    <string name="xtream_categories">Categories</string>
+    <string name="xtream_load_error">The IPTV server did not answer. Try Refresh.</string>
+    <string name="xtream_play_error">This stream cannot be played (%1$s).</string>
+    <string name="xtream_banner_hint">◀ list · ▲▼ channel</string>
 </resources>

@@ -8,6 +8,7 @@ enum class AppScreen {
     Remote,
     Settings,
     SettingsImport,
+    Xtream,
     Diagnostics,
     SignalMeter,
     Oscam,

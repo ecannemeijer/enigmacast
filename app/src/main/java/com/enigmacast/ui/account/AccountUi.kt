@@ -170,6 +170,7 @@ fun PremiumDialog(feature: PremiumFeature, onDismiss: () -> Unit) {
             PremiumFeature.SOCCER -> R.string.premium_feature_soccer
             PremiumFeature.EPG -> R.string.premium_feature_epg
             PremiumFeature.SETTINGS_IMPORT -> R.string.premium_feature_settings_import
+            PremiumFeature.XTREAM -> R.string.premium_feature_xtream
         },
     )
     TvChoiceDialog(

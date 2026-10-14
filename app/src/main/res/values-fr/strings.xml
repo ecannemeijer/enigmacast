@@ -1240,4 +1240,17 @@ Profil : %2$s</string>
     <string name="import_cancelled_loaded">Annulé après l\'écriture de tous les fichiers. Les nouvelles listes sont sur le récepteur.</string>
     <string name="osd_remaining_min">+%1$d min</string>
     <string name="osd_duration_min">%1$d min</string>
+    <string name="nav_iptv">IPTV</string>
+    <string name="premium_feature_xtream">IPTV (playlists XStreamity)</string>
+    <string name="xtream_none">Aucune playlist XStreamity trouvée sur ce récepteur.</string>
+    <string name="xtream_choose_playlist">Choisir une playlist</string>
+    <string name="xtream_choose_playlist_desc">Le plugin XStreamity de votre récepteur a plusieurs playlists.</string>
+    <string name="xtream_live">TV en direct</string>
+    <string name="xtream_movies">Films</string>
+    <string name="xtream_series">Séries</string>
+    <string name="xtream_refresh">Actualiser</string>
+    <string name="xtream_categories">Catégories</string>
+    <string name="xtream_load_error">Le serveur IPTV ne répond pas. Essayez Actualiser.</string>
+    <string name="xtream_play_error">Ce flux ne peut pas être lu (%1$s).</string>
+    <string name="xtream_banner_hint">◀ liste · ▲▼ chaîne</string>
 </resources>

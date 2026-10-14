@@ -16,6 +16,9 @@ enum class PremiumFeature {
 
     /** Settings import: channel lists from GitHub and IPTV bouquets loaded on the receiver. */
     SETTINGS_IMPORT,
+
+    /** IPTV: the Xtream Codes playlists of the receiver's XStreamity plugin, played in the app. */
+    XTREAM,
 }
 
 /**
@@ -59,6 +62,7 @@ object Entitlements {
         PremiumFeature.SOCCER,
         PremiumFeature.EPG,
         PremiumFeature.SETTINGS_IMPORT,
+        PremiumFeature.XTREAM,
         -> isPremium(account, nowMs)
     }
 

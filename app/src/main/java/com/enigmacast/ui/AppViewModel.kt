@@ -358,6 +358,10 @@ class AppViewModel @Inject constructor(
         toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
         screen = AppScreen.SettingsImport
     }
+    /** IPTV (XStreamity playlists) in full screen; Back returns to the dashboard. */
+    fun openXtream() {
+        screen = AppScreen.Xtream
+    }
 
     fun openOscam() {
         toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
@@ -370,6 +374,7 @@ class AppViewModel @Inject constructor(
 
     fun back() {
         screen = when (screen) {
+            AppScreen.Xtream -> AppScreen.Dashboard
             AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport -> {
                 if (toolReturn == AppScreen.Dashboard) returnToSettingsHub = true
                 toolReturn

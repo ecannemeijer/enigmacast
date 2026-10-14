@@ -1231,4 +1231,17 @@ Profiel: %2$s</string>
     <string name="import_cancelled_loaded">Geannuleerd nadat alle bestanden geschreven waren. De nieuwe lijsten staan op de ontvanger.</string>
     <string name="osd_remaining_min">+%1$d min</string>
     <string name="osd_duration_min">%1$d min</string>
+    <string name="nav_iptv">IPTV</string>
+    <string name="premium_feature_xtream">IPTV (XStreamity-playlists)</string>
+    <string name="xtream_none">Geen XStreamity-playlists gevonden op deze ontvanger.</string>
+    <string name="xtream_choose_playlist">Kies een playlist</string>
+    <string name="xtream_choose_playlist_desc">De XStreamity-plugin op je ontvanger heeft meerdere playlists.</string>
+    <string name="xtream_live">Live tv</string>
+    <string name="xtream_movies">Films</string>
+    <string name="xtream_series">Series</string>
+    <string name="xtream_refresh">Vernieuwen</string>
+    <string name="xtream_categories">Categorieën</string>
+    <string name="xtream_load_error">De IPTV-server antwoordde niet. Probeer Vernieuwen.</string>
+    <string name="xtream_play_error">Deze stream kan niet worden afgespeeld (%1$s).</string>
+    <string name="xtream_banner_hint">◀ lijst · ▲▼ zender</string>
 </resources>

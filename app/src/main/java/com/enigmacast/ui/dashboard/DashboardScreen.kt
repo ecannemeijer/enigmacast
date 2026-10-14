@@ -186,6 +186,7 @@ fun DashboardScreen(
     onSignalMeter: () -> Unit = {},
     onOscam: () -> Unit = {},
     onSettingsImport: () -> Unit = {},
+    onXtream: () -> Unit = {},
     onRunSetup: () -> Unit = {},
     onChooseLanguage: (AppLanguage) -> Unit = {},
     pendingSearchQuery: String? = null,
@@ -247,6 +248,8 @@ fun DashboardScreen(
     val accountModel: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
     val account by accountModel.account.collectAsState()
     val premium = accountModel.isPremium(account)
+    val xtreamModel: com.enigmacast.ui.xtream.XtreamViewModel = hiltViewModel()
+    val xtreamAvailable = xtreamModel.detection.collectAsState().value?.available == true
     /** Free accounts: these menu items show a lock and open the Premium dialog. */
     fun lockedFeature(target: DashSection): com.enigmacast.domain.account.PremiumFeature? = if (premium) null else when (target) {
         DashSection.Guide -> com.enigmacast.domain.account.PremiumFeature.EPG
@@ -456,6 +459,20 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Series && lockedFeature(DashSection.Series) == null) seriesContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Series) },
                 )
+                if (xtreamAvailable) {
+                    NavItem(
+                        icon = EnigmaIcons.Tv,
+                        label = stringResource(R.string.nav_iptv),
+                        selected = false,
+                        showLabel = drawerExpanded,
+                        locked = !premium,
+                        staggerIndex = 4,
+                        modifier = Modifier.focusProperties { right = FocusRequester.Cancel },
+                        onClick = {
+                            if (accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) onXtream()
+                        },
+                    )
+                }
                 NavItem(
                     icon = EnigmaIcons.Soccer,
                     label = stringResource(R.string.nav_soccer),
