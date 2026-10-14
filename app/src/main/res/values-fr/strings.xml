@@ -1304,4 +1304,15 @@ Profil : %2$s</string>
     <string name="library_remove_title">Retirer de la Bibliothèque ?</string>
     <string name="library_remove_message">Retirer « %1$s » ? Le film ou la série reste dans la playlist.</string>
     <string name="library_remove">Retirer</string>
+    <string name="settings_lock">Verrouillage</string>
+    <string name="pin_lock_toggle">Verrouiller les réglages</string>
+    <string name="pin_lock_desc">Demander un code PIN à 4 chiffres avant d\'ouvrir les Réglages. Oublié ? Effacer les données de l\'app supprime le verrouillage.</string>
+    <string name="pin_change">Changer le code PIN</string>
+    <string name="pin_unlock_title">Saisissez le code PIN pour ouvrir les Réglages</string>
+    <string name="pin_new_title">Choisissez un code PIN à 4 chiffres</string>
+    <string name="pin_repeat_title">Saisissez à nouveau le code PIN</string>
+    <string name="pin_current_title">Saisissez votre code PIN actuel</string>
+    <string name="pin_mismatch">Les codes PIN ne correspondent pas. Recommencez.</string>
+    <string name="pin_wrong">Code PIN incorrect. Encore %1$d essais.</string>
+    <string name="pin_cooldown">Trop de codes PIN incorrects. Réessayez dans %1$d s.</string>
 </resources>

@@ -1303,4 +1303,15 @@ Profile: %2$s</string>
     <string name="library_remove_title">Remove from Library?</string>
     <string name="library_remove_message">Remove “%1$s”? The film or series stays in the playlist.</string>
     <string name="library_remove">Remove</string>
+    <string name="settings_lock">Lock</string>
+    <string name="pin_lock_toggle">Lock settings</string>
+    <string name="pin_lock_desc">Ask for a 4-digit PIN before Settings opens. Forgot it? Clearing the app’s data removes the lock.</string>
+    <string name="pin_change">Change PIN</string>
+    <string name="pin_unlock_title">Enter PIN to open Settings</string>
+    <string name="pin_new_title">Choose a 4-digit PIN</string>
+    <string name="pin_repeat_title">Enter the PIN again</string>
+    <string name="pin_current_title">Enter your current PIN</string>
+    <string name="pin_mismatch">The PINs did not match. Choose again.</string>
+    <string name="pin_wrong">Wrong PIN. %1$d attempts left.</string>
+    <string name="pin_cooldown">Too many wrong PINs. Try again in %1$d s.</string>
 </resources>

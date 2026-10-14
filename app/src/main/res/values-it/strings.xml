@@ -1304,4 +1304,15 @@ Profilo: %2$s</string>
     <string name="library_remove_title">Rimuovere dalla Libreria?</string>
     <string name="library_remove_message">Rimuovere “%1$s”? Il film o la serie resta nella playlist.</string>
     <string name="library_remove">Rimuovi</string>
+    <string name="settings_lock">Blocco</string>
+    <string name="pin_lock_toggle">Blocca impostazioni</string>
+    <string name="pin_lock_desc">Chiedi un PIN di 4 cifre prima di aprire le Impostazioni. Dimenticato? Cancellare i dati dell\'app rimuove il blocco.</string>
+    <string name="pin_change">Cambia PIN</string>
+    <string name="pin_unlock_title">Inserisci il PIN per aprire le Impostazioni</string>
+    <string name="pin_new_title">Scegli un PIN di 4 cifre</string>
+    <string name="pin_repeat_title">Inserisci di nuovo il PIN</string>
+    <string name="pin_current_title">Inserisci il PIN attuale</string>
+    <string name="pin_mismatch">I PIN non coincidono. Scegli di nuovo.</string>
+    <string name="pin_wrong">PIN errato. Ancora %1$d tentativi.</string>
+    <string name="pin_cooldown">Troppi PIN errati. Riprova tra %1$d s.</string>
 </resources>

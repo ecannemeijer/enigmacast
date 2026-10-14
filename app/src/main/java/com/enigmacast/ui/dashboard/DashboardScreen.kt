@@ -163,6 +163,7 @@ private enum class SettingPage {
     Keys,
     Guide,
     Iptv,
+    Lock,
     Recordings,
     Appearance,
     Remote,
@@ -246,6 +247,17 @@ fun DashboardScreen(
     var settingsFormOpen by remember { mutableStateOf(false) }
     val bouquetFocus = remember { FocusRequester() }
     val tvMenuFocus = remember { FocusRequester() }
+    // Settings lock: unlocked until Settings is left or the app goes to the background.
+    val settingsLock: com.enigmacast.ui.security.SettingsLockViewModel = hiltViewModel()
+    LaunchedEffect(section) { if (section != DashSection.Settings) settingsLock.lock.relock() }
+    val lockLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lockLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) settingsLock.lock.relock()
+        }
+        lockLifecycle.lifecycle.addObserver(observer)
+        onDispose { lockLifecycle.lifecycle.removeObserver(observer) }
+    }
     /** The TV / Library flyout, open for that group (null when closed), and where it sits. */
     var flyout by remember { mutableStateOf<DashGroup?>(null) }
     val flyoutAnchor = remember { androidx.compose.runtime.mutableStateMapOf<DashGroup, androidx.compose.ui.geometry.Offset>() }
@@ -729,6 +741,16 @@ fun DashboardScreen(
                         )
                         }
                         DashSection.Settings -> {
+                        val lockEnabled by settingsLock.lock.enabled.collectAsState()
+                        val unlocked by settingsLock.lock.unlocked.collectAsState()
+                        if (lockEnabled && !unlocked) {
+                            // Every way into Settings (menu, deep links, shortcuts) passes the PIN pad first.
+                            LaunchedEffect(Unit) { settingsLock.start(com.enigmacast.ui.security.PinStep.UNLOCK) }
+                            com.enigmacast.ui.security.PinFlow(settingsLock) {
+                                openSection(DashSection.Home)
+                                runCatching { homeFocus.requestFocus() }
+                            }
+                        } else {
                         LaunchedEffect(sectionEnter) {
                             if (sectionEnter == 0) return@LaunchedEffect
                             settingsPageFocus.requestWhenReady()
@@ -748,6 +770,7 @@ fun DashboardScreen(
                             onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
                         )
+                        }
                         }
                     }
                     }
@@ -1208,6 +1231,7 @@ private fun SettingsHub(
                 SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_keys), page == SettingPage.Keys, navFocus.getValue(SettingPage.Keys), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Keys) }) { enterPage(SettingPage.Keys) }
                 SettingNav(EnigmaIcons.Guide, stringResource(R.string.settings_guide_home), page == SettingPage.Guide, navFocus.getValue(SettingPage.Guide), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Guide) }) { enterPage(SettingPage.Guide) }
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
+                SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_lock), page == SettingPage.Lock, navFocus.getValue(SettingPage.Lock), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Lock) }) { enterPage(SettingPage.Lock) }
                 SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
                 SettingNav(EnigmaIcons.Palette, stringResource(R.string.settings_appearance), page == SettingPage.Appearance, navFocus.getValue(SettingPage.Appearance), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Appearance) }) { enterPage(SettingPage.Appearance) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
@@ -1307,6 +1331,7 @@ private fun SettingsHub(
                     SettingPage.Keys -> com.enigmacast.ui.keys.RemoteKeysSettingsPanel(pageContentFocus, settings.streamMode)
                     SettingPage.Guide -> GuideHomeSettingsPanel(pageContentFocus)
                     SettingPage.Iptv -> IptvSettingsPanel(pageContentFocus)
+                    SettingPage.Lock -> LockSettingsPanel(pageContentFocus)
                     SettingPage.Recordings -> PlaybackSettingsPanel(
                         settings.streamMode,
                         settings.playback.lowLatency,
@@ -1757,6 +1782,37 @@ private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         com.enigmacast.ui.home.HomeFilmSettingsCard()
         com.enigmacast.ui.home.DataSyncSettingsCard()
+    }
+}
+
+/** Settings › Lock: PIN for Settings (on asks a new PIN twice, off and change ask the current one). */
+@Composable
+private fun LockSettingsPanel(contentFocus: FocusRequester) {
+    val model: com.enigmacast.ui.security.SettingsLockViewModel = hiltViewModel()
+    val enabled by model.lock.enabled.collectAsState()
+    Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        com.enigmacast.ui.theme.SettingsCard(stringResource(R.string.settings_lock)) {
+            com.enigmacast.ui.theme.ToggleRow(
+                title = stringResource(R.string.pin_lock_toggle),
+                description = stringResource(R.string.pin_lock_desc),
+                checked = enabled,
+                onCheckedChange = { on -> model.start(if (on) com.enigmacast.ui.security.PinStep.NEW else com.enigmacast.ui.security.PinStep.CURRENT_TO_DISABLE) },
+            )
+            if (enabled) com.enigmacast.ui.theme.ValueRow(
+                title = stringResource(R.string.pin_change),
+                value = "••••",
+                onClick = { model.start(com.enigmacast.ui.security.PinStep.CURRENT_TO_CHANGE) },
+            )
+        }
+    }
+    if (model.step != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = model::cancel,
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            com.enigmacast.ui.theme.NavigationSoundsForWindow()
+            com.enigmacast.ui.security.PinFlow(model) { runCatching { contentFocus.requestFocus() } }
+        }
     }
 }
 

@@ -1295,4 +1295,15 @@ Profiel: %2$s</string>
     <string name="library_remove_title">Verwijderen uit Bibliotheek?</string>
     <string name="library_remove_message">“%1$s” verwijderen? De film of serie blijft in de playlist.</string>
     <string name="library_remove">Verwijderen</string>
+    <string name="settings_lock">Vergrendeling</string>
+    <string name="pin_lock_toggle">Instellingen vergrendelen</string>
+    <string name="pin_lock_desc">Vraag een pincode van 4 cijfers voordat Instellingen opent. Vergeten? Wis de app-gegevens om de vergrendeling te verwijderen.</string>
+    <string name="pin_change">Pincode wijzigen</string>
+    <string name="pin_unlock_title">Voer de pincode in om Instellingen te openen</string>
+    <string name="pin_new_title">Kies een pincode van 4 cijfers</string>
+    <string name="pin_repeat_title">Voer de pincode nogmaals in</string>
+    <string name="pin_current_title">Voer je huidige pincode in</string>
+    <string name="pin_mismatch">De pincodes kwamen niet overeen. Kies opnieuw.</string>
+    <string name="pin_wrong">Onjuiste pincode. Nog %1$d pogingen.</string>
+    <string name="pin_cooldown">Te vaak een onjuiste pincode. Probeer het over %1$d s opnieuw.</string>
 </resources>

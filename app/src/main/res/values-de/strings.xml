@@ -1300,4 +1300,15 @@ Profil: %2$s</string>
     <string name="library_remove_title">Aus Mediathek entfernen?</string>
     <string name="library_remove_message">„%1$s“ entfernen? Der Film oder die Serie bleibt in der Playlist.</string>
     <string name="library_remove">Entfernen</string>
+    <string name="settings_lock">Sperre</string>
+    <string name="pin_lock_toggle">Einstellungen sperren</string>
+    <string name="pin_lock_desc">Vor dem Öffnen der Einstellungen eine 4-stellige PIN abfragen. Vergessen? Das Löschen der App-Daten entfernt die Sperre.</string>
+    <string name="pin_change">PIN ändern</string>
+    <string name="pin_unlock_title">PIN eingeben, um die Einstellungen zu öffnen</string>
+    <string name="pin_new_title">4-stellige PIN wählen</string>
+    <string name="pin_repeat_title">PIN erneut eingeben</string>
+    <string name="pin_current_title">Aktuelle PIN eingeben</string>
+    <string name="pin_mismatch">Die PINs stimmen nicht überein. Bitte neu wählen.</string>
+    <string name="pin_wrong">Falsche PIN. Noch %1$d Versuche.</string>
+    <string name="pin_cooldown">Zu viele falsche PINs. In %1$d s erneut versuchen.</string>
 </resources>
