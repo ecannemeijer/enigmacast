@@ -1296,4 +1296,12 @@ Profil : %2$s</string>
     <string name="iptv_categories_title">Choisir les catégories</string>
     <string name="iptv_categories_count">%1$d sur %2$d affichées</string>
     <string name="iptv_categories_none">Cette section n\'a pas de catégories.</string>
+    <string name="iptv_library_add">Ajouter à la Bibliothèque</string>
+    <string name="iptv_library_remove">Retirer de la Bibliothèque</string>
+    <string name="library_continue">Reprendre la lecture</string>
+    <string name="library_iptv_favorites">Favoris IPTV</string>
+    <string name="library_remove_continue">Retirer de Reprendre la lecture</string>
+    <string name="library_remove_title">Retirer de la Bibliothèque ?</string>
+    <string name="library_remove_message">Retirer « %1$s » ? Le film ou la série reste dans la playlist.</string>
+    <string name="library_remove">Retirer</string>
 </resources>

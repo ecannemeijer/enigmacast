@@ -1292,4 +1292,12 @@ Profil: %2$s</string>
     <string name="iptv_categories_title">Kategorien auswählen</string>
     <string name="iptv_categories_count">%1$d von %2$d angezeigt</string>
     <string name="iptv_categories_none">Dieser Bereich hat keine Kategorien.</string>
+    <string name="iptv_library_add">Zur Mediathek hinzufügen</string>
+    <string name="iptv_library_remove">Aus Mediathek entfernen</string>
+    <string name="library_continue">Weiterschauen</string>
+    <string name="library_iptv_favorites">IPTV-Favoriten</string>
+    <string name="library_remove_continue">Aus Weiterschauen entfernen</string>
+    <string name="library_remove_title">Aus Mediathek entfernen?</string>
+    <string name="library_remove_message">„%1$s“ entfernen? Der Film oder die Serie bleibt in der Playlist.</string>
+    <string name="library_remove">Entfernen</string>
 </resources>

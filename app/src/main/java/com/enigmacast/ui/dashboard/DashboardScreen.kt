@@ -723,6 +723,7 @@ fun DashboardScreen(
                             onPlay = onStream,
                             onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
+                            onXtream = onXtream,
                         )
                         }
                         DashSection.Settings -> {

@@ -232,6 +232,8 @@ internal fun XtreamVodPage(
                 resumeLabel = null,
                 onResume = null,
                 below = if (isSeries) ({ Episodes(model, item, onPlayed) }) else null,
+                favorite = remember(item, model.favoriteVersion) { model.isFavorite(item) },
+                onFavorite = { model.toggleFavorite(item) },
             ),
         )
     }

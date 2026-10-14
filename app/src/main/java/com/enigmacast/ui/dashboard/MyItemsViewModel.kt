@@ -29,7 +29,69 @@ class MyItemsViewModel @Inject constructor(
     private val resume: com.enigmacast.live.ResumeTracker,
     private val artwork: com.enigmacast.live.RecordingArtwork,
     receiverNames: com.enigmacast.live.ReceiverNames,
+    private val iptv: com.enigmacast.data.xtream.IptvLibrary,
+    private val gate: com.enigmacast.live.PremiumGate,
+    private val playlistStore: com.enigmacast.data.xtream.IptvPlaylistStore,
+    private val xtream: com.enigmacast.data.xtream.XtreamRepository,
+    private val settingsSource: SettingsRepository,
 ) : ViewModel() {
+    /** Playlist accounts that are configured now; Library hides (keeps) entries of others. */
+    private val activeSources = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+
+    private suspend fun loadSources() {
+        val settings = settingsSource.current()
+        activeSources.value = runCatching {
+            if (settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+                val login = playlistStore.login.value
+                when (settings.iptvPlaylistKind) {
+                    com.enigmacast.domain.model.IptvPlaylistKind.XTREAM -> setOfNotNull(login.xtreamAccount()?.key)
+                    com.enigmacast.domain.model.IptvPlaylistKind.M3U ->
+                        if (login.configured(com.enigmacast.domain.model.IptvPlaylistKind.M3U)) setOf(com.enigmacast.ui.xtream.XtreamViewModel.M3U_ACCOUNT.key) else emptySet()
+                }
+            } else {
+                val receiver = settings.activeReceiver() ?: return@runCatching emptySet<String>()
+                (xtream.cachedDetection(receiver.id) ?: xtream.detect(receiver)).accounts.map { it.key }.toSet()
+            }
+        }.getOrDefault(emptySet())
+    }
+
+    /** Library › Continue watching and IPTV favorites (Premium IPTV only). */
+    val iptvContinue: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
+        combine(iptv.resumes, activeSources) { rows, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.continueWatching(rows, sources) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val iptvFavorites: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
+        combine(iptv.favorites, iptv.resumeMap, activeSources) { rows, resumes, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.favorites(rows, resumes, sources) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    fun iptvAllowed(): Boolean = gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM)
+
+    /** OK on an IPTV card: the IPTV page plays the film (resume dialog) or shows the series. */
+    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit) {
+        if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
+        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open)
+        onXtream()
+    }
+
+    /** Options on an IPTV card, then the confirmation, as for recordings. */
+    var iptvOptions by mutableStateOf<com.enigmacast.domain.xtream.IptvLibraryCard?>(null)
+        private set
+    var iptvPendingRemove by mutableStateOf<com.enigmacast.domain.xtream.IptvLibraryCard?>(null)
+        private set
+    fun optionsIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard) { iptvOptions = card }
+    fun dismissIptvOptions() { iptvOptions = null }
+    fun askRemoveIptv() { iptvPendingRemove = iptvOptions; iptvOptions = null }
+    fun dismissRemoveIptv() { iptvPendingRemove = null }
+    fun confirmRemoveIptv() {
+        val card = iptvPendingRemove ?: return
+        iptvPendingRemove = null
+        if (card.key.startsWith("fav/")) {
+            iptv.setFavorite(com.enigmacast.data.db.IptvLibraryRow(card.source, card.kind, card.id, "", null, null, null, "", "", "", 0), false)
+        } else {
+            iptv.clearResume(card.source, card.kind, card.id)
+        }
+    }
+
+    init { viewModelScope.launch { settingsSource.settings.collect { loadSources() } } }
+
     /** Saved positions by recording id, for the progress bars. */
     val resumePoints: StateFlow<Map<String, com.enigmacast.domain.resume.ResumePoint>> = resume.points
     /** TMDB matches by recording id (null = no match, placeholder). */

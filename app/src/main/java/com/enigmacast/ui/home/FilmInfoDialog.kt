@@ -185,6 +185,9 @@ fun FilmInfoDialog(
                             if (plot.length > PLOT_MORE_CHARS) {
                                 EnigmaGlassButton(stringResource(R.string.home_more), { showPlot = true })
                             }
+                            vod.onFavorite?.let { toggle ->
+                                EnigmaGlassButton(stringResource(if (vod.favorite) R.string.iptv_library_remove else R.string.iptv_library_add), toggle)
+                            }
                             EnigmaGlassButton(
                                 stringResource(R.string.home_close),
                                 onClose,
@@ -240,6 +243,9 @@ data class VodDetail(
     val resumeLabel: String? = null,
     val onResume: (() -> Unit)? = null,
     val below: (@Composable () -> Unit)? = null,
+    /** Library › IPTV favorites: Add / Remove toggle (null hides the button). */
+    val favorite: Boolean = false,
+    val onFavorite: (() -> Unit)? = null,
 )
 
 /** "More": the whole plot (and tagline) in a small window; Back or OK closes it. */

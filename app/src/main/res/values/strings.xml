@@ -1295,4 +1295,12 @@ Profile: %2$s</string>
     <string name="iptv_categories_title">Choose categories</string>
     <string name="iptv_categories_count">%1$d of %2$d shown</string>
     <string name="iptv_categories_none">This section has no categories.</string>
+    <string name="iptv_library_add">Add to Library</string>
+    <string name="iptv_library_remove">Remove from Library</string>
+    <string name="library_continue">Continue watching</string>
+    <string name="library_iptv_favorites">IPTV favorites</string>
+    <string name="library_remove_continue">Remove from Continue watching</string>
+    <string name="library_remove_title">Remove from Library?</string>
+    <string name="library_remove_message">Remove “%1$s”? The film or series stays in the playlist.</string>
+    <string name="library_remove">Remove</string>
 </resources>

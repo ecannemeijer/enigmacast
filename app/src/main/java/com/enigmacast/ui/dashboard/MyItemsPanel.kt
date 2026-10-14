@@ -1,5 +1,12 @@
 package com.enigmacast.ui.dashboard
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
@@ -67,6 +74,7 @@ fun MyItemsPanel(
     onPlay: () -> Unit,
     onRetreatTo: (FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
+    onXtream: () -> Unit = {},
     viewModel: MyItemsViewModel = hiltViewModel(),
 ) {
     val book by viewModel.items.collectAsStateWithLifecycle()
@@ -98,6 +106,32 @@ fun MyItemsPanel(
         val notice = viewModel.notice.asString()
         if (notice.isNotBlank()) {
             Text(notice, color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+        }
+        // IPTV: Continue watching and favorites, above the recordings (Premium IPTV only).
+        val iptvContinue by viewModel.iptvContinue.collectAsStateWithLifecycle()
+        val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
+        if (viewModel.iptvAllowed()) {
+            listOf(R.string.library_continue to iptvContinue, R.string.library_iptv_favorites to iptvFavorites).forEach { (header, cards) ->
+                if (cards.isEmpty()) return@forEach
+                Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 4.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                ) {
+                    itemsIndexed(cards, key = { _, c -> c.key }) { i, card ->
+                        IptvCard(
+                            card = card,
+                            modifier = Modifier.focusProperties {
+                                canFocus = rowsFocusable
+                                if (i == 0) left = menuFocus
+                                if (i == cards.lastIndex) right = FocusRequester.Cancel
+                            },
+                            onClick = { viewModel.openIptv(card, onXtream) },
+                            onOptions = { viewModel.optionsIptv(card) },
+                        )
+                    }
+                }
+            }
         }
         val boxMovies = sections.onReceiver
         val boxTimers = sections.scheduledOnReceiver
@@ -234,6 +268,31 @@ fun MyItemsPanel(
                 }
             },
             onDismiss = viewModel::dismiss,
+            compact = true,
+        )
+    }
+    viewModel.iptvOptions?.let { card ->
+        TvChoiceDialog(
+            title = card.title,
+            message = card.subtitle,
+            choices = listOf(
+                stringResource(if (card.key.startsWith("fav/")) R.string.iptv_library_remove else R.string.library_remove_continue),
+                stringResource(R.string.cancel),
+            ),
+            onChoose = { i -> if (i == 0) viewModel.askRemoveIptv() else viewModel.dismissIptvOptions() },
+            onDismiss = viewModel::dismissIptvOptions,
+            compact = true,
+        )
+    }
+    viewModel.iptvPendingRemove?.let { card ->
+        TvConfirmDialog(
+            title = stringResource(R.string.library_remove_title),
+            message = stringResource(R.string.library_remove_message, card.title),
+            confirmLabel = stringResource(R.string.library_remove),
+            dismissLabel = stringResource(R.string.cancel),
+            onConfirm = viewModel::confirmRemoveIptv,
+            onDismiss = viewModel::dismissRemoveIptv,
+            destructive = true,
             compact = true,
         )
     }
@@ -391,4 +450,59 @@ private fun actionsFor(item: Recording, box: Boolean, boxTimer: Boolean): List<I
     if (!box && item.status == RecordingStatus.RECORDING) add(ItemAction.STOP)
     add(ItemAction.DELETE)
     add(ItemAction.CANCEL)
+}
+
+/**
+ * An IPTV card in the recordings' poster style. OK opens it; Menu or holding OK opens the
+ * options (remove from favorites / from Continue watching).
+ */
+@Composable
+private fun IptvCard(
+    card: com.enigmacast.domain.xtream.IptvLibraryCard,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onOptions: () -> Unit,
+) {
+    val focus = com.enigmacast.ui.soccer.rememberTvFocus()
+    var held by remember { mutableStateOf(false) }
+    Column(
+        modifier
+            .width(100.dp)
+            .onPreviewKeyEvent { e ->
+                val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                when {
+                    e.key == Key.Menu -> { if (e.type == KeyEventType.KeyUp) onOptions(); true }
+                    ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
+                        if (!held) { held = true; focus.pressed = false; onOptions() }
+                        true
+                    }
+                    ok && e.type == KeyEventType.KeyUp && held -> { held = false; true }
+                    else -> false
+                }
+            }
+            .tvClick(focus, onClick),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Box(
+            Modifier
+                .width(100.dp)
+                .height(150.dp)
+                .border(if (focus.focused) 3.dp else 0.dp, if (focus.focused) EnigmaColors.Cyan else androidx.compose.ui.graphics.Color.Transparent, skinShape(12.dp)),
+        ) {
+            val film = com.enigmacast.domain.films.HomeFilm(
+                com.enigmacast.domain.films.FilmCandidate(
+                    com.enigmacast.domain.epg.GuideEvent(-1, "iptv:${card.id}", card.title, "", "", 0, 0), "", card.title, null,
+                ),
+                com.enigmacast.domain.films.TmdbMovie(id = 0, title = card.title, posterPath = card.poster, isSeries = card.kind != "m"),
+            )
+            com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
+            if (card.progress > 0f) {
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(androidx.compose.ui.graphics.Color(0x66000000))) {
+                    Box(Modifier.fillMaxWidth(card.progress).height(4.dp).background(EnigmaColors.Cyan))
+                }
+            }
+        }
+        Text(card.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (card.subtitle.isNotBlank()) Text(card.subtitle, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }

@@ -46,10 +46,11 @@ interface ResumeDao {
  * The viewer's own data (unlike [EnigmaDatabase], which is a cache that a schema change
  * wipes). Kept separate so resume positions survive cache rebuilds.
  */
-@Database(entities = [ResumeRow::class, SeriesRuleRow::class], version = 2, exportSchema = false)
+@Database(entities = [ResumeRow::class, SeriesRuleRow::class, IptvLibraryRow::class, IptvResumeRow::class], version = 3, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun resume(): ResumeDao
     abstract fun seriesRules(): SeriesRuleDao
+    abstract fun iptvLibrary(): IptvLibraryDao
 
     companion object {
         const val NAME = "enigmacast-user.db"
@@ -63,7 +64,7 @@ object UserDatabaseModule {
     @Singleton
     fun userDatabase(@ApplicationContext context: Context): UserDatabase =
         Room.databaseBuilder(context, UserDatabase::class.java, UserDatabase.NAME)
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
@@ -75,6 +76,26 @@ object UserDatabaseModule {
             )
         }
     }
+
+    /** Additive: IPTV favorites and IPTV resume positions (with what Library needs to show them offline). */
+    internal val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `iptv_library` (`source` TEXT NOT NULL, `kind` TEXT NOT NULL, `id` TEXT NOT NULL, " +
+                    "`title` TEXT NOT NULL, `poster` TEXT, `backdrop` TEXT, `year` INTEGER, `categoryId` TEXT NOT NULL, " +
+                    "`extension` TEXT NOT NULL, `url` TEXT NOT NULL, `addedMs` INTEGER NOT NULL, PRIMARY KEY(`source`, `kind`, `id`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `iptv_resume` (`source` TEXT NOT NULL, `kind` TEXT NOT NULL, `id` TEXT NOT NULL, " +
+                    "`positionMs` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, `updatedMs` INTEGER NOT NULL, `title` TEXT NOT NULL, " +
+                    "`poster` TEXT, `extension` TEXT NOT NULL, `url` TEXT NOT NULL, `categoryId` TEXT NOT NULL, `seriesId` TEXT, " +
+                    "`seriesTitle` TEXT, `season` INTEGER NOT NULL, `episode` INTEGER NOT NULL, PRIMARY KEY(`source`, `kind`, `id`))",
+            )
+        }
+    }
+
+    @Provides
+    fun iptvLibraryDao(db: UserDatabase): IptvLibraryDao = db.iptvLibrary()
 
     @Provides
     fun seriesRuleDao(db: UserDatabase): SeriesRuleDao = db.seriesRules()
@@ -116,4 +137,64 @@ interface SeriesRuleDao {
 
     @Query("DELETE FROM series_rules WHERE id = :id")
     suspend fun delete(id: String)
+}
+
+/** An IPTV film ([kind] "m") or series ("s") in Library › IPTV favorites. [source] is the playlist account key. */
+@Entity(tableName = "iptv_library", primaryKeys = ["source", "kind", "id"])
+data class IptvLibraryRow(
+    val source: String,
+    val kind: String,
+    val id: String,
+    val title: String,
+    val poster: String?,
+    val backdrop: String?,
+    val year: Int?,
+    val categoryId: String,
+    val extension: String,
+    val url: String,
+    val addedMs: Long,
+)
+
+/** Where the viewer stopped in an IPTV film ("m") or episode ("e"), for Continue watching. */
+@Entity(tableName = "iptv_resume", primaryKeys = ["source", "kind", "id"])
+data class IptvResumeRow(
+    val source: String,
+    val kind: String,
+    val id: String,
+    val positionMs: Long,
+    val durationMs: Long,
+    val updatedMs: Long,
+    val title: String,
+    val poster: String?,
+    val extension: String,
+    val url: String,
+    val categoryId: String,
+    val seriesId: String?,
+    val seriesTitle: String?,
+    val season: Int,
+    val episode: Int,
+)
+
+@Dao
+interface IptvLibraryDao {
+    @Query("SELECT * FROM iptv_library ORDER BY addedMs DESC")
+    fun favorites(): Flow<List<IptvLibraryRow>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putFavorite(row: IptvLibraryRow)
+
+    @Query("DELETE FROM iptv_library WHERE source = :source AND kind = :kind AND id = :id")
+    suspend fun deleteFavorite(source: String, kind: String, id: String)
+
+    @Query("SELECT * FROM iptv_resume ORDER BY updatedMs DESC")
+    fun resumes(): Flow<List<IptvResumeRow>>
+
+    @Query("SELECT * FROM iptv_resume WHERE source = :source AND kind = :kind AND id = :id")
+    suspend fun resume(source: String, kind: String, id: String): IptvResumeRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putResume(row: IptvResumeRow)
+
+    @Query("DELETE FROM iptv_resume WHERE source = :source AND kind = :kind AND id = :id")
+    suspend fun deleteResume(source: String, kind: String, id: String)
 }

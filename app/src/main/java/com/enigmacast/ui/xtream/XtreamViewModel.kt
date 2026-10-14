@@ -35,6 +35,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +64,7 @@ class XtreamViewModel @Inject constructor(
     private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
+    private val library: com.enigmacast.data.xtream.IptvLibrary,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -277,32 +279,103 @@ class XtreamViewModel @Inject constructor(
         detailEpisodes = emptyList()
     }
 
-    private val resumePrefs by lazy { context.getSharedPreferences("iptv_resume", Context.MODE_PRIVATE) }
     private var resumeKey: String? = null
 
     private fun resumeKeyOf(kind: String, id: String): String? = account?.let { "${it.key}/$kind/$id" }
+    private fun resumeRow(kind: String, id: String) = resumeKeyOf(kind, id)?.let { library.resumeMap.value[it] }
 
     /** Where a film or episode was left, in ms; 0 when it was not started or watched to the end. */
-    fun resumeOf(item: XtreamItem): Long = resumeKeyOf("m", item.id)?.let { resumePrefs.getLong(it, 0L) } ?: 0L
-    fun resumeOf(episode: XtreamEpisode): Long = resumeKeyOf("e", episode.id)?.let { resumePrefs.getLong(it, 0L) } ?: 0L
+    fun resumeOf(item: XtreamItem): Long = resumeRow("m", item.id)?.positionMs ?: 0L
+    fun resumeOf(episode: XtreamEpisode): Long = resumeRow("e", episode.id)?.positionMs ?: 0L
 
     /** 0..1 for the progress line on a card (0 when nothing to resume). */
-    fun progressOf(item: XtreamItem): Float = resumeKeyOf("m", item.id)?.let { key ->
-        com.enigmacast.domain.resume.ResumePolicy.fraction(
-            com.enigmacast.domain.resume.ResumePoint(key, resumePrefs.getLong(key, 0L), resumePrefs.getLong("$key$DURATION", 0L)), 0L,
-        )
+    fun progressOf(item: XtreamItem): Float = resumeRow("m", item.id)?.let { row ->
+        com.enigmacast.domain.resume.ResumePolicy.fraction(com.enigmacast.domain.resume.ResumePoint(row.id, row.positionMs, row.durationMs), 0L)
     } ?: 0f
+
+    /** The poster Library shows: TMDB when matched, else the playlist's cover. */
+    private fun posterOf(item: XtreamItem): String? {
+        val movie = artwork.value[com.enigmacast.data.xtream.IptvVod.key(item)]
+        return com.enigmacast.data.tmdb.TmdbJson.image(movie?.posterPath, "w342") ?: item.icon.ifBlank { null }
+    }
 
     private fun saveResume() {
         val key = resumeKey ?: return
         val p = player ?: return
-        val edit = resumePrefs.edit()
+        val parts = key.split('/')
+        if (parts.size != 3) return
+        val (source, kind, id) = parts
         when (val keep = IptvResume.toStore(p.currentPosition, p.duration)) {
-            null -> edit.remove(key).remove("$key$DURATION")
-            else -> edit.putLong(key, keep).putLong("$key$DURATION", p.duration)
+            null -> library.clearResume(source, kind, id)
+            else -> {
+                val what = playing
+                val item = what?.item
+                val episode = what?.episode
+                library.saveResume(
+                    com.enigmacast.data.db.IptvResumeRow(
+                        source = source, kind = kind, id = id,
+                        positionMs = keep, durationMs = p.duration.coerceAtLeast(0), updatedMs = System.currentTimeMillis(),
+                        title = if (episode != null) episode.title.ifBlank { what.title } else item?.name ?: what?.title.orEmpty(),
+                        poster = item?.let(::posterOf),
+                        extension = episode?.extension ?: item?.extension.orEmpty(),
+                        url = if (episode == null) item?.url.orEmpty() else "",
+                        categoryId = item?.categoryId.orEmpty(),
+                        seriesId = if (episode != null) item?.id else null,
+                        seriesTitle = if (episode != null) item?.name else null,
+                        season = episode?.season ?: 0,
+                        episode = episode?.episode ?: 0,
+                    ),
+                )
+            }
         }
-        edit.apply()
         resumeVersion++
+    }
+
+    /** IPTV favorites (Library): the film or series on the info page. */
+    fun isFavorite(item: XtreamItem): Boolean = account?.let {
+        com.enigmacast.data.xtream.IptvLibrary.key(it.key, com.enigmacast.data.xtream.IptvLibrary.kindOf(item.section), item.id) in library.favoriteKeys.value
+    } == true
+
+    fun toggleFavorite(item: XtreamItem) {
+        val account = account ?: return
+        val movie = artwork.value[com.enigmacast.data.xtream.IptvVod.key(item)]
+        val on = !isFavorite(item)
+        library.setFavorite(
+            com.enigmacast.data.db.IptvLibraryRow(
+                source = account.key, kind = com.enigmacast.data.xtream.IptvLibrary.kindOf(item.section), id = item.id,
+                title = item.name, poster = posterOf(item),
+                backdrop = com.enigmacast.data.tmdb.TmdbJson.image(movie?.backdropPath, "w780"),
+                year = movie?.year ?: com.enigmacast.data.xtream.IptvVod.title(item.name).second,
+                categoryId = item.categoryId, extension = item.extension, url = item.url, addedMs = System.currentTimeMillis(),
+            ),
+            on,
+        )
+        favoriteVersion++
+    }
+
+    var favoriteVersion by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    /** Library asked for a film (play, with the resume dialog) or a series (info page). */
+    var libraryPlayed by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+    var libraryDetail by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    private fun handleOpenRequest() {
+        val request = library.openRequest.value ?: return
+        val account = account ?: return
+        if (account.key != request.source) return
+        library.openRequest.value = null
+        val item = request.item
+        if (item.section == XtreamSection.SERIES) {
+            selectSection(XtreamSection.SERIES)
+            openDetail(item)
+            libraryDetail++
+        } else {
+            selectSection(XtreamSection.MOVIES)
+            requestFilm(item) { libraryPlayed++ }
+        }
     }
 
     /** Bumped whenever a position is saved, so cards redraw their progress line. */
@@ -364,6 +437,11 @@ class XtreamViewModel @Inject constructor(
     private var epgJob: Job? = null
 
     init {
+        viewModelScope.launch { library.resumes.collect { resumeVersion++ } }
+        viewModelScope.launch { library.favorites.collect { favoriteVersion++ } }
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(library.openRequest, snapshotFlow { account }) { r, a -> r to a }.collect { handleOpenRequest() }
+        }
         // Categories changed in Settings: the open section is read again (from the cache).
         viewModelScope.launch {
             hiddenCategories.changes.drop(1).collect { if (account != null && categories.isNotEmpty()) selectSection(section, force = true) }
@@ -720,7 +798,7 @@ class XtreamViewModel @Inject constructor(
         player = null
     }
 
-    private companion object {
+    internal companion object {
         const val EPG_BATCH = 24
         /** Stand-in account of an M3U playlist: every entry has its own address. */
         val M3U_ACCOUNT = XtreamAccount("Playlist", "http://playlist.invalid", "", "", "ts")
@@ -751,4 +829,3 @@ object IptvResume {
     fun offer(savedMs: Long): Long? = savedMs.takeIf { it >= com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS }
 }
 
-private const val DURATION = "/d"

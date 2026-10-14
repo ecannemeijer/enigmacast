@@ -124,6 +124,9 @@ fun XtreamScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(detection) { model.open() }
+    // Opened from Library: a film plays full screen, a series shows its info page over the grid.
+    LaunchedEffect(model.libraryPlayed) { if (model.libraryPlayed > 0) { panelOpen = false; showBanner(fromZap = false) } }
+    LaunchedEffect(model.libraryDetail) { if (model.libraryDetail > 0) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ } }
     DisposableEffect(Unit) { onDispose { model.stop() } }
     // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
     LaunchedEffect(model.categoriesReady) {
