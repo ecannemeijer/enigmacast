@@ -65,9 +65,13 @@ class MyItemsViewModel @Inject constructor(
     fun iptvAllowed(): Boolean = gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM)
 
     /** OK on an IPTV card: the IPTV page plays the film (resume dialog) or shows the series. */
-    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit) {
+    /** The card to focus after coming back from the IPTV player (see [IptvLibrary.returnTo]). */
+    val returnKey: String? get() = iptv.returnTo.value
+    fun consumeReturn() { iptv.returnTo.value = null }
+
+    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String? = null) {
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
-        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open)
+        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, origin)
         onXtream()
     }
 

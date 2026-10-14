@@ -94,6 +94,8 @@ fun MyItemsPanel(
             delay(20_000)
         }
     }
+    val iptvReturnFocus = remember { FocusRequester() }
+    val iptvRowCount = if (viewModel.iptvAllowed()) listOf(viewModel.iptvContinue.value, viewModel.iptvFavorites.value).count { it.isNotEmpty() } else 0
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
     Column(
         modifier
@@ -110,9 +112,12 @@ fun MyItemsPanel(
         // IPTV: Continue watching and favorites, above the recordings (Premium IPTV only).
         val iptvContinue by viewModel.iptvContinue.collectAsStateWithLifecycle()
         val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
-        if (viewModel.iptvAllowed()) {
-            listOf(R.string.library_continue to iptvContinue, R.string.library_iptv_favorites to iptvFavorites).forEach { (header, cards) ->
-                if (cards.isEmpty()) return@forEach
+        val iptvBlocks = if (viewModel.iptvAllowed()) {
+            listOf(R.string.library_continue to iptvContinue, R.string.library_iptv_favorites to iptvFavorites).filter { it.second.isNotEmpty() }
+        } else emptyList()
+        // One IPTV row (header + sideways cards); inside the LazyColumn when recordings exist so everything scrolls.
+        val iptvRow: @Composable (Int, List<com.enigmacast.domain.xtream.IptvLibraryCard>) -> Unit = { header, cards ->
+            Column {
                 Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 4.dp))
                 androidx.compose.foundation.lazy.LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -121,12 +126,14 @@ fun MyItemsPanel(
                     itemsIndexed(cards, key = { _, c -> c.key }) { i, card ->
                         IptvCard(
                             card = card,
-                            modifier = Modifier.focusProperties {
-                                canFocus = rowsFocusable
-                                if (i == 0) left = menuFocus
-                                if (i == cards.lastIndex) right = FocusRequester.Cancel
-                            },
-                            onClick = { viewModel.openIptv(card, onXtream) },
+                            modifier = Modifier
+                                .then(if (viewModel.returnKey == "$header/${card.key}") Modifier.focusRequester(iptvReturnFocus) else Modifier)
+                                .focusProperties {
+                                    canFocus = rowsFocusable
+                                    if (i == 0) left = menuFocus
+                                    if (i == cards.lastIndex) right = FocusRequester.Cancel
+                                },
+                            onClick = { viewModel.openIptv(card, onXtream, "$header/${card.key}") },
                             onOptions = { viewModel.optionsIptv(card) },
                         )
                     }
@@ -137,6 +144,7 @@ fun MyItemsPanel(
         val boxTimers = sections.scheduledOnReceiver
         val all = items + boxMovies + boxTimers
         if (all.isEmpty()) {
+            iptvBlocks.forEach { (h, c) -> iptvRow(h, c) }
             Text(
                 stringResource(R.string.my_items_empty),
                 color = EnigmaColors.Muted,
@@ -157,6 +165,7 @@ fun MyItemsPanel(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                iptvBlocks.forEach { (h, c) -> item(key = "iptv-$h") { iptvRow(h, c) } }
                 // Sections: this app's recordings, recordings on the box, timers on the box. Headers are not focusable.
                 val box = boxName.ifBlank { null }
                 listOf(
@@ -210,12 +219,20 @@ fun MyItemsPanel(
         }
     }
     }
+    // Back from an IPTV film started here: focus returns to its card.
+    LaunchedEffect(viewModel.returnKey) {
+        if (viewModel.returnKey == null) return@LaunchedEffect
+        val row = if (viewModel.returnKey!!.startsWith("${R.string.library_continue}/")) 0 else iptvRowCount - 1
+        if (row >= 0 && (items + sections.onReceiver + sections.scheduledOnReceiver).isNotEmpty()) listState.scrollToItem(row)
+        iptvReturnFocus.requestWhenReady()
+        viewModel.consumeReturn()
+    }
     val focusTokenOnEnter = remember { viewModel.focusToken }
     LaunchedEffect(viewModel.focusToken) {
         if (viewModel.focusToken == 0 || viewModel.focusToken == focusTokenOnEnter) return@LaunchedEffect
         if (viewModel.selected != null || viewModel.pendingDelete != null) return@LaunchedEffect
         val index = listIndexOf(viewModel.focusId, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
-        if (index >= 0) listState.scrollToItem(index)
+        if (index >= 0) listState.scrollToItem(index + iptvRowCount)
         // A poster sits inside a sideways row: bring it into view there too.
         for ((key, list) in listOf("app" to items, "movies" to sections.onReceiver)) {
             val i = list.filter(viewModel::isPoster).indexOfFirst { it.id == viewModel.focusId }

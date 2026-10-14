@@ -20,7 +20,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** What Library asks the IPTV page to open: a film to play (resume dialog) or a series info page. */
-data class IptvOpenRequest(val source: String, val item: XtreamItem, val token: Long = System.nanoTime())
+/** [origin] = where it was started ("home/<card key>" or "<row>/<card key>" in Library), to return there afterwards. */
+data class IptvOpenRequest(val source: String, val item: XtreamItem, val origin: String? = null, val token: Long = System.nanoTime())
 
 /**
  * IPTV favorites and resume positions in the user database (Library rows work offline).
@@ -43,6 +44,8 @@ class IptvLibrary @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     /** Library → IPTV page. */
+    /** Set when the IPTV screen closes after a start from Home/Library: the card to focus again. */
+    val returnTo = MutableStateFlow<String?>(null)
     val openRequest = MutableStateFlow<IptvOpenRequest?>(null)
 
     init { scope.launch { migratePrefs() } }

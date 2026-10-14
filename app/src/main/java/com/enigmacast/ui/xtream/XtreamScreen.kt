@@ -125,6 +125,12 @@ fun XtreamScreen(onBack: () -> Unit) {
 
     LaunchedEffect(detection) { model.open() }
     // Opened from Library: a film plays full screen, a series shows its info page over the grid.
+    // The end of a film started from Home/Library also returns there.
+    LaunchedEffect(model.playerState.playbackState) {
+        if (model.playerState.playbackState == "ENDED" && model.launchOrigin != null && model.playing?.item?.section != XtreamSection.LIVE) {
+            model.stop(); model.exitToOrigin(); onBack()
+        }
+    }
     LaunchedEffect(model.libraryPlayed) { if (model.libraryPlayed > 0) { panelOpen = false; showBanner(fromZap = false) } }
     LaunchedEffect(model.libraryDetail) { if (model.libraryDetail > 0) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ } }
     DisposableEffect(Unit) { onDispose { model.stop() } }
@@ -167,10 +173,13 @@ fun XtreamScreen(onBack: () -> Unit) {
             panelOpen && column == PanelColumn.VOD_GRID -> { column = PanelColumn.VOD_CATEGORIES; openRequest++ }
             panelOpen && column == PanelColumn.VOD_CATEGORIES -> { column = PanelColumn.SECTIONS; openRequest++ }
             // A film or episode in full screen: Back stops it and shows the grid again.
+            // Started from Home/Library: stopping goes back there (focus on that card).
+            model.launchOrigin != null && ((!panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE) ||
+                (panelOpen && model.series != null)) -> { model.stop(); model.exitToOrigin(); onBack() }
             !panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE -> { model.stop(); openPanel() }
             model.series != null && panelOpen -> model.closeSeries()
             panelOpen && model.playing != null -> panelOpen = false
-            else -> { model.stop(); onBack() }
+            else -> { model.stop(); model.exitToOrigin(); onBack() }
         }
     }
 

@@ -204,11 +204,15 @@ fun DashboardScreen(
     // After a language change the activity is recreated; reopen Settings › Language then.
     // Back from a recording opens My Items on that row.
     var sectionEnter by remember { mutableIntStateOf(0) }
+    // Back from an IPTV film/series started on Home or in My items: reopen that page (the panel focuses the card).
+    val returnItems: MyItemsViewModel = hiltViewModel()
+    val iptvReturn = remember { returnItems.returnKey }
     var section by remember {
         mutableStateOf(
             when {
                 focusLanguageSetting || returnToSettingsHub -> DashSection.Settings
                 returnToMyItemsId != null -> DashSection.MyItems
+                iptvReturn != null && !iptvReturn.startsWith("home/") -> DashSection.MyItems
                 else -> DashSection.Home
             },
         )
@@ -339,6 +343,7 @@ fun DashboardScreen(
                 onSettingsHubShown()
             }
             focusLanguageSetting || returnToMyItemsId != null -> Unit
+            iptvReturn != null -> { if (!iptvReturn.startsWith("home/")) { myItemsListActive = true; onMyItemsFocused() } }
             // Back from the player: Live TV opens the player, so focus its menu item.
             focusPlayingChannel -> { tvMenuFocus.requestWhenReady(); onPlayingChannelFocused() }
             else -> homeFocus.requestWhenReady()

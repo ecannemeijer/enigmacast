@@ -370,11 +370,18 @@ class XtreamViewModel @Inject constructor(
     var libraryDetail by androidx.compose.runtime.mutableIntStateOf(0)
         private set
 
+    /** Started from Home/Library: stopping returns there instead of to the IPTV pages. */
+    var launchOrigin by mutableStateOf<String?>(null)
+        private set
+    /** Leaving the IPTV screen: hand the origin card to Home/Library. */
+    fun exitToOrigin() { library.returnTo.value = launchOrigin; launchOrigin = null }
+
     private fun handleOpenRequest() {
         val request = library.openRequest.value ?: return
         val account = account ?: return
         if (account.key != request.source) return
         library.openRequest.value = null
+        launchOrigin = request.origin
         val item = request.item
         if (item.section == XtreamSection.SERIES) {
             selectSection(XtreamSection.SERIES)

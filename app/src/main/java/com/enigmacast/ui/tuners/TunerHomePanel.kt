@@ -4,6 +4,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
+import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -93,6 +94,14 @@ fun TunerHomePanel(
     library: com.enigmacast.ui.dashboard.MyItemsViewModel = hiltViewModel(),
 ) {
     val iptvContinue by library.iptvContinue.collectAsStateWithLifecycle()
+    // Back from an IPTV film started on Home: focus that card again.
+    val iptvReturnFocus = remember { FocusRequester() }
+    val iptvReturn = remember { library.returnKey?.takeIf { it.startsWith("home/") } }
+    LaunchedEffect(iptvReturn, iptvContinue.isNotEmpty()) {
+        if (iptvReturn == null || iptvContinue.none { "home/${it.key}" == iptvReturn }) return@LaunchedEffect
+        iptvReturnFocus.requestWhenReady()
+        library.consumeReturn()
+    }
     LaunchedEffect(Unit) { model.whileVisible() }
     val left = Modifier.focusProperties { left = menuFocus }
     var chosen by remember { mutableStateOf<TunerCard?>(null) }
@@ -133,8 +142,9 @@ fun TunerHomePanel(
                                 com.enigmacast.ui.dashboard.IptvCard(
                                     card = card,
                                     modifier = (if (i == 0) left else Modifier).then(rowNav("iptv"))
+                                        .then(if (iptvReturn == "home/${card.key}") Modifier.focusRequester(iptvReturnFocus) else Modifier)
                                         .focusProperties { if (i == iptvContinue.lastIndex) right = FocusRequester.Cancel },
-                                    onClick = { library.openIptv(card, onXtream) },
+                                    onClick = { library.openIptv(card, onXtream, "home/${card.key}") },
                                     onOptions = {},
                                 )
                             }
