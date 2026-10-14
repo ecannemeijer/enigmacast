@@ -23,6 +23,11 @@ android {
         buildConfigField("String", "ACCOUNT_API_URL", "\"https://api.velixatv.com/\"")
     }
 
+    // The app's languages (see AppLanguage and res/xml/locales_config.xml); other library translations are left out.
+    androidResources {
+        localeFilters += listOf("en", "nl", "de", "it", "fr")
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

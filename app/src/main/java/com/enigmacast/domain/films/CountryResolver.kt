@@ -34,6 +34,10 @@ object CountryResolver {
             lang == "nl" -> "nl-NL"
             lang == "en" && country == "US" -> "en-US"
             lang == "en" -> "en-GB"
+            // TMDB has translations per language region; a Dutch country with German text still wants de-DE.
+            lang == "de" -> if (country in setOf("AT", "CH")) "de-$country" else "de-DE"
+            lang == "it" -> if (country == "CH") "it-CH" else "it-IT"
+            lang == "fr" -> if (country in setOf("BE", "CH", "CA")) "fr-$country" else "fr-FR"
             else -> "$lang-$country"
         }
     }

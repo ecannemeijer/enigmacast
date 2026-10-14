@@ -10,7 +10,7 @@ class AppLanguageTest {
         assertEquals(AppLanguage.ENGLISH, AppLanguage.DEFAULT)
         assertNull(AppLanguage.fromTag(null))
         assertNull(AppLanguage.fromTag(""))
-        assertNull(AppLanguage.fromTag("de"))
+        assertNull(AppLanguage.fromTag("es"))
         assertEquals(AppLanguage.ENGLISH, AppLanguage.fromTag("en-GB"))
     }
 
@@ -19,5 +19,13 @@ class AppLanguageTest {
         assertEquals(AppLanguage.DUTCH, AppLanguage.fromTag("nl"))
         assertEquals(AppLanguage.DUTCH, AppLanguage.fromTag("nl-NL"))
         assertEquals("Nederlands", AppLanguage.DUTCH.nativeName)
+    }
+
+    @Test
+    fun germanItalianAndFrenchTagsSelectTheirLanguage() {
+        assertEquals(AppLanguage.GERMAN, AppLanguage.fromTag("de-AT"))
+        assertEquals(AppLanguage.ITALIAN, AppLanguage.fromTag("it"))
+        assertEquals(AppLanguage.FRENCH, AppLanguage.fromTag("fr_BE"))
+        assertEquals(listOf("en", "nl", "de", "it", "fr"), AppLanguage.entries.map { it.tag })
     }
 }

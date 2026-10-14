@@ -11,6 +11,9 @@ import java.util.Locale
 enum class AppLanguage(val tag: String, val nativeName: String) {
     ENGLISH("en", "English"),
     DUTCH("nl", "Nederlands"),
+    GERMAN("de", "Deutsch"),
+    ITALIAN("it", "Italiano"),
+    FRENCH("fr", "Français"),
     ;
 
     companion object {

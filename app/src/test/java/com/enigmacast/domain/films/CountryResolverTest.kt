@@ -32,5 +32,8 @@ class CountryResolverTest {
         assertEquals("en-GB", CountryResolver.tmdbLanguage("en", "NL"))
         assertEquals("en-US", CountryResolver.tmdbLanguage("en", "US"))
         assertEquals("de-DE", CountryResolver.tmdbLanguage("de", "DE"))
+        assertEquals("de-DE", CountryResolver.tmdbLanguage("de", "NL"))
+        assertEquals("fr-BE", CountryResolver.tmdbLanguage("fr", "BE"))
+        assertEquals("it-IT", CountryResolver.tmdbLanguage("it", "NL"))
     }
 }
