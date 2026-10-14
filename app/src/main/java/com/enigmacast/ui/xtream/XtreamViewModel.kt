@@ -83,7 +83,7 @@ class XtreamViewModel @Inject constructor(
     var episodes by mutableStateOf<List<XtreamEpisode>>(emptyList())
         private set
     /** [items] as cards with the playlist's own name and cover; artwork replaces them per card. */
-    var baseFilms by mutableStateOf<List<com.enigmacast.domain.films.HomeFilm>>(emptyList())
+    var cards by mutableStateOf<List<IptvCard>>(emptyList())
         private set
     var loading by mutableStateOf(false)
         private set
@@ -335,11 +335,11 @@ class XtreamViewModel @Inject constructor(
             val hasRows = playlistAccount != null && playlistSync.count() > 0
             _detection.value = XtreamDetection(false, listOfNotNull(playlistAccount?.takeIf { hasRows }))
             // A new load or another playlist: the lists start over from Room.
-            if (wasPlaylist || account != null) { account = null; categories = emptyList(); category = null; items = emptyList(); series = null }
+            if (wasPlaylist || account != null) { account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList(); series = null }
             open()
             return
         }
-        if (playlist != null) { playlist = null; account = null; categories = emptyList(); category = null; items = emptyList() }
+        if (playlist != null) { playlist = null; account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList() }
         _detection.value = null
         val receiver = settingsRepository.current().activeReceiver() ?: return
         _detection.value = repository.cachedDetection(receiver.id) ?: repository.detect(receiver)
@@ -377,7 +377,7 @@ class XtreamViewModel @Inject constructor(
         this.section = section
         val account = account ?: return
         loadJob?.cancel()
-        categories = emptyList(); category = null; items = emptyList(); series = null; episodes = emptyList()
+        categories = emptyList(); category = null; items = emptyList(); cards = emptyList(); series = null; episodes = emptyList()
         loadJob = viewModelScope.launch {
             loading = true; error = false
             runCatching { categoriesOf(account, section) }
@@ -415,14 +415,14 @@ class XtreamViewModel @Inject constructor(
                 val list = itemsOf(account, section, category.id, force)
                 // The cards' playlist data (title clean-up per name) is built once, off the main thread.
                 val base = if (section == XtreamSection.LIVE) emptyList()
-                else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { list.map { com.enigmacast.data.xtream.IptvVod.film(it, null) } }
+                else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { IptvCard.of(list) }
                 list to base
             }
                 .onSuccess { (list, base) ->
                     if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: ${list.size} items in ${System.currentTimeMillis() - started} ms")
                     this.category = category
                     series = null; episodes = emptyList()
-                    baseFilms = base
+                    cards = base
                     items = list
                     itemsReady++
                 }
@@ -654,5 +654,17 @@ class XtreamViewModel @Inject constructor(
         const val EPG_BATCH = 24
         /** Stand-in account of an M3U playlist: every entry has its own address. */
         val M3U_ACCOUNT = XtreamAccount("Playlist", "http://playlist.invalid", "", "", "ts")
+    }
+}
+
+/**
+ * One film or series card: the item, its playlist-only card and its unique grid key, built
+ * together so the grid's list and its keys always come from the same snapshot.
+ */
+data class IptvCard(val key: String, val item: XtreamItem, val base: com.enigmacast.domain.films.HomeFilm) {
+    companion object {
+        fun of(items: List<XtreamItem>): List<IptvCard> =
+            com.enigmacast.domain.xtream.LazyKeys.keyed(items, "vod") { "${it.section.name}:${it.id}" }
+                .map { IptvCard(it.key, it.value, com.enigmacast.data.xtream.IptvVod.film(it.value, null)) }
     }
 }

@@ -82,7 +82,7 @@ internal fun XtreamVodPage(
     val art by model.artwork.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf<HomeFilm?>(null) }
     // Built once per category (off the main thread); an artwork update only changes its own card.
-    val films = model.baseFilms.takeIf { it.size == model.items.size } ?: emptyList()
+    val cards = model.cards
     Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         Box(Modifier.padding(start = 260.dp)) { Backdrop(focused) }
         Row(
@@ -93,15 +93,17 @@ internal fun XtreamVodPage(
             Column(
                 Modifier.width(240.dp).fillMaxHeight().background(EnigmaColors.Canvas.copy(alpha = 0.9f)).columnKeysVod(
                     onLeft = null,
-                    onRight = { if (model.items.isNotEmpty()) onGrid() },
+                    onRight = { if (model.cards.isNotEmpty()) onGrid() },
                 ),
             ) {
                 VodHeader(stringResource(if (model.section == XtreamSection.SERIES) R.string.xtream_series else R.string.xtream_movies), model.loading && model.categories.isEmpty())
                 val state = rememberLazyListState()
                 val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
                 LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
+                val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
-                    itemsIndexed(model.categories, key = { _, c -> c.id }) { index, c ->
+                    itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
+                        val c = k.value
                         CompactListRow(
                             onClick = { model.selectCategory(c) },
                             selected = c.id == model.category?.id,
@@ -122,16 +124,16 @@ internal fun XtreamVodPage(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 VodHeader(model.category?.name.orEmpty(), model.loading)
                 if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp)
-                if (!model.loading && model.category != null && films.isEmpty()) {
+                if (!model.loading && model.category != null && cards.isEmpty()) {
                     Text(stringResource(R.string.iptv_vod_empty), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
                 }
                 val grid = rememberLazyGridState()
-                LaunchedEffect(model.items) { if (model.items.isNotEmpty()) grid.scrollToItem(0) }
+                LaunchedEffect(cards) { if (cards.isNotEmpty()) grid.scrollToItem(0) }
                 // Artwork for the cards on screen only; a scroll cancels the waiting batch.
-                LaunchedEffect(grid, model.items) {
+                LaunchedEffect(grid, cards) {
                     snapshotFlow { grid.layoutInfo.visibleItemsInfo.map { it.index } }
                         .distinctUntilChanged()
-                        .collect { rows -> model.requestArtwork(rows.mapNotNull { model.items.getOrNull(it) }) }
+                        .collect { rows -> model.requestArtwork(rows.mapNotNull { cards.getOrNull(it)?.item }) }
                 }
                 LaunchedEffect(gridActive) { if (gridActive) gridFocus.requestWhenReady() }
                 LazyVerticalGrid(
@@ -142,18 +144,19 @@ internal fun XtreamVodPage(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize().focusGroup(),
                 ) {
-                    itemsIndexed(films, key = { index, _ -> IptvVod.key(model.items[index]) }, contentType = { _, _ -> "poster" }) { index, base ->
-                        val item = model.items[index]
+                    itemsIndexed(cards, key = { _, card -> card.key }, contentType = { _, _ -> "poster" }) { index, card ->
+                        val item = card.item
+                        val base = card.base
                         val movie = art[IptvVod.key(item)]
                         val film = remember(base, movie) { if (movie == null) base else IptvVod.film(item, movie) }
-                        val lastRowStart = (films.size - 1) / GRID_COLUMNS * GRID_COLUMNS
+                        val lastRowStart = (cards.size - 1) / GRID_COLUMNS * GRID_COLUMNS
                         PosterCard(
                             film = film,
                             modifier = Modifier
                                 .then(if (index == 0) Modifier.focusRequester(gridFocus) else Modifier)
                                 .focusProperties {
                                     if (index % GRID_COLUMNS == 0) left = categoryFocus
-                                    if (index % GRID_COLUMNS == GRID_COLUMNS - 1 || index == films.lastIndex) right = FocusRequester.Cancel
+                                    if (index % GRID_COLUMNS == GRID_COLUMNS - 1 || index == cards.lastIndex) right = FocusRequester.Cancel
                                     if (index < GRID_COLUMNS) up = FocusRequester.Cancel
                                     if (index >= lastRowStart) down = FocusRequester.Cancel
                                 },
@@ -220,9 +223,10 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
                 ) { Text(stringResource(R.string.iptv_season, s), fontSize = 13.sp) }
             }
         }
-        val list = episodes.filter { it.season == season }
+        val list = remember(episodes, season) { com.enigmacast.domain.xtream.LazyKeys.keyed(episodes.filter { it.season == season }, "ep") { it.id } }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            itemsIndexed(list, key = { _, e -> e.id }) { index, e ->
+            itemsIndexed(list, key = { _, k -> k.key }) { index, k ->
+                val e = k.value
                 EpisodeCard(e, model.resumeOf(e) > 0, Modifier.focusProperties {
                     if (index == 0) left = FocusRequester.Cancel
                     if (index == list.lastIndex) right = FocusRequester.Cancel

@@ -335,8 +335,10 @@ private fun SidePanel(
             val state = rememberLazyListState()
             val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
             LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
+            val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
             LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
-                itemsIndexed(model.categories, key = { _, c -> c.id }) { index, c ->
+                itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
+                    val c = k.value
                     CompactListRow(
                         onClick = { model.selectCategory(c) },
                         selected = c.id == model.category?.id,
@@ -380,8 +382,10 @@ private fun SidePanel(
             if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
             val state = rememberLazyListState()
             if (series != null) {
+                val keyedEpisodes = remember(model.episodes) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.episodes, "ep") { it.id } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
-                    itemsIndexed(model.episodes, key = { _, e -> e.id }) { index, e ->
+                    itemsIndexed(keyedEpisodes, key = { _, k -> k.key }) { index, k ->
+                        val e = k.value
                         CompactListRow(
                             onClick = { model.playEpisode(e); onPlayed() },
                             selected = model.playing?.episode?.id == e.id,
@@ -408,8 +412,10 @@ private fun SidePanel(
                 }
                 var nowSec by remember { mutableStateOf(System.currentTimeMillis() / 1000) }
                 LaunchedEffect(Unit) { while (true) { delay(30_000); nowSec = System.currentTimeMillis() / 1000 } }
+                val keyedItems = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
-                    itemsIndexed(model.items, key = { _, i -> i.id }) { index, item ->
+                    itemsIndexed(keyedItems, key = { _, k -> k.key }) { index, k ->
+                        val item = k.value
                         CompactListRow(
                             onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
                             selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
