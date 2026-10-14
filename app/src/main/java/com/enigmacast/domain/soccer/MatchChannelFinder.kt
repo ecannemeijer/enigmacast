@@ -45,12 +45,20 @@ object MatchChannelFinder {
         "m'gladbach" to listOf("gladbach", "monchengladbach"),
     )
 
+    // Compiled once: compiling these per call on the main thread froze the Soccer page (ANR).
+    private val marks = Regex("\\p{Mn}+")
+    private val nonWord = Regex("[^a-z0-9']+")
+
     fun normalize(text: String): String {
-        val plain = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+        val plain = Normalizer.normalize(text, Normalizer.Form.NFD).replace(marks, "")
         return plain.lowercase(Locale.ROOT)
             .replace("ß", "ss")
-            .replace(Regex("[^a-z0-9']+"), " ")
+            .replace(nonWord, " ")
             .trim()
+    }
+
+    private val NORMALIZED_ALIASES: Map<String, List<String>> by lazy {
+        ALIASES.mapValues { (_, values) -> values.map(::normalize) }
     }
 
     /** Spellings to look for, longest first. Single words shorter than 3 letters are left out. */
@@ -65,23 +73,27 @@ object MatchChannelFinder {
         }
         add(team.name)
         add(team.shortName)
-        out.toList().forEach { v -> ALIASES[v]?.forEach { out += normalize(it) } }
-        ALIASES.forEach { (key, values) -> if (values.any { normalize(it) in out }) out += key }
+        out.toList().forEach { v -> NORMALIZED_ALIASES[v]?.let { out += it } }
+        NORMALIZED_ALIASES.forEach { (key, values) -> if (values.any { it in out }) out += key }
         return out.filter { it.length >= 3 || it == "az" }.sortedByDescending { it.length }
     }
 
-    private fun mentions(text: String, team: SoccerTeam): Boolean {
-        val hay = " ${normalize(text)} "
-        return variants(team).any { hay.contains(" $it ") }
-    }
+    private fun mentions(normalizedHay: String, variants: List<String>): Boolean =
+        variants.any { normalizedHay.contains(" $it ") }
 
     /** Best programme for [match], or null. Title matches beat description matches; then closest to kickoff. */
-    fun find(match: SoccerMatch, candidates: List<EpgCandidate>): EpgCandidate? =
-        candidates
-            .filter { kotlin.math.abs(it.beginSec - match.kickoffSec) <= WINDOW_SEC }
+    fun find(match: SoccerMatch, candidates: List<EpgCandidate>): EpgCandidate? {
+        val inWindow = candidates.filter { kotlin.math.abs(it.beginSec - match.kickoffSec) <= WINDOW_SEC }
+        if (inWindow.isEmpty()) return null
+        // Team spellings once per match, each programme text normalised once.
+        val home = variants(match.home)
+        val away = variants(match.away)
+        return inWindow
             .mapNotNull { c ->
-                val inTitle = mentions(c.title, match.home) && mentions(c.title, match.away)
-                val inBoth = !inTitle && mentions("${c.title} ${c.description}", match.home) && mentions("${c.title} ${c.description}", match.away)
+                val title = " ${normalize(c.title)} "
+                val inTitle = mentions(title, home) && mentions(title, away)
+                val both = if (inTitle || c.description.isBlank()) title else " ${normalize("${c.title} ${c.description}")} "
+                val inBoth = !inTitle && mentions(both, home) && mentions(both, away)
                 when {
                     inTitle -> c to 2
                     inBoth -> c to 1
@@ -90,4 +102,5 @@ object MatchChannelFinder {
             }
             .sortedWith(compareByDescending<Pair<EpgCandidate, Int>> { it.second }.thenBy { kotlin.math.abs(it.first.beginSec - match.kickoffSec) })
             .firstOrNull()?.first
+    }
 }

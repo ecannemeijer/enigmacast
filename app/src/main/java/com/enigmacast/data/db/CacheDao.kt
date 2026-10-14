@@ -97,8 +97,19 @@ interface CacheDao {
     @Query("SELECT * FROM bouquets WHERE receiverKey = :receiverKey ORDER BY position")
     fun observeBouquets(receiverKey: String): Flow<List<BouquetRow>>
 
-    @Query("SELECT * FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec <= :toSec")
+    /**
+     * Programmes starting in a window, without the long description (it is not searched and made
+     * the rows of a whole bouquet set overflow the 2 MB cursor window). [eventAt] reads one in full.
+     */
+    @Query(
+        "SELECT receiverKey, serviceKey, reference, beginSec, endSec, eventId, title, shortDescription, " +
+            "'' AS longDescription, genreId, genre FROM epg_events " +
+            "WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec <= :toSec",
+    )
     suspend fun eventsStarting(receiverKey: String, fromSec: Long, toSec: Long): List<EpgRow>
+
+    @Query("SELECT * FROM epg_events WHERE receiverKey = :receiverKey AND serviceKey = :serviceKey AND beginSec = :beginSec LIMIT 1")
+    suspend fun eventAt(receiverKey: String, serviceKey: String, beginSec: Long): EpgRow?
 
     @Query("SELECT COUNT(*) FROM epg_events WHERE receiverKey = :receiverKey AND beginSec >= :fromSec AND beginSec < :toSec")
     suspend fun eventCount(receiverKey: String, fromSec: Long, toSec: Long): Int

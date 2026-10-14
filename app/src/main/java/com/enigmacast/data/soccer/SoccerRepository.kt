@@ -134,7 +134,10 @@ class SoccerRepository @Inject constructor(
     }
 
     /** Channels in the cached guide of [receiver] that show each match (matches within the synced days only). */
-    suspend fun channels(receiver: ReceiverConfig, matches: List<SoccerMatch>): Map<Int, MatchChannel> {
+    suspend fun channels(receiver: ReceiverConfig, matches: List<SoccerMatch>): Map<Int, MatchChannel> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { channelsOffMain(receiver, matches) }
+
+    private suspend fun channelsOffMain(receiver: ReceiverConfig, matches: List<SoccerMatch>): Map<Int, MatchChannel> {
         val rk = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
         val names = cache.channels(rk).associateBy { it.serviceKey.ifBlank { NowEvents.key(it.reference) } }
         if (names.isEmpty()) return emptyMap()
@@ -146,10 +149,12 @@ class SoccerRepository @Inject constructor(
                 val ch = names[r.serviceKey] ?: return@mapNotNull null
                 EpgCandidate(ch.reference, ch.name, r.eventId, r.title, r.shortDescription, r.beginSec, r.endSec)
             }
+            val found = group.associate { m -> m.id to MatchChannelFinder.find(m, candidates) }
             group.forEach { m ->
-                MatchChannelFinder.find(m, candidates)?.let { c ->
+                found[m.id]?.let { c ->
                     val ch = names[NowEvents.key(c.reference)] ?: return@let
-                    val row = rows.first { it.serviceKey == NowEvents.key(c.reference) && it.beginSec == c.beginSec }
+                    val lean = rows.first { it.serviceKey == NowEvents.key(c.reference) && it.beginSec == c.beginSec }
+                    val row = cache.eventAt(rk, lean.serviceKey, lean.beginSec) ?: lean
                     result[m.id] = MatchChannel(BouquetEntry(name = ch.name, reference = ch.reference, number = ch.number, picon = ch.picon), CacheMappers.event(row))
                 }
             }

@@ -121,14 +121,25 @@ class SoccerViewModel @Inject constructor(
     }
 
     private var linkKey = ""
+    private var linkJob: Job? = null
 
     private fun linkChannels(list: List<SoccerMatch>) {
         val key = list.joinToString(",") { "${it.id}:${it.kickoffSec}:${it.status}" }
         if (key == linkKey) return
         linkKey = key
-        viewModelScope.launch {
+        // One search at a time: a refresh (or a country change) emits several lists in a row,
+        // and every one of them started a full guide search that kept running.
+        linkJob?.cancel()
+        linkJob = viewModelScope.launch {
+            delay(LINK_DEBOUNCE_MS)
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
-            channels = runCatching { repository.channels(receiver, list) }.getOrDefault(emptyMap())
+            channels = try {
+                repository.channels(receiver, list)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyMap()
+            }
         }
     }
 
@@ -215,5 +226,6 @@ class SoccerViewModel @Inject constructor(
 
     private companion object {
         const val LIVE_MS = 60_000L
+        const val LINK_DEBOUNCE_MS = 400L
     }
 }
