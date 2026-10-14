@@ -244,6 +244,14 @@ class IptvPlaylistSync @Inject constructor(
     private fun objects(input: InputStream): Sequence<JsonObject> =
         Json.decodeToSequence(input, JsonElement.serializer(), DecodeSequenceMode.ARRAY_WRAPPED).mapNotNull { it as? JsonObject }
 
+    /** Titles containing [query], at most [limit] per section; IO thread. */
+    suspend fun search(query: String, limit: Int = com.enigmacast.domain.xtream.IptvSearch.LIMIT): List<XtreamItem> = withContext(Dispatchers.IO) {
+        val pattern = com.enigmacast.domain.xtream.IptvSearch.likePattern(query)
+        XtreamSection.entries.flatMap { section ->
+            dao.search(SOURCE, section.name, pattern, limit).map { XtreamItem(it.id, it.name, section, it.categoryId, it.icon, it.extension, it.number, it.url) }
+        }
+    }
+
     suspend fun counts(section: XtreamSection): Map<String, Int> =
         dao.countsByCategory(SOURCE, section.name).associate { it.categoryId to it.n }
 

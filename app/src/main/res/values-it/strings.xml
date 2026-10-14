@@ -1315,4 +1315,7 @@ Profilo: %2$s</string>
     <string name="pin_mismatch">I PIN non coincidono. Scegli di nuovo.</string>
     <string name="pin_wrong">PIN errato. Ancora %1$d tentativi.</string>
     <string name="pin_cooldown">Troppi PIN errati. Riprova tra %1$d s.</string>
+    <string name="search_iptv_live">IPTV Live</string>
+    <string name="search_iptv_films">IPTV Film</string>
+    <string name="search_iptv_series">IPTV Serie</string>
 </resources>

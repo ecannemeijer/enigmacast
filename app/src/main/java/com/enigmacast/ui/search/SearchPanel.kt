@@ -83,6 +83,7 @@ fun SearchPanel(
     menuFocus: FocusRequester? = null,
     focusToken: Int = 0,
     onRetreatTo: ((FocusRequester) -> Unit)? = null,
+    onXtream: (() -> Unit)? = null,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val fieldFocus = remember { FocusRequester() }
@@ -117,6 +118,11 @@ fun SearchPanel(
     val nowSec = System.currentTimeMillis() / 1000
     val searchable = SearchQuery.parse(viewModel.query, nowSec).isSearchable
     val sections = viewModel.results.sections()
+    val iptvRows = if (onXtream == null) emptyList() else listOf(
+        R.string.search_iptv_live to viewModel.iptv.live,
+        R.string.search_iptv_films to viewModel.iptv.films,
+        R.string.search_iptv_series to viewModel.iptv.series,
+    ).filter { it.second.isNotEmpty() }
     val body = modifier
         .fillMaxSize()
         .onFocusChanged { if (it.hasFocus && menuFocus != null) onRetreatTo?.invoke(menuFocus) }
@@ -178,14 +184,39 @@ fun SearchPanel(
         }
         when {
             !searchable -> Hint(stringResource(R.string.search_hint))
-            viewModel.searching && viewModel.results.isEmpty -> SearchSpinner()
-            !viewModel.searching && viewModel.results.isEmpty -> Hint(stringResource(R.string.search_empty))
+            viewModel.searching && viewModel.results.isEmpty && iptvRows.isEmpty() -> SearchSpinner()
+            !viewModel.searching && viewModel.results.isEmpty && iptvRows.isEmpty() -> Hint(stringResource(R.string.search_empty))
             else -> {
                 if (viewModel.searching) SearchSpinner()
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
+                    // IPTV Live / Films / Series: sideways poster rows after the programme results.
+                    iptvRows.forEach { (title, cards) ->
+                        item(key = "iptv-$title") {
+                            Column {
+                                Text(stringResource(title), color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                ) {
+                                    items(cards, key = { it.key }) { card ->
+                                        com.enigmacast.ui.dashboard.IptvCard(
+                                            card = card,
+                                            modifier = Modifier.focusProperties {
+                                                canFocus = rowsFocusable
+                                                if (card === cards.first()) left = menuFocus ?: FocusRequester.Cancel
+                                                if (card === cards.last()) right = FocusRequester.Cancel
+                                            },
+                                            onClick = { onXtream?.let { viewModel.openIptv(card, it) } },
+                                            onOptions = {},
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                     sections.forEach { (kind, hits) ->
                         item(key = "header-$kind") {
                             Text(

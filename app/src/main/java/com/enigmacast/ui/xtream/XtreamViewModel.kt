@@ -383,8 +383,12 @@ class XtreamViewModel @Inject constructor(
         library.openRequest.value = null
         launchOrigin = request.origin
         val item = request.item
-        if (item.section == XtreamSection.SERIES) {
-            selectSection(XtreamSection.SERIES)
+        if (item.section == XtreamSection.LIVE) {
+            selectSection(XtreamSection.LIVE)
+            play(item)
+            libraryPlayed++
+        } else if (item.section == XtreamSection.SERIES || request.detail) {
+            selectSection(item.section)
             openDetail(item)
             libraryDetail++
         } else {

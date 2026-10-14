@@ -28,7 +28,20 @@ class SearchViewModel @Inject constructor(
     private val recordings: RecordingBook,
     private val reminders: com.enigmacast.live.ReminderScheduler,
     private val settingsRepository: com.enigmacast.data.settings.SettingsRepository,
+    private val iptvSearch: com.enigmacast.data.xtream.IptvSearchSource,
+    private val iptvLibrary: com.enigmacast.data.xtream.IptvLibrary,
+    private val gate: com.enigmacast.live.PremiumGate,
 ) : ViewModel() {
+    /** IPTV Live / Films / Series rows (Premium XTREAM; playlist DB or already fetched lists). */
+    var iptv by mutableStateOf(com.enigmacast.domain.xtream.IptvSearchResults())
+        private set
+
+    /** OK on an IPTV result: live plays, a film opens its info page, a series its series page. */
+    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit) {
+        if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
+        iptvLibrary.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, detail = true)
+        onXtream()
+    }
     /** A programme whose OK opened the action dialog (AutoSwitch / Record / Watch now). */
     var programme by mutableStateOf<SearchHit?>(null)
         private set
@@ -94,12 +107,14 @@ class SearchViewModel @Inject constructor(
         val nowSec = System.currentTimeMillis() / 1000
         if (!SearchQuery.parse(value, nowSec).isSearchable) {
             results = SearchResults()
+            iptv = com.enigmacast.domain.xtream.IptvSearchResults()
             searching = false
             return
         }
         searching = true
         searchJob = viewModelScope.launch {
             if (!immediate) delay(DEBOUNCE_MS)
+            launch { iptv = iptvSearch.search(value) }
             val found = programmeSearch.search(value, recordings.items.value, System.currentTimeMillis() / 1000)
             results = found
             searching = false

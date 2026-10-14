@@ -107,6 +107,13 @@ class XtreamRepository @Inject constructor(
         }
     }
 
+    /** Items in lists already fetched for [account] (memory cache only; never a request). */
+    fun cachedItems(account: XtreamAccount): Sequence<XtreamItem> {
+        val prefix = "${account.key}/"
+        return cache.entries.asSequence().filter { it.key.startsWith(prefix) }
+            .flatMap { (it.value.second as? List<*>).orEmpty().asSequence().filterIsInstance<XtreamItem>() }
+    }
+
     /** Items of categories already fetched (memory cache only; no request). */
     fun cachedCounts(account: XtreamAccount, section: XtreamSection): Map<String, Int> {
         val action = when (section) {

@@ -36,6 +36,10 @@ interface IptvDao {
     @Query("SELECT categoryId AS categoryId, COUNT(*) AS n FROM iptv_item WHERE source = :source AND section = :section GROUP BY categoryId")
     suspend fun countsByCategory(source: String, section: String): List<IptvCategoryCount>
 
+    /** Search: titles containing the query ([pattern] from IptvSearch.likePattern), per section. */
+    @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section AND name LIKE :pattern ESCAPE '\\' LIMIT :limit")
+    suspend fun search(source: String, section: String, pattern: String, limit: Int): List<IptvItemRow>
+
     @Query("SELECT COUNT(*) FROM iptv_item WHERE source = :source")
     suspend fun itemCount(source: String): Int
 

@@ -1306,4 +1306,7 @@ Profiel: %2$s</string>
     <string name="pin_mismatch">De pincodes kwamen niet overeen. Kies opnieuw.</string>
     <string name="pin_wrong">Onjuiste pincode. Nog %1$d pogingen.</string>
     <string name="pin_cooldown">Te vaak een onjuiste pincode. Probeer het over %1$d s opnieuw.</string>
+    <string name="search_iptv_live">IPTV Live</string>
+    <string name="search_iptv_films">IPTV Films</string>
+    <string name="search_iptv_series">IPTV Series</string>
 </resources>

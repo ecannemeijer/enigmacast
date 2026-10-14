@@ -735,6 +735,7 @@ fun DashboardScreen(
                             searchEnterToken += 1
                         }
                         SearchPanel(
+                            onXtream = onXtream,
                             rowsFocusable = searchActive,
                             focusToken = searchEnterToken,
                             menuFocus = searchMenuFocus,
