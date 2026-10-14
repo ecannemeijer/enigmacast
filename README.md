@@ -42,6 +42,48 @@ FOOTBALL_DATA_API_KEY=your_football_data_key
 PITCH_API_KEY=pk_your_pitchapi_key
 ```
 
+## New on feature/settingimport and feature/skins
+
+- **Settings import (Premium):** Settings › Settings import loads a ready-made channel list or IPTV bouquets on the receiver.
+  - **Channel lists** come from the GitHub repos of Morpheus883, Ciefp and Hans. You pick a tuner configuration (for example 19.2E, or 19.2E + 23.5E + 28.2E). The preview shows the number of TV and radio bouquets, whether a `satellites.xml` is included, and when the list was updated.
+  - **IPTV bouquets** are built from the iptv-org and Free-TV M3U playlists. Load groups reads the playlists with a progress bar per playlist. Every group is selected by default, with Select all / Select none and an X / Y count. Each chosen group becomes a bouquet after your satellite bouquets, named `IPTV · <group>` (the prefix is never doubled). The satellite bouquets themselves are not changed. Service type 4097 uses the default player; 5001 and 5002 need GStreamer or exteplayer3 on the receiver.
+  - **Copying to the receiver:** files go over FTP (port 21, user root, usually without a password; the login can be set per receiver under FTP login). The receiver then runs OpenWebif `servicelistreload`, and the app resyncs its channels.
+  - **Several receivers:** a load can go to more than one saved receiver.
+  - **Backup and rollback:** before every load, that receiver's channel list is backed up. Restore puts any backup back.
+  - **Load dialog:** the load runs in a modal dialog with progress per receiver (backup, upload, reload). Cancel rolls the receiver back to its backup. The dialog ends with the result.
+  - **Update automatically:** Off, daily, every 7 or 14 days, or monthly, run by WorkManager.
+  - **After a load,** the app waits until OpenWebif lists the new bouquets, then replaces the channel cache and refreshes the TV Guide, tuner cards and the player's zap list.
+- **Satellite EPG for IPTV:** an IPTV channel uses the guide of the satellite channel with the same name. Names are compared without accents, without HD/FHD/UHD/4K/SD, brackets and region suffixes, and the HD satellite channel is preferred. This works in the TV guide, the channel EPG, the Home tuner cards and now/next. Stream references keep their URL in the EPG key, so IPTV lines no longer collide.
+- **Channel lists per receiver:** each receiver keeps its own bouquets and channels. A change hash, checked at start and on resume, notices when the list on the box changed. Refresh channels & bouquets is now in Settings › Receivers. When a box is switched, its list is carried over only when it is the same list. The player's bouquet side panel follows the active receiver and reloads after a switch or a list change.
+- **Video output:** SurfaceView by default with tunneling off. Settings › Playback has Video decoder (Automatic, Hardware, Software) and Compatibility mode (Automatic, On, Off). Compatibility mode gives a safe output with no refresh-rate switching or tunneling, and Off uses the old TextureView output. Automatic turns it on for Xiaomi and Amlogic sticks.
+- **OpenWebif:** at most 4 calls at a time per receiver. A failed GET is retried once on a fresh connection, and IOException details are logged.
+- **Five app languages:** English, Nederlands, Deutsch, Italiano and Français (see [Language](#language)).
+- **GUI skins:** Settings › Appearance › GUI skins changes the look of the whole app and the channel banner (see [GUI skins](#gui-skins)).
+- **Stability:**
+  - The soccer channel lookup and the IPTV EPG name matching run off the main thread with precompiled patterns.
+  - The guide query for the soccer page leaves out long descriptions.
+  - When the soccer country changes, only one channel search runs at a time.
+
+## GUI skins
+
+Settings › Appearance › GUI skins shows one tile per skin with a small preview in that skin's own colours and banner layout. Left and Right walk the tiles, and OK applies a skin at once: every screen and the OSD repaint without a restart. The choice is stored with the other settings, so settings from before skins existed open in EnigmaCast. A skin is only data in `ui/theme/Skins.kt`: colour tokens, a corner-radius scale, a text weight, a focus style (fill, outline or glow) and a banner layout. Screens only use token names, so they do not know which skin is active.
+
+| Skin | Look | Channel banner |
+|---|---|---|
+| EnigmaCast | midnight blue, electric blue accent (the default) | rounded floating card |
+| OpenPLi | PLi-HD: #101214, glossy blue-grey selection bar with yellow text, square corners | PLi-HD InfoBar |
+| Midnight | OLED black, teal accent, white outline focus | minimal card without border |
+| Metrix | openATV MetrixHD: flat dark tiles, square corners, blue accent | flat bar with a coloured channel block |
+| Aurora | glassy indigo/teal, larger corners, glowing focus | translucent gradient card |
+
+The OpenPLi skin follows `PLi-HD` from littlesat/skin-PLiHD: the colours from `<colors>` in `skin.xml`, and the InfoBar laid out on the skin's own 1280×720 grid, scaled to the screen.
+- **Top of the bar:** the date and clock in yellow on the left, the recording mark, then the channel number and name. The encryption line is top right, and the service icons (HD / 16:9 / 4:3, TXT, DD, crypt) are on one row.
+- **Middle:** the 840×8 bronze progress bar, then now and next with start time and title. The current programme shows "+N min" left; the next one shows its length.
+- **Bottom left:** the 100×60 picon.
+- **Right column:** tuner, video size, SNR and orbital position.
+
+The skin's font (`nmsbd.ttf`) is not bundled; a semi-bold sans-serif is used instead.
+
 ## Account and Premium
 
 EnigmaCast needs an account (e-mail + password), created or used in the setup wizard or under
@@ -56,7 +98,8 @@ Settings › Account. Accounts live on the VelixaTV API server (`BuildConfig.ACC
 | `POST api/enigmacast/logout` | unregisters this device |
 
 - **Free:** one receiver, Live TV, Radio, Search, My items. **Premium:** also Movies, TV Series,
-  Soccer, TV Guide/EPG and several receivers (add, Switch receiver, tuner failover).
+  Soccer, TV Guide/EPG, Settings import (channel lists and IPTV bouquets) and several receivers
+  (add, Switch receiver, tuner failover). GUI skins and all five languages are free.
 - A new account gets a 14-day Premium trial; during the beta the server grants 2 years
   (`enigmacast.trialDays` in the server `.env`, default 730).
 - Each account has at most 10 devices (per user in the admin panel); the 11th login is refused.
@@ -320,9 +363,9 @@ Router and receiver:
 
 ## Language
 
-EnigmaCast is in English by default, also on a TV set to Dutch and after updating from an older version. Settings → Language switches between English and Nederlands. The screen redraws in the new language right away and focus stays on the language choice. On Android 13 and later the choice also shows in Android's per-app language settings, and a language chosen there is picked up by the app. Channel names, programme titles and other receiver data are shown as the receiver sends them.
+EnigmaCast is in English by default, also on a TV set to another language and after updating from an older version. Settings → Language offers English, Nederlands, Deutsch, Italiano and Français. The screen redraws in the new language right away and focus stays on the language choice. On Android 13 and later the choice also shows in Android's per-app language settings (`locales_config.xml`), and a language chosen there is picked up by the app. Channel names, programme titles and other receiver data are shown as the receiver sends them.
 
-All texts are Android string resources: English in `values/strings.xml`, Dutch in `values-nl/strings.xml`. Logs, the debug overlay, OSD diagnostics values and raw error texts from Android or the network stay in English.
+All texts are Android string resources: English in `values/strings.xml`, and the translations in `values-nl`, `values-de`, `values-it` and `values-fr`. Skin names are not translated. Logs, the debug overlay, OSD diagnostics values and raw error texts from Android or the network stay in English.
 
 ## Soccer
 
@@ -349,12 +392,13 @@ Right from Settings opens a submenu, in this order. Each page groups its options
 - Profiles: who is watching (switch) and Manage profiles (add, rename, avatar, delete).
 - Receivers: the list of boxes. OK selects one, Edit changes its address and login, Remove deletes it. See [Several receivers](#several-receivers).
 - Receiver: power (standby, wake, restart), details.
-- Playback & streaming: Stable or Fast buffer, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stereo or HDMI, DVB subtitles, auto-reconnect, audio sync per output.
+- Playback & streaming: Video decoder and Compatibility mode, Stable or Fast buffer, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stereo or HDMI, DVB subtitles, auto-reconnect, audio sync per output.
 - Viewing mode: own tuner (multi-user) or follow the receiver.
 - Remote control keys: see below.
 - Guide & Home: Home country, Home bouquets, own TMDB key, data & sync (guide days, sync frequency, Sync now).
 - Recordings: recording size of captures on this device (where to record is asked per recording).
-- Appearance: language, navigation sounds, motion quality, OSD (transparency, skins, banner fields, receiver OSD).
+- Appearance: language, navigation sounds, motion quality, OSD (transparency, banner fields, receiver OSD) and GUI skins.
+- Settings import (Premium): channel lists, IPTV bouquets, Restore and FTP login. See [New on feature/settingimport and feature/skins](#new-on-featuresettingimport-and-featureskins).
 - Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel.
 - Soccer: competitions/country and API keys.
 - Signal meter and Oscam (tools, open full screen).
