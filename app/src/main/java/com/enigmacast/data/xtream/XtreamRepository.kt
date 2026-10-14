@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -130,15 +131,31 @@ class XtreamRepository @Inject constructor(
         cached(account, "get_short_epg12/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "12")) }
     }.getOrDefault(emptyList())
 
+    /**
+     * Fresh entries come straight from memory; a stale one is still shown at once and refreshed
+     * in the background (the next open gets the new list). JSON is parsed off the main thread.
+     */
     private suspend fun <T : Any> cached(account: XtreamAccount, key: String, force: Boolean, ttl: Long = TTL_MS, load: suspend () -> T): T {
         val full = "${account.key}/$key"
         val now = System.currentTimeMillis()
+        val hit = cache[full]
         @Suppress("UNCHECKED_CAST")
-        if (!force) cache[full]?.takeIf { now - it.first < ttl }?.let { return it.second as T }
-        val value = load()
+        if (!force && hit != null) {
+            if (now - hit.first >= ttl && refreshing.add(full)) {
+                background.launch {
+                    try { runCatching { withContext(Dispatchers.Default) { load() } }.onSuccess { cache[full] = System.currentTimeMillis() to it } }
+                    finally { refreshing.remove(full) }
+                }
+            }
+            return hit.second as T
+        }
+        val value = withContext(Dispatchers.Default) { load() }
         cache[full] = now to value
         return value
     }
+
+    private val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val refreshing: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private suspend fun get(account: XtreamAccount, action: String, vararg params: Pair<String, String>): String = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()

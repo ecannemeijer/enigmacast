@@ -82,6 +82,9 @@ class XtreamViewModel @Inject constructor(
         private set
     var episodes by mutableStateOf<List<XtreamEpisode>>(emptyList())
         private set
+    /** [items] as cards with the playlist's own name and cover; artwork replaces them per card. */
+    var baseFilms by mutableStateOf<List<com.enigmacast.domain.films.HomeFilm>>(emptyList())
+        private set
     var loading by mutableStateOf(false)
         private set
     /** The category whose list is being fetched after OK; the shown list stays until it arrives. */
@@ -384,6 +387,8 @@ class XtreamViewModel @Inject constructor(
                 }
                 .onFailure { error = true }
             loading = false
+            // Films and series show the first category's cards right away (focus stays on the list).
+            if (section != XtreamSection.LIVE) categories.firstOrNull()?.let { loadCategory(account, it) }
         }
     }
 
@@ -405,11 +410,20 @@ class XtreamViewModel @Inject constructor(
         pendingCategory = category
         loading = true; error = false
         try {
-            runCatching { itemsOf(account, section, category.id, force) }
-                .onSuccess {
+            val started = System.currentTimeMillis()
+            runCatching {
+                val list = itemsOf(account, section, category.id, force)
+                // The cards' playlist data (title clean-up per name) is built once, off the main thread.
+                val base = if (section == XtreamSection.LIVE) emptyList()
+                else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { list.map { com.enigmacast.data.xtream.IptvVod.film(it, null) } }
+                list to base
+            }
+                .onSuccess { (list, base) ->
+                    if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: ${list.size} items in ${System.currentTimeMillis() - started} ms")
                     this.category = category
                     series = null; episodes = emptyList()
-                    items = it
+                    baseFilms = base
+                    items = list
                     itemsReady++
                 }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; error = true }

@@ -81,7 +81,8 @@ internal fun XtreamVodPage(
 ) {
     val art by model.artwork.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf<HomeFilm?>(null) }
-    val films = remember(model.items, art) { model.items.map { IptvVod.film(it, art[IptvVod.key(it)]) } }
+    // Built once per category (off the main thread); an artwork update only changes its own card.
+    val films = model.baseFilms.takeIf { it.size == model.items.size } ?: emptyList()
     Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         Box(Modifier.padding(start = 260.dp)) { Backdrop(focused) }
         Row(
@@ -141,8 +142,10 @@ internal fun XtreamVodPage(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize().focusGroup(),
                 ) {
-                    itemsIndexed(films, key = { _, f -> f.candidate.event.reference + f.displayTitle }) { index, film ->
+                    itemsIndexed(films, key = { index, _ -> IptvVod.key(model.items[index]) }, contentType = { _, _ -> "poster" }) { index, base ->
                         val item = model.items[index]
+                        val movie = art[IptvVod.key(item)]
+                        val film = remember(base, movie) { if (movie == null) base else IptvVod.film(item, movie) }
                         val lastRowStart = (films.size - 1) / GRID_COLUMNS * GRID_COLUMNS
                         PosterCard(
                             film = film,

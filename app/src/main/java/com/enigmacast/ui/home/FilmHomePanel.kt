@@ -1,5 +1,6 @@
 package com.enigmacast.ui.home
 
+import coil3.request.crossfade
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.animation.Crossfade
@@ -545,8 +546,19 @@ internal fun PosterCard(
             val poster = film.movie.posterPath
             var failed by remember(poster) { mutableStateOf(false) }
             if (poster != null && !failed) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val request = remember(poster) {
+                    // Decoded at card size (playlist covers are often full-size originals), faded in.
+                    val w = with(density) { CARD_WIDTH_DP.dp.roundToPx() }
+                    coil3.request.ImageRequest.Builder(context)
+                        .data(TmdbJson.image(poster, "w342"))
+                        .size(w, (w * 1.5f).toInt())
+                        .crossfade(true)
+                        .build()
+                }
                 AsyncImage(
-                    model = TmdbJson.image(poster, "w342"),
+                    model = request,
                     contentDescription = film.displayTitle,
                     contentScale = ContentScale.Crop,
                     onError = { failed = true },
