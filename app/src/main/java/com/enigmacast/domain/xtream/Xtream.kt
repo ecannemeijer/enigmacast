@@ -42,6 +42,8 @@ data class XtreamItem(
     val icon: String = "",
     val extension: String = "",
     val number: Int = 0,
+    /** Direct stream address (M3U playlists); empty for Xtream items, whose address is built. */
+    val url: String = "",
 )
 
 data class XtreamEpisode(val id: String, val season: Int, val episode: Int, val title: String, val extension: String)
@@ -165,9 +167,13 @@ object XtreamJson {
         XtreamCategory(id, o.str("category_name") ?: id)
     }
 
-    fun items(body: String, section: XtreamSection): List<XtreamItem> = array(body).mapNotNull { o ->
-        val id = (if (section == XtreamSection.SERIES) o.str("series_id") else o.str("stream_id")) ?: return@mapNotNull null
-        XtreamItem(
+    fun items(body: String, section: XtreamSection): List<XtreamItem> = array(body).mapNotNull { item(it, section) }
+
+    fun category(o: JsonObject): XtreamCategory? = o.str("category_id")?.let { XtreamCategory(it, o.str("category_name") ?: it) }
+
+    fun item(o: JsonObject, section: XtreamSection): XtreamItem? {
+        val id = (if (section == XtreamSection.SERIES) o.str("series_id") else o.str("stream_id")) ?: return null
+        return XtreamItem(
             id = id,
             name = o.str("name") ?: o.str("title") ?: id,
             section = section,

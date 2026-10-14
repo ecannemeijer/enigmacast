@@ -24,13 +24,20 @@ import java.util.concurrent.TimeUnit
 interface SyncEntryPoint {
     fun engine(): SyncEngine
     fun settings(): SettingsRepository
+    fun iptvPlaylist(): com.enigmacast.data.xtream.IptvPlaylistSync
 }
 
 /** Runs [SyncEngine] for the active receiver. Hourly it only does the steps that are due. */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val entry = EntryPointAccessors.fromApplication(applicationContext, SyncEntryPoint::class.java)
-        val receiver = entry.settings().current().activeReceiver() ?: return Result.success()
+        val settings = entry.settings().current()
+        // Settings › IPTV › Playlist: reloaded once a day on the same schedule, receiver or not.
+        if (settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+            runCatching { entry.iptvPlaylist().refreshIfDue(settings.iptvPlaylistKind) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        }
+        val receiver = settings.activeReceiver() ?: return Result.success()
         entry.engine().run(
             receiver,
             force = inputData.getBoolean(KEY_FORCE, false),

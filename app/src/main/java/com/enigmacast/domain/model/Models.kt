@@ -219,6 +219,9 @@ data class AppSettings(
      * Performance keeps the same layout with shorter motion and no glow.
      */
     val motionQuality: MotionQuality = MotionQuality.PREMIUM,
+    /** Settings › IPTV: where the IPTV page gets its lists. Logins of a playlist are in the SecretStore. */
+    val iptvSource: IptvSourceMode = IptvSourceMode.XSTREAMITY,
+    val iptvPlaylistKind: IptvPlaylistKind = IptvPlaylistKind.M3U,
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
@@ -402,3 +405,10 @@ data class ConnectionTestResult(
     val capabilities: ReceiverCapabilities? = null,
     val service: EnigmaService? = null,
 )
+
+/** IPTV page source: the receiver's XStreamity playlists, or a playlist entered in the app. */
+@Serializable
+enum class IptvSourceMode { XSTREAMITY, PLAYLIST }
+
+@Serializable
+enum class IptvPlaylistKind { M3U, XTREAM }

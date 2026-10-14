@@ -1747,6 +1747,7 @@ private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         com.enigmacast.ui.home.HomeFilmSettingsCard()
         com.enigmacast.ui.home.DataSyncSettingsCard()
+        com.enigmacast.ui.xtream.IptvSettingsCard()
     }
 }
 

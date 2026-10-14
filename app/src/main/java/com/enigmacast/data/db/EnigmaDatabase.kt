@@ -13,13 +13,14 @@ import javax.inject.Singleton
 
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
-        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class],
-    version = 7,
+        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvCategoryRow::class, IptvItemRow::class],
+    version = 8,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
     abstract fun cache(): CacheDao
     abstract fun soccer(): SoccerDao
+    abstract fun iptv(): IptvDao
 
     companion object {
         const val NAME = "enigmacast-cache.db"
@@ -42,6 +43,15 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("DROP TABLE IF EXISTS `iptv_epg`")
             }
         }
+
+        /** 7 → 8: IPTV playlist tables. Only adds tables; the cache stays. */
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `iptv_category` (`source` TEXT NOT NULL, `section` TEXT NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `sort` INTEGER NOT NULL, PRIMARY KEY(`source`, `section`, `id`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `iptv_item` (`source` TEXT NOT NULL, `section` TEXT NOT NULL, `categoryId` TEXT NOT NULL, `id` TEXT NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `extension` TEXT NOT NULL, `number` INTEGER NOT NULL, `url` TEXT NOT NULL, `sort` INTEGER NOT NULL, PRIMARY KEY(`source`, `section`, `categoryId`, `id`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_iptv_item_source_section_categoryId_sort` ON `iptv_item` (`source`, `section`, `categoryId`, `sort`)")
+            }
+        }
     }
 }
 
@@ -53,7 +63,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8)
             // A cache only: an older build reading a newer database just starts empty instead of crashing.
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .fallbackToDestructiveMigration(dropAllTables = true)
@@ -61,6 +71,9 @@ object DatabaseModule {
 
     @Provides
     fun cacheDao(db: EnigmaDatabase): CacheDao = db.cache()
+
+    @Provides
+    fun iptvDao(db: EnigmaDatabase): IptvDao = db.iptv()
 
     @Provides
     fun soccerDao(db: EnigmaDatabase): SoccerDao = db.soccer()

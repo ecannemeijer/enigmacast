@@ -113,3 +113,32 @@ data class SyncStateRow(
     /** CHANNELS only: ChannelListHash of the lists last stored for this receiver. */
     @androidx.room.ColumnInfo(defaultValue = "") val contentHash: String = "",
 )
+
+/** IPTV playlist categories (Settings › IPTV › Playlist). [source] "playlist", or "playlist.new" while loading. */
+@androidx.room.Entity(tableName = "iptv_category", primaryKeys = ["source", "section", "id"])
+data class IptvCategoryRow(
+    val source: String,
+    val section: String,
+    val id: String,
+    val name: String,
+    val sort: Int,
+)
+
+/** IPTV playlist channels, films and series. Lean rows: no descriptions, so pages stay small. */
+@androidx.room.Entity(
+    tableName = "iptv_item",
+    primaryKeys = ["source", "section", "categoryId", "id"],
+    indices = [androidx.room.Index(value = ["source", "section", "categoryId", "sort"])],
+)
+data class IptvItemRow(
+    val source: String,
+    val section: String,
+    val categoryId: String,
+    val id: String,
+    val name: String,
+    val icon: String,
+    val extension: String,
+    val number: Int,
+    val url: String,
+    val sort: Int,
+)
