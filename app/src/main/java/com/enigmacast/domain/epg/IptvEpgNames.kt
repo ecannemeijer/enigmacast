@@ -15,6 +15,20 @@ object IptvEpgNames {
     private val brackets = Regex("""\([^)]*\)|\[[^]]*]""")
     private val quality = Regex("""\b(uhd|fhd|hd|sd|4k|8k|hevc|h265|h264|1080p|1080i|720p|576p|480p|50fps|backup|geo\s*blocked|ⓢ|ⓖ|ⓨ|ⓣ)\b""")
     private val region = Regex("""\s+[a-z]{2}$""")
+    private val marks = Regex("\\p{M}+")
+    private val circled = Regex("[ⓢⓖⓨⓣ]")
+    private val nonWord = Regex("[^a-z0-9+&]+")
+    private val spaces = Regex("\\s+")
+    private val hdName = Regex("""\b(hd|fhd|uhd|4k)\b""", RegexOption.IGNORE_CASE)
+
+    /** Both keys of one name from a single clean pass. */
+    private class Keys(val full: String, val short: String?)
+
+    private fun keys(name: String): Keys {
+        val text = clean(name)
+        val short = if (region.containsMatchIn(text)) squash(text.replace(region, "")).takeIf { it.isNotEmpty() } else null
+        return Keys(squash(text), short)
+    }
 
     /** Lowercase, no accents, no quality / bracket tags, letters and digits only. */
     fun normalize(name: String): String = squash(clean(name))
@@ -27,15 +41,15 @@ object IptvEpgNames {
     }
 
     private fun clean(name: String): String {
-        val ascii = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+        val ascii = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD).replace(marks, "")
         return ascii.lowercase()
             .replace(brackets, " ")
-            .replace(Regex("[ⓢⓖⓨⓣ]"), " ")
-            .replace(Regex("[^a-z0-9+&]+"), " ")
+            .replace(circled, " ")
+            .replace(nonWord, " ")
             .replace(quality, " ")
             .replace("&", " and ")
             .replace("+", " plus ")
-            .replace(Regex("\\s+"), " ")
+            .replace(spaces, " ")
             .trim()
     }
 
@@ -44,7 +58,7 @@ object IptvEpgNames {
     /** HD satellite channels win: an HD service type or "HD" in the name. */
     private fun isHd(service: NamedService): Boolean {
         val type = service.reference.split(':').getOrNull(2)?.uppercase().orEmpty()
-        return type in HD_TYPES || Regex("""\b(hd|fhd|uhd|4k)\b""", RegexOption.IGNORE_CASE).containsMatchIn(service.name)
+        return type in HD_TYPES || hdName.containsMatchIn(service.name)
     }
 
     /**
@@ -62,13 +76,15 @@ object IptvEpgNames {
             if (old == null || (!isHd(old) && isHd(s))) map[key] = s
         }
         satellite.forEach { s ->
-            offer(byName, normalize(s.name), s)
-            withoutRegion(s.name)?.let { offer(byShort, it, s) }
+            val k = keys(s.name)
+            offer(byName, k.full, s)
+            k.short?.let { offer(byShort, it, s) }
         }
         val out = LinkedHashMap<String, String>()
         services.filter { ServiceStreams.isInternet(it.reference) }.forEach { iptv ->
-            val name = normalize(iptv.name)
-            val short = withoutRegion(iptv.name)
+            val k = keys(iptv.name)
+            val name = k.full
+            val short = k.short
             val hit = byName[name]
                 ?: short?.let { byName[it] }
                 ?: byShort[name]

@@ -73,7 +73,8 @@ class TmdbHttp @Inject constructor(
         val key = apiKey()
         if (key.isBlank()) return null
         val cacheKey = sha1(path + params.joinToString("&") { "${it.first}=${it.second}" })
-        cache.read(cacheKey)?.let { return it }
+        // Disk read: never on the caller's thread (the Home build can resume on the main thread).
+        withContext(Dispatchers.IO) { cache.read(cacheKey) }?.let { return it }
         return parallel.withPermit {
             limiter.acquire()
             withContext(Dispatchers.IO) {
