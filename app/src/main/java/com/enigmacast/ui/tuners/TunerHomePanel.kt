@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.Text
-import androidx.compose.material.icons.filled.Refresh
 import com.enigmacast.R
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.tuner.ScheduleItem
@@ -80,8 +79,8 @@ import java.util.Locale
 
 private val CardShape get() = skinShape(12.dp)
 
-/** One tuner card beside the mini player. Two of them plus the gap set the player height. */
-private val TunerCardHeight = 128.dp
+/** One tuner card. Tall enough for the channel, programme and "This TV" line. Two rows set the player height. */
+private val TunerCardHeight = 96.dp
 private val TunerGap = 8.dp
 
 /**
@@ -143,7 +142,7 @@ fun TunerHomePanel(
                         model.cards.isEmpty() -> EnigmaColors.Subtle
                         else -> EnigmaColors.Success
                     }
-                    TunersRow(model, left, menuFocus, nextDown, showStream, dot, model::openSwitcher) { chosen = it }
+                    TunersRow(model, left, menuFocus, nextDown, showStream, dot) { chosen = it }
                 })
                 // IPTV Continue watching (Home has no recordings resume row): OK plays with the resume dialog / opens the series.
                 if (iptvContinue.isNotEmpty() && library.iptvAllowed()) add(PageSection("iptv") {
@@ -286,117 +285,115 @@ private fun TunersRow(
     nextDown: FocusRequester,
     showStream: Boolean,
     status: Color,
-    onSwitch: () -> Unit,
     onOpen: (TunerCard) -> Unit,
 ) {
-    val switchFocus = remember { FocusRequester() }
-    val firstFocus = remember { FocusRequester() }
-    val secondFocus = remember { FocusRequester() }
-    val pair = model.cards.take(2)
-    val extra = model.cards.drop(2)
-    val extraFoci = remember(extra.size) { List(extra.size) { FocusRequester() } }
-    val belowPair = if (pair.size >= 2) secondFocus else switchFocus
-    val aboveSwitch = if (pair.size >= 2) secondFocus else firstFocus
-    val belowSwitch = extraFoci.firstOrNull() ?: nextDown
-    val slots = pair.size.coerceAtLeast(1)
-    val stackHeight = TunerCardHeight * slots + TunerGap * (slots - 1)
-    // Tuner A over Tuner B, as tall as the 16:9 player. Switch receiver and any further tuners sit under that pair.
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            Modifier.fillMaxWidth().height(stackHeight),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(TunerGap)) {
-                if (pair.isEmpty()) {
-                    val focus = rememberTvFocus()
-                    Box(
-                        Modifier.focusProperties {
-                            down = switchFocus
-                            up = FocusRequester.Cancel
-                            this.left = menuFocus
-                        }
-                            .then(left)
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .focusRequester(firstFocus)
-                            .then(focusLook(focus.focused, CardShape))
-                            .tvClick(focus) { model.message = null },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            if (model.loading) "…" else stringResource(R.string.home_unreachable),
-                            color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
-                        )
-                    }
-                } else {
-                    pair.forEachIndexed { i, card ->
-                        val down = if (i == 0) belowPair else switchFocus
-                        val up = if (i == 0) FocusRequester.Cancel else firstFocus
-                        TunerCardView(
-                            card,
-                            model,
-                            Modifier.focusProperties {
-                                this.down = down
-                                this.up = up
-                                this.left = menuFocus
-                            }
-                                .then(if (i == 0) left else Modifier)
-                                .weight(1f)
-                                .focusRequester(if (i == 0) firstFocus else secondFocus),
-                            stretch = true,
-                        ) { onOpen(card) }
-                    }
-                }
-            }
-            if (showStream) {
+    val foci = remember { List(4) { FocusRequester() } }
+    val byIndex = model.cards.associateBy { it.index }
+    val stackHeight = TunerCardHeight * 2 + TunerGap
+    fun present(index: Int) = byIndex[index] != null
+    // A and B side by side, C and D under them. The two rows are as tall as the player.
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp).height(stackHeight),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(TunerGap)) {
+            if (model.cards.isEmpty()) {
+                val focus = rememberTvFocus()
                 Box(
-                    Modifier
-                        .fillMaxHeight()
-                        .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
-                        .clip(skinShape(8.dp))
-                        .background(Color.Black),
+                    Modifier.focusProperties {
+                        down = nextDown
+                        up = FocusRequester.Cancel
+                        this.left = menuFocus
+                    }
+                        .then(left)
+                        .fillMaxSize()
+                        .focusRequester(foci[0])
+                        .then(focusLook(focus.focused, CardShape))
+                        .tvClick(focus) { model.message = null },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    com.enigmacast.ui.dashboard.MiniStreamPlayer(Modifier.fillMaxSize())
-                    Box(
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(8.dp)
-                            .size(10.dp)
-                            .background(status, CircleShape),
+                    Text(
+                        if (model.loading) "…" else stringResource(R.string.home_unreachable),
+                        color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
                     )
                 }
             } else {
-                Box(Modifier.padding(top = 4.dp).size(10.dp).background(status, CircleShape))
-            }
-        }
-        SwitchReceiverButton(
-            onClick = onSwitch,
-            modifier = Modifier.focusRequester(switchFocus).focusProperties {
-                up = aboveSwitch
-                down = belowSwitch
-                this.left = menuFocus
-                right = FocusRequester.Cancel
-            },
-        )
-        if (extra.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                extra.forEachIndexed { i, card ->
-                    TunerCardView(
-                        card,
-                        model,
-                        Modifier.focusProperties {
-                            up = switchFocus
-                            down = nextDown
-                            this.left = if (i == 0) menuFocus else extraFoci[i - 1]
-                            right = extraFoci.getOrNull(i + 1) ?: FocusRequester.Cancel
+                for (row in 0..1) {
+                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TunerGap)) {
+                        for (col in 0..1) {
+                            val index = row * 2 + col
+                            val card = byIndex[index]
+                            if (card == null) {
+                                AbsentTuner(('A' + index).toString(), Modifier.weight(1f).fillMaxHeight())
+                            } else {
+                                val leftTarget = if (col == 0 || !present(index - 1)) menuFocus else foci[index - 1]
+                                val rightTarget = if (col == 1 || !present(index + 1)) FocusRequester.Cancel else foci[index + 1]
+                                val downTarget = if (index + 2 < 4 && present(index + 2)) foci[index + 2] else nextDown
+                                val upTarget = if (index >= 2 && present(index - 2)) foci[index - 2] else FocusRequester.Cancel
+                                TunerCardView(
+                                    card,
+                                    model,
+                                    Modifier.focusProperties {
+                                        this.left = leftTarget
+                                        right = rightTarget
+                                        down = downTarget
+                                        up = upTarget
+                                    }
+                                        .then(if (leftTarget == menuFocus) left else Modifier)
+                                        .weight(1f)
+                                        .focusRequester(foci[index]),
+                                    stretch = true,
+                                ) { onOpen(card) }
+                            }
                         }
-                            .then(if (i == 0) left else Modifier)
-                            .focusRequester(extraFoci[i]),
-                    ) { onOpen(card) }
+                    }
                 }
             }
         }
+        if (showStream) {
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
+                    .clip(skinShape(8.dp))
+                    .background(Color.Black),
+            ) {
+                com.enigmacast.ui.dashboard.MiniStreamPlayer(Modifier.fillMaxSize())
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .size(10.dp)
+                        .background(status, CircleShape),
+                )
+            }
+        } else {
+            Box(Modifier.padding(top = 4.dp).size(10.dp).background(status, CircleShape))
+        }
+    }
+}
+
+/** A tuner this receiver does not have. Shown, but not focusable, until a box with that slot connects. */
+@Composable
+private fun AbsentTuner(letter: String, modifier: Modifier) {
+    Column(
+        modifier.then(focusLook(false, CardShape)).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(22.dp).clip(skinShape(8.dp)).background(EnigmaColors.CardBorder),
+                contentAlignment = Alignment.Center,
+            ) { Text(letter, color = EnigmaColors.Muted, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+            Text(
+                stringResource(R.string.home_tuner_name, letter),
+                color = EnigmaColors.Muted, fontSize = 12.sp, fontWeight = EnigmaType.Strong,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Text(stringResource(R.string.home_tuner_absent), color = EnigmaColors.Subtle, fontSize = 12.sp, maxLines = 1)
     }
 }
 
@@ -416,15 +413,15 @@ private fun TunerCardView(
             .then(if (stretch) Modifier.fillMaxWidth().fillMaxHeight() else Modifier.width(232.dp).heightIn(min = 96.dp))
             .then(focusLook(focus.focused, CardShape))
             .tvClick(focus, onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(26.dp).clip(skinShape(8.dp))
+                Modifier.size(22.dp).clip(skinShape(8.dp))
                     .background(if (card.idle) EnigmaColors.CardBorder else EnigmaColors.Cyan),
                 contentAlignment = Alignment.Center,
-            ) { Text(card.letter, color = if (card.idle) EnigmaColors.Text else Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            ) { Text(card.letter, color = if (card.idle) EnigmaColors.Text else Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
             Column(Modifier.padding(start = 8.dp).weight(1f)) {
                 Text(card.name.ifBlank { stringResource(R.string.home_tuner_name, card.letter) }, color = EnigmaColors.Text, fontSize = 12.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(card.type, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -661,36 +658,3 @@ private fun SeriesEpisodesDialog(
     }
 }
 
-/** Home's "Switch receiver" button: a real button with the Red-key hint, focus colour like the other buttons. */
-@Composable
-private fun SwitchReceiverButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    androidx.tv.material3.Button(
-        onClick = onClick,
-        modifier = modifier,
-        shape = androidx.tv.material3.ButtonDefaults.shape(shape = skinShape(8.dp)),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-        scale = androidx.tv.material3.ButtonDefaults.scale(scale = 1f, focusedScale = 1.06f),
-        border = androidx.tv.material3.ButtonDefaults.border(
-            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.dp, EnigmaColors.CardBorder), shape = skinShape(8.dp)),
-            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, EnigmaColors.Text), shape = skinShape(8.dp)),
-        ),
-        colors = androidx.tv.material3.ButtonDefaults.colors(
-            containerColor = EnigmaColors.Raised,
-            contentColor = EnigmaColors.Text,
-            focusedContainerColor = EnigmaColors.Accent,
-            focusedContentColor = EnigmaColors.OnAccent,
-        ),
-    ) {
-        androidx.tv.material3.Icon(
-            androidx.compose.material.icons.Icons.Filled.Refresh,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-        )
-        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-        Text(stringResource(R.string.switch_receiver), fontSize = 14.sp, maxLines = 1)
-        androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
-        Box(Modifier.size(10.dp).background(Color(0xFFE53935), androidx.compose.foundation.shape.CircleShape))
-        androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
-        Text(stringResource(R.string.switch_receiver_red), fontSize = 12.sp, maxLines = 1)
-    }
-}

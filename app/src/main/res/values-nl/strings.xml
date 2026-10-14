@@ -879,6 +879,7 @@
     <string name="home_tuners_subtitle">Wat de tuners van je ontvanger nu doen</string>
     <string name="home_tuner_name">Tuner %1$s</string>
     <string name="home_tuner_idle">Vrij</string>
+    <string name="home_tuner_absent">Niet aanwezig</string>
     <string name="home_use_live">Scherm ontvanger</string>
     <string name="home_use_recording">Opname</string>
     <string name="home_use_own">Deze tv (EnigmaCast)</string>

@@ -882,6 +882,7 @@
     <string name="home_tuners_subtitle">What your receiver\'s tuners are doing right now</string>
     <string name="home_tuner_name">Tuner %1$s</string>
     <string name="home_tuner_idle">Free</string>
+    <string name="home_tuner_absent">Not present</string>
     <string name="home_use_live">Receiver screen</string>
     <string name="home_use_recording">Recording</string>
     <string name="home_use_own">This TV (EnigmaCast)</string>

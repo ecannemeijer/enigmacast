@@ -879,6 +879,7 @@
     <string name="home_tuners_subtitle">Was die Tuner deines Receivers gerade tun</string>
     <string name="home_tuner_name">Tuner %1$s</string>
     <string name="home_tuner_idle">Frei</string>
+    <string name="home_tuner_absent">Nicht vorhanden</string>
     <string name="home_use_live">Receiver-Bild</string>
     <string name="home_use_recording">Aufnahme</string>
     <string name="home_use_own">Dieser Fernseher (EnigmaCast)</string>
