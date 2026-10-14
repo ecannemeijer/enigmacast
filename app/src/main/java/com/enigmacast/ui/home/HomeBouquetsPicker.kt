@@ -1,5 +1,7 @@
 package com.enigmacast.ui.home
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -114,12 +116,12 @@ private fun HomeBouquetsDialog(choice: BouquetChoice, model: HomeBouquetsViewMod
             Modifier
                 .width(520.dp)
                 .heightIn(max = 480.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(stringResource(R.string.home_bouquets), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.home_bouquets), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             Text(
                 stringResource(R.string.home_bouquets_count, choice.selected.size, choice.bouquets.size),
                 color = EnigmaColors.Muted,

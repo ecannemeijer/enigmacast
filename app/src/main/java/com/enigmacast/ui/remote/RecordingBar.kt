@@ -1,5 +1,7 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -113,7 +115,7 @@ fun RecordingBar(
             ui.fileTitle.ifBlank { stringResource(R.string.nav_my_items) },
             color = Color.White,
             fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -198,14 +200,14 @@ private fun ProgressLine(
             Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(2.dp)),
+                .background(Color.White.copy(alpha = 0.35f), skinShape(2.dp)),
         )
         if (played > 0.dp) {
             Box(
                 Modifier
                     .width(played)
                     .height(4.dp)
-                    .background(RecordRed, RoundedCornerShape(2.dp)),
+                    .background(RecordRed, skinShape(2.dp)),
             )
         }
         Box(

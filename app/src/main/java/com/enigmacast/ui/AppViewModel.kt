@@ -63,6 +63,14 @@ class AppViewModel @Inject constructor(
     var screen by mutableStateOf(AppScreen.Loading)
         private set
 
+    init {
+        // Settings › Appearance › GUI skins: repaints every screen and the OSD right away.
+        viewModelScope.launch {
+            settingsRepository.settings.map { it.osdSkin }.distinctUntilChanged()
+                .collect { com.enigmacast.ui.theme.ActiveSkin.apply(it) }
+        }
+    }
+
     /** Settings › General › Navigation sounds, applied to every app window. */
     val navigationSounds: StateFlow<Boolean> = settingsRepository.settings
         .map { it.navigationSounds }

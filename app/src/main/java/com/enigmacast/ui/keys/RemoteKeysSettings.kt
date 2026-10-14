@@ -1,5 +1,7 @@
 package com.enigmacast.ui.keys
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import android.view.KeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -220,7 +222,7 @@ private fun KeyRow(label: String, value: String, onClick: () -> Unit, modifier: 
     ) { _ ->
         Text(label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
-        Text(value, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, fontSize = 12.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -240,8 +242,8 @@ private fun KeyCaptureDialog(actionLabel: String, longPressMs: Long, onKey: (Key
         Column(
             modifier = Modifier
                 .widthIn(min = 260.dp, max = 420.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .background(EnigmaColors.Selected, skinShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                 .padding(16.dp)
                 .focusRequester(focus)
                 .onPreviewKeyEvent { event ->
@@ -273,7 +275,7 @@ private fun KeyCaptureDialog(actionLabel: String, longPressMs: Long, onKey: (Key
                 .focusable(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(actionLabel, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(actionLabel, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             Text(stringResource(R.string.keys_press_now), color = EnigmaColors.Text, fontSize = 14.sp)
             Text(stringResource(R.string.keys_press_hint), color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp)
             if (fixed) Text(stringResource(R.string.keys_fixed_key), color = EnigmaColors.Accent, fontSize = 12.sp)

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.settings
 
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -203,7 +204,7 @@ private fun MeterBar(label: String, percent: Int?, extra: String? = null) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(14.dp)
-                .clip(RoundedCornerShape(7.dp))
+                .clip(skinShape(7.dp))
                 .background(EnigmaColors.Raised),
         ) {
             Box(

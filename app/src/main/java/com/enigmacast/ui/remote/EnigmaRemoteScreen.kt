@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.skinShape
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -163,7 +164,7 @@ fun EnigmaRemoteScreen(
                         actions = quickBarActions,
                         modifier = Modifier
                             .padding(horizontal = 36.dp, vertical = 12.dp)
-                            .background(scrim, RoundedCornerShape(14.dp))
+                            .background(scrim, skinShape(14.dp))
                             .padding(8.dp),
                     )
                 }
@@ -186,7 +187,7 @@ fun EnigmaRemoteScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 44.dp, vertical = 32.dp)
-                    .background(scrim, RoundedCornerShape(14.dp))
+                    .background(scrim, skinShape(14.dp))
                     .padding(8.dp),
             )
         }

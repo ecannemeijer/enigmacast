@@ -221,7 +221,7 @@
     <string name="nav_search">Suche</string>
     <string name="nav_my_items">Meine Inhalte</string>
     <string name="nav_receiver">Receiver</string>
-    <string name="nav_osd_skins">OSD-Skins</string>
+    <string name="nav_osd_skins">GUI-Skins</string>
     <string name="nav_settings">Einstellungen</string>
     <string name="nav_exit">Beenden</string>
     <string name="exit_app_title">EnigmaCast beenden?</string>
@@ -235,7 +235,7 @@
     <string name="bouquets">Bouquets</string>
     <string name="channels">Sender</string>
     <string name="skins_subtitle">Hier kannst du bald einen Skin für das OSD wählen.</string>
-    <string name="skins_detail">Ein Skin ändert das Senderbanner, die Senderliste und die Hinweise, die EnigmaCast selbst zeichnet.</string>
+    <string name="skins_detail">Ändert Farben, Formen und Fokus der ganzen App sowie das Layout des Senderbanners. Wird sofort übernommen.</string>
     <string name="settings_title">Einstellungen</string>
     <string name="settings_receivers">Receiver</string>
     <string name="receivers_intro">Wähle, von welcher Enigma2-Box Tunerstatus, Bouquets und Aufnahmen kommen.</string>
@@ -1234,4 +1234,6 @@ Profil: %2$s</string>
     <string name="import_cancelled_rolled_back">Während des Schreibens abgebrochen. Die vorherigen Listen wurden zurückgespielt und neu geladen.</string>
     <string name="import_cancelled_rollback_failed">Während des Schreibens abgebrochen, und das Zurückspielen der vorherigen Listen ist fehlgeschlagen. Stelle die Sicherung unter Wiederherstellen wieder her.</string>
     <string name="import_cancelled_loaded">Abgebrochen, nachdem alle Dateien geschrieben waren. Die neuen Listen sind auf dem Receiver.</string>
+    <string name="osd_remaining_min">+%1$d Min.</string>
+    <string name="osd_duration_min">%1$d Min.</string>
 </resources>

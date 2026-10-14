@@ -1,5 +1,7 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,7 +99,7 @@ data class QuickBarActions(
     val onSearch: () -> Unit,
 )
 
-private val TileShape = RoundedCornerShape(10.dp)
+private val TileShape get() = skinShape(10.dp)
 
 /**
  * TiviMate-style options under the channel banner: a row of tiles (icon, name, current
@@ -200,12 +202,12 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         Column(
             modifier = Modifier
                 .widthIn(min = 220.dp, max = 340.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(12.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(12.dp))
+                .background(EnigmaColors.Selected, skinShape(12.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(12.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(option.label(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(option.label(), color = Color.White, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
             when (option) {
                 QuickOption.STREAM_INFO -> StreamInfo(ui, onClose)
                 QuickOption.AUDIO_DELAY -> {

@@ -127,12 +127,16 @@ data class DebugSettings(
 
 /**
  * Stored id of the OSD skin (the look of the OSD the app draws itself). The skins themselves
- * are in `ui.osd.OsdSkins`, keyed by this id; only [STANDARD] exists for now. Saved by name,
+ * are in `ui.theme.Skins`, keyed by this id. Saved by name,
  * so renaming the class does not touch existing settings.
  */
 @Serializable
 enum class OsdSkinId(@StringRes val label: Int) {
-    STANDARD(R.string.skin_standard),
+    STANDARD(R.string.skin_enigmacast),
+    OPENPLI(R.string.skin_openpli),
+    MIDNIGHT(R.string.skin_midnight),
+    METRIX(R.string.skin_metrix),
+    AURORA(R.string.skin_aurora),
 }
 
 /** Which extra information the channel banner shows (Settings › OSD). */

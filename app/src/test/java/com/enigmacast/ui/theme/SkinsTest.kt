@@ -1,0 +1,45 @@
+package com.enigmacast.ui.theme
+
+import com.enigmacast.domain.model.OsdSkinId
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Test
+
+class SkinsTest {
+    @After fun reset() = ActiveSkin.apply(OsdSkinId.STANDARD)
+
+    @Test
+    fun everySkinIdHasExactlyOneSkin() {
+        assertEquals(OsdSkinId.entries.toSet(), Skins.all.map { it.id }.toSet())
+        assertEquals(OsdSkinId.entries.size, Skins.all.size)
+    }
+
+    @Test
+    fun theDefaultSkinKeepsTheEnigmaCastColours() {
+        ActiveSkin.apply(OsdSkinId.STANDARD)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF4188FF), EnigmaColors.Accent)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF080D1C), EnigmaColors.Canvas)
+    }
+
+    @Test
+    fun applyingASkinRepaintsTheTokens() {
+        ActiveSkin.apply(OsdSkinId.OPENPLI)
+        assertEquals(OsdLayout.PLI_BAR, ActiveSkin.current.osd)
+        assertEquals(Skins.OpenPli.palette.accent, EnigmaColors.Accent)
+        assertNotEquals(Skins.EnigmaCast.palette.canvas, EnigmaColors.Canvas)
+    }
+
+    @Test
+    fun cornersFollowTheSkin() {
+        ActiveSkin.apply(OsdSkinId.METRIX)
+        assertEquals(0f, ActiveSkin.current.cornerScale)
+        ActiveSkin.apply(OsdSkinId.AURORA)
+        assertEquals(1.4f, ActiveSkin.current.cornerScale)
+    }
+
+    @Test
+    fun layoutsAreDistinct() {
+        assertEquals(Skins.all.size, Skins.all.map { it.osd }.toSet().size)
+    }
+}

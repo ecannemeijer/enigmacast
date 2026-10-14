@@ -32,7 +32,7 @@ interface OsdSkin {
 
 object OsdSkins {
     fun of(id: OsdSkinId): OsdSkin = when (id) {
-        OsdSkinId.STANDARD -> StandardOsdSkin
+        else -> StandardOsdSkin
     }
 }
 

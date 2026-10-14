@@ -1,5 +1,6 @@
 package com.enigmacast.ui.components
 
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -47,8 +48,8 @@ import com.enigmacast.ui.animation.focusTween
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 
-private val PanelShape = RoundedCornerShape(16.dp)
-private val CardShape = RoundedCornerShape(14.dp)
+private val PanelShape get() = skinShape(16.dp)
+private val CardShape get() = skinShape(14.dp)
 
 @Composable
 fun Modifier.enigmaGlass(corner: Dp = 16.dp): Modifier {
@@ -90,12 +91,12 @@ fun EnigmaGlassButton(
         animationSpec = spec.focusTween(),
         label = "glassButton",
     )
-    val shape = RoundedCornerShape(12.dp)
+    val shape = skinShape(12.dp)
     Text(
         text = text,
         color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Text,
         fontSize = EnigmaType.Body,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = EnigmaType.Strong,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
@@ -203,7 +204,7 @@ fun EnigmaProgramProgress(
         modifier
             .fillMaxWidth()
             .height(4.dp)
-            .clip(RoundedCornerShape(2.dp))
+            .clip(skinShape(2.dp))
             .background(EnigmaColors.Raised),
     ) {
         Box(
@@ -235,7 +236,7 @@ fun EnigmaChannelCard(
                 title,
                 color = EnigmaColors.Text,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -263,7 +264,7 @@ fun EnigmaLoadingIndicator(modifier: Modifier = Modifier) {
         Box(
             modifier
                 .size(16.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(skinShape(8.dp))
                 .background(EnigmaColors.Accent),
         )
         return
@@ -278,6 +279,6 @@ fun EnigmaLoadingIndicator(modifier: Modifier = Modifier) {
         modifier
             .size(18.dp)
             .graphicsLayer { rotationZ = angle }
-            .border(2.dp, Brush.sweepGradient(listOf(Color.Transparent, EnigmaColors.Cyan, EnigmaColors.Accent)), RoundedCornerShape(9.dp)),
+            .border(2.dp, Brush.sweepGradient(listOf(Color.Transparent, EnigmaColors.Cyan, EnigmaColors.Accent)), skinShape(9.dp)),
     )
 }

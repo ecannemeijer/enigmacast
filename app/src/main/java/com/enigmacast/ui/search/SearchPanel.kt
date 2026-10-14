@@ -1,5 +1,6 @@
 package com.enigmacast.ui.search
 
+import com.enigmacast.ui.theme.EnigmaType
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -130,7 +131,7 @@ fun SearchPanel(
             stringResource(R.string.nav_search),
             color = Color.White,
             fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             modifier = Modifier.padding(bottom = 8.dp),
         )
         Row(
@@ -191,7 +192,7 @@ fun SearchPanel(
                                 sectionTitle(kind),
                                 color = EnigmaColors.Accent,
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = EnigmaType.Strong,
                                 modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
                             )
                         }

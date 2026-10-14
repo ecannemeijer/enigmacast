@@ -221,7 +221,7 @@
     <string name="nav_search">Zoeken</string>
     <string name="nav_my_items">Mijn items</string>
     <string name="nav_receiver">Ontvanger</string>
-    <string name="nav_osd_skins">OSD-skins</string>
+    <string name="nav_osd_skins">GUI-skins</string>
     <string name="nav_settings">Instellingen</string>
     <string name="nav_exit">Afsluiten</string>
     <string name="exit_app_title">EnigmaCast stoppen?</string>
@@ -235,7 +235,7 @@
     <string name="bouquets">Bouquets</string>
     <string name="channels">Kanalen</string>
     <string name="skins_subtitle">Hier kun je straks een skin voor het OSD kiezen.</string>
-    <string name="skins_detail">Een skin verandert straks de zenderbalk, de zenderlijst en de meldingen die EnigmaCast zelf tekent.</string>
+    <string name="skins_detail">Verandert de kleuren, vormen en focus van de hele app en de indeling van de zenderbalk. Direct toegepast.</string>
     <string name="settings_title">Instellingen</string>
     <string name="settings_receivers">Ontvangers</string>
     <string name="receivers_intro">Kies van welke Enigma2-box tunerstatus, bouquets en opnames komen.</string>
@@ -1229,4 +1229,6 @@ Profiel: %2$s</string>
     <string name="import_cancelled_rolled_back">Geannuleerd tijdens het schrijven. De vorige lijsten zijn teruggezet en opnieuw geladen.</string>
     <string name="import_cancelled_rollback_failed">Geannuleerd tijdens het schrijven, en het terugzetten van de vorige lijsten is mislukt. Zet de back-up terug bij Terugzetten.</string>
     <string name="import_cancelled_loaded">Geannuleerd nadat alle bestanden geschreven waren. De nieuwe lijsten staan op de ontvanger.</string>
+    <string name="osd_remaining_min">+%1$d min</string>
+    <string name="osd_duration_min">%1$d min</string>
 </resources>

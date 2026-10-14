@@ -221,7 +221,7 @@
     <string name="nav_search">Recherche</string>
     <string name="nav_my_items">Mes contenus</string>
     <string name="nav_receiver">Récepteur</string>
-    <string name="nav_osd_skins">Thèmes OSD</string>
+    <string name="nav_osd_skins">Thèmes GUI</string>
     <string name="nav_settings">Paramètres</string>
     <string name="nav_exit">Quitter</string>
     <string name="exit_app_title">Quitter EnigmaCast ?</string>
@@ -235,7 +235,7 @@
     <string name="bouquets">Bouquets</string>
     <string name="channels">Chaînes</string>
     <string name="skins_subtitle">Vous pourrez choisir ici un thème pour l\'OSD.</string>
-    <string name="skins_detail">Un thème modifie le bandeau de chaîne, la liste des chaînes et les notifications qu\'EnigmaCast affiche lui-même.</string>
+    <string name="skins_detail">Change les couleurs, les formes et le focus de toute l\'application ainsi que la mise en page du bandeau de chaîne. Appliqué immédiatement.</string>
     <string name="settings_title">Paramètres</string>
     <string name="settings_receivers">Récepteurs</string>
     <string name="receivers_intro">Choisissez de quel boîtier Enigma2 proviennent l\'état des tuners, les bouquets et les enregistrements.</string>
@@ -1238,4 +1238,6 @@ Profil : %2$s</string>
     <string name="import_cancelled_rolled_back">Annulé pendant l\'écriture. Les listes précédentes ont été remises en place et rechargées.</string>
     <string name="import_cancelled_rollback_failed">Annulé pendant l\'écriture, et la remise en place des listes précédentes a échoué. Restaurez la sauvegarde dans Restaurer.</string>
     <string name="import_cancelled_loaded">Annulé après l\'écriture de tous les fichiers. Les nouvelles listes sont sur le récepteur.</string>
+    <string name="osd_remaining_min">+%1$d min</string>
+    <string name="osd_duration_min">%1$d min</string>
 </resources>

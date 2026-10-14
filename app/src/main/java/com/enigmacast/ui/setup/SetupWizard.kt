@@ -1,5 +1,6 @@
 package com.enigmacast.ui.setup
 
+import com.enigmacast.ui.theme.EnigmaType
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -172,7 +173,7 @@ private fun BigChoice(title: String, description: String, selected: Boolean, mod
         selected = selected,
         onClick = onClick,
         modifier = modifier.widthIn(max = 760.dp).fillMaxWidth(),
-        headlineContent = { Text(title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold) },
+        headlineContent = { Text(title, fontSize = 19.sp, fontWeight = EnigmaType.Strong) },
         supportingContent = if (description.isBlank()) null else { { Text(description, fontSize = 14.sp, lineHeight = 19.sp) } },
         trailingContent = { if (selected) Text("✓", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
         scale = ListItemDefaults.scale(scale = 1f, focusedScale = 1.02f),
@@ -202,7 +203,7 @@ private fun ReceiverStep(model: SetupViewModel, connection: ConnectionViewModel,
             stringResource(R.string.setup_receiver_connected, name.ifBlank { receiver?.name.orEmpty() }, receiver?.host.orEmpty()),
             color = EnigmaColors.Text,
             fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
         )
     }
     ReceiverSetup(
@@ -343,7 +344,7 @@ private fun AccountStep(focus: FocusRequester, onSignedIn: () -> Unit) {
             stringResource(R.string.setup_account_signed_in, current.email),
             color = EnigmaColors.Text,
             fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
         )
         Text(
             com.enigmacast.ui.account.planLine(current, model.isPremium(current)),

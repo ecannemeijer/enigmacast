@@ -176,7 +176,7 @@ internal fun LiveBrowser(
                 guideModel.bouquetName.ifBlank { stringResource(R.string.channels) },
                 color = EnigmaColors.Text,
                 fontSize = EnigmaType.Title,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
@@ -265,7 +265,7 @@ private fun androidx.compose.foundation.layout.RowScope.ChannelLine(
     Picon(entry, picon, cachedPicon, Modifier.width(40.dp).height(24.dp), fallbackSize = 8.sp)
     Spacer(Modifier.width(8.dp))
     Column(Modifier.weight(1f)) {
-        Text(entry.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(entry.name, fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val line = when {
             now != null && next != null -> now.title + "  ·  " + next.title
             now != null -> now.title
@@ -311,7 +311,7 @@ private fun PreviewPane(
                     channel?.name ?: stringResource(R.string.channels),
                     color = EnigmaColors.Text,
                     fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

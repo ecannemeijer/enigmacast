@@ -1,5 +1,7 @@
 package com.enigmacast.ui.recording
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,12 +83,12 @@ fun TunerConflictHost(model: TunerConflictViewModel = androidx.hilt.lifecycle.vi
         LaunchedEffect(current) { first.requestWhenReady() }
         Column(
             Modifier.widthIn(min = 260.dp, max = 460.dp).width(IntrinsicSize.Max)
-                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .background(EnigmaColors.Selected, skinShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(stringResource(R.string.conflict_title, current.target.name), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(stringResource(R.string.conflict_title, current.target.name), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 2)
             current.recordings.forEachIndexed { i, rec ->
                 Text(
                     stringResource(R.string.conflict_running, rec.channelName, rec.title.ifBlank { rec.channelName }, clock.format(Date(rec.untilEpochSec * 1000))),

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.soccer
 
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.animation.core.RepeatMode
@@ -85,7 +86,7 @@ import com.enigmacast.util.isEmpty
 /** One row/block of the Soccer page, in visual order; [key] names it in the focus chain. */
 class PageSection(val key: String, val content: @Composable () -> Unit)
 
-private val CardShape = RoundedCornerShape(12.dp)
+private val CardShape get() = skinShape(12.dp)
 
 /**
  * The Soccer page, in the style of Home: a hero with the most relevant match, rows of live,
@@ -112,7 +113,7 @@ fun SoccerPanel(
         Box(
             Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(skinShape(16.dp))
                 .background(Brush.verticalGradient(0f to Color(0xFF0B2A1E), 0.55f to EnigmaColors.Canvas))
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
                 .holdPageFocus(contentFocus, listOf(model.loading && model.sections.isEmpty, model.sections.isEmpty, model.sections.hero?.let { it.id })),
@@ -200,8 +201,8 @@ fun SoccerPanel(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 18.dp)
-                        .background(EnigmaColors.Raised, RoundedCornerShape(10.dp))
-                        .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                        .background(EnigmaColors.Raised, skinShape(10.dp))
+                        .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                 )
             }
@@ -274,7 +275,7 @@ private fun Hero(
                 stringResource(if (match.status.isLive) R.string.soccer_hero_live else R.string.soccer_hero_next),
                 color = EnigmaColors.Cyan,
                 fontSize = EnigmaType.Label,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
             )
             Text(
                 match.competitionName + (match.matchday?.let { " · " + stringResourceMatchday(it) } ?: ""),
@@ -294,7 +295,7 @@ private fun Hero(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             match.venue?.let { Text(it, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             if (channel != null) {
-                Text(stringResource(R.string.soccer_on_channel, channel.first, channel.second), color = EnigmaColors.Accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.soccer_on_channel, channel.first, channel.second), color = EnigmaColors.Accent, fontSize = 14.sp, fontWeight = EnigmaType.Strong)
             }
             if (scheduled) Badge(stringResource(R.string.home_scheduled), EnigmaColors.Accent)
         }
@@ -326,14 +327,14 @@ private fun Hero(
 private fun TeamBlock(team: com.enigmacast.domain.soccer.SoccerTeam, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Crest(team, 88.dp)
-        Text(team.label, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        Text(team.label, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
 private fun MatchRow(title: String, matches: List<SoccerMatch>, nowSec: Long, locale: java.util.Locale, left: Modifier, model: SoccerViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 24.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(start = 4.dp, end = 32.dp, top = 6.dp, bottom = 6.dp),
@@ -399,7 +400,7 @@ private fun Standings(model: SoccerViewModel, firstFocus: FocusRequester, left: 
     val tables: List<StandingTable> = model.standings[code].orEmpty().filter { it.rows.isNotEmpty() }
     Column(Modifier.padding(start = 24.dp, end = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.soccer_standings), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.soccer_standings), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
             Text(stringResource(R.string.pitch_hint_club), color = EnigmaColors.Subtle, fontSize = 12.sp)
             if (codes.size > 1) {
                 codes.forEachIndexed { i, c ->
@@ -463,9 +464,9 @@ private fun StandingLine(code: String, row: StandingRow, size: Int, modifier: Mo
                 ok
             }
             .focusable(interactionSource = interaction)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(skinShape(8.dp))
             .background(if (focused) EnigmaColors.Selected else EnigmaColors.Card.copy(alpha = 0.6f))
-            .border(if (focused) 2.dp else 0.dp, if (focused) EnigmaColors.Cyan else Color.Transparent, RoundedCornerShape(8.dp))
+            .border(if (focused) 2.dp else 0.dp, if (focused) EnigmaColors.Cyan else Color.Transparent, skinShape(8.dp))
             .height(30.dp)
             .padding(end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -499,7 +500,7 @@ private fun FormCells(form: String?, modifier: Modifier) {
                 "L" -> LiveRed
                 else -> EnigmaColors.Muted
             }
-            Box(Modifier.size(15.dp).background(color, RoundedCornerShape(3.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(15.dp).background(color, skinShape(3.dp)), contentAlignment = Alignment.Center) {
                 Text(r, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
@@ -521,13 +522,13 @@ private fun Skeleton(left: Modifier) {
             Text(stringResource(R.string.soccer_loading), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = left.focusable())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(88.dp).background(block, RoundedCornerShape(44.dp)))
-            Box(Modifier.width(120.dp).height(44.dp).background(block, RoundedCornerShape(8.dp)))
-            Box(Modifier.size(88.dp).background(block, RoundedCornerShape(44.dp)))
+            Box(Modifier.size(88.dp).background(block, skinShape(44.dp)))
+            Box(Modifier.width(120.dp).height(44.dp).background(block, skinShape(8.dp)))
+            Box(Modifier.size(88.dp).background(block, skinShape(44.dp)))
         }
         Spacer(Modifier.height(40.dp))
         repeat(2) {
-            Box(Modifier.width(160.dp).height(18.dp).background(block, RoundedCornerShape(6.dp)))
+            Box(Modifier.width(160.dp).height(18.dp).background(block, skinShape(6.dp)))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 repeat(4) { Box(Modifier.width(212.dp).height(118.dp).background(block, CardShape)) }
             }
@@ -553,7 +554,7 @@ private fun EmptyState(left: Modifier, onRetry: () -> Unit) =
 @Composable
 private fun Message(title: String, body: String, left: Modifier, onRetry: () -> Unit) {
     Column(Modifier.padding(start = 28.dp, top = 60.dp).fillMaxWidth(0.7f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
         Text(body, color = EnigmaColors.Muted, fontSize = 14.sp)
         EnigmaGlassButton(stringResource(R.string.home_try_again), onRetry, left)
         Spacer(Modifier.height(120.dp))

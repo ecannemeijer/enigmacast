@@ -44,7 +44,7 @@ import androidx.tv.material3.LocalContentColor
 import com.enigmacast.ui.animation.LocalMotionSpec
 import com.enigmacast.ui.animation.focusTween
 
-private val CompactShape = RoundedCornerShape(6.dp)
+private val CompactShape get() = skinShape(6.dp)
 
 /**
  * A dense, D-pad focusable list row for long lists (channels, bouquets). TV buttons have
@@ -99,6 +99,7 @@ fun CompactListRow(
             }
             .onGloballyPositioned { lastCoords = it; if (focused) onPlaced(it) }
             .background(background, CompactShape)
+            .skinFocusEdge(focused && drawFocus, 6.dp)
             .edgeLeft()
             .onKeyEvent { event ->
                 val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter

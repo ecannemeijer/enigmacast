@@ -1,5 +1,7 @@
 package com.enigmacast.ui.receivers
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -118,12 +120,12 @@ fun ReceiverSwitchHost(onAddReceiver: () -> Unit, model: ReceiverSwitchViewModel
         Column(
             Modifier
                 .widthIn(min = 300.dp, max = 460.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .background(EnigmaColors.Selected, skinShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(stringResource(R.string.switch_receiver), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.switch_receiver), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             if (receivers.size <= 1) {
                 Text(stringResource(R.string.switch_receiver_only_one), color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp)
             }

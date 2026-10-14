@@ -1,5 +1,6 @@
 package com.enigmacast.ui.components
 
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -41,7 +42,7 @@ import com.enigmacast.ui.theme.EnigmaColors
 import kotlin.math.roundToInt
 
 private val DrawerShape = RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
-private val CursorShape = RoundedCornerShape(8.dp)
+private val CursorShape get() = skinShape(8.dp)
 
 /**
  * One sliding highlight for the side menu. A focused row writes its place;

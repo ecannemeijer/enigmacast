@@ -1,5 +1,7 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -84,7 +86,7 @@ data class GuideActions(
 
 private val ChannelColumn = 200.dp
 private val RowHeight = 38.dp
-private val CellShape = RoundedCornerShape(4.dp)
+private val CellShape get() = skinShape(4.dp)
 private val Airing = Color(0xFF1A2744)
 private val Empty = Color(0xFF0C1220)
 
@@ -212,7 +214,7 @@ private fun GuideHeader(
                 title,
                 color = EnigmaColors.Accent,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = 220.dp),
@@ -238,7 +240,7 @@ private fun GuideHeader(
             event?.title ?: stringResource(R.string.osd_no_programme_data),
             color = if (event != null) Color.White else EnigmaColors.Muted,
             fontSize = 19.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -284,7 +286,7 @@ private fun TimeRuler(windowStartSec: Long, nowSec: Long, dpPerSec: Float) {
             dayLabel(windowStartSec, nowSec),
             color = EnigmaColors.Accent,
             fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             maxLines = 1,
             modifier = Modifier.width(ChannelColumn).padding(start = 16.dp),
         )
@@ -490,8 +492,8 @@ private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, air
 
 @Composable
 private fun GuideProgress(fraction: Float, modifier: Modifier = Modifier) {
-    Box(modifier = modifier.height(3.dp).background(EnigmaColors.Raised, RoundedCornerShape(2.dp))) {
-        Box(Modifier.fillMaxWidth(fraction).height(3.dp).background(EnigmaColors.Accent, RoundedCornerShape(2.dp)))
+    Box(modifier = modifier.height(3.dp).background(EnigmaColors.Raised, skinShape(2.dp))) {
+        Box(Modifier.fillMaxWidth(fraction).height(3.dp).background(EnigmaColors.Accent, skinShape(2.dp)))
     }
 }
 
@@ -524,7 +526,7 @@ fun ChannelEpgPanel(
             .width(480.dp)
             .padding(horizontal = 12.dp, vertical = 20.dp),
     ) {
-        Text(channel.name, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(channel.name, color = Color.White, fontSize = 17.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(stringResource(R.string.epg_panel_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
         if (events.isEmpty()) {
             CompactListRow(onClick = {}, modifier = Modifier.focusRequester(focus)) {
@@ -557,7 +559,7 @@ fun ChannelEpgPanel(
                             Text(
                                 event.title,
                                 fontSize = 13.sp,
-                                fontWeight = if (airing) FontWeight.SemiBold else FontWeight.Normal,
+                                fontWeight = if (airing) EnigmaType.Strong else FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
@@ -580,11 +582,11 @@ fun ChannelEpgPanel(
                 .fillMaxWidth()
                 .height(150.dp)
                 .padding(top = 10.dp)
-                .background(EnigmaColors.Card, RoundedCornerShape(8.dp))
+                .background(EnigmaColors.Card, skinShape(8.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(selected.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(selected.title, color = Color.White, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(timeRange(selected, nowSec), color = EnigmaColors.Accent, fontSize = 12.sp)
             Text(
                 selected.description,

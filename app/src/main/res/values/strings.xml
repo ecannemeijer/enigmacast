@@ -224,7 +224,7 @@
     <string name="nav_search">Search</string>
     <string name="nav_my_items">My Items</string>
     <string name="nav_receiver">Receiver</string>
-    <string name="nav_osd_skins">OSD skins</string>
+    <string name="nav_osd_skins">GUI skins</string>
     <string name="nav_settings">Settings</string>
     <string name="nav_exit">Exit</string>
     <string name="exit_app_title">Stop EnigmaCast?</string>
@@ -238,7 +238,7 @@
     <string name="bouquets">Bouquets</string>
     <string name="channels">Channels</string>
     <string name="skins_subtitle">Here you will be able to choose a skin for the OSD.</string>
-    <string name="skins_detail">A skin will change the channel banner, the channel list and the notices that EnigmaCast draws itself.</string>
+    <string name="skins_detail">Changes the colours, shapes and focus of the whole app and the layout of the channel banner. Applied at once.</string>
     <string name="settings_title">Settings</string>
     <string name="settings_receivers">Receivers</string>
     <string name="receivers_intro">Choose which Enigma2 box tuner status, bouquets and recordings come from.</string>
@@ -1232,4 +1232,11 @@ Profile: %2$s</string>
     <string name="import_cancelled_rolled_back">Cancelled while writing. The previous lists were put back and reloaded.</string>
     <string name="import_cancelled_rollback_failed">Cancelled while writing, and putting the previous lists back failed. Restore the backup under Restore.</string>
     <string name="import_cancelled_loaded">Cancelled after all files were written. The new lists are on the receiver.</string>
+    <string name="osd_remaining_min">+%1$d min</string>
+    <string name="osd_duration_min">%1$d min</string>
+    <string name="skin_enigmacast" translatable="false">EnigmaCast</string>
+    <string name="skin_openpli" translatable="false">OpenPLi</string>
+    <string name="skin_midnight" translatable="false">Midnight</string>
+    <string name="skin_metrix" translatable="false">Metrix</string>
+    <string name="skin_aurora" translatable="false">Aurora</string>
 </resources>

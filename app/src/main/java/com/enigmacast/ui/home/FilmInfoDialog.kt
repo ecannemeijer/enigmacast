@@ -1,5 +1,7 @@
 package com.enigmacast.ui.home
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -114,9 +116,9 @@ fun FilmInfoDialog(
                         Modifier
                             .width(150.dp)
                             .height(225.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(skinShape(12.dp))
                             .background(EnigmaColors.Card)
-                            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(12.dp)),
+                            .border(1.dp, EnigmaColors.GlassEdge, skinShape(12.dp)),
                     ) {
                         if (movie.posterPath != null) {
                             AsyncImage(
@@ -136,7 +138,7 @@ fun FilmInfoDialog(
                             if (movie.isSeries) {
                                 movie.seasons?.let { Text(androidx.compose.ui.res.pluralStringResource(R.plurals.series_seasons, it, it), color = EnigmaColors.Muted, fontSize = 13.sp) }
                                 com.enigmacast.domain.series.EpisodeLabel.parse(film.event)?.text()?.takeIf { it.isNotBlank() }?.let {
-                                    Text(it, color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(it, color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = EnigmaType.Strong)
                                 }
                             }
                             if (movie.certification.isNotBlank()) {
@@ -144,7 +146,7 @@ fun FilmInfoDialog(
                                     movie.certification,
                                     color = EnigmaColors.Text,
                                     fontSize = 11.sp,
-                                    modifier = Modifier.border(1.dp, EnigmaColors.Muted, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+                                    modifier = Modifier.border(1.dp, EnigmaColors.Muted, skinShape(4.dp)).padding(horizontal = 5.dp),
                                 )
                             }
                             if (airing) Badge(stringResource(R.string.home_live), LiveRed)
@@ -165,7 +167,7 @@ fun FilmInfoDialog(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Picon(channel, picon, cachedPicon, Modifier.size(width = 44.dp, height = 26.dp), fallbackSize = 9.sp)
-                            Text(film.candidate.channelName, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(film.candidate.channelName, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
                             Text(FilmFormat.slot(film), color = EnigmaColors.Accent, fontSize = 14.sp)
                             if (autoSwitchSet) Badge(stringResource(R.string.home_scheduled), EnigmaColors.Accent)
                             if (recordingSet) Badge(stringResource(R.string.home_recording_set), LiveRed)
@@ -195,7 +197,7 @@ fun FilmInfoDialog(
                 }
                 if (movie.cast.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
                             items(movie.cast, key = { it.name + it.character }) { member -> CastCard(member) }
                         }
@@ -222,12 +224,12 @@ private fun PlotDialog(title: String, plot: String, onClose: () -> Unit) {
         Column(
             Modifier
                 .width(620.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong)
             Text(plot, color = EnigmaColors.Muted, fontSize = 15.sp, lineHeight = 21.sp, maxLines = 14, overflow = TextOverflow.Ellipsis)
             EnigmaGlassButton(stringResource(R.string.home_close), onClose, Modifier.focusRequester(close))
         }
@@ -262,7 +264,7 @@ private fun CastCard(member: TmdbCastMember) {
                 Text(member.name.split(' ').mapNotNull { it.firstOrNull() }.take(2).joinToString(""), color = EnigmaColors.Muted, fontSize = 16.sp)
             }
         }
-        Text(member.name, color = if (focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(member.name, color = if (focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (member.character.isNotBlank()) {
             Text(member.character, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -342,7 +344,7 @@ fun RecordingInfoDialog(
                 }
                 if (movie.cast.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
                             items(movie.cast, key = { it.name + it.character }) { member -> CastCard(member) }
                         }
@@ -360,9 +362,9 @@ fun RecordingInfoDialog(
 fun PosterBox(film: HomeFilm, modifier: Modifier) {
     Box(
         modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(skinShape(12.dp))
             .background(Brush.verticalGradient(listOf(EnigmaColors.Raised, EnigmaColors.Card)))
-            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(12.dp)),
+            .border(1.dp, EnigmaColors.GlassEdge, skinShape(12.dp)),
         contentAlignment = Alignment.Center,
     ) {
         val poster = film.movie.posterPath

@@ -1,5 +1,7 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -124,7 +126,7 @@ private fun FullRadio(
             Modifier
                 .width(220.dp)
                 .height(140.dp)
-                .background(EnigmaColors.Raised, RoundedCornerShape(12.dp))
+                .background(EnigmaColors.Raised, skinShape(12.dp))
                 .padding(12.dp),
             fallbackSize = 22.sp,
         )
@@ -132,7 +134,7 @@ private fun FullRadio(
             channel.name,
             color = Color.White,
             fontSize = 32.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -161,7 +163,7 @@ private fun CompactRadio(
             Modifier
                 .width(72.dp)
                 .height(48.dp)
-                .background(EnigmaColors.Raised, RoundedCornerShape(6.dp))
+                .background(EnigmaColors.Raised, skinShape(6.dp))
                 .padding(4.dp),
             fallbackSize = 9.sp,
         )
@@ -170,7 +172,7 @@ private fun CompactRadio(
                 channel.name,
                 color = Color.White,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

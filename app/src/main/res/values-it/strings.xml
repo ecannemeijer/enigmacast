@@ -221,7 +221,7 @@
     <string name="nav_search">Cerca</string>
     <string name="nav_my_items">I miei contenuti</string>
     <string name="nav_receiver">Ricevitore</string>
-    <string name="nav_osd_skins">Skin OSD</string>
+    <string name="nav_osd_skins">Skin GUI</string>
     <string name="nav_settings">Impostazioni</string>
     <string name="nav_exit">Esci</string>
     <string name="exit_app_title">Chiudere EnigmaCast?</string>
@@ -235,7 +235,7 @@
     <string name="bouquets">Bouquet</string>
     <string name="channels">Canali</string>
     <string name="skins_subtitle">Qui potrai scegliere una skin per l\'OSD.</string>
-    <string name="skins_detail">Una skin cambia il banner del canale, l\'elenco canali e gli avvisi che EnigmaCast disegna da sé.</string>
+    <string name="skins_detail">Cambia colori, forme e focus di tutta l\'app e il layout del banner del canale. Applicata subito.</string>
     <string name="settings_title">Impostazioni</string>
     <string name="settings_receivers">Ricevitori</string>
     <string name="receivers_intro">Scegli da quale box Enigma2 provengono stato dei tuner, bouquet e registrazioni.</string>
@@ -1238,4 +1238,6 @@ Profilo: %2$s</string>
     <string name="import_cancelled_rolled_back">Annullato durante la scrittura. Le liste precedenti sono state ripristinate e ricaricate.</string>
     <string name="import_cancelled_rollback_failed">Annullato durante la scrittura, e il ripristino delle liste precedenti non è riuscito. Ripristina il backup in Ripristina.</string>
     <string name="import_cancelled_loaded">Annullato dopo la scrittura di tutti i file. Le nuove liste sono sul ricevitore.</string>
+    <string name="osd_remaining_min">+%1$d min</string>
+    <string name="osd_duration_min">%1$d min</string>
 </resources>

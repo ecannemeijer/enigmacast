@@ -1,5 +1,6 @@
 package com.enigmacast.ui.account
 
+import com.enigmacast.ui.theme.EnigmaType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -132,7 +133,7 @@ fun AccountSettingsPanel(contentFocus: FocusRequester, model: AccountViewModel =
             return@Column
         }
         val premium = model.isPremium(current)
-        Text(current.email, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(current.email, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = EnigmaType.Strong)
         Text(planLine(current, premium), color = if (premium) EnigmaColors.Accent else EnigmaColors.Muted, fontSize = 14.sp)
         Text(
             stringResource(R.string.account_devices, current.devicesUsed, current.maxDevices),

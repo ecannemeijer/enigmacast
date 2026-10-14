@@ -1,5 +1,6 @@
 package com.enigmacast.ui.components
 
+import com.enigmacast.ui.theme.EnigmaType
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -72,7 +73,7 @@ fun DefaultArtwork(title: String, modifier: Modifier = Modifier, showTitle: Bool
                     color = Color.White,
                     fontSize = if (small) 9.sp else 12.sp,
                     lineHeight = if (small) 11.sp else 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,

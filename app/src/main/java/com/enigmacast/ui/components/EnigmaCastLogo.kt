@@ -1,5 +1,6 @@
 package com.enigmacast.ui.components
 
+import com.enigmacast.ui.theme.EnigmaType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,7 +59,7 @@ fun EnigmaCastLogo(
                 text = "Cast",
                 color = EnigmaColors.Cyan,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
                 letterSpacing = 0.3.sp,
             )
         }
@@ -83,7 +84,7 @@ fun EnigmaCastBootLogo(modifier: Modifier = Modifier) {
         )
         Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Enigma", color = EnigmaColors.Text, fontSize = 28.sp, fontWeight = FontWeight.Medium)
-            Text("Cast", color = EnigmaColors.Cyan, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+            Text("Cast", color = EnigmaColors.Cyan, fontSize = 28.sp, fontWeight = EnigmaType.Strong)
         }
     }
 }

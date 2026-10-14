@@ -1,5 +1,7 @@
 package com.enigmacast.ui.update
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -90,8 +92,8 @@ fun AppUpdateDialog(
                 .width(560.dp)
                 // Fits the screen; the notes take what is left and scroll.
                 .heightIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(16.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(16.dp))
+                .background(EnigmaColors.Selected, skinShape(16.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(16.dp))
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -100,7 +102,7 @@ fun AppUpdateDialog(
                 stringResource(if (reinstall) R.string.update_reinstall_title else R.string.update_available),
                 color = EnigmaColors.Text,
                 fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
             )
             Text(
                 stringResource(
@@ -176,8 +178,8 @@ private fun ReleaseNotes(notes: String, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 60.dp)
-            .background(EnigmaColors.Raised, RoundedCornerShape(10.dp))
-            .border(1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+            .background(EnigmaColors.Raised, skinShape(10.dp))
+            .border(1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, skinShape(10.dp))
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
@@ -212,13 +214,13 @@ private fun DownloadProgress(percent: Int) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(EnigmaColors.Raised, RoundedCornerShape(2.dp)),
+                .background(EnigmaColors.Raised, skinShape(2.dp)),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(percent.coerceIn(0, 100) / 100f)
                     .height(4.dp)
-                    .background(EnigmaColors.Accent, RoundedCornerShape(2.dp)),
+                    .background(EnigmaColors.Accent, skinShape(2.dp)),
             )
         }
         Text(

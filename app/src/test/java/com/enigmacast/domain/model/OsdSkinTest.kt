@@ -16,9 +16,12 @@ class OsdSkinTest {
 
     @Test
     fun theSkinChoiceIsSavedByName() {
-        val saved = openWebifJson.encodeToString(AppSettings.serializer(), AppSettings(osdSkin = OsdSkinId.STANDARD))
-        assertEquals(OsdSkinId.STANDARD, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
-        assertEquals(R.string.skin_standard, OsdSkinId.STANDARD.label)
+        for (id in OsdSkinId.entries) {
+            val saved = openWebifJson.encodeToString(AppSettings.serializer(), AppSettings(osdSkin = id))
+            assertEquals(id, openWebifJson.decodeFromString<AppSettings>(saved).osdSkin)
+        }
+        assertEquals(R.string.skin_enigmacast, OsdSkinId.STANDARD.label)
+        assertEquals(R.string.skin_openpli, OsdSkinId.OPENPLI.label)
     }
 
     @Test

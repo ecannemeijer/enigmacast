@@ -1,5 +1,7 @@
 package com.enigmacast.ui.tuners
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.Image
@@ -73,7 +75,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val CardShape = RoundedCornerShape(12.dp)
+private val CardShape get() = skinShape(12.dp)
 
 /**
  * Home: one card per tuner (who uses it, which channel, programme) and what is scheduled
@@ -100,7 +102,7 @@ fun TunerHomePanel(
         Box(
             Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(skinShape(16.dp))
                 .background(Brush.verticalGradient(0f to Color(0xFF0E1C2E), 0.6f to EnigmaColors.Canvas))
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
                 .holdPageFocus(contentFocus, model.cards.map { it.index }),
@@ -298,12 +300,12 @@ private fun TunerCardView(card: TunerCard, model: TunerHomeViewModel, modifier: 
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(26.dp).clip(RoundedCornerShape(8.dp))
+                Modifier.size(26.dp).clip(skinShape(8.dp))
                     .background(if (card.idle) EnigmaColors.CardBorder else EnigmaColors.Cyan),
                 contentAlignment = Alignment.Center,
             ) { Text(card.letter, color = if (card.idle) EnigmaColors.Text else Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             Column(Modifier.padding(start = 8.dp).weight(1f)) {
-                Text(card.name.ifBlank { stringResource(R.string.home_tuner_name, card.letter) }, color = EnigmaColors.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(card.name.ifBlank { stringResource(R.string.home_tuner_name, card.letter) }, color = EnigmaColors.Text, fontSize = 12.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(card.type, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (use != null && use.reference.isNotBlank()) Picon(model, use)
@@ -311,7 +313,7 @@ private fun TunerCardView(card: TunerCard, model: TunerHomeViewModel, modifier: 
         if (use == null) {
             Text(stringResource(R.string.home_tuner_idle), color = EnigmaColors.Muted, fontSize = 12.sp)
         } else {
-            Text(use.channelName, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(use.channelName, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // Bouquet and programme share a line to keep the card short.
             val sub = listOfNotNull(channel?.bouquet?.takeIf { it.isNotBlank() }, channel?.now?.title).joinToString(" · ")
             if (sub.isNotBlank()) Text(sub, color = EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -353,7 +355,7 @@ private fun ScheduleRow(
     onOpen: (ScheduleItem) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
         if (items.isEmpty()) {
             val focus = rememberTvFocus()
             Box(left.then(nav).width(320.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus) {}.padding(12.dp)) {
@@ -380,7 +382,7 @@ private fun ScheduleCard(item: ScheduleItem, model: TunerHomeViewModel, withDay:
         modifier.width(256.dp).height(88.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus, onClick).padding(7.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(Modifier.width(49.dp).height(74.dp).clip(RoundedCornerShape(8.dp)).background(EnigmaColors.CardBorder), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(49.dp).height(74.dp).clip(skinShape(8.dp)).background(EnigmaColors.CardBorder), contentAlignment = Alignment.Center) {
             if (poster != null) {
                 coil3.compose.AsyncImage(
                     model = com.enigmacast.data.tmdb.TmdbJson.image(poster, "w185"),
@@ -394,12 +396,12 @@ private fun ScheduleCard(item: ScheduleItem, model: TunerHomeViewModel, withDay:
             if (item.running) {
                 Text(
                     stringResource(R.string.home_now_running), color = Color.White, fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.TopStart).padding(3.dp).background(Color(0xFFE53935), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                    modifier = Modifier.align(Alignment.TopStart).padding(3.dp).background(Color(0xFFE53935), skinShape(4.dp)).padding(horizontal = 4.dp),
                 )
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(item.title, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.title, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (item.reference.isNotBlank()) Picon(model, TunerUse(TunerUseKind.LIVE, item.channelName, item.reference), small = true)
                 Text(item.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -417,7 +419,7 @@ private fun ScheduleCard(item: ScheduleItem, model: TunerHomeViewModel, withDay:
                 ),
                 color = if (item.kind == ScheduleKind.AUTOSWITCH) EnigmaColors.Accent else Color(0xFFFF7A7A),
                 fontSize = 11.sp,
-                modifier = Modifier.border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+                modifier = Modifier.border(1.dp, EnigmaColors.CardBorder, skinShape(4.dp)).padding(horizontal = 5.dp),
             )
         }
     }
@@ -426,7 +428,7 @@ private fun ScheduleCard(item: ScheduleItem, model: TunerHomeViewModel, withDay:
 @Composable
 private fun SeriesRow(model: TunerHomeViewModel, left: Modifier, nav: Modifier, onOpen: (com.enigmacast.domain.series.SeriesGroup) -> Unit) {
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(stringResource(R.string.home_series_title), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.home_series_title), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
         androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
             items(model.series.size, key = { model.series[it].key }) { i ->
                 val group = model.series[i]
@@ -444,7 +446,7 @@ private fun SeriesCard(group: com.enigmacast.domain.series.SeriesGroup, poster: 
         modifier.width(256.dp).height(88.dp).then(focusLook(focus.focused, CardShape)).tvClick(focus, onClick).padding(7.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(Modifier.width(49.dp).height(74.dp).clip(RoundedCornerShape(8.dp)).background(EnigmaColors.CardBorder), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(49.dp).height(74.dp).clip(skinShape(8.dp)).background(EnigmaColors.CardBorder), contentAlignment = Alignment.Center) {
             if (poster != null) {
                 coil3.compose.AsyncImage(
                     model = com.enigmacast.data.tmdb.TmdbJson.image(poster, "w185"),
@@ -457,7 +459,7 @@ private fun SeriesCard(group: com.enigmacast.domain.series.SeriesGroup, poster: 
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(group.title, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(group.title, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(group.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1)
             if (group.episodes.isEmpty()) {
                 Text(stringResource(R.string.series_rule_only), color = EnigmaColors.Muted, fontSize = 11.sp, maxLines = 2)
@@ -485,12 +487,12 @@ private fun SeriesEpisodesDialog(
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
         Column(
-            Modifier.width(560.dp).background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp)).padding(16.dp)
+            Modifier.width(560.dp).background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp)).padding(16.dp)
                 .trapFocus(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.home_series_dialog, group.title, group.channelName), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(stringResource(R.string.home_series_dialog, group.title, group.channelName), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong, maxLines = 2)
             Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (group.episodes.isEmpty()) Text(stringResource(R.string.series_rule_only), color = EnigmaColors.Muted, fontSize = 13.sp)
                 group.episodes.forEachIndexed { i, ep ->
@@ -544,12 +546,12 @@ private fun SwitchReceiverButton(onClick: () -> Unit, modifier: Modifier = Modif
     androidx.tv.material3.Button(
         onClick = onClick,
         modifier = modifier,
-        shape = androidx.tv.material3.ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        shape = androidx.tv.material3.ButtonDefaults.shape(shape = skinShape(8.dp)),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
         scale = androidx.tv.material3.ButtonDefaults.scale(scale = 1f, focusedScale = 1.06f),
         border = androidx.tv.material3.ButtonDefaults.border(
-            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.dp, EnigmaColors.CardBorder), shape = RoundedCornerShape(8.dp)),
-            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, EnigmaColors.Text), shape = RoundedCornerShape(8.dp)),
+            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.dp, EnigmaColors.CardBorder), shape = skinShape(8.dp)),
+            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, EnigmaColors.Text), shape = skinShape(8.dp)),
         ),
         colors = androidx.tv.material3.ButtonDefaults.colors(
             containerColor = EnigmaColors.Raised,

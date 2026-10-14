@@ -1,5 +1,7 @@
 package com.enigmacast.ui.connection
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -108,12 +110,12 @@ private fun AutodetectDialog(
         Column(
             modifier = Modifier
                 .widthIn(min = 320.dp, max = 480.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.autodetect_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.autodetect_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
             when (state) {
                 AutodetectState.Searching -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -198,7 +200,7 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
+        shape = ButtonDefaults.shape(shape = skinShape(10.dp)),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
         scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
@@ -212,7 +214,7 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val title = receiver.model.ifBlank { receiver.address }
-            Text((if (inUse) "✓ " else "") + title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text((if (inUse) "✓ " else "") + title, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val details = buildList {
                 add(receiver.address)
                 if (receiver.image.isNotBlank()) add(receiver.image)
@@ -231,7 +233,7 @@ private fun ReceiverRow(receiver: DiscoveredReceiver, inUse: Boolean, onClick: (
                     .padding(start = 10.dp)
                     .height(36.dp)
                     .aspectRatio(ratio, matchHeightConstraintsFirst = true)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .clip(skinShape(4.dp)),
             )
         }
     }

@@ -93,6 +93,7 @@ class SettingsViewModel @Inject constructor(
     fun setDebugOverlay(enabled: Boolean) = update { it.copy(debug = it.debug.copy(overlay = enabled)) }
     fun setVerboseLogging(enabled: Boolean) = update { it.copy(debug = it.debug.copy(verboseLogging = enabled)) }
     fun setDebugBorders(enabled: Boolean) = update { it.copy(osd = it.osd.copy(debugBorders = enabled)) }
+    fun setSkin(id: com.enigmacast.domain.model.OsdSkinId) = update { it.copy(osdSkin = id) }
     fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
     fun setMotionQuality(quality: MotionQuality) = update { it.copy(motionQuality = quality) }
     fun setOsdInfoFields(fields: OsdInfoFields) = update { it.copy(osdInfo = fields) }

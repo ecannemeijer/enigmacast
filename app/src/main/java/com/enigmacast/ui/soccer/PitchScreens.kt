@@ -1,5 +1,7 @@
 package com.enigmacast.ui.soccer
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -144,7 +146,7 @@ private fun TeamButton(team: PitchTeam, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
     ) {
         PitchImage(team.image, team.initials, 56.dp)
-        Text(team.name, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(team.name, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -152,7 +154,7 @@ private fun TeamButton(team: PitchTeam, onClick: () -> Unit) {
 @Composable
 private fun Line(modifier: Modifier = Modifier, onClick: () -> Unit = {}, content: @Composable () -> Unit) {
     val f = rememberTvFocus()
-    Box(modifier.fillMaxWidth().tvClick(f, onClick).then(focusLook(f.focused, RoundedCornerShape(8.dp))).padding(horizontal = 12.dp, vertical = 6.dp)) { content() }
+    Box(modifier.fillMaxWidth().tvClick(f, onClick).then(focusLook(f.focused, skinShape(8.dp))).padding(horizontal = 12.dp, vertical = 6.dp)) { content() }
 }
 
 @Composable
@@ -206,7 +208,7 @@ private fun LineupsTab(model: PitchViewModel, d: PitchMatchDetail) {
                 SideTitle(d.match.home.name, lu.home)
                 SideTitle(d.match.away.name, lu.away, end = true)
             }
-            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(PitchGreen, RoundedCornerShape(10.dp)).border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(10.dp))) {
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(PitchGreen, skinShape(10.dp)).border(1.dp, Color(0x55FFFFFF), skinShape(10.dp))) {
                 // Half-way line and centre circle.
                 Box(Modifier.align(Alignment.Center).width(1.dp).fillMaxHeight().background(Color(0x55FFFFFF)))
                 Box(Modifier.align(Alignment.Center).size(60.dp).border(1.dp, Color(0x55FFFFFF), CircleShape))
@@ -234,7 +236,7 @@ private fun LineupsTab(model: PitchViewModel, d: PitchMatchDetail) {
 private fun SideTitle(team: String, side: TeamLineup?, end: Boolean = false) {
     side ?: return
     Column(horizontalAlignment = if (end) Alignment.End else Alignment.Start) {
-        Text("$team · ${side.formation}", color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text("$team · ${side.formation}", color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = EnigmaType.Strong)
         Text(
             listOfNotNull(stringResource(if (side.confirmed) R.string.pitch_confirmed else R.string.pitch_predicted), side.coach?.let { stringResource(R.string.pitch_coach, it) }).joinToString(" · "),
             color = if (side.confirmed) EnigmaColors.Muted else EnigmaColors.Accent, fontSize = 11.sp,
@@ -263,7 +265,7 @@ private fun PlayerDot(p: LineupPlayer, x: Float, y: Float, w: androidx.compose.u
         Text(
             (if (p.captain) "© " else "") + p.name.substringAfterLast(' '),
             color = if (f.focused) EnigmaColors.Cyan else Color.White, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.background(if (f.focused) Color(0xCC000000) else Color.Transparent, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
+            modifier = Modifier.background(if (f.focused) Color(0xCC000000) else Color.Transparent, skinShape(4.dp)).padding(horizontal = 3.dp),
         )
     }
 }
@@ -275,7 +277,7 @@ private fun StatsTab(groups: List<com.enigmacast.domain.soccer.pitch.StatGroup>)
         items(groups, key = { it.name }) { g ->
             Line {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(g.name, color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(g.name, color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = EnigmaType.Strong)
                     g.items.forEach { i -> StatLine(i.title, i.home, i.away) }
                 }
             }
@@ -290,9 +292,9 @@ private fun StatLine(title: String, home: String, away: String) {
     val share = if (h + a > 0) h / (h + a) else 0.5f
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(home, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(90.dp))
+            Text(home, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.width(90.dp))
             Text(title, color = EnigmaColors.Muted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f), maxLines = 1)
-            Text(away, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.width(90.dp))
+            Text(away, color = EnigmaColors.Text, fontSize = 13.sp, fontWeight = EnigmaType.Strong, textAlign = TextAlign.End, modifier = Modifier.width(90.dp))
         }
         Row(Modifier.fillMaxWidth().height(3.dp)) {
             if (share > 0f) Box(Modifier.weight(share).fillMaxHeight().background(EnigmaColors.Accent))
@@ -461,11 +463,11 @@ private fun lineName(l: PitchStats.Line): String = when (l) {
 }
 
 @Composable
-private fun Heading(text: String) = Text(text, color = EnigmaColors.Cyan, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+private fun Heading(text: String) = Text(text, color = EnigmaColors.Cyan, fontSize = 14.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
 
 @Composable
 private fun Tile(label: String, value: String) {
-    Column(Modifier.width(84.dp).background(EnigmaColors.Card, RoundedCornerShape(10.dp)).border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp)).padding(8.dp)) {
+    Column(Modifier.width(84.dp).background(EnigmaColors.Card, skinShape(10.dp)).border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp)).padding(8.dp)) {
         Text(value, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(label, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
@@ -532,18 +534,18 @@ private fun PlayerScreen(model: PitchViewModel, v: PitchViewModel.PlayerView) {
         if (v.loading) EnigmaLoadingIndicator(Modifier.size(22.dp))
         val groups = v.match?.groups.orEmpty().filter { it.second.isNotEmpty() }
         if (groups.isNotEmpty()) {
-            Text(stringResource(R.string.pitch_in_match), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.pitch_in_match), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(groups, key = { _, g -> g.first }) { i, (name, stats) ->
                     Line(if (i == 0) Modifier.focusRequester(first) else Modifier) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(groupName(name), color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text(groupName(name), color = EnigmaColors.Cyan, fontSize = 13.sp, fontWeight = EnigmaType.Strong)
                             stats.chunked(3).forEach { row ->
                                 Row(Modifier.fillMaxWidth()) {
                                     row.forEach { (label, value) ->
                                         Row(Modifier.weight(1f).padding(end = 12.dp)) {
                                             Text(label, color = EnigmaColors.Muted, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(value, color = EnigmaColors.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                            Text(value, color = EnigmaColors.Text, fontSize = 12.sp, fontWeight = EnigmaType.Strong)
                                         }
                                     }
                                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }

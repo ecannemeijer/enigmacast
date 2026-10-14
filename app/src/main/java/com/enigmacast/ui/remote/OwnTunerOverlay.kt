@@ -1,5 +1,7 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -59,6 +61,9 @@ import com.enigmacast.domain.model.ChannelGuide
 import com.enigmacast.domain.model.EpgEvent
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.OsdSkinId
+import com.enigmacast.ui.theme.ActiveSkin
+import com.enigmacast.ui.theme.OsdLayout
+import androidx.compose.ui.graphics.Brush
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.osdinfo.OsdInfo
 import com.enigmacast.domain.service.BouquetChannels
@@ -142,7 +147,7 @@ fun OwnTunerOverlay(
                 fontSize = 28.sp,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .background(scrim, RoundedCornerShape(12.dp))
+                    .background(scrim, skinShape(12.dp))
                     .padding(horizontal = 22.dp, vertical = 12.dp),
             )
         }
@@ -155,7 +160,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(32.dp)
-                    .background(scrim, RoundedCornerShape(12.dp))
+                    .background(scrim, skinShape(12.dp))
                     .padding(horizontal = 24.dp, vertical = 8.dp),
             )
         }
@@ -167,7 +172,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(32.dp)
-                    .background(scrim, RoundedCornerShape(10.dp))
+                    .background(scrim, skinShape(10.dp))
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
@@ -187,7 +192,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
-                    .background(scrim, RoundedCornerShape(14.dp))
+                    .background(scrim, skinShape(14.dp))
                     .padding(8.dp),
             )
         }
@@ -217,7 +222,7 @@ fun OwnTunerOverlay(
                         actions = quickBarActions,
                         modifier = Modifier
                             .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
-                            .background(scrim, RoundedCornerShape(14.dp))
+                            .background(scrim, skinShape(14.dp))
                             .padding(8.dp),
                     )
                 }
@@ -242,7 +247,7 @@ fun OwnTunerOverlay(
 }
 
 @Composable
-private fun ChannelBanner(
+internal fun ChannelBanner(
     channel: BouquetEntry,
     number: Int,
     guide: ChannelGuide?,
@@ -273,12 +278,31 @@ private fun ChannelBanner(
     val loading = player.playbackState == "BUFFERING" ||
         tuner.status == TunerStatus.CHECKING ||
         tuner.status == TunerStatus.STARTING
+    val layout = ActiveSkin.current.osd
+    val info: @Composable () -> Unit = { BannerInfo(player, osdInfo, osdFields, osdSkin, optionsHint) }
+    when (layout) {
+        OsdLayout.PLI_BAR -> {
+            PliBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, modifier)
+            return
+        }
+        OsdLayout.FLAT -> {
+            FlatBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, modifier)
+            return
+        }
+        else -> Unit
+    }
+    val cardShape = skinShape(16.dp)
+    val fill = if (layout == OsdLayout.GLASS) {
+        Brush.linearGradient(listOf(EnigmaColors.scrimOf(ActiveSkin.current.palette.osdFill, scrim), EnigmaColors.scrimOf(ActiveSkin.current.palette.osdFillEnd, scrim)))
+    } else {
+        androidx.compose.ui.graphics.SolidColor(scrim)
+    }
     Row(
         modifier = modifier
             .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
             .fillMaxWidth()
-            .background(scrim, RoundedCornerShape(16.dp))
-            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(16.dp))
+            .background(fill, cardShape)
+            .then(if (layout == OsdLayout.MINIMAL) Modifier else Modifier.border(1.dp, EnigmaColors.GlassEdge, cardShape))
             .padding(20.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -299,7 +323,7 @@ private fun ChannelBanner(
                     channel.name,
                     color = Color.White,
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -342,40 +366,46 @@ private fun ChannelBanner(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val infoView = OsdInfoPresenter.present(osdInfo, osdFields)
-            val resolution = videoLabel(player)
-            if (!infoView.isEmpty || resolution.isNotBlank()) {
-                OsdSkins.of(osdSkin).Strip(infoView, Modifier.fillMaxWidth()) {
-                    if (resolution.isNotBlank()) Tag(resolution)
-                }
-            }
-            if (player.audioLabel.isNotEmpty()) {
-                val more = if (player.audioTrackCount > 1) {
-                    pluralStringResource(R.plurals.osd_audio_languages, player.audioTrackCount, player.audioTrackCount)
-                } else {
-                    ""
-                }
-                Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more, Modifier.widthIn(max = 220.dp))
-            }
-            when {
-                player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()), Modifier.widthIn(max = 220.dp))
-                player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available), Modifier.widthIn(max = 220.dp))
-            }
-            val hint = when {
-                player.timeshiftPaused && optionsHint -> R.string.osd_banner_hint_options_paused
-                player.timeshiftPaused -> R.string.osd_banner_hint_paused
-                optionsHint -> R.string.osd_banner_hint_options
-                else -> R.string.osd_banner_hint
-            }
-            Text(
-                stringResource(hint),
-                color = EnigmaColors.Subtle,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            info()
         }
     }
+}
+
+/** Right-hand facts of the banner (receiver info strip, audio, subtitles, key hint); every layout places it. */
+@Composable
+private fun BannerInfo(player: PlayerState, osdInfo: OsdInfo, osdFields: OsdInfoFields, osdSkin: OsdSkinId, optionsHint: Boolean) {
+    val infoView = OsdInfoPresenter.present(osdInfo, osdFields)
+    val resolution = videoLabel(player)
+    if (!infoView.isEmpty || resolution.isNotBlank()) {
+        OsdSkins.of(osdSkin).Strip(infoView, Modifier.fillMaxWidth()) {
+            if (resolution.isNotBlank()) Tag(resolution)
+        }
+    }
+    if (player.audioLabel.isNotEmpty()) {
+        val more = if (player.audioTrackCount > 1) {
+            pluralStringResource(R.plurals.osd_audio_languages, player.audioTrackCount, player.audioTrackCount)
+        } else {
+            ""
+        }
+        Tag(stringResource(R.string.osd_audio, player.audioLabel.asString()) + more, Modifier.widthIn(max = 220.dp))
+    }
+    when {
+        player.subtitleLabel.isNotEmpty() -> Tag(stringResource(R.string.osd_subtitles, player.subtitleLabel.asString()), Modifier.widthIn(max = 220.dp))
+        player.subtitleTrackCount > 0 -> Tag(stringResource(R.string.osd_subtitles_available), Modifier.widthIn(max = 220.dp))
+    }
+    val hint = when {
+        player.timeshiftPaused && optionsHint -> R.string.osd_banner_hint_options_paused
+        player.timeshiftPaused -> R.string.osd_banner_hint_paused
+        optionsHint -> R.string.osd_banner_hint_options
+        else -> R.string.osd_banner_hint
+    }
+    Text(
+        stringResource(hint),
+        color = EnigmaColors.Subtle,
+        fontSize = 11.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
@@ -418,7 +448,7 @@ private fun Tag(text: String, modifier: Modifier = Modifier) {
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .widthIn(max = 168.dp)
-            .background(EnigmaColors.Raised, RoundedCornerShape(6.dp))
+            .background(EnigmaColors.Raised, skinShape(6.dp))
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
@@ -471,8 +501,8 @@ private fun TunerNotice(tuner: TunerState, channelName: String, scrim: Color, mo
     Column(
         modifier = modifier
             .widthIn(max = 440.dp)
-            .background(scrim, RoundedCornerShape(12.dp))
-            .border(1.dp, EnigmaColors.GlassEdge, RoundedCornerShape(12.dp))
+            .background(scrim, skinShape(12.dp))
+            .border(1.dp, EnigmaColors.GlassEdge, skinShape(12.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -480,10 +510,10 @@ private fun TunerNotice(tuner: TunerState, channelName: String, scrim: Color, mo
             Box(
                 Modifier
                     .size(8.dp)
-                    .background(if (tuner.status == TunerStatus.NO_PICTURE) EnigmaColors.Accent else EnigmaColors.Danger, RoundedCornerShape(4.dp)),
+                    .background(if (tuner.status == TunerStatus.NO_PICTURE) EnigmaColors.Accent else EnigmaColors.Danger, skinShape(4.dp)),
             )
             Spacer(Modifier.width(8.dp))
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             if (channelName.isNotBlank()) {
                 Text("  ·  $channelName", color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -574,7 +604,7 @@ internal fun BouquetPanel(
             .width(210.dp)
             .padding(horizontal = 10.dp, vertical = 20.dp),
     ) {
-        Text(stringResource(R.string.osd_bouquets), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.osd_bouquets), color = Color.White, fontSize = 17.sp, fontWeight = EnigmaType.Strong)
         Text(stringResource(R.string.osd_bouquet_choose_hint), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
         if (bouquets.isEmpty()) {
             Text(stringResource(R.string.osd_bouquets_loading), color = EnigmaColors.Muted, fontSize = 13.sp)
@@ -659,7 +689,7 @@ private fun ChannelPanel(
             .padding(horizontal = 12.dp, vertical = 20.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 8.dp)) {
-            Text(stringResource(R.string.osd_channels), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.osd_channels), color = Color.White, fontSize = 17.sp, fontWeight = EnigmaType.Strong)
             Text(
                 own.bouquetName,
                 color = EnigmaColors.Muted,
@@ -783,7 +813,7 @@ private fun OsdClock(scrim: Color, modifier: Modifier = Modifier) {
     }
     Column(
         modifier = modifier
-            .background(scrim, RoundedCornerShape(6.dp))
+            .background(scrim, skinShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp),
         horizontalAlignment = Alignment.End,
     ) {

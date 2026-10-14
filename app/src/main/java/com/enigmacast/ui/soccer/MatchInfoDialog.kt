@@ -1,5 +1,6 @@
 package com.enigmacast.ui.soccer
 
+import com.enigmacast.ui.theme.EnigmaType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,7 +70,7 @@ fun MatchInfoDialog(
                     match.competitionName + (match.matchday?.let { " · " + stringResource(R.string.soccer_matchday, it) } ?: ""),
                     color = EnigmaColors.Cyan,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Team(match.home)
@@ -93,7 +94,7 @@ fun MatchInfoDialog(
                     )
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(stringResource(R.string.soccer_h2h), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.soccer_h2h), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
                     when {
                         headToHead != null && headToHead.matches.isNotEmpty() -> {
                             Text(
@@ -134,7 +135,7 @@ fun MatchInfoDialog(
 private fun Team(team: com.enigmacast.domain.soccer.SoccerTeam) {
     Column(Modifier.width(240.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Crest(team, 96.dp)
-        Text(team.name, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(team.name, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

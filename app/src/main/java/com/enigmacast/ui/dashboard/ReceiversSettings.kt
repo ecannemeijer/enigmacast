@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.EnigmaType
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -141,7 +142,7 @@ fun ReceiversSettingsPanel(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                 ) { _ ->
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(receiver.name.ifBlank { receiver.host }, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(receiver.name.ifBlank { receiver.host }, fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
                         if (receiver.name.isNotBlank()) {
                             Text(receiver.host, fontSize = 12.sp, maxLines = 1)
                         }

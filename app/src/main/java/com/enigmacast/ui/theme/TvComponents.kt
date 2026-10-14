@@ -62,9 +62,9 @@ import androidx.tv.material3.Switch
 import androidx.tv.material3.SwitchDefaults
 import androidx.tv.material3.Text
 
-private val RowShape = RoundedCornerShape(10.dp)
-private val CardShape = RoundedCornerShape(14.dp)
-private val TileShape = RoundedCornerShape(12.dp)
+private val RowShape get() = skinShape(10.dp)
+private val CardShape get() = skinShape(14.dp)
+private val TileShape get() = skinShape(12.dp)
 
 @Composable
 private fun rowColors() = ListItemDefaults.colors(
@@ -188,7 +188,7 @@ fun NavItem(
 @Composable
 fun PanelHeader(title: String, subtitle: String = "", modifier: Modifier = Modifier) {
     Column(modifier.padding(bottom = 8.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
         if (subtitle.isNotBlank()) {
             Text(
                 subtitle,
@@ -227,7 +227,7 @@ fun SettingsCard(
                     title.orEmpty().uppercase(),
                     color = EnigmaColors.Accent,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     letterSpacing = 1.sp,
                     modifier = Modifier.weight(1f),
                 )
@@ -336,6 +336,8 @@ fun ChoiceChip(
         enabled = enabled,
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
         scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
+        shape = ButtonDefaults.shape(shape = skinShape(20.dp)),
+        border = skinButtonBorder(),
         colors = ButtonDefaults.colors(
             containerColor = if (selected) EnigmaColors.Selected else EnigmaColors.Raised,
             contentColor = if (selected) EnigmaColors.Accent else EnigmaColors.Text,
@@ -401,7 +403,7 @@ fun StepperRow(
                 value,
                 color = EnigmaColors.Accent,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
                 modifier = Modifier.widthIn(min = 72.dp),
             )
             ChoiceChip(label = increaseLabel, selected = false, onClick = onIncrease)
@@ -460,7 +462,7 @@ fun ActionTile(
         Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!description.isNullOrBlank()) {
                 Text(
                     description,
@@ -497,8 +499,8 @@ fun ChannelsLoadingDialog(message: String, progress: Float = 0f) {
         Column(
             modifier = Modifier
                 .widthIn(min = 360.dp, max = 520.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(20.dp)
                 .focusRequester(hold)
                 .focusable(),
@@ -514,10 +516,10 @@ fun ChannelsLoadingDialog(message: String, progress: Float = 0f) {
                     message,
                     color = EnigmaColors.Text,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     modifier = Modifier.weight(1f),
                 )
-                Text("$percent%", color = EnigmaColors.Cyan, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("$percent%", color = EnigmaColors.Cyan, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             }
             LinearProgressIndicator(
                 progress = { animated },
@@ -587,7 +589,7 @@ fun TvConfirmDialog(
                 .padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = if (compact) 15.sp else 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = EnigmaColors.Text, fontSize = if (compact) 15.sp else 18.sp, fontWeight = EnigmaType.Strong)
             Text(message, color = EnigmaColors.Muted, fontSize = if (compact) 12.sp else 14.sp, lineHeight = if (compact) 16.sp else 19.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (compact) 2.dp else 6.dp)) {
                 DialogButton(
@@ -645,7 +647,7 @@ fun TvChoiceDialog(
                 .padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = if (compact) 15.sp else 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(title, color = EnigmaColors.Text, fontSize = if (compact) 15.sp else 18.sp, fontWeight = EnigmaType.Strong, maxLines = 2)
             Text(message, color = EnigmaColors.Muted, fontSize = if (compact) 12.sp else 14.sp, lineHeight = if (compact) 16.sp else 19.sp, maxLines = 3)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = if (compact) 2.dp else 6.dp)) {
                 choices.forEachIndexed { index, label ->
@@ -674,12 +676,12 @@ private fun StackedChoiceDialog(title: String, message: String, choices: List<St
             modifier = Modifier
                 .widthIn(min = 220.dp, max = 420.dp)
                 .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
-                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .background(EnigmaColors.Selected, skinShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(title, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 2)
             if (message.isNotBlank()) Text(message, color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3)
             choices.forEachIndexed { index, label ->
                 DialogButton(
@@ -738,7 +740,7 @@ fun CompactButton(
     Button(
         onClick = onClick,
         modifier = modifier,
-        shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+        shape = ButtonDefaults.shape(shape = skinShape(8.dp)),
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
         scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.08f),
         colors = ButtonDefaults.colors(
@@ -764,8 +766,8 @@ fun FeedbackSnackbar(message: String, isError: Boolean, modifier: Modifier = Mod
     Row(
         modifier = modifier
             .widthIn(max = 560.dp)
-            .background(EnigmaColors.Raised, RoundedCornerShape(12.dp))
-            .border(1.dp, if (isError) EnigmaColors.Danger else EnigmaColors.CardBorder, RoundedCornerShape(12.dp))
+            .background(EnigmaColors.Raised, skinShape(12.dp))
+            .border(1.dp, if (isError) EnigmaColors.Danger else EnigmaColors.CardBorder, skinShape(12.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -803,7 +805,7 @@ fun ValueRow(
             null
         },
         trailingContent = {
-            Text("$value  ›", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text("$value  ›", fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
         },
         colors = rowColors(),
         shape = ListItemDefaults.shape(shape = RowShape),
@@ -844,12 +846,12 @@ fun OptionListDialog(
             modifier = Modifier
                 .widthIn(min = 280.dp, max = 380.dp)
                 .heightIn(max = 470.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
+            Text(title, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 options.forEachIndexed { index, label ->
                     ListItem(

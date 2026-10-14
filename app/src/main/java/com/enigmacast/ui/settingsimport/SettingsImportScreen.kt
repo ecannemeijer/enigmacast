@@ -1,5 +1,7 @@
 package com.enigmacast.ui.settingsimport
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -242,7 +244,7 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
             if (pkg == null) {
                 Muted(stringResource(R.string.import_choose_list))
             } else {
-                Text(pkg.displayName, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
+                Text(pkg.displayName, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
                 InfoRow(stringResource(R.string.import_source), "${pkg.provider.title} · ${pkg.folder}")
                 InfoRow(stringResource(R.string.import_updated), viewModel.selectedDate?.let { DATE.format(it.atZone(ZoneId.systemDefault())) } ?: "–")
                 InfoRow(
@@ -344,7 +346,7 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                     stringResource(R.string.import_groups_count, viewModel.chosenGroups.size, viewModel.groups.size),
                     color = EnigmaColors.Text,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     maxLines = 1,
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
                     modifier = Modifier.weight(1f).padding(end = 6.dp),
@@ -365,8 +367,8 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                 Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(EnigmaColors.Card, RoundedCornerShape(10.dp))
-                    .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                    .background(EnigmaColors.Card, skinShape(10.dp))
+                    .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                     .padding(4.dp)
                     .focusRestorer(),
                 verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -444,7 +446,7 @@ private fun SectionLabel(text: String) {
         text.uppercase(),
         color = EnigmaColors.Accent,
         fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = EnigmaType.Strong,
         letterSpacing = 1.sp,
         modifier = Modifier.padding(start = 6.dp, top = 2.dp),
     )
@@ -463,7 +465,7 @@ private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, lef
             onClick = onClick,
             enabled = enabled,
             modifier = Modifier.fillMaxWidth().focusProperties { this.left = left },
-            shape = ButtonDefaults.shape(shape = RoundedCornerShape(10.dp)),
+            shape = ButtonDefaults.shape(shape = skinShape(10.dp)),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
             scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.03f),
             colors = ButtonDefaults.colors(
@@ -478,7 +480,7 @@ private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, lef
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Icon(EnigmaIcons.Layers, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(label, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
             }
         }
         if (!enabled && disabledHint != null) {
@@ -492,7 +494,7 @@ private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, lef
 private fun ProgressLine(fraction: Float?, text: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(text, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val barModifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+        val barModifier = Modifier.fillMaxWidth().height(6.dp).clip(skinShape(3.dp))
         if (fraction == null) {
             LinearProgressIndicator(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
         } else {
@@ -553,7 +555,7 @@ private fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit,
 
 @Composable
 private fun CheckBox(checked: Boolean, focused: Boolean) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = skinShape(4.dp)
     val fill = when {
         checked && focused -> EnigmaColors.OnFocus
         checked -> EnigmaColors.Accent
@@ -617,7 +619,7 @@ private fun Segmented(
     left: FocusRequester,
     selectedModifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = skinShape(10.dp)
     Row(
         Modifier
             .fillMaxWidth()
@@ -639,7 +641,7 @@ private fun Segmented(
                         if (index == 0) this.left = left
                         if (index == options.lastIndex) right = FocusRequester.Cancel
                     },
-                shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+                shape = ButtonDefaults.shape(shape = skinShape(8.dp)),
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1.04f),
                 colors = ButtonDefaults.colors(
@@ -654,7 +656,7 @@ private fun Segmented(
                 Text(
                     label,
                     fontSize = 13.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (selected) EnigmaType.Strong else FontWeight.Normal,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
@@ -693,7 +695,7 @@ private fun androidx.compose.foundation.layout.RowScope.RestoreTab(viewModel: Se
         item { Muted(stringResource(R.string.import_restore_hint)) }
         viewModel.receivers.forEach { receiver ->
             item(key = "h-${receiver.id}") {
-                Text(receiver.name, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                Text(receiver.name, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(top = 8.dp))
             }
             val list = viewModel.backupList[receiver.id].orEmpty()
             if (list.isEmpty()) {
@@ -842,8 +844,8 @@ private fun LoadDialog(viewModel: SettingsImportViewModel) {
             modifier = Modifier
                 .widthIn(min = 420.dp, max = 560.dp)
                 .heightIn(max = 520.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(16.dp)
                 .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -858,7 +860,7 @@ private fun LoadDialog(viewModel: SettingsImportViewModel) {
                 ),
                 color = EnigmaColors.Text,
                 fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
             )
             if (busy) {
                 LoadProgressCard(viewModel.progress)
@@ -896,12 +898,12 @@ private fun ReceiverChoiceDialog(viewModel: SettingsImportViewModel) {
             modifier = Modifier
                 .widthIn(min = 360.dp, max = 520.dp)
                 .heightIn(max = 520.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.import_choose_receivers), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.import_choose_receivers), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
             Muted(stringResource(R.string.import_choose_receivers_hint))
             Row(Modifier.focusGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton(stringResource(R.string.import_active_receiver), viewModel::chooseActiveOnly, modifier = Modifier.focusRequester(first))

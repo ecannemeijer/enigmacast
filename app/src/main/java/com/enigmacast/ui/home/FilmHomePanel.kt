@@ -1,5 +1,6 @@
 package com.enigmacast.ui.home
 
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -88,7 +89,7 @@ import com.enigmacast.util.asString
 import com.enigmacast.util.isEmpty
 
 private const val RECENTS_SECTION = 1000
-private val PosterShape = RoundedCornerShape(12.dp)
+private val PosterShape get() = skinShape(12.dp)
 private const val CARD_WIDTH_DP = 132
 
 /**
@@ -123,7 +124,7 @@ fun FilmHomePanel(
         Box(
             Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(skinShape(16.dp))
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
                 .holdPageFocus(contentFocus, listOf(model.state::class, hero?.key)),
         ) {
@@ -207,7 +208,7 @@ fun FilmHomePanel(
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(12.dp)
-                        .background(EnigmaColors.Selected.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                        .background(EnigmaColors.Selected.copy(alpha = 0.9f), skinShape(10.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -224,8 +225,8 @@ fun FilmHomePanel(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 20.dp)
-                        .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                        .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                        .background(EnigmaColors.Selected, skinShape(10.dp))
+                        .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                 )
             }
@@ -310,7 +311,7 @@ private fun Hero(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(if (LocalSeriesPage.current) R.string.series_hero_label else R.string.home_hero_label), color = EnigmaColors.Cyan, fontSize = EnigmaType.Label, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(if (LocalSeriesPage.current) R.string.series_hero_label else R.string.home_hero_label), color = EnigmaColors.Cyan, fontSize = EnigmaType.Label, fontWeight = EnigmaType.Strong)
             if (airing) Badge(stringResource(R.string.home_live), LiveRed)
         }
         TitleOrLogo(film, height = 72.dp, fontSize = 36.sp)
@@ -326,7 +327,7 @@ private fun Hero(
             Text(plot, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(film.candidate.channelName, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(film.candidate.channelName, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = EnigmaType.Strong)
             Text(FilmFormat.slot(film), color = EnigmaColors.Accent, fontSize = 14.sp)
             if (autoSwitchSet) Badge(stringResource(R.string.home_scheduled), EnigmaColors.Accent)
             if (recordingSet) Badge(stringResource(R.string.home_recording_set), LiveRed)
@@ -373,7 +374,7 @@ internal fun TitleOrLogo(film: HomeFilm, height: androidx.compose.ui.unit.Dp, fo
 
 @Composable
 private fun RowTitle(text: String) {
-    Text(text, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+    Text(text, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
 }
 
 @Composable
@@ -480,7 +481,7 @@ private fun FilmCard(
                     film.displayTitle,
                     color = EnigmaColors.Text,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = EnigmaType.Strong,
                     modifier = Modifier.align(Alignment.Center).padding(10.dp),
                 )
             }
@@ -494,7 +495,7 @@ private fun FilmCard(
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
                     .size(width = 46.dp, height = 28.dp)
-                    .background(Color(0xCC080D1C), RoundedCornerShape(6.dp))
+                    .background(Color(0xCC080D1C), skinShape(6.dp))
                     .padding(3.dp),
             ) {
                 Picon(
@@ -514,7 +515,7 @@ private fun FilmCard(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(6.dp)
-                        .background(Color(0xE0080D1C), RoundedCornerShape(6.dp))
+                        .background(Color(0xE0080D1C), skinShape(6.dp))
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                 )
             }
@@ -530,7 +531,7 @@ private fun FilmCard(
             film.displayTitle,
             color = if (focused) EnigmaColors.Text else EnigmaColors.Muted,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -539,7 +540,7 @@ private fun FilmCard(
             if (airing) stringResource(R.string.home_card_live_left, FilmFormat.minutesLeft(film, nowSec)) else FilmFormat.slot(film),
             color = if (airing) LiveRed else EnigmaColors.Accent,
             fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             maxLines = 1,
         )
         RatingStars(film.movie.voteAverage, size = 10.sp)
@@ -565,12 +566,12 @@ private fun LoadingSkeleton(contentFocus: FocusRequester, left: Modifier, percen
                 modifier = Modifier.focusRequester(contentFocus).then(left).focusable(),
             )
         }
-        Box(Modifier.width(380.dp).height(44.dp).background(block, RoundedCornerShape(8.dp)))
-        Box(Modifier.width(260.dp).height(16.dp).background(block, RoundedCornerShape(6.dp)))
-        Box(Modifier.width(420.dp).height(48.dp).background(block, RoundedCornerShape(6.dp)))
+        Box(Modifier.width(380.dp).height(44.dp).background(block, skinShape(8.dp)))
+        Box(Modifier.width(260.dp).height(16.dp).background(block, skinShape(6.dp)))
+        Box(Modifier.width(420.dp).height(48.dp).background(block, skinShape(6.dp)))
         Spacer(Modifier.height(80.dp))
         repeat(2) {
-            Box(Modifier.width(160.dp).height(18.dp).background(block, RoundedCornerShape(6.dp)))
+            Box(Modifier.width(160.dp).height(18.dp).background(block, skinShape(6.dp)))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 repeat(6) { Box(Modifier.width(CARD_WIDTH_DP.dp).height((CARD_WIDTH_DP * 1.5f).dp).background(block, PosterShape)) }
             }
@@ -588,7 +589,7 @@ private fun EmptyState(state: HomeFilmsViewModel.State, contentFocus: FocusReque
         else stringResource(R.string.home_no_films) to stringResource(R.string.home_no_films_hint)
     }
     Column(Modifier.padding(start = 28.dp, top = 60.dp).fillMaxWidth(0.7f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
         if (body.isNotBlank()) Text(body, color = EnigmaColors.Muted, fontSize = 14.sp)
         EnigmaGlassButton(stringResource(R.string.home_try_again), onRetry, Modifier.focusRequester(contentFocus).then(left))
         Spacer(Modifier.height(140.dp))

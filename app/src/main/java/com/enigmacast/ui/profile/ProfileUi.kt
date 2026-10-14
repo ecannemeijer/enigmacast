@@ -1,5 +1,7 @@
 package com.enigmacast.ui.profile
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,7 +89,7 @@ fun ProfilePicker(model: ProfileViewModel) {
         ) {
             Text(
                 stringResource(if (model.managing) R.string.profile_manage else R.string.profile_who),
-                color = EnigmaColors.Text, fontSize = 30.sp, fontWeight = FontWeight.SemiBold,
+                color = EnigmaColors.Text, fontSize = 30.sp, fontWeight = EnigmaType.Strong,
             )
             Row(Modifier.padding(top = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 state.profiles.forEachIndexed { i, p ->
@@ -140,7 +142,7 @@ private fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: Bo
         Box {
             AvatarImage(
                 avatar, 120.dp,
-                Modifier.border(if (focus.focused) 4.dp else 0.dp, if (focus.focused) Color.White else Color.Transparent, RoundedCornerShape(24.dp)),
+                Modifier.border(if (focus.focused) 4.dp else 0.dp, if (focus.focused) Color.White else Color.Transparent, skinShape(24.dp)),
             )
             if (managing) {
                 Text("✎", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Center).background(Color(0x99000000), CircleShape).padding(horizontal = 10.dp, vertical = 4.dp))
@@ -148,7 +150,7 @@ private fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: Bo
         }
         Text(
             name, color = if (focus.focused || active) EnigmaColors.Text else EnigmaColors.Muted,
-            fontSize = 15.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            fontSize = 15.sp, fontWeight = if (active) EnigmaType.Strong else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -162,8 +164,8 @@ private fun AddTile(onClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
-            Modifier.size(120.dp).clip(RoundedCornerShape(24.dp)).background(EnigmaColors.Raised)
-                .border(if (focus.focused) 4.dp else 1.dp, if (focus.focused) Color.White else EnigmaColors.CardBorder, RoundedCornerShape(24.dp)),
+            Modifier.size(120.dp).clip(skinShape(24.dp)).background(EnigmaColors.Raised)
+                .border(if (focus.focused) 4.dp else 1.dp, if (focus.focused) Color.White else EnigmaColors.CardBorder, skinShape(24.dp)),
             contentAlignment = Alignment.Center,
         ) { Text("+", color = EnigmaColors.Text, fontSize = 48.sp) }
         Text(stringResource(R.string.profile_add), color = EnigmaColors.Muted, fontSize = 15.sp)
@@ -200,13 +202,13 @@ fun ProfileEditor(
         LaunchedEffect(Unit) { field.requestWhenReady() }
         Column(
             Modifier.widthIn(max = 560.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .background(EnigmaColors.Selected, skinShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                 .padding(14.dp)
                 .trapFocus(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
             TvTextField(stringResource(R.string.profile_name), name, { name = it.take(20) }, fieldFocus = field)
             Text(stringResource(R.string.profile_avatar), color = EnigmaColors.Muted, fontSize = 12.sp)
             for (row in 0 until 2) {
@@ -219,7 +221,7 @@ fun ProfileEditor(
                                 .border(
                                     if (focus.focused || avatar == i) 3.dp else 0.dp,
                                     when { focus.focused -> Color.White; avatar == i -> EnigmaColors.Cyan; else -> Color.Transparent },
-                                    RoundedCornerShape(12.dp),
+                                    skinShape(12.dp),
                                 ).padding(3.dp),
                         ) { AvatarImage(i, 52.dp) }
                     }
@@ -241,7 +243,7 @@ fun ProfileChip(model: ProfileViewModel, expanded: Boolean, modifier: Modifier =
     val p = state.active
     val focus = rememberTvFocus()
     Row(
-        modifier.padding(start = 6.dp, bottom = 8.dp).then(focusLook(focus.focused, RoundedCornerShape(10.dp))).tvClick(focus) { model.openMenu() }.padding(4.dp),
+        modifier.padding(start = 6.dp, bottom = 8.dp).then(focusLook(focus.focused, skinShape(10.dp))).tvClick(focus) { model.openMenu() }.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -262,8 +264,8 @@ fun ProfileMenu(model: ProfileViewModel, powerLabel: String, powerAction: String
         LaunchedEffect(Unit) { first.requestWhenReady() }
         Column(
             Modifier.widthIn(min = 240.dp, max = 360.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp))
+                .background(EnigmaColors.Selected, skinShape(10.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
                 .padding(10.dp)
                 .trapFocus(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -272,7 +274,7 @@ fun ProfileMenu(model: ProfileViewModel, powerLabel: String, powerAction: String
             state.profiles.forEachIndexed { i, p ->
                 val focus = rememberTvFocus()
                 Row(
-                    Modifier.fillMaxWidth().focusRequesterIf(i == 0, first).then(focusLook(focus.focused, RoundedCornerShape(8.dp)))
+                    Modifier.fillMaxWidth().focusRequesterIf(i == 0, first).then(focusLook(focus.focused, skinShape(8.dp)))
                         .tvClick(focus) { model.choose(p.id) }.padding(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),

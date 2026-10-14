@@ -1,5 +1,7 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -1030,7 +1032,7 @@ internal fun BouquetColumn(
             stringResource(R.string.bouquets),
             color = Color.White,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             modifier = Modifier.padding(bottom = 4.dp, start = 8.dp),
         )
         LazyColumn(
@@ -1302,6 +1304,7 @@ private fun SettingsHub(
                             settings.osdInfo,
                             viewModel,
                             contentFocus = remember { FocusRequester() },
+                            skin = settings.osdSkin,
                         )
                     }
                     SettingPage.Soccer -> SoccerSettingsPanel(pageContentFocus)
@@ -1478,7 +1481,7 @@ private fun AudioSyncCard(
                         .padding(top = 6.dp, end = 6.dp)
                         .width(240.dp)
                         .aspectRatio(16f / 9f)
-                        .background(Color.Black, RoundedCornerShape(8.dp)),
+                        .background(Color.Black, skinShape(8.dp)),
                 ) {
                     EnigmaVideoTexture(player(), emptyList(), Modifier.fillMaxSize())
                 }
@@ -1548,6 +1551,7 @@ private fun OsdSettingsPanel(
     info: OsdInfoFields,
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
+    skin: com.enigmacast.domain.model.OsdSkinId = com.enigmacast.domain.model.OsdSkinId.STANDARD,
 ) {
     SettingsCard(stringResource(R.string.osd_transparency)) {
         StepperRow(
@@ -1564,19 +1568,13 @@ private fun OsdSettingsPanel(
     OsdInfoSettings(info, viewModel::setOsdInfoFields)
     SettingsCard(stringResource(R.string.nav_osd_skins)) {
         Text(
-            stringResource(R.string.coming_soon),
-            color = EnigmaColors.Text,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-        )
-        Text(
             stringResource(R.string.skins_detail),
             color = EnigmaColors.Muted,
             fontSize = 12.sp,
             lineHeight = 16.sp,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
         )
+        com.enigmacast.ui.settings.SkinChooser(skin, viewModel::setSkin)
     }
     SettingsCard(stringResource(R.string.receiver_osd)) {
         ChoiceRow(

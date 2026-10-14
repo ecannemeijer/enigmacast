@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.background
@@ -297,7 +298,7 @@ private fun PosterCard(
             Modifier
                 .width(100.dp)
                 .height(150.dp)
-                .border(if (focus.focused) 3.dp else 0.dp, if (focus.focused) EnigmaColors.Cyan else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(12.dp)),
+                .border(if (focus.focused) 3.dp else 0.dp, if (focus.focused) EnigmaColors.Cyan else androidx.compose.ui.graphics.Color.Transparent, skinShape(12.dp)),
         ) {
             com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
             if (item.status == RecordingStatus.RECORDING) {
@@ -306,7 +307,7 @@ private fun PosterCard(
                     color = androidx.compose.ui.graphics.Color.White,
                     fontSize = 10.sp,
                     modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
-                        .background(EnigmaColors.Danger, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                        .background(EnigmaColors.Danger, skinShape(4.dp)).padding(horizontal = 4.dp),
                 )
             }
             if (progress > 0f) {

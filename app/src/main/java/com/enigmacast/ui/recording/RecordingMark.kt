@@ -1,5 +1,6 @@
 package com.enigmacast.ui.recording
 
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,7 +41,7 @@ fun RecordingDot(modifier: Modifier = Modifier) {
 fun RecordingChip(channel: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .background(Color(0xCC000000), RoundedCornerShape(8.dp))
+            .background(Color(0xCC000000), skinShape(8.dp))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

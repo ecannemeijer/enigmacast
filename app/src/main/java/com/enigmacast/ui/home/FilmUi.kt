@@ -1,5 +1,7 @@
 package com.enigmacast.ui.home
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -44,7 +46,7 @@ internal fun RatingStars(value: Double, size: TextUnit = 14.sp, modifier: Modifi
     val stars = "★".repeat(filled) + "☆".repeat(5 - filled)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(stars, color = Gold, fontSize = size)
-        Text(FilmFormat.rating(value), color = EnigmaColors.Text, fontSize = size, fontWeight = FontWeight.SemiBold)
+        Text(FilmFormat.rating(value), color = EnigmaColors.Text, fontSize = size, fontWeight = EnigmaType.Strong)
     }
 }
 
@@ -56,7 +58,7 @@ internal fun Badge(text: String, color: androidx.compose.ui.graphics.Color, modi
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         modifier = modifier
-            .background(color, RoundedCornerShape(5.dp))
+            .background(color, skinShape(5.dp))
             .padding(horizontal = 7.dp, vertical = 2.dp),
     )
 }

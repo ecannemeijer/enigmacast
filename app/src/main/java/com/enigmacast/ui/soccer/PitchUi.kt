@@ -1,5 +1,6 @@
 package com.enigmacast.ui.soccer
 
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -64,7 +65,7 @@ import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import java.util.Locale
 
-internal val PitchShape = RoundedCornerShape(12.dp)
+internal val PitchShape get() = skinShape(12.dp)
 internal val WinGreen = Color(0xFF2FBF71)
 
 /** A .webp crest or player photo from cdn.pitchapi.dev; [fallback] text while loading or on error. */
@@ -168,7 +169,7 @@ fun PitchMatchCard(m: PitchMatch, nowSec: Long, locale: Locale, modifier: Modifi
 private fun PitchRow(title: String, matches: List<PitchMatch>, nowSec: Long, locale: Locale, left: Modifier, onOpen: (PitchMatch) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(start = 24.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
             Text(stringResource(R.string.pitch_hint_match), color = EnigmaColors.Subtle, fontSize = 12.sp)
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(start = 4.dp, end = 32.dp, top = 6.dp, bottom = 6.dp)) {
@@ -205,7 +206,7 @@ fun pitchSections(model: PitchViewModel, nowSec: Long, locale: Locale, left: Mod
 private fun ClubsRow(league: String, clubs: List<com.enigmacast.domain.soccer.pitch.PitchTeam>, left: Modifier, onOpen: (com.enigmacast.domain.soccer.pitch.PitchTeam) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 24.dp)) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.pitch_clubs, league), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.pitch_clubs, league), color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
             Text(stringResource(R.string.pitch_hint_club), color = EnigmaColors.Subtle, fontSize = 12.sp)
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(start = 4.dp, end = 32.dp, top = 6.dp, bottom = 6.dp)) {
@@ -234,7 +235,7 @@ internal fun FormDots(form: List<String>, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally)) {
         form.forEach { r ->
             val color = when (r) { "W" -> WinGreen; "L" -> LiveRed; else -> EnigmaColors.Muted }
-            Box(Modifier.size(15.dp).background(color, RoundedCornerShape(3.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(15.dp).background(color, skinShape(3.dp)), contentAlignment = Alignment.Center) {
                 Text(r, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }

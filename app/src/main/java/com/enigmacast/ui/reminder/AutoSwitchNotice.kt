@@ -1,5 +1,7 @@
 package com.enigmacast.ui.reminder
 
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -50,8 +52,8 @@ fun AutoSwitchNotice(notice: ReminderNotice, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .widthIn(min = 360.dp, max = 520.dp)
-            .background(EnigmaColors.Scrim, RoundedCornerShape(16.dp))
-            .border(1.dp, EnigmaColors.Accent.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+            .background(EnigmaColors.Scrim, skinShape(16.dp))
+            .border(1.dp, EnigmaColors.Accent.copy(alpha = 0.6f), skinShape(16.dp))
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -61,7 +63,7 @@ fun AutoSwitchNotice(notice: ReminderNotice, modifier: Modifier = Modifier) {
                 "  " + stringResource(R.string.autoswitch_notice_title),
                 color = EnigmaColors.Accent,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = EnigmaType.Strong,
             )
         }
         Text(
@@ -101,9 +103,9 @@ private fun KeyHint(key: String, action: String) {
             key,
             color = EnigmaColors.OnAccent,
             fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = EnigmaType.Strong,
             modifier = Modifier
-                .background(EnigmaColors.Accent, RoundedCornerShape(6.dp))
+                .background(EnigmaColors.Accent, skinShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 2.dp),
         )
         Text("  $action", color = EnigmaColors.Text, fontSize = 14.sp)
@@ -119,8 +121,8 @@ fun AutoSwitchMessage(message: String, modifier: Modifier = Modifier) {
         fontSize = 15.sp,
         modifier = modifier
             .widthIn(max = 520.dp)
-            .background(EnigmaColors.Scrim, RoundedCornerShape(12.dp))
-            .border(1.dp, EnigmaColors.Danger, RoundedCornerShape(12.dp))
+            .background(EnigmaColors.Scrim, skinShape(12.dp))
+            .border(1.dp, EnigmaColors.Danger, skinShape(12.dp))
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
