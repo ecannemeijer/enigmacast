@@ -75,6 +75,23 @@ class XtreamViewModel @Inject constructor(
         private set
     var section by mutableStateOf(XtreamSection.LIVE)
         private set
+    /** Section chosen in the IPTV menu, applied when the page opens. */
+    private var requestedSection: XtreamSection? = null
+    /** Back from the category column: the dashboard focuses the IPTV menu item. */
+    var returnToMenu by mutableStateOf(false)
+        private set
+
+    fun requestSection(section: XtreamSection) {
+        requestedSection = section
+    }
+
+    fun markReturnToMenu() {
+        returnToMenu = true
+    }
+
+    fun consumeReturnToMenu() {
+        returnToMenu = false
+    }
     var categories by mutableStateOf<List<XtreamCategory>>(emptyList())
         private set
     var category by mutableStateOf<XtreamCategory?>(null)
@@ -527,13 +544,28 @@ class XtreamViewModel @Inject constructor(
     /** Opens the page: one playlist is chosen right away; several leave [account] null for the chooser. */
     fun open() {
         val accounts = _detection.value?.accounts.orEmpty()
-        if (account == null && accounts.size == 1) choose(accounts.first())
+        when {
+            account == null && accounts.size == 1 -> choose(accounts.first())
+            account != null -> applyRequested()
+        }
     }
 
     fun choose(account: XtreamAccount) {
-        if (this.account?.key == account.key && categories.isNotEmpty()) return
+        val start = requestedSection
+        requestedSection = null
+        val same = this.account?.key == account.key && categories.isNotEmpty()
         this.account = account
-        selectSection(XtreamSection.LIVE, force = true)
+        if (same) {
+            if (start != null && start != section) selectSection(start)
+            return
+        }
+        selectSection(start ?: XtreamSection.LIVE, force = true)
+    }
+
+    private fun applyRequested() {
+        val start = requestedSection ?: return
+        requestedSection = null
+        if (account != null && start != section) selectSection(start)
     }
 
     fun selectSection(section: XtreamSection, force: Boolean = false) {

@@ -251,6 +251,7 @@ fun DashboardScreen(
     var settingsFormOpen by remember { mutableStateOf(false) }
     val bouquetFocus = remember { FocusRequester() }
     val tvMenuFocus = remember { FocusRequester() }
+    val iptvMenuFocus = remember { FocusRequester() }
     // Settings lock: unlocked until Settings is left or the app goes to the background.
     val settingsLock: com.enigmacast.ui.security.SettingsLockViewModel = hiltViewModel()
     LaunchedEffect(section) { if (section != DashSection.Settings) settingsLock.lock.relock() }
@@ -312,13 +313,15 @@ fun DashboardScreen(
     }
     fun sectionMenu(): FocusRequester = when (DashGroups.groupOf(section)) {
         DashGroup.TV -> tvMenuFocus
+        DashGroup.IPTV -> iptvMenuFocus
         null -> sectionMenuOf()
     }
     DisposableEffect(contentFocused, section, guideModel.askWake, flyout) {
         onBindBack {
             if (flyout != null) {
+                val menu = if (flyout == DashGroup.IPTV) iptvMenuFocus else tvMenuFocus
                 flyout = null
-                runCatching { tvMenuFocus.requestFocus() }
+                runCatching { menu.requestFocus() }
                 true
             } else if (guideModel.askWake) {
                 guideModel.declineWake()
@@ -343,6 +346,7 @@ fun DashboardScreen(
             iptvReturn != null -> { if (!iptvReturn.startsWith("home/")) { myItemsListActive = true; onMyItemsFocused() } }
             // Back from the player: Live TV opens the player, so focus its menu item.
             focusPlayingChannel -> { tvMenuFocus.requestWhenReady(); onPlayingChannelFocused() }
+            xtreamModel.returnToMenu -> { iptvMenuFocus.requestWhenReady(); xtreamModel.consumeReturnToMenu() }
             else -> homeFocus.requestWhenReady()
         }
     }
@@ -486,13 +490,24 @@ fun DashboardScreen(
                     NavItem(
                         icon = EnigmaIcons.Tv,
                         label = stringResource(R.string.nav_iptv),
+                        subtitle = if (xtreamModel.categories.isNotEmpty()) stringResource(xtreamSectionLabel(xtreamModel.section)) else null,
                         selected = false,
                         showLabel = drawerExpanded,
                         locked = !premium,
                         staggerIndex = 2,
-                        modifier = Modifier.focusProperties { right = FocusRequester.Cancel },
+                        modifier = Modifier
+                            .focusRequester(iptvMenuFocus)
+                            .onGloballyPositioned { flyoutAnchor[DashGroup.IPTV] = it.positionInRoot().let { p -> androidx.compose.ui.geometry.Offset(p.x + it.size.width, p.y) } }
+                            .onPreviewKeyEvent { e ->
+                                if (e.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                                if (e.type == KeyEventType.KeyDown && accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) {
+                                    flyout = DashGroup.IPTV
+                                }
+                                true
+                            }
+                            .focusProperties { right = FocusRequester.Cancel },
                         onClick = {
-                            if (accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) onXtream()
+                            if (accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) flyout = DashGroup.IPTV
                         },
                     )
                 }
@@ -807,28 +822,49 @@ fun DashboardScreen(
         }
         flyout?.let { group ->
             val anchor = flyoutAnchor[group] ?: androidx.compose.ui.geometry.Offset.Zero
-            val menu = tvMenuFocus
-            fun close() { flyout = null; runCatching { menu.requestFocus() } }
-            DashFlyout(
-                entries = DashGroups.tabs(group).map { target ->
-                    DashFlyoutEntry(target, stringResource(DashGroups.label(target)), lockedFeature(target) != null)
-                },
-                active = DashGroups.current(group, section, tabMemory.last(group)),
-                anchorPx = anchor,
-                onClose = ::close,
-                onChoose = { entry ->
-                    flyout = null
-                    when (entry.section) {
-                        // Live TV still opens the full player.
-                        DashSection.Stream -> { runCatching { menu.requestFocus() }; guideModel.openLive(onStream) }
-                        else -> {
-                            enterSection(entry.section)
-                            // A locked entry stays closed (the gate asked); focus goes back to the item.
-                            if (entry.locked) runCatching { menu.requestFocus() }
+            when (group) {
+                DashGroup.TV -> {
+                    val menu = tvMenuFocus
+                    fun close() { flyout = null; runCatching { menu.requestFocus() } }
+                    DashFlyout(
+                        entries = DashGroups.tabs(group).map { target ->
+                            DashFlyoutEntry(target, stringResource(DashGroups.label(target)), lockedFeature(target) != null)
+                        },
+                        active = DashGroups.current(group, section, tabMemory.last(group)),
+                        anchorPx = anchor,
+                        onClose = ::close,
+                        onChoose = { entry ->
+                            flyout = null
+                            when (entry.id) {
+                                // Live TV still opens the full player.
+                                DashSection.Stream -> { runCatching { menu.requestFocus() }; guideModel.openLive(onStream) }
+                                else -> {
+                                    enterSection(entry.id)
+                                    // A locked entry stays closed (the gate asked); focus goes back to the item.
+                                    if (entry.locked) runCatching { menu.requestFocus() }
+                                }
+                            }
+                        },
+                    )
+                }
+                DashGroup.IPTV -> DashFlyout(
+                    entries = com.enigmacast.domain.xtream.XtreamSection.entries.map { part ->
+                        DashFlyoutEntry(part, stringResource(xtreamSectionLabel(part)), !premium)
+                    },
+                    active = xtreamModel.section.takeIf { xtreamModel.categories.isNotEmpty() },
+                    anchorPx = anchor,
+                    onClose = { flyout = null; runCatching { iptvMenuFocus.requestFocus() } },
+                    onChoose = { entry ->
+                        flyout = null
+                        if (!accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) {
+                            runCatching { iptvMenuFocus.requestFocus() }
+                        } else {
+                            xtreamModel.requestSection(entry.id)
+                            onXtream()
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
         if (guideModel.loadingChannels) {
             ChannelsLoadingDialog(

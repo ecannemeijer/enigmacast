@@ -42,8 +42,8 @@ import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 
-/** Main-menu groups whose pages are tabs. */
-internal enum class DashGroup { TV }
+/** Main-menu groups that open a flyout. TV's rows are dashboard pages; IPTV's are playlist sections. */
+internal enum class DashGroup { TV, IPTV }
 
 internal object DashGroups {
     private val TV = listOf(DashSection.Stream, DashSection.Guide, DashSection.Movies, DashSection.Series, DashSection.Radio)
@@ -53,7 +53,7 @@ internal object DashGroups {
         else -> null
     }
 
-    fun tabs(@Suppress("UNUSED_PARAMETER") group: DashGroup): List<DashSection> = TV
+    fun tabs(group: DashGroup): List<DashSection> = if (group == DashGroup.TV) TV else emptyList()
 
     /**
      * The page OK on a group opens: the last-used tab, else the first open one. Live TV is a
@@ -73,7 +73,7 @@ internal object DashGroups {
     }
 
     /** Where focus starts in the flyout: the current entry, else the first. */
-    fun flyoutStart(entries: List<DashSection>, active: DashSection?): Int = entries.indexOf(active).coerceAtLeast(0)
+    fun <T> flyoutStart(entries: List<T>, active: T?): Int = entries.indexOf(active).coerceAtLeast(0)
 
     @StringRes
     fun label(section: DashSection): Int = when (section) {
@@ -86,6 +86,12 @@ internal object DashGroups {
         DashSection.Search -> R.string.nav_search
         else -> R.string.nav_home
     }
+}
+
+internal fun xtreamSectionLabel(section: com.enigmacast.domain.xtream.XtreamSection): Int = when (section) {
+    com.enigmacast.domain.xtream.XtreamSection.LIVE -> R.string.xtream_live
+    com.enigmacast.domain.xtream.XtreamSection.MOVIES -> R.string.xtream_movies
+    com.enigmacast.domain.xtream.XtreamSection.SERIES -> R.string.xtream_series
 }
 
 /** The last-used tab per group, kept across app starts (only the tab name). */
@@ -101,22 +107,22 @@ internal class DashTabMemory(context: Context) {
     }
 }
 
-internal data class DashFlyoutEntry(val section: DashSection, val label: String, val locked: Boolean)
+internal data class DashFlyoutEntry<T>(val id: T, val label: String, val locked: Boolean)
 
 /**
- * The small submenu right of TV / Library in the drawer. Up/Down choose (stopping at the ends),
+ * The small submenu right of a drawer item. Up/Down choose (stopping at the ends),
  * OK opens, Left and Back close it back to the item. Focus starts on the current entry.
  */
 @Composable
-internal fun DashFlyout(
-    entries: List<DashFlyoutEntry>,
-    active: DashSection?,
+internal fun <T> DashFlyout(
+    entries: List<DashFlyoutEntry<T>>,
+    active: T?,
     anchorPx: androidx.compose.ui.geometry.Offset,
     onClose: () -> Unit,
-    onChoose: (DashFlyoutEntry) -> Unit,
+    onChoose: (DashFlyoutEntry<T>) -> Unit,
 ) {
     val focus = remember(entries.size) { List(entries.size) { FocusRequester() } }
-    val start = DashGroups.flyoutStart(entries.map { it.section }, active)
+    val start = DashGroups.flyoutStart(entries.map { it.id }, active)
     LaunchedEffect(Unit) { focus[start].requestWhenReady() }
     val density = androidx.compose.ui.platform.LocalDensity.current
     androidx.compose.foundation.layout.Column(
@@ -132,7 +138,7 @@ internal fun DashFlyout(
         entries.forEachIndexed { index, entry ->
             val interaction = remember { MutableInteractionSource() }
             val focused by interaction.collectIsFocusedAsState()
-            val selected = entry.section == active
+            val selected = entry.id == active
             Row(
                 Modifier
                     .fillMaxWidth()
