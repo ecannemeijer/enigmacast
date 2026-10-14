@@ -211,7 +211,11 @@ class RemoteDisplayViewModel @Inject constructor(
     private val recordings: com.enigmacast.live.RecordingBook,
     private val switcher: com.enigmacast.live.ReceiverSwitcher,
     private val premiumGate: com.enigmacast.live.PremiumGate,
+    private val listEvents: com.enigmacast.sync.ChannelListEvents,
 ) : ViewModel() {
+    /** The receiver whose bouquets are in [RemoteDisplayUiState.bouquets]; another box loads its own. */
+    private var bouquetsReceiverId: String? = null
+
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
     private val analyzer = AndroidOsdAnalyzer()
@@ -298,6 +302,10 @@ class RemoteDisplayViewModel @Inject constructor(
             }
         }
         registerNetwork()
+        viewModelScope.launch {
+            // New lists on the active box (settings import, reload): the bouquet panel reads them again.
+            listEvents.changed.collect { id -> if (id == settingsSnapshot.activeReceiver()?.id) clearBouquets() }
+        }
         viewModelScope.launch {
             // Back from the background: everything was stopped there; start this channel again.
             playbackLifecycle.resumes.collect { count ->
@@ -570,6 +578,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun restart(settings: AppSettings) {
         session?.cancel()
         val receiver = settings.activeReceiver()
+        if (receiver?.id != bouquetsReceiverId) clearBouquets()
         ownSession.bind(receiver?.id)
         if (receiver == null) {
             _ui.update { it.copy(connectionState = ConnectionState.NotConfigured) }
@@ -951,16 +960,34 @@ class RemoteDisplayViewModel @Inject constructor(
 
     private fun nowSec(): Long = System.currentTimeMillis() / 1000
 
+    /** Forgets the bouquet list (other receiver, or its lists changed); an open panel loads it again. */
+    private fun clearBouquets() {
+        bouquetsReceiverId = null
+        val open = _ui.value.bouquetPanel
+        _ui.update { it.copy(bouquets = emptyList()) }
+        if (open) loadBouquets()
+    }
+
     private fun loadBouquets() {
         val radio = BouquetChannels.isRadioBouquet(ownSession.state.value.bouquetReference)
         val cached = _ui.value.bouquets
-        if (cached.isNotEmpty() && cached.any { BouquetChannels.isRadioBouquet(it.reference) } == radio) return
+        val activeId = settingsSnapshot.activeReceiver()?.id
+        if (cached.isNotEmpty() && activeId == bouquetsReceiverId &&
+            cached.any { BouquetChannels.isRadioBouquet(it.reference) } == radio
+        ) {
+            return
+        }
         viewModelScope.launch {
             val receiver = settingsSnapshot.activeReceiver() ?: return@launch
             val loaded = runCatching {
                 if (radio) serviceSource.radioBouquets(receiver) else serviceSource.televisionBouquets(receiver)
             }
-            loaded.onSuccess { list -> _ui.update { it.copy(bouquets = list) } }
+            loaded.onSuccess { list ->
+                // A switch while this was loading: the list belongs to the old box, drop it.
+                if (settingsSnapshot.activeReceiver()?.id != receiver.id) return@onSuccess
+                bouquetsReceiverId = receiver.id
+                _ui.update { it.copy(bouquets = list) }
+            }
         }
     }
 
