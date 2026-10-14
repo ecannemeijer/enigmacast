@@ -276,7 +276,7 @@ fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Mod
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun EnigmaVideoPlayer(
+internal fun EnigmaVideoPlayer(
     player: Player,
     frame: OsdFrame?,
     debugBorders: Boolean,

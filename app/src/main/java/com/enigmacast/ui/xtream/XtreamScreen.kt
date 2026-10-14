@@ -48,7 +48,6 @@ import com.enigmacast.domain.xtream.XtreamEpg
 import com.enigmacast.domain.xtream.XtreamSection
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
 import com.enigmacast.ui.components.EnigmaProgramProgress
-import com.enigmacast.ui.remote.EnigmaVideoTexture
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
@@ -80,6 +79,8 @@ fun XtreamScreen(onBack: () -> Unit) {
     val itemFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
+    var quickBar by remember { mutableStateOf(false) }
+    var quickToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(detection) { model.open() }
     DisposableEffect(Unit) { onDispose { model.stop() } }
@@ -95,6 +96,7 @@ fun XtreamScreen(onBack: () -> Unit) {
     }
     BackHandler {
         when {
+            quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
             model.series != null && panelOpen -> model.closeSeries()
             panelOpen && model.playing != null -> panelOpen = false
             else -> { model.stop(); onBack() }
@@ -107,7 +109,15 @@ fun XtreamScreen(onBack: () -> Unit) {
             .background(androidx.compose.ui.graphics.Color.Black)
             .focusRequester(rootFocus)
             .onPreviewKeyEvent { e ->
-                if (panelOpen || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (panelOpen || quickBar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val bannerShown = model.playing != null && System.currentTimeMillis() < bannerUntil
+                when (e.key) {
+                    Key.DirectionDown, Key.DirectionCenter, Key.Enter -> if (bannerShown) {
+                        if (e.key == Key.DirectionDown) { quickBar = true; quickToken++ } else { model.togglePause(); bannerUntil = System.currentTimeMillis() + 5_000 }
+                        return@onPreviewKeyEvent true
+                    }
+                    else -> Unit
+                }
                 when (e.key) {
                     Key.DirectionLeft, Key.DirectionCenter, Key.Enter, Key.Menu -> { panelOpen = true; openRequest++; true }
                     Key.DirectionUp, Key.ChannelUp -> { model.zap(-1); bannerUntil = System.currentTimeMillis() + 5_000; true }
@@ -118,7 +128,17 @@ fun XtreamScreen(onBack: () -> Unit) {
             }
             .focusable(),
     ) {
-        if (model.playing != null) EnigmaVideoTexture(model.player(), emptyList(), Modifier.fillMaxSize())
+        if (model.playing != null) {
+            val ps = model.playerState
+            com.enigmacast.ui.remote.EnigmaVideoPlayer(
+                player = model.player(),
+                frame = null,
+                debugBorders = false,
+                cues = emptyList(),
+                picture = com.enigmacast.ui.remote.VideoShape(model.pictureMode, ps.videoWidth, ps.videoHeight, ps.pixelRatio),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         val accounts = detection?.accounts.orEmpty()
         when {
@@ -138,8 +158,8 @@ fun XtreamScreen(onBack: () -> Unit) {
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
             LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay(500) } }
-            if (!panelOpen && now < bannerUntil) {
-                Banner(playing, model.playing?.item?.id?.let { model.epg[it] }.orEmpty(), Modifier.align(Alignment.BottomCenter))
+            if (!panelOpen && (quickBar || now < bannerUntil)) {
+                IptvOsd(model, playing, quickBar, quickToken, Modifier.align(Alignment.BottomCenter))
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
             model.playerError?.let {
@@ -310,25 +330,73 @@ internal fun nowNext(list: List<XtreamEpg>, nowSec: Long = System.currentTimeMil
     return now to next
 }
 
+/**
+ * The same OSD as for Enigma2 channels, in the selected GUI skin, with the options row under
+ * it. Satellite slots (position, signal/SNR, tuner, CA/FTA, transponder) are switched off and the
+ * options row only has the player's own options.
+ */
 @Composable
-private fun Banner(playing: XtreamPlaying, epg: List<XtreamEpg>, modifier: Modifier) {
-    val (now, next) = nowNext(epg)
-    Column(
-        modifier
-            .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
-            .fillMaxWidth()
-            .background(EnigmaColors.scrim(10), skinShape(16.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(playing.title, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (now != null) {
-            Text("${time(now.startSec)} – ${time(now.endSec)}  ${now.title}", color = EnigmaColors.Text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val total = (now.endSec - now.startSec).coerceAtLeast(1)
-            EnigmaProgramProgress(((System.currentTimeMillis() / 1000 - now.startSec).toFloat() / total).coerceIn(0f, 1f))
+private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Boolean, quickToken: Int, modifier: Modifier) {
+    val look by model.osdLook.collectAsStateWithLifecycle()
+    val scrim = EnigmaColors.scrim(look.second)
+    val item = playing.item
+    val logo = item?.icon.orEmpty()
+    val entry = com.enigmacast.domain.model.BouquetEntry(
+        name = playing.title,
+        reference = "iptv:${item?.id.orEmpty()}:${playing.episode?.id.orEmpty()}",
+        number = item?.number?.takeIf { item.section == XtreamSection.LIVE } ?: 0,
+        picon = logo,
+    )
+    val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epg[it.id] }?.let { IptvOsdModel.guide(entry, it) }
+    Column(modifier) {
+        if (!quickBar) {
+            com.enigmacast.ui.remote.ChannelBanner(
+                channel = entry,
+                number = entry.number,
+                guide = guide,
+                player = model.playerState,
+                tuner = com.enigmacast.live.TunerState(),
+                details = false,
+                optionsHint = true,
+                recording = false,
+                osdInfo = IptvOsdModel.INFO,
+                osdFields = IptvOsdModel.FIELDS,
+                osdSkin = look.first,
+                picon = { model.logo(it.picon) },
+                cachedPicon = { model.cachedLogo(it.picon) },
+                scrim = scrim,
+            )
+        } else {
+            val ui = com.enigmacast.ui.remote.RemoteDisplayUiState(
+                playerState = model.playerState,
+                tracks = model.tracks,
+                pictureMode = model.pictureMode,
+                quickBarToken = quickToken,
+            )
+            com.enigmacast.ui.remote.QuickOptionsBar(
+                ui = ui,
+                actions = remember(model) {
+                    com.enigmacast.ui.remote.QuickBarActions(
+                        onSubtitles = model::chooseSubtitles,
+                        onAudio = model::chooseAudio,
+                        onPassthrough = {},
+                        onPictureMode = model::choosePictureMode,
+                        onAudioDelay = {},
+                        onGuide = {},
+                        onRecent = {},
+                        onSleep = {},
+                        onRestart = model::restart,
+                        onQuality = {},
+                        onRecord = {},
+                        onSearch = {},
+                    )
+                },
+                iptv = true,
+                modifier = Modifier
+                    .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
+                    .background(scrim, skinShape(14.dp))
+                    .padding(8.dp),
+            )
         }
-        if (next != null) Text("${time(next.startSec)}  ${next.title}", color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(stringResource(R.string.xtream_banner_hint), color = EnigmaColors.Subtle, fontSize = 11.sp)
     }
 }
-

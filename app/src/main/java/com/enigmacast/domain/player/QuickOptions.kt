@@ -37,6 +37,20 @@ object QuickOptions {
         ownTuner -> QuickOption.entries
         else -> QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT)
     }
+
+    /**
+     * IPTV (Xtream / playlist) in the full player: only what the app's own player does.
+     * Receiver-bound tiles are left out: search and guide (receiver EPG), record (box timer),
+     * quality (receiver transcoding), recent (receiver channels); also audio delay and sleep,
+     * which live in the receiver player's model. Restart only for films and episodes.
+     */
+    fun iptvTiles(vod: Boolean): List<QuickOption> = buildList {
+        add(QuickOption.SUBTITLES)
+        add(QuickOption.AUDIO)
+        add(QuickOption.PICTURE)
+        add(QuickOption.STREAM_INFO)
+        if (vod) add(QuickOption.RESTART)
+    }
 }
 
 /** Sleep timer of the app itself: it closes EnigmaCast (and so the stream) when it runs out. */

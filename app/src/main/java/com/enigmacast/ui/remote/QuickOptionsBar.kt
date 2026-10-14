@@ -106,8 +106,14 @@ private val TileShape get() = skinShape(10.dp)
  * value), Left/Right to move, OK to open a small picker above the tile, Back to close.
  */
 @Composable
-fun QuickOptionsBar(ui: RemoteDisplayUiState, actions: QuickBarActions, modifier: Modifier = Modifier) {
-    val tiles = QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback)
+fun QuickOptionsBar(
+    ui: RemoteDisplayUiState,
+    actions: QuickBarActions,
+    modifier: Modifier = Modifier,
+    /** IPTV playback: only player options, nothing that belongs to the receiver. */
+    iptv: Boolean = false,
+) {
+    val tiles = if (iptv) QuickOptions.iptvTiles(ui.playerState.filePlayback) else QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback)
     val firstFocus = remember { FocusRequester() }
     var open by remember { mutableStateOf<QuickOption?>(null) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -148,7 +154,7 @@ fun QuickOptionsBar(ui: RemoteDisplayUiState, actions: QuickBarActions, modifier
                     modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
                 )
                 if (open == option) {
-                    QuickPicker(option, ui, actions, onClose = { open = null })
+                    QuickPicker(option, ui, actions, iptv, onClose = { open = null })
                 }
             }
         }
@@ -188,7 +194,7 @@ private fun QuickTile(
 private class PickerItem(val label: String, val selected: Boolean, val onSelect: () -> Unit)
 
 @Composable
-private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: QuickBarActions, onClose: () -> Unit) {
+private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: QuickBarActions, iptv: Boolean, onClose: () -> Unit) {
     val density = LocalDensity.current
     val provider = remember(density) {
         with(density) { AboveAnchor(gapPx = 8.dp.roundToPx(), marginPx = 16.dp.roundToPx()) }
@@ -209,17 +215,17 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         ) {
             Text(option.label(), color = Color.White, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
             when (option) {
-                QuickOption.STREAM_INFO -> StreamInfo(ui, onClose)
+                QuickOption.STREAM_INFO -> StreamInfo(ui, iptv, onClose)
                 QuickOption.AUDIO_DELAY -> {
                     Text(
                         stringResource(if (ui.audioDelayPassthrough) R.string.quick_delay_for_hdmi else R.string.quick_delay_for_stereo),
                         color = EnigmaColors.Subtle,
                         fontSize = 11.sp,
                     )
-                    PickerList(pickerItems(option, ui, actions, onClose), onClose)
+                    PickerList(pickerItems(option, ui, actions, iptv, onClose), onClose)
                 }
                 else -> {
-                    val items = pickerItems(option, ui, actions, onClose)
+                    val items = pickerItems(option, ui, actions, iptv, onClose)
                     if (items.isEmpty()) {
                         Text(emptyText(option), color = EnigmaColors.Muted, fontSize = 13.sp)
                         CloseOnOk(onClose)
@@ -233,7 +239,7 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
 }
 
 @Composable
-private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: QuickBarActions, onClose: () -> Unit): List<PickerItem> {
+private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: QuickBarActions, iptv: Boolean, onClose: () -> Unit): List<PickerItem> {
     fun pick(action: () -> Unit): () -> Unit = {
         action()
         onClose()
@@ -249,7 +255,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         }
         QuickOption.AUDIO -> {
             val tracks = ui.tracks.audio.map { track -> PickerItem(track.label.asString(), track.selected && ui.tracks.audio.size > 1, pick { actions.onAudio(track.id) }) }
-            tracks + listOf(
+            if (iptv) tracks else tracks + listOf(
                 PickerItem(stringResource(R.string.quick_output_stereo), !ui.hdmiPassthrough, pick { actions.onPassthrough(false) }),
                 PickerItem(stringResource(R.string.quick_output_hdmi), ui.hdmiPassthrough, pick { actions.onPassthrough(true) }),
             )
@@ -356,7 +362,7 @@ private fun routeLabel(route: ReceiverRoute): Int = when (route) {
 }
 
 @Composable
-private fun StreamInfo(ui: RemoteDisplayUiState, onClose: () -> Unit) {
+private fun StreamInfo(ui: RemoteDisplayUiState, iptv: Boolean, onClose: () -> Unit) {
     val player = ui.playerState
     val video = listOf(
         if (player.videoWidth > 0) "${player.videoWidth}×${player.videoHeight}" else "",
@@ -366,6 +372,7 @@ private fun StreamInfo(ui: RemoteDisplayUiState, onClose: () -> Unit) {
     val lines = buildList {
         if (video.isNotBlank()) add(stringResource(R.string.quick_info_video, video))
         if (player.audioLabel.isNotEmpty()) add(stringResource(R.string.quick_info_audio, player.audioLabel.asString()))
+        if (iptv) return@buildList
         add(stringResource(R.string.quick_info_bitrate, bitrateLabel(ui.stats.bitrateKbps)))
         add(stringResource(R.string.quick_info_buffer, ui.stats.bufferMs / 1000f))
         add(stringResource(R.string.quick_info_dropped, ui.stats.droppedFrames))

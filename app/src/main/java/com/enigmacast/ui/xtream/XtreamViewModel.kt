@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** What plays: a live channel, a film or an episode. */
@@ -101,6 +103,43 @@ class XtreamViewModel @Inject constructor(
 
     /** Set while Settings › IPTV uses a playlist: lists come from Room instead of the API. */
     private var playlist: IptvPlaylistKind? = null
+
+    /** What the full-player OSD shows: resolution, codecs and audio from the player itself. */
+    var playerState by mutableStateOf(com.enigmacast.domain.model.PlayerState())
+        private set
+    var tracks by mutableStateOf(com.enigmacast.playback.TrackMenu())
+        private set
+    var pictureMode by mutableStateOf(com.enigmacast.domain.player.PictureMode.AUTO)
+        private set
+
+    /** GUI skin and OSD transparency, as the receiver player uses them. */
+    val osdLook: StateFlow<Pair<com.enigmacast.domain.model.OsdSkinId, Int>> = settingsRepository.settings
+        .map { it.osdSkin to it.osd.transparencyPercent.coerceIn(0, 100) }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.enigmacast.domain.model.OsdSkinId.STANDARD to 10)
+
+    private val logos = java.util.concurrent.ConcurrentHashMap<String, androidx.compose.ui.graphics.ImageBitmap>()
+    private val logoClient by lazy { okhttp3.OkHttpClient.Builder().connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS).readTimeout(10, java.util.concurrent.TimeUnit.SECONDS).build() }
+
+    fun cachedLogo(url: String): androidx.compose.ui.graphics.ImageBitmap? = logos[url]
+
+    /** The channel logo of the playlist (tvg-logo / stream_icon), decoded off the main thread. */
+    suspend fun logo(url: String): androidx.compose.ui.graphics.ImageBitmap? {
+        if (!url.startsWith("http", ignoreCase = true)) return null
+        logos[url]?.let { return it }
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                logoClient.newCall(okhttp3.Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()).execute().use { r ->
+                    if (!r.isSuccessful) return@use null
+                    val opts = android.graphics.BitmapFactory.Options().apply { inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888 }
+                    android.graphics.BitmapFactory.decodeStream(r.body.byteStream(), null, opts)?.let { bmp ->
+                        val scaled = if (bmp.width > 320) android.graphics.Bitmap.createScaledBitmap(bmp, 320, (bmp.height * 320f / bmp.width).toInt().coerceAtLeast(1), true) else bmp
+                        scaled.asImageBitmap()
+                    }
+                }
+            }.getOrNull()?.also { logos[url] = it }
+        }
+    }
+
 
     private var player: ExoPlayer? = null
     private var loadJob: Job? = null
@@ -314,6 +353,40 @@ class XtreamViewModel @Inject constructor(
                 p.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
                         buffering = state == Player.STATE_BUFFERING
+                        playerState = playerState.copy(
+                            playbackState = when (state) {
+                                Player.STATE_BUFFERING -> "BUFFERING"
+                                Player.STATE_READY -> "READY"
+                                Player.STATE_ENDED -> "ENDED"
+                                else -> "IDLE"
+                            },
+                        )
+                    }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        playerState = playerState.copy(playing = isPlaying)
+                    }
+
+                    override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
+                        playerState = playerState.copy(videoWidth = size.width, videoHeight = size.height, pixelRatio = size.pixelWidthHeightRatio)
+                    }
+
+                    override fun onTracksChanged(t: androidx.media3.common.Tracks) {
+                        val subtitlesOn = !p.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_TEXT)
+                        val menu = com.enigmacast.playback.TrackMenus.build(t, subtitlesOn)
+                        tracks = menu
+                        val video = p.videoFormat
+                        val audio = p.audioFormat
+                        playerState = playerState.copy(
+                            videoCodec = video?.sampleMimeType.orEmpty(),
+                            frameRate = video?.frameRate?.takeIf { it > 0f } ?: 0f,
+                            audioCodec = audio?.sampleMimeType.orEmpty(),
+                            audioChannels = audio?.channelCount?.takeIf { it > 0 } ?: 0,
+                            audioLabel = com.enigmacast.playback.TrackLabels.audio(audio),
+                            audioTrackCount = menu.audio.size,
+                            subtitleLabel = menu.subtitles.firstOrNull { it.selected }?.label ?: com.enigmacast.util.UiText.Empty,
+                            subtitleTrackCount = menu.subtitles.size,
+                        )
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
@@ -332,6 +405,7 @@ class XtreamViewModel @Inject constructor(
         else EnigmaLog.network("Xtream play ${XtreamUrls.redact(url, account).substringAfter("://").substringAfter('/')}")
         playerError = null
         playing = what
+        playerState = com.enigmacast.domain.model.PlayerState(filePlayback = !live)
         val builder = MediaItem.Builder().setUri(url)
         if (url.endsWith(".m3u8")) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
         if (url.substringBefore('?').endsWith(".m3u8") && !url.endsWith(".m3u8")) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -341,6 +415,39 @@ class XtreamViewModel @Inject constructor(
             prepare()
             playWhenReady = true
         }
+    }
+
+    fun chooseAudio(id: String) {
+        val p = player ?: return
+        val (group, track) = com.enigmacast.playback.TrackMenus.find(p.currentTracks, id, androidx.media3.common.C.TRACK_TYPE_AUDIO) ?: return
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, track))
+            .build()
+    }
+
+    fun chooseSubtitles(id: String?) {
+        val p = player ?: return
+        val builder = p.trackSelectionParameters.buildUpon()
+        if (id == null) {
+            builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+        } else {
+            val (group, track) = com.enigmacast.playback.TrackMenus.find(p.currentTracks, id, androidx.media3.common.C.TRACK_TYPE_TEXT) ?: return
+            builder.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                .setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, track))
+        }
+        p.trackSelectionParameters = builder.build()
+    }
+
+    fun choosePictureMode(mode: com.enigmacast.domain.player.PictureMode) { pictureMode = mode }
+
+    /** Films and episodes only: back to the start. */
+    fun restart() {
+        if (playing?.item?.section == XtreamSection.LIVE && playing?.episode == null) return
+        player?.seekTo(0)
+    }
+
+    fun togglePause() {
+        player?.let { it.playWhenReady = !it.playWhenReady }
     }
 
     /** Leaving the page: the stream stops, the lists stay for next time. */
