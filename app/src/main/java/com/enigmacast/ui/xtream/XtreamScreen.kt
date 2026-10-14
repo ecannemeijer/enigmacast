@@ -153,8 +153,8 @@ fun XtreamScreen(onBack: () -> Unit) {
             quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS }
             // Films / Series: grid → categories → Live TV / Films / Series.
-            panelOpen && column == PanelColumn.VOD_GRID -> column = PanelColumn.VOD_CATEGORIES
-            panelOpen && column == PanelColumn.VOD_CATEGORIES -> column = PanelColumn.SECTIONS
+            panelOpen && column == PanelColumn.VOD_GRID -> { column = PanelColumn.VOD_CATEGORIES; openRequest++ }
+            panelOpen && column == PanelColumn.VOD_CATEGORIES -> { column = PanelColumn.SECTIONS; openRequest++ }
             // A film or episode in full screen: Back stops it and shows the grid again.
             !panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE -> { model.stop(); openPanel() }
             model.series != null && panelOpen -> model.closeSeries()
@@ -220,8 +220,11 @@ fun XtreamScreen(onBack: () -> Unit) {
                 gridActive = column == PanelColumn.VOD_GRID,
                 categoryFocus = categoryFocus,
                 gridFocus = gridFocus,
-                onGrid = { column = PanelColumn.VOD_GRID },
+                // openRequest re-runs the focus effect even when the column did not change.
+                onGrid = { column = PanelColumn.VOD_GRID; openRequest++ },
                 onCategories = { column = PanelColumn.VOD_CATEGORIES },
+                onSections = { column = PanelColumn.SECTIONS; openRequest++ },
+                onGridFocused = { column = PanelColumn.VOD_GRID },
             ) { panelOpen = false; showBanner(fromZap = false) }
             panelOpen -> SidePanel(
                 model = model,

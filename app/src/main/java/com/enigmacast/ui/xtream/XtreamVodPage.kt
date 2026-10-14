@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -77,6 +78,8 @@ internal fun XtreamVodPage(
     gridFocus: FocusRequester,
     onGrid: () -> Unit,
     onCategories: () -> Unit,
+    onSections: () -> Unit,
+    onGridFocused: () -> Unit,
     onPlayed: () -> Unit,
 ) {
     val art by model.artwork.collectAsStateWithLifecycle()
@@ -91,9 +94,9 @@ internal fun XtreamVodPage(
         ) {
             // Categories; Right enters a grid that is already there.
             Column(
-                Modifier.width(240.dp).fillMaxHeight().background(EnigmaColors.Canvas.copy(alpha = 0.9f)).columnKeysVod(
-                    onLeft = null,
-                    onRight = { if (model.cards.isNotEmpty()) onGrid() },
+                Modifier.width(240.dp).fillMaxHeight().background(EnigmaColors.Canvas.copy(alpha = 0.9f)).onFocusChanged { if (it.hasFocus) onCategories() }.columnKeysVod(
+                    onLeft = onSections,
+                    onRight = { if (VodPanelNav.canEnterGrid(model.cards.size)) onGrid() },
                 ),
             ) {
                 VodHeader(stringResource(if (model.section == XtreamSection.SERIES) R.string.xtream_series else R.string.xtream_movies), model.loading && model.categories.isEmpty())
@@ -142,7 +145,7 @@ internal fun XtreamVodPage(
                     contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize().focusGroup(),
+                    modifier = Modifier.fillMaxSize().onFocusChanged { if (it.hasFocus) onGridFocused() }.focusGroup(),
                 ) {
                     itemsIndexed(cards, key = { _, card -> card.key }, contentType = { _, _ -> "poster" }) { index, card ->
                         val item = card.item
@@ -274,4 +277,20 @@ private fun Modifier.columnKeysVod(onLeft: (() -> Unit)?, onRight: (() -> Unit)?
     } ?: return@onPreviewKeyEvent false
     if (e.type == KeyEventType.KeyDown) handler()
     true
+}
+
+/**
+ * Films / Series columns: Right from the categories enters the grid whenever cards are shown
+ * (auto-loaded or loaded on OK); Back walks grid → categories → section choice, one press each.
+ */
+internal object VodPanelNav {
+    enum class Column { SECTIONS, CATEGORIES, GRID }
+
+    fun canEnterGrid(cards: Int) = cards > 0
+
+    fun back(column: Column): Column = when (column) {
+        Column.GRID -> Column.CATEGORIES
+        Column.CATEGORIES -> Column.SECTIONS
+        Column.SECTIONS -> Column.SECTIONS
+    }
 }

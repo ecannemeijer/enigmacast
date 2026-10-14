@@ -388,7 +388,7 @@ class XtreamViewModel @Inject constructor(
                 .onFailure { error = true }
             loading = false
             // Films and series show the first category's cards right away (focus stays on the list).
-            if (section != XtreamSection.LIVE) categories.firstOrNull()?.let { loadCategory(account, it) }
+            if (section != XtreamSection.LIVE) categories.firstOrNull()?.let { loadCategory(account, it, announce = false) }
         }
     }
 
@@ -406,7 +406,7 @@ class XtreamViewModel @Inject constructor(
         loadJob = viewModelScope.launch { loadCategory(account, category) }
     }
 
-    private suspend fun loadCategory(account: XtreamAccount, category: XtreamCategory, force: Boolean = false) {
+    private suspend fun loadCategory(account: XtreamAccount, category: XtreamCategory, force: Boolean = false, announce: Boolean = true) {
         pendingCategory = category
         loading = true; error = false
         try {
@@ -424,7 +424,8 @@ class XtreamViewModel @Inject constructor(
                     series = null; episodes = emptyList()
                     cards = base
                     items = list
-                    itemsReady++
+                    // Only an OK-loaded category moves focus into the grid; the auto-loaded first one does not.
+                    if (announce) itemsReady++
                 }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; error = true }
         } finally {
