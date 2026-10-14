@@ -284,15 +284,72 @@ class XtreamViewModel @Inject constructor(
     fun resumeOf(item: XtreamItem): Long = resumeKeyOf("m", item.id)?.let { resumePrefs.getLong(it, 0L) } ?: 0L
     fun resumeOf(episode: XtreamEpisode): Long = resumeKeyOf("e", episode.id)?.let { resumePrefs.getLong(it, 0L) } ?: 0L
 
+    /** 0..1 for the progress line on a card (0 when nothing to resume). */
+    fun progressOf(item: XtreamItem): Float = resumeKeyOf("m", item.id)?.let { key ->
+        com.enigmacast.domain.resume.ResumePolicy.fraction(
+            com.enigmacast.domain.resume.ResumePoint(key, resumePrefs.getLong(key, 0L), resumePrefs.getLong("$key$DURATION", 0L)), 0L,
+        )
+    } ?: 0f
+
     private fun saveResume() {
         val key = resumeKey ?: return
         val p = player ?: return
-        val pos = p.currentPosition
-        val dur = p.duration
         val edit = resumePrefs.edit()
-        if (pos > 60_000 && dur > 0 && pos < dur - 120_000) edit.putLong(key, pos) else edit.remove(key)
+        when (val keep = IptvResume.toStore(p.currentPosition, p.duration)) {
+            null -> edit.remove(key).remove("$key$DURATION")
+            else -> edit.putLong(key, keep).putLong("$key$DURATION", p.duration)
+        }
         edit.apply()
+        resumeVersion++
     }
+
+    /** Bumped whenever a position is saved, so cards redraw their progress line. */
+    var resumeVersion by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    /** "Resume from … / Start from the beginning" before a film or episode with a saved place. */
+    data class ResumeAsk(val title: String, val positionMs: Long, val play: (fromStart: Boolean) -> Unit)
+    var resumeAsk by mutableStateOf<ResumeAsk?>(null)
+        private set
+
+    fun requestFilm(item: XtreamItem, onStarted: () -> Unit) {
+        val offer = IptvResume.offer(resumeOf(item))
+        if (offer == null) { playFilm(item, fromStart = true); onStarted() }
+        else resumeAsk = ResumeAsk(item.name, offer) { fromStart -> playFilm(item, fromStart); onStarted() }
+    }
+
+    fun requestEpisode(episode: XtreamEpisode, show: XtreamItem? = series, onStarted: () -> Unit) {
+        val offer = IptvResume.offer(resumeOf(episode))
+        if (offer == null) { playEpisode(episode, show, fromStart = true); onStarted() }
+        else resumeAsk = ResumeAsk(episode.title, offer) { fromStart -> playEpisode(episode, show, fromStart); onStarted() }
+    }
+
+    fun answerResume(fromStart: Boolean) { val ask = resumeAsk ?: return; resumeAsk = null; ask.play(fromStart) }
+    fun dismissResume() { resumeAsk = null }
+
+    /** Films and episodes: position for the seek bar twice a second, the resume place every 5 s. */
+    private var tickJob: Job? = null
+    private fun startTicker() {
+        tickJob?.cancel()
+        tickJob = viewModelScope.launch {
+            var sinceSave = 0L
+            while (true) {
+                delay(500)
+                val p = player ?: continue
+                playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = p.duration.takeIf { it > 0 } ?: 0L)
+                sinceSave += 500
+                if (sinceSave >= com.enigmacast.domain.resume.ResumePolicy.SAVE_EVERY_MS && p.isPlaying) { sinceSave = 0; saveResume() }
+            }
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        val p = player ?: return
+        p.seekTo(positionMs.coerceAtLeast(0))
+        playerState = playerState.copy(positionMs = positionMs.coerceAtLeast(0))
+    }
+
+    fun seekBy(deltaMs: Long) { player?.let { seekTo(it.currentPosition + deltaMs) } }
 
     fun playFilm(item: XtreamItem, fromStart: Boolean) {
         val account = account ?: return
@@ -600,6 +657,7 @@ class XtreamViewModel @Inject constructor(
             prepare()
             playWhenReady = true
         }
+        if (live) { tickJob?.cancel(); tickJob = null } else startTicker()
     }
 
     fun chooseAudio(id: String) {
@@ -637,6 +695,7 @@ class XtreamViewModel @Inject constructor(
 
     /** Leaving the page: the stream stops, the lists stay for next time. */
     fun stop() {
+        tickJob?.cancel()
         saveResume()
         resumeKey = null
         playbackOwner.release(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
@@ -669,3 +728,17 @@ data class IptvCard(val key: String, val item: XtreamItem, val base: com.enigmac
                 .map { IptvCard(it.key, it.value, com.enigmacast.data.xtream.IptvVod.film(it.value, null)) }
     }
 }
+
+/** Resume rules of the recordings (Library), for IPTV films and episodes. */
+object IptvResume {
+    /** The position to keep, or null to forget it (too early, or watched to the end). */
+    fun toStore(positionMs: Long, durationMs: Long): Long? {
+        if (positionMs < com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS) return null
+        if (durationMs > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(positionMs, durationMs)) return null
+        return positionMs
+    }
+
+    fun offer(savedMs: Long): Long? = savedMs.takeIf { it >= com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS }
+}
+
+private const val DURATION = "/d"

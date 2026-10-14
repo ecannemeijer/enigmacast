@@ -95,6 +95,12 @@ fun XtreamScreen(onBack: () -> Unit) {
     val rootFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
     var quickBar by remember { mutableStateOf(false) }
+    // Films and episodes: the recordings' seek bar (OK, Left/Right, FF/RW show it; Down opens the options).
+    var vodBar by remember { mutableStateOf(false) }
+    var vodBarTouch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(vodBar, vodBarTouch, quickBar) {
+        if (vodBar && !quickBar) { delay(VOD_BAR_MS); vodBar = false; openRequest++ }
+    }
     var quickToken by remember { mutableIntStateOf(0) }
 
     fun showBanner(fromZap: Boolean, withDetails: Boolean = false) {
@@ -151,7 +157,8 @@ fun XtreamScreen(onBack: () -> Unit) {
     }
     BackHandler {
         when {
-            quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
+            quickBar -> { quickBar = false; vodBar = false; bannerUntil = 0L; openRequest++ }
+            vodBar -> { vodBar = false; openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS }
             // Films / Series: grid → categories → Live TV / Films / Series.
             panelOpen && column == PanelColumn.VOD_GRID -> { column = PanelColumn.VOD_CATEGORIES; openRequest++ }
@@ -173,6 +180,17 @@ fun XtreamScreen(onBack: () -> Unit) {
                 if (panelOpen || quickBar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
                 if (code == android.view.KeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
+                val playingVod = model.playing?.let { it.episode != null || it.item?.section == XtreamSection.MOVIES } == true
+                if (playingVod) {
+                    when (VodBarKeys.action(code, vodBar)) {
+                        VodBarKeys.Action.SHOW -> { if (e.nativeKeyEvent.repeatCount == 0) { vodBar = true; vodBarTouch++ }; return@onPreviewKeyEvent true }
+                        VodBarKeys.Action.FORWARD -> { model.seekBy(VodBarKeys.FF_MS); vodBar = true; vodBarTouch++; return@onPreviewKeyEvent true }
+                        VodBarKeys.Action.REWIND -> { model.seekBy(-VodBarKeys.FF_MS); vodBar = true; vodBarTouch++; return@onPreviewKeyEvent true }
+                        VodBarKeys.Action.PAUSE -> { if (e.nativeKeyEvent.repeatCount == 0) { model.togglePause(); vodBarTouch++ }; return@onPreviewKeyEvent true }
+                        VodBarKeys.Action.BAR -> { vodBarTouch++; return@onPreviewKeyEvent false }
+                        VodBarKeys.Action.PLAYER -> Unit
+                    }
+                }
                 val bannerShown = model.playing != null && System.currentTimeMillis() < bannerUntil
                 val playing = model.playing
                 val vod = playing != null && (playing.episode != null || playing.item?.section == XtreamSection.MOVIES)
@@ -204,6 +222,19 @@ fun XtreamScreen(onBack: () -> Unit) {
             )
         }
 
+        model.resumeAsk?.let { ask ->
+            com.enigmacast.ui.theme.TvChoiceDialog(
+                title = stringResource(R.string.resume_title),
+                message = ask.title,
+                choices = listOf(
+                    stringResource(R.string.resume_from, com.enigmacast.domain.resume.ResumePolicy.clock(ask.positionMs)),
+                    stringResource(R.string.resume_start_over),
+                ),
+                onChoose = { i -> model.answerResume(fromStart = i == 1) },
+                onDismiss = model::dismissResume,
+                compact = true,
+            )
+        }
         val accounts = detection?.accounts.orEmpty()
         when {
             detection == null -> Centered { EnigmaLoadingIndicator() }
@@ -241,7 +272,21 @@ fun XtreamScreen(onBack: () -> Unit) {
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
             LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay(500) } }
-            if (!panelOpen && (quickBar || now < bannerUntil)) {
+            if (!panelOpen && vodBar) {
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    com.enigmacast.ui.remote.RecordingBar(
+                        title = playing.title,
+                        positionMs = model.playerState.positionMs,
+                        durationMs = model.playerState.durationMs,
+                        playing = model.playerState.playing,
+                        onSeek = { model.seekTo(it); vodBarTouch++ },
+                        onTogglePause = { model.togglePause(); vodBarTouch++ },
+                        onOptions = { quickBar = true; quickToken++ },
+                        onTouch = { vodBarTouch++ },
+                    )
+                    if (quickBar) IptvOsd(model, playing, true, quickToken, details, Modifier)
+                }
+            } else if (!panelOpen && (quickBar || now < bannerUntil)) {
                 IptvOsd(model, playing, quickBar, quickToken, details, Modifier.align(Alignment.BottomCenter))
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
@@ -391,7 +436,7 @@ private fun SidePanel(
                     itemsIndexed(keyedEpisodes, key = { _, k -> k.key }) { index, k ->
                         val e = k.value
                         CompactListRow(
-                            onClick = { model.playEpisode(e); onPlayed() },
+                            onClick = { model.requestEpisode(e, onStarted = onPlayed) },
                             selected = model.playing?.episode?.id == e.id,
                             modifier = Modifier
                                 .then(if (index == 0) Modifier.focusRequester(itemFocus) else Modifier)
@@ -567,5 +612,28 @@ private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Bo
                     .padding(8.dp),
             )
         }
+    }
+}
+
+private const val VOD_BAR_MS = 5_000L
+
+/**
+ * Keys while a film or episode plays in full screen. Without the bar, OK / Left / Right show it;
+ * with it, the D-pad belongs to the bar (line, ±30, pause, Down to the options). FF / RW skip
+ * and Play/Pause toggles in both cases; everything else goes to the IPTV player keys.
+ */
+internal object VodBarKeys {
+    const val FF_MS = 30_000L
+
+    enum class Action { SHOW, FORWARD, REWIND, PAUSE, BAR, PLAYER }
+
+    fun action(keyCode: Int, barShown: Boolean): Action = when (keyCode) {
+        android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> Action.FORWARD
+        android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> Action.REWIND
+        android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, android.view.KeyEvent.KEYCODE_MEDIA_PLAY, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> Action.PAUSE
+        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+        android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+        android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (barShown) Action.BAR else if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) Action.PLAYER else Action.SHOW
+        else -> if (barShown) Action.BAR else Action.PLAYER
     }
 }

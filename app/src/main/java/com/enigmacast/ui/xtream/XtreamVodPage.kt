@@ -1,5 +1,8 @@
 package com.enigmacast.ui.xtream
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -187,6 +190,13 @@ internal fun XtreamVodPage(
                                 },
                             onFocus = { focused = film },
                             onClick = { model.openDetail(item) },
+                            overlay = {
+                                val progress = remember(item, model.resumeVersion) { model.progressOf(item) }
+                                if (progress > 0f) {
+                                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.Black.copy(alpha = 0.5f)))
+                                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(progress).height(4.dp).background(com.enigmacast.ui.recording.RecordRed))
+                                }
+                            },
                             lines = {
                                 film.movie.year?.let { Text(it.toString(), color = EnigmaColors.Subtle, fontSize = 11.sp) }
                                 if (model.resumeOf(item) > 0) Text(stringResource(R.string.iptv_resume_badge), color = EnigmaColors.Accent, fontSize = 11.sp)
@@ -217,9 +227,10 @@ internal fun XtreamVodPage(
             cachedPicon = { null },
             channel = BouquetEntry(item.name, "iptv:${item.id}"),
             vod = VodDetail(
-                onPlay = if (isSeries) null else ({ model.closeDetail(); model.playFilm(item, fromStart = true); onPlayed() }),
-                resumeLabel = if (!isSeries && resume > 0) stringResource(R.string.iptv_resume, clock(resume)) else null,
-                onResume = if (!isSeries && resume > 0) ({ model.closeDetail(); model.playFilm(item, fromStart = false); onPlayed() }) else null,
+                // A saved place is offered in the same "Resume playback?" dialog as recordings.
+                onPlay = if (isSeries) null else ({ model.closeDetail(); model.requestFilm(item, onPlayed) }),
+                resumeLabel = null,
+                onResume = null,
                 below = if (isSeries) ({ Episodes(model, item, onPlayed) }) else null,
             ),
         )
@@ -259,8 +270,7 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
                     down = FocusRequester.Cancel
                 }) {
                     model.closeDetail()
-                    model.playEpisode(e, show)
-                    onPlayed()
+                    model.requestEpisode(e, show, onPlayed)
                 }
             }
         }

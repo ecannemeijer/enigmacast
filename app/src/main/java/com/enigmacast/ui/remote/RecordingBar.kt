@@ -71,17 +71,41 @@ fun RecordingBar(
     onOptions: () -> Unit,
     onTouch: () -> Unit,
     modifier: Modifier = Modifier,
+) = RecordingBar(
+    title = ui.fileTitle.ifBlank { stringResource(R.string.nav_my_items) },
+    positionMs = ui.playerState.positionMs,
+    durationMs = ui.playerState.durationMs,
+    playing = ui.playerState.playing,
+    onSeek = onSeek,
+    onTogglePause = onTogglePause,
+    onOptions = onOptions,
+    onTouch = onTouch,
+    modifier = modifier,
+)
+
+/** The same bar for any file the app plays itself (recordings, IPTV films and episodes). */
+@Composable
+fun RecordingBar(
+    title: String,
+    positionMs: Long,
+    durationMs: Long,
+    playing: Boolean,
+    onSeek: (Long) -> Unit,
+    onTogglePause: () -> Unit,
+    onOptions: () -> Unit,
+    onTouch: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val duration = ui.playerState.durationMs
-    var shown by remember { mutableLongStateOf(ui.playerState.positionMs) }
+    val duration = durationMs
+    var shown by remember { mutableLongStateOf(positionMs) }
     var scrubbing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var commit by remember { mutableStateOf<Job?>(null) }
     val lineFocus = remember { FocusRequester() }
     val pauseFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { lineFocus.requestWhenReady() }
-    LaunchedEffect(ui.playerState.positionMs, scrubbing) {
-        if (!scrubbing) shown = ui.playerState.positionMs
+    LaunchedEffect(positionMs, scrubbing) {
+        if (!scrubbing) shown = positionMs
     }
 
     fun endMs(): Long = duration.takeIf { it > 0 } ?: (shown + SKIP_STEP_MS).coerceAtLeast(SKIP_STEP_MS)
@@ -112,7 +136,7 @@ fun RecordingBar(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            ui.fileTitle.ifBlank { stringResource(R.string.nav_my_items) },
+            title,
             color = Color.White,
             fontSize = 22.sp,
             fontWeight = EnigmaType.Strong,
@@ -154,7 +178,7 @@ fun RecordingBar(
         ) {
             TransportButton("−30", -SKIP_STEP_MS, ::nudge, ::release)
             TransportButton(
-                label = if (ui.playerState.playing) "❚❚" else "▶",
+                label = if (playing) "❚❚" else "▶",
                 stepMs = 0,
                 onNudge = { _: Long -> },
                 onRelease = {},
@@ -180,9 +204,10 @@ private fun ProgressLine(
         modifier = modifier
             .height(22.dp)
             .onKeyEvent { event ->
+                val step = SeekSteps.scrub(event.nativeKeyEvent.repeatCount)
                 val delta = when (event.key) {
-                    Key.DirectionLeft -> -SCRUB_STEP_MS
-                    Key.DirectionRight -> SCRUB_STEP_MS
+                    Key.DirectionLeft -> -step
+                    Key.DirectionRight -> step
                     else -> return@onKeyEvent false
                 }
                 when (event.type) {
@@ -264,4 +289,13 @@ private fun clock(ms: Long): String {
     val minutes = (total % 3600) / 60
     val seconds = total % 60
     return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
+/** Holding Left/Right on the line goes faster: 10 s steps, then 30 s, then 60 s. */
+object SeekSteps {
+    fun scrub(repeatCount: Int): Long = when {
+        repeatCount >= 20 -> 60_000L
+        repeatCount >= 8 -> 30_000L
+        else -> SCRUB_STEP_MS
+    }
 }
