@@ -71,6 +71,15 @@ class XtreamViewModel @Inject constructor(
         private set
     var loading by mutableStateOf(false)
         private set
+    /** The category whose list is being fetched after OK; the shown list stays until it arrives. */
+    var pendingCategory by mutableStateOf<XtreamCategory?>(null)
+        private set
+    /** Goes up when a list loaded through OK is ready: the screen moves focus into it. */
+    var itemsReady by mutableStateOf(0)
+        private set
+    /** Goes up when the categories of a section chosen with OK are ready. */
+    var categoriesReady by mutableStateOf(0)
+        private set
     var error by mutableStateOf(false)
         private set
     var playing by mutableStateOf<XtreamPlaying?>(null)
@@ -129,28 +138,43 @@ class XtreamViewModel @Inject constructor(
             runCatching { repository.categories(account, section) }
                 .onSuccess { list ->
                     categories = list
-                    list.firstOrNull()?.let { loadCategory(account, it) }
+                    categoriesReady++
                 }
                 .onFailure { error = true }
             loading = false
         }
     }
 
+    /**
+     * OK on a category: fetches its list (cancelling a fetch that was still running). The list on
+     * screen stays until the new one is there. OK on the category that is shown only moves focus.
+     */
     fun selectCategory(category: XtreamCategory) {
-        if (category.id == this.category?.id && series == null) return
         val account = account ?: return
+        if (category.id == this.category?.id && series == null && pendingCategory == null && items.isNotEmpty()) {
+            itemsReady++
+            return
+        }
         loadJob?.cancel()
         loadJob = viewModelScope.launch { loadCategory(account, category) }
     }
 
     private suspend fun loadCategory(account: XtreamAccount, category: XtreamCategory, force: Boolean = false) {
-        this.category = category
-        series = null; episodes = emptyList()
+        pendingCategory = category
         loading = true; error = false
-        runCatching { repository.items(account, section, category.id, force) }
-            .onSuccess { items = it }
-            .onFailure { items = emptyList(); error = true }
-        loading = false
+        try {
+            runCatching { repository.items(account, section, category.id, force) }
+                .onSuccess {
+                    this.category = category
+                    series = null; episodes = emptyList()
+                    items = it
+                    itemsReady++
+                }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; error = true }
+        } finally {
+            if (pendingCategory?.id == category.id) pendingCategory = null
+            loading = false
+        }
     }
 
     fun refresh() {
@@ -169,12 +193,14 @@ class XtreamViewModel @Inject constructor(
         val account = account ?: return
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            series = item
             loading = true; error = false
-            runCatching { repository.episodes(account, item.id) }
-                .onSuccess { episodes = it }
-                .onFailure { episodes = emptyList(); error = true }
-            loading = false
+            try {
+                runCatching { repository.episodes(account, item.id) }
+                    .onSuccess { episodes = it; series = item; itemsReady++ }
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; error = true }
+            } finally {
+                loading = false
+            }
         }
     }
 

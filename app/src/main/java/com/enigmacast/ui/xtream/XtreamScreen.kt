@@ -83,7 +83,10 @@ fun XtreamScreen(onBack: () -> Unit) {
 
     LaunchedEffect(detection) { model.open() }
     DisposableEffect(Unit) { onDispose { model.stop() } }
-    LaunchedEffect(panelOpen, openRequest, model.items.isNotEmpty(), model.categories.isNotEmpty()) {
+    // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
+    LaunchedEffect(model.categoriesReady) { if (model.categoriesReady > 0 && panelOpen) categoryFocus.requestWhenReady() }
+    LaunchedEffect(model.itemsReady) { if (model.itemsReady > 0 && panelOpen) itemFocus.requestWhenReady() }
+    LaunchedEffect(panelOpen, openRequest) {
         if (panelOpen) {
             if (!itemFocus.requestWhenReady(4) && !categoryFocus.requestWhenReady(4)) sectionFocus.requestWhenReady()
         } else {
@@ -187,7 +190,6 @@ private fun SidePanel(
                     selected = s == model.section,
                     modifier = Modifier
                         .then(if (s == model.section) Modifier.focusRequester(sectionFocus) else Modifier)
-                        .onFocusChanged { if (it.isFocused) model.selectSection(s) }
                         .focusProperties {
                             left = FocusRequester.Cancel
                             right = categoryFocus
@@ -207,6 +209,7 @@ private fun SidePanel(
             Header(stringResource(R.string.xtream_categories), model.loading && model.categories.isEmpty())
             val state = rememberLazyListState()
             val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
+            val hasList = if (model.series != null) model.episodes.isNotEmpty() else model.items.isNotEmpty()
             LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
             LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
                 itemsIndexed(model.categories, key = { _, c -> c.id }) { index, c ->
@@ -215,14 +218,17 @@ private fun SidePanel(
                         selected = c.id == model.category?.id,
                         modifier = Modifier
                             .then(if (index == selectedIndex) Modifier.focusRequester(categoryFocus) else Modifier)
-                            .onFocusChanged { if (it.isFocused) model.selectCategory(c) }
                             .focusProperties {
                                 left = sectionFocus
-                                right = itemFocus
+                                // Right only enters a list that is already there; OK loads one.
+                                right = if (hasList) itemFocus else FocusRequester.Cancel
                                 if (index == 0) up = FocusRequester.Cancel
                                 if (index == model.categories.lastIndex) down = FocusRequester.Cancel
                             },
-                    ) { Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    ) {
+                        Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        if (model.pendingCategory?.id == c.id) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
+                    }
                 }
             }
         }
