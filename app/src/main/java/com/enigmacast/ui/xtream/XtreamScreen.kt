@@ -71,9 +71,10 @@ private enum class PanelColumn { CATEGORIES, CHANNELS, GUIDE, VOD_CATEGORIES, VO
 /**
  * IPTV in full screen, laid out and driven like the Enigma2 channel player. The list opens on
  * the channels only; Right shows the focused channel's programmes, Left the categories.
- * Left or Back from the categories returns to the IPTV menu. Categories still load on OK. With the list closed the keys
- * follow [IptvPlayerKeys]: Up/Down zap (Up = next), OK shows the banner, Down on that banner
- * opens the options row.
+ * While a live stream plays, one Back closes the channel list or the categories and stays full
+ * screen; Back on the banner hides it, and Back on the bare picture leaves. Films keep their
+ * own Back. With the list closed the keys follow [IptvPlayerKeys]: Up/Down zap (Up = next),
+ * OK shows the banner, Down on that banner opens the options row.
  */
 @Composable
 fun XtreamScreen(onBack: () -> Unit) {
@@ -173,7 +174,32 @@ fun XtreamScreen(onBack: () -> Unit) {
         model.exitToOrigin()
         onBack()
     }
+    fun playingLive() = model.playing?.item?.section == XtreamSection.LIVE
+    // Preview and BackHandler can both see one press; the second call in that window is ignored.
+    val liveBackAt = remember { longArrayOf(0L) }
+    fun liveBack() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - liveBackAt[0] < 80L) return
+        liveBackAt[0] = now
+        val bannerShown = System.currentTimeMillis() < bannerUntil
+        when {
+            quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
+            panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
+            panelOpen && column == PanelColumn.CHANNELS && model.series != null -> { model.closeSeries(); openRequest++ }
+            panelOpen && (column == PanelColumn.CHANNELS || column == PanelColumn.CATEGORIES) -> {
+                panelOpen = false
+                model.closeGuide()
+                openRequest++
+            }
+            bannerShown -> { bannerUntil = 0L; details = false; openRequest++ }
+            else -> leave()
+        }
+    }
     BackHandler {
+        if (playingLive()) {
+            liveBack()
+            return@BackHandler
+        }
         when {
             quickBar -> { quickBar = false; vodBar = false; bannerUntil = 0L; openRequest++ }
             vodBar -> { vodBar = false; openRequest++ }
@@ -200,8 +226,13 @@ fun XtreamScreen(onBack: () -> Unit) {
             .background(androidx.compose.ui.graphics.Color.Black)
             .focusRequester(rootFocus)
             .onPreviewKeyEvent { e ->
-                if (panelOpen || quickBar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
+                // Consume Back before the focused row can drop focus, then act once on release.
+                if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
+                    if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
+                    return@onPreviewKeyEvent true
+                }
+                if (panelOpen || quickBar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (code == android.view.KeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
                 val playingVod = model.playing?.let { it.episode != null || it.item?.section == XtreamSection.MOVIES } == true
                 if (playingVod) {
@@ -362,10 +393,10 @@ private fun SidePanel(
             .padding(horizontal = EnigmaColors.SafeHorizontal / 2, vertical = EnigmaColors.SafeVertical),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Categories are the left column. Left returns to the IPTV menu.
+        // Categories are the left column. Left returns to the menu, except while live plays.
         if (model.section == XtreamSection.LIVE && column == PanelColumn.CATEGORIES) Column(
             Modifier.width(240.dp).columnKeys(
-                onLeft = onLeave,
+                onLeft = if (model.playing?.item?.section == XtreamSection.LIVE) null else onLeave,
                 // Right only enters a list that is already there.
                 onRight = { if (hasList) onColumn(PanelColumn.CHANNELS) },
             ),

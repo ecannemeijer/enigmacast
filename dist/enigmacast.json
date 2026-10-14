@@ -1,6 +1,6 @@
 {
-  "versionCode": 25,
-  "versionName": "1.0.0-beta.22",
+  "versionCode": 30,
+  "versionName": "1.0.0-beta.27",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Pause and resume live TV with timeshift. OK opens the next menu on its first item. Hold Back for the full-screen stream."
+  "notes": "Switch receiver from Home or the Red key. Playback stops when the app goes to the background and resumes when you come back."
 }

@@ -1,6 +1,6 @@
 {
-  "versionCode": 30,
-  "versionName": "1.0.0-beta.27",
+  "versionCode": 36,
+  "versionName": "1.0.0-beta.33",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "New: EnigmaCast accounts with Free and Premium. Create an account in the setup wizard and enjoy a free Premium trial (2 years during the beta). Premium unlocks multiple receivers, Movies, Series, Soccer and the TV Guide. Manage your account in Settings › Account. Up to 10 devices per account."
+  "notes": "D-pad stops at the top and bottom of My items, Search and the IPTV grid. An IPTV stream in front is no longer replaced by a background Enigma2 start."
 }
