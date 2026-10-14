@@ -99,6 +99,10 @@ fun CompactListRow(
             }
             .onGloballyPositioned { lastCoords = it; if (focused) onPlaced(it) }
             .background(background, CompactShape)
+            .then(
+                ActiveSkin.current.palette.focusBrush?.takeIf { focused && drawFocus }
+                    ?.let { Modifier.background(androidx.compose.ui.graphics.Brush.verticalGradient(it), CompactShape) } ?: Modifier,
+            )
             .skinFocusEdge(focused && drawFocus, 6.dp)
             .edgeLeft()
             .onKeyEvent { event ->

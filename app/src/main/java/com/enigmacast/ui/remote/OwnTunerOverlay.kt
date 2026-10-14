@@ -282,7 +282,7 @@ internal fun ChannelBanner(
     val info: @Composable () -> Unit = { BannerInfo(player, osdInfo, osdFields, osdSkin, optionsHint) }
     when (layout) {
         OsdLayout.PLI_BAR -> {
-            PliBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, modifier)
+            PliHdInfoBar(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, OsdInfoPresenter.present(osdInfo, osdFields), osdInfo, player, modifier)
             return
         }
         OsdLayout.FLAT -> {

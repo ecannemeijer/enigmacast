@@ -38,6 +38,8 @@ data class SkinPalette(
     /** Second colour of the OSD gradient; equal to [osdFill] for a flat bar. */
     val osdFillEnd: Color,
     val osdEdge: Color,
+    /** Gradient drawn on a focused row instead of the flat [focus] colour (OpenPLi's sel.png), or null. */
+    val focusBrush: List<Color>? = null,
 )
 
 /** How a focused control is marked. */
@@ -90,19 +92,24 @@ object Skins {
         cornerScale = 1f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.FILL, osd = OsdLayout.CARD,
     )
 
-    /** OpenPLi PLi-HD: blue-grey gradient bars, blue selection bar, orange/yellow accents, square-ish corners. */
+    /**
+     * OpenPLi PLi-HD (littlesat/skin-PLiHD, PLi-HD/skin.xml): near-black #101214 screens,
+     * a glossy blue-grey selection bar (buttons/sel.png) with secondFG yellow text, yellow
+     * clock and accents, grey secondary text, square corners, one semi-bold sans font.
+     */
     val OpenPli = Skin(
         id = OsdSkinId.OPENPLI,
         palette = SkinPalette(
-            canvas = Color(0xFF0B1626), card = Color(0xFF142640), cardBorder = Color(0xFF2B4466),
-            raised = Color(0xFF1B3152), selected = Color(0xFF203A5E), focus = Color(0xFF2F64A8),
-            onFocus = Color.White, accent = Color(0xFFFF9C00), highlight = Color(0xFFFFD200),
-            secondary = Color(0xFF9FB4CF), onAccent = Color.Black, text = Color.White,
-            muted = Color(0xFFC9D2DE), subtle = Color(0xFF8B98AB), success = Color(0xFF5FD35F),
-            danger = Color(0xFFFF4A3D), dangerFocus = Color(0xFFB22222),
-            osdFill = Color(0xFF26405F), osdFillEnd = Color(0xFF0A1424), osdEdge = Color(0xFFFF9C00),
+            canvas = Color(0xFF101214), card = Color(0xFF16181B), cardBorder = Color(0xFF33333A),
+            raised = Color(0xFF242424), selected = Color(0xFF303240), focus = Color(0xFF2B3745),
+            onFocus = Color(0xFFFCC000), accent = Color(0xFFFFC000), highlight = Color(0xFFFCC000),
+            secondary = Color(0xFF879CE1), onAccent = Color.Black, text = Color(0xFFF0F0F0),
+            muted = Color(0xFFAAAAAA), subtle = Color(0xFF555556), success = Color(0xFF56C856),
+            danger = Color(0xFFFF4A3C), dangerFocus = Color(0xFF4C0000),
+            osdFill = Color(0xFF101214), osdFillEnd = Color(0xFF101214), osdEdge = Color(0xFF33333A),
+            focusBrush = listOf(Color(0xFF939FAB), Color(0xFF647080), Color(0xFF2B3745), Color(0xFF061220), Color(0xFF0D1E2E), Color(0xFF435260)),
         ),
-        cornerScale = 0.25f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.FILL, osd = OsdLayout.PLI_BAR,
+        cornerScale = 0f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.FILL, osd = OsdLayout.PLI_BAR,
     )
 
     /** OLED black: no grey canvas, white outline focus, teal accent. */

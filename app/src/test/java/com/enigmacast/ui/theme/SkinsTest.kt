@@ -42,4 +42,15 @@ class SkinsTest {
     fun layoutsAreDistinct() {
         assertEquals(Skins.all.size, Skins.all.map { it.osd }.toSet().size)
     }
+
+    @Test
+    fun openPliUsesThePliHdSkinColours() {
+        val p = Skins.OpenPli.palette
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF101214), p.canvas)   // noTransBG
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFCC000), p.onFocus)  // selectedFG
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFF0F0F0), p.text)     // foreground
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFAAAAAA), p.muted)    // grey
+        assertEquals(0f, Skins.OpenPli.cornerScale)
+        assertEquals(6, p.focusBrush?.size)
+    }
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -49,14 +50,15 @@ import com.enigmacast.ui.theme.skinShape
 fun SkinChooser(selected: OsdSkinId, onSelect: (OsdSkinId) -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        // Five equal tiles that share the content width, so all of them are always on screen.
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Skins.all.forEachIndexed { index, skin ->
             SkinTile(
                 skin,
                 selected = skin.id == selected,
                 onClick = { onSelect(skin.id) },
-                modifier = if (index == 0) Modifier.edgeLeft() else Modifier,
+                modifier = Modifier.weight(1f).then(if (index == 0) Modifier.edgeLeft() else Modifier),
             )
         }
     }
@@ -69,20 +71,19 @@ private fun SkinTile(skin: Skin, selected: Boolean, onClick: () -> Unit, modifie
     val shape = skinShape(10.dp)
     Column(
         modifier
-            .width(150.dp)
-            .scale(if (focused) 1.06f else 1f)
+            .scale(if (focused) 1.04f else 1f)
             .background(if (focused) EnigmaColors.Focus else if (selected) EnigmaColors.Selected else EnigmaColors.Raised, shape)
             .border(2.dp, if (focused) EnigmaColors.OnFocus else if (selected) EnigmaColors.Accent else EnigmaColors.CardBorder, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(8.dp),
     ) {
-        SkinThumbnail(skin, Modifier.fillMaxWidth().height(76.dp))
+        SkinThumbnail(skin, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(skin.id.label),
                 color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Text,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = EnigmaType.Strong,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -110,12 +111,15 @@ internal fun SkinThumbnail(skin: Skin, modifier: Modifier = Modifier) {
         Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(10.dp).background(p.accent, CircleShape))
         val bar = Modifier.align(Alignment.BottomCenter)
         when (skin.osd) {
-            OsdLayout.PLI_BAR -> Column(bar.fillMaxWidth()) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(p.accent))
-                Box(Modifier.fillMaxWidth().height(22.dp).background(Brush.verticalGradient(listOf(p.osdFill, p.osdFillEnd)))) {
-                    Box(Modifier.padding(start = 6.dp, top = 5.dp).width(28.dp).height(4.dp).background(p.highlight))
-                    Box(Modifier.padding(start = 6.dp, top = 13.dp).width(80.dp).height(3.dp).background(p.accent))
-                }
+            OsdLayout.PLI_BAR -> Box(
+                bar.fillMaxWidth().height(26.dp)
+                    .background(Brush.verticalGradient(listOf(p.osdFill.copy(alpha = 0f), p.osdFill.copy(alpha = 0.82f), p.osdFill.copy(alpha = 0.82f)))),
+            ) {
+                // Yellow clock left, then name, the bronze progress bar and two event lines.
+                Box(Modifier.padding(start = 5.dp, top = 9.dp).width(12.dp).height(4.dp).background(p.highlight))
+                Box(Modifier.padding(start = 22.dp, top = 9.dp).width(36.dp).height(4.dp).background(p.text))
+                Box(Modifier.padding(start = 22.dp, top = 15.dp).width(80.dp).height(2.dp).background(androidx.compose.ui.graphics.Color(0xFF4C3811)))
+                Box(Modifier.padding(start = 22.dp, top = 19.dp).width(60.dp).height(2.dp).background(p.muted))
             }
             OsdLayout.FLAT -> Row(bar.padding(4.dp).fillMaxWidth().height(20.dp).background(p.osdFill)) {
                 Box(Modifier.width(18.dp).height(20.dp).background(p.accent))
