@@ -105,9 +105,20 @@ class SyncEngine @Inject constructor(
                 }
             }
             val horizonSec = today.startSec + values.epgDays * 24 * 3600L
-            val epgDue = changed || force ||
-                SyncPolicy.isDue(values.epgPerDay, last(rk, SyncKind.EPG), nowMs, dao.eventCount(rk, today.startSec, today.endSec) > 0)
-            if (epgDue) {
+            val epgState = dao.syncState(rk, SyncKind.EPG.name)
+            val epgReason = com.enigmacast.domain.sync.EpgSyncDecision.decide(
+                force = force,
+                channelsChanged = changed,
+                hasGuideToday = dao.eventCount(rk, today.startSec, today.endSec) > 0,
+                timesPerDay = values.epgPerDay,
+                lastSuccessMs = epgState?.lastSuccessMs ?: 0L,
+                lastAttemptMs = epgState?.lastAttemptMs ?: 0L,
+                nowMs = nowMs,
+            )
+            EnigmaLog.service("sync epg decision receiver=$rk: $epgReason")
+            if (com.enigmacast.domain.sync.EpgSyncDecision.runs(epgReason)) {
+                // Marked as started first, so a download that never finishes is not redone on every start.
+                dao.putSyncState(SyncStateRow(rk, SyncKind.EPG.name, epgState?.lastSuccessMs ?: 0L, nowMs, epgState?.error.orEmpty(), epgState?.contentHash.orEmpty()))
                 attempt(rk, SyncKind.EPG) { syncEpg(receiver, rk, today.startSec - 4 * 3600, horizonSec) }
                 changed = true
             }
@@ -214,8 +225,12 @@ class SyncEngine @Inject constructor(
         val perBouquet = bouquets.map { bouquet ->
             async {
                 gate.withPermit {
-                    var events = runCatching { api.bouquetEvents(receiver, bouquet.reference, fromSec, minutes) }.getOrDefault(emptyList())
-                    if (events.isEmpty()) {
+                    // Per-channel requests only when the bouquet request itself failed: a bouquet whose
+                    // channels have no guide (an empty answer) would otherwise cost 40 calls every sync.
+                    val multi = runCatching { api.bouquetEvents(receiver, bouquet.reference, fromSec, minutes) }
+                        .onFailure { if (it is CancellationException) throw it }
+                    var events = multi.getOrDefault(emptyList())
+                    if (multi.isFailure) {
                         events = channels[bouquet.reference].orEmpty().take(FALLBACK_CHANNELS).flatMap { channel ->
                             runCatching { api.serviceEvents(receiver, channel.reference) }.getOrDefault(emptyList())
                         }
