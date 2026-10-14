@@ -35,6 +35,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +62,7 @@ class XtreamViewModel @Inject constructor(
     private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
     private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
+    private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -362,6 +364,10 @@ class XtreamViewModel @Inject constructor(
     private var epgJob: Job? = null
 
     init {
+        // Categories changed in Settings: the open section is read again (from the cache).
+        viewModelScope.launch {
+            hiddenCategories.changes.drop(1).collect { if (account != null && categories.isNotEmpty()) selectSection(section, force = true) }
+        }
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(
                 settingsRepository.settings.map { Triple(it.iptvSource, it.iptvPlaylistKind, it.activeReceiver()) },
@@ -411,8 +417,12 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
-    private suspend fun categoriesOf(account: XtreamAccount, section: XtreamSection, force: Boolean = false) =
-        if (playlist != null) playlistSync.categories(section) else repository.categories(account, section, force)
+    /** The section's categories without the ones hidden in Settings › IPTV › Categories. */
+    private suspend fun categoriesOf(account: XtreamAccount, section: XtreamSection, force: Boolean = false): List<XtreamCategory> {
+        val all = if (playlist != null) playlistSync.categories(section) else repository.categories(account, section, force)
+        val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(playlist?.name, account.key)
+        return com.enigmacast.domain.xtream.IptvCategoryFilter.visible(all, hiddenCategories.hidden(source, section))
+    }
 
     private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, id: String, force: Boolean) =
         if (playlist != null) playlistSync.items(section, id) else repository.items(account, section, id, force)

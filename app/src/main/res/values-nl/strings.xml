@@ -1283,4 +1283,8 @@ Profiel: %2$s</string>
     <string name="nav_sport">Sport</string>
     <string name="nav_library">Bibliotheek</string>
     <string name="settings_iptv">IPTV</string>
+    <string name="iptv_categories_manage">Categorieën</string>
+    <string name="iptv_categories_title">Categorieën kiezen</string>
+    <string name="iptv_categories_count">%1$d van %2$d getoond</string>
+    <string name="iptv_categories_none">Deze sectie heeft geen categorieën.</string>
 </resources>

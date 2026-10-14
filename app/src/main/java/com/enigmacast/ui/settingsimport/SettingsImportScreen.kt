@@ -532,7 +532,7 @@ private fun LoadProgressCard(progress: LoadProgress?) {
 
 /** A single-line row with a checkbox, for dense lists. */
 @Composable
-private fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, trailing: String? = null) {
+internal fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, trailing: String? = null) {
     CompactListRow(
         onClick = onToggle,
         modifier = modifier,
@@ -554,7 +554,7 @@ private fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit,
 }
 
 @Composable
-private fun CheckBox(checked: Boolean, focused: Boolean) {
+internal fun CheckBox(checked: Boolean, focused: Boolean) {
     val shape = skinShape(4.dp)
     val fill = when {
         checked && focused -> EnigmaColors.OnFocus

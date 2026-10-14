@@ -1292,4 +1292,8 @@ Profil : %2$s</string>
     <string name="nav_sport">Sport</string>
     <string name="nav_library">Bibliothèque</string>
     <string name="settings_iptv">IPTV</string>
+    <string name="iptv_categories_manage">Catégories</string>
+    <string name="iptv_categories_title">Choisir les catégories</string>
+    <string name="iptv_categories_count">%1$d sur %2$d affichées</string>
+    <string name="iptv_categories_none">Cette section n\'a pas de catégories.</string>
 </resources>

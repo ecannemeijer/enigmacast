@@ -1,5 +1,11 @@
 package com.enigmacast.ui.xtream
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -68,7 +74,57 @@ class IptvSettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val store: IptvPlaylistStore,
     private val sync: IptvPlaylistSync,
+    private val xtream: com.enigmacast.data.xtream.XtreamRepository,
+    private val hidden: com.enigmacast.data.xtream.IptvHiddenCategories,
 ) : ViewModel() {
+    /** Settings › IPTV › Categories: the open section's categories and which are hidden. */
+    data class CategoryPage(
+        val section: com.enigmacast.domain.xtream.XtreamSection,
+        val loading: Boolean,
+        val categories: List<com.enigmacast.domain.xtream.XtreamCategory> = emptyList(),
+        val hidden: Set<String> = emptySet(),
+        val failed: Boolean = false,
+        val source: String = "",
+    )
+    private val _categories = MutableStateFlow<CategoryPage?>(null)
+    val categoryPage: StateFlow<CategoryPage?> = _categories
+    private var categoryJob: Job? = null
+
+    fun openCategories() = showCategories(com.enigmacast.domain.xtream.XtreamSection.LIVE)
+
+    fun showCategories(section: com.enigmacast.domain.xtream.XtreamSection) {
+        categoryJob?.cancel()
+        _categories.value = CategoryPage(section, loading = true)
+        categoryJob = viewModelScope.launch {
+            val page = runCatching {
+                // Room (playlist) or the receiver's first XStreamity account; parsing runs off the main thread.
+                val (mode, kind) = mode.value
+                if (mode == IptvSourceMode.PLAYLIST) {
+                    val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(kind.name, "")
+                    CategoryPage(section, false, sync.categories(section), hidden.hidden(source, section), source = source)
+                } else {
+                    val receiver = settingsRepository.current().activeReceiver() ?: error("no receiver")
+                    val account = (xtream.cachedDetection(receiver.id) ?: xtream.detect(receiver)).accounts.firstOrNull() ?: error("no playlist")
+                    val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(null, account.key)
+                    CategoryPage(section, false, xtream.categories(account, section), hidden.hidden(source, section), source = source)
+                }
+            }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it; CategoryPage(section, false, failed = true) }
+            _categories.value = page
+        }
+    }
+
+    private fun saveHidden(ids: Set<String>) {
+        val page = _categories.value ?: return
+        if (page.source.isBlank()) return
+        hidden.set(page.source, page.section, ids)
+        _categories.value = page.copy(hidden = ids)
+    }
+
+    fun toggleCategory(id: String) = _categories.value?.let { saveHidden(com.enigmacast.domain.xtream.IptvCategoryFilter.toggle(it.hidden, id)) }
+    fun showAllCategories() = saveHidden(com.enigmacast.domain.xtream.IptvCategoryFilter.all())
+    fun hideAllCategories() = _categories.value?.let { saveHidden(com.enigmacast.domain.xtream.IptvCategoryFilter.none(it.categories)) }
+    fun closeCategories() { categoryJob?.cancel(); _categories.value = null }
+
     val mode: StateFlow<Pair<IptvSourceMode, IptvPlaylistKind>> = settingsRepository.settings
         .map { it.iptvSource to it.iptvPlaylistKind }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IptvSourceMode.XSTREAMITY to IptvPlaylistKind.M3U)
@@ -119,6 +175,10 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     LaunchedEffect(loads) { count = model.count() }
 
     SettingsCard(stringResource(R.string.iptv_settings_card)) {
+        // Which categories the IPTV page shows, per section.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TvButton(stringResource(R.string.iptv_categories_manage), { model.openCategories() })
+        }
         val sources = IptvSourceMode.entries
         ChoiceRow(
             title = stringResource(R.string.iptv_source),
@@ -160,6 +220,8 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
         }
     }
     load?.let { IptvLoadDialog(it, onCancel = model::cancel, onClose = model::close) }
+    val categoryPage by model.categoryPage.collectAsStateWithLifecycle()
+    categoryPage?.let { IptvCategoriesDialog(it, model) }
 }
 
 @Composable
@@ -214,6 +276,103 @@ private fun IptvLoadDialog(state: IptvLoadState, onCancel: () -> Unit, onClose: 
                     fontSize = 14.sp,
                 )
                 TvButton(stringResource(R.string.close), onClose, modifier = Modifier.focusRequester(button))
+            }
+        }
+    }
+}
+
+/**
+ * Settings › IPTV › Categories, in the style of Settings Import's group picker: Live TV / Films /
+ * Series chips, Select all / Select none with "x of y shown", then a compact checkbox list.
+ * Up/Down move between the three rows and the list; Back closes.
+ */
+@Composable
+private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model: IptvSettingsViewModel) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = model::closeCategories,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        com.enigmacast.ui.theme.NavigationSoundsForWindow()
+        val sections = com.enigmacast.domain.xtream.XtreamSection.entries
+        val chipFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val allFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val noneFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val listFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { chipFocus.requestFocus() } }
+        val Cancel = androidx.compose.ui.focus.FocusRequester.Cancel
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .width(520.dp)
+                .heightIn(max = 560.dp)
+                .background(EnigmaColors.Selected, com.enigmacast.ui.theme.skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, com.enigmacast.ui.theme.skinShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.iptv_categories_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.focusGroup()) {
+                sections.forEachIndexed { index, section ->
+                    com.enigmacast.ui.theme.ChoiceChip(
+                        label = stringResource(
+                            when (section) {
+                                com.enigmacast.domain.xtream.XtreamSection.LIVE -> R.string.xtream_live
+                                com.enigmacast.domain.xtream.XtreamSection.MOVIES -> R.string.xtream_movies
+                                com.enigmacast.domain.xtream.XtreamSection.SERIES -> R.string.xtream_series
+                            },
+                        ),
+                        selected = section == page.section,
+                        onClick = { model.showCategories(section) },
+                        modifier = Modifier
+                            .then(if (section == page.section) Modifier.focusRequester(chipFocus) else Modifier)
+                            .focusProperties {
+                                up = Cancel
+                                down = if (page.categories.isNotEmpty()) allFocus else Cancel
+                                if (index == 0) left = Cancel
+                                if (index == sections.lastIndex) right = Cancel
+                            },
+                    )
+                }
+            }
+            when {
+                page.loading -> com.enigmacast.ui.components.EnigmaLoadingIndicator()
+                page.failed -> Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp)
+                page.categories.isEmpty() -> Text(stringResource(R.string.iptv_categories_none), color = EnigmaColors.Muted, fontSize = 13.sp)
+                else -> {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
+                        com.enigmacast.ui.theme.CompactButton(
+                            stringResource(R.string.import_select_all),
+                            model::showAllCategories,
+                            modifier = Modifier.focusRequester(allFocus).focusProperties { up = chipFocus; down = listFocus; left = Cancel; right = noneFocus },
+                            icon = androidx.compose.material.icons.Icons.Filled.Check,
+                        )
+                        com.enigmacast.ui.theme.CompactButton(
+                            stringResource(R.string.import_select_none),
+                            { model.hideAllCategories() },
+                            modifier = Modifier.focusRequester(noneFocus).focusProperties { up = chipFocus; down = listFocus; left = allFocus; right = Cancel },
+                        )
+                        Text(
+                            stringResource(R.string.iptv_categories_count, com.enigmacast.domain.xtream.IptvCategoryFilter.shown(page.categories, page.hidden), page.categories.size),
+                            color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1,
+                        )
+                    }
+                    val keyed = remember(page.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(page.categories, "cat") { it.id } }
+                    androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                        itemsIndexed(keyed, key = { _, k -> k.key }) { index, k ->
+                            com.enigmacast.ui.settingsimport.CompactToggle(
+                                title = k.value.name,
+                                checked = k.value.id !in page.hidden,
+                                onToggle = { model.toggleCategory(k.value.id) },
+                                modifier = Modifier
+                                    .then(if (index == 0) Modifier.focusRequester(listFocus) else Modifier)
+                                    .focusProperties {
+                                        left = Cancel; right = Cancel
+                                        if (index == 0) up = allFocus
+                                        if (index == keyed.lastIndex) down = Cancel
+                                    },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
