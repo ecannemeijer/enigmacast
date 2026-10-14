@@ -1272,4 +1272,11 @@ Profiel: %2$s</string>
     <string name="iptv_err_http">De server gaf een foutmelding.</string>
     <string name="iptv_err_unreachable">De server is niet bereikbaar.</string>
     <string name="iptv_err_empty">De playlist bevat geen items.</string>
+    <string name="iptv_play">Afspelen</string>
+    <string name="iptv_play_start">Vanaf begin</string>
+    <string name="iptv_resume">Verder vanaf %1$s</string>
+    <string name="iptv_resume_badge">Verder kijken</string>
+    <string name="iptv_season">Seizoen %1$d</string>
+    <string name="iptv_no_episodes">Geen afleveringen gevonden.</string>
+    <string name="iptv_vod_empty">Geen titels in deze categorie.</string>
 </resources>

@@ -60,6 +60,7 @@ class XtreamViewModel @Inject constructor(
     private val playlistSync: IptvPlaylistSync,
     private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
     private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
+    private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -216,6 +217,84 @@ class XtreamViewModel @Inject constructor(
         guideJob?.cancel()
         guideItem = null
         guideEvents = emptyList()
+    }
+
+    /** TMDB matches of the film and series cards, by IptvVod.key. */
+    val artwork: StateFlow<Map<String, com.enigmacast.domain.films.TmdbMovie?>> = artworkSource.movies
+    private var artworkJob: Job? = null
+
+    /** Artwork for the cards on screen; a scroll cancels the batch that was waiting. */
+    fun requestArtwork(visible: List<XtreamItem>) {
+        artworkJob?.cancel()
+        artworkJob = viewModelScope.launch {
+            delay(200)
+            artworkSource.resolve(visible)
+        }
+    }
+
+    /** The info page of a film or series (OK on a card). */
+    var detail by mutableStateOf<XtreamItem?>(null)
+        private set
+    var detailFilm by mutableStateOf<com.enigmacast.domain.films.HomeFilm?>(null)
+        private set
+    var detailEpisodes by mutableStateOf<List<XtreamEpisode>>(emptyList())
+        private set
+    var detailLoading by mutableStateOf(false)
+        private set
+    private var detailJob: Job? = null
+
+    fun openDetail(item: XtreamItem) {
+        val vod = com.enigmacast.data.xtream.IptvVod
+        detail = item
+        detailEpisodes = emptyList()
+        detailFilm = vod.film(item, artwork.value[vod.key(item)])
+        detailJob?.cancel()
+        detailJob = viewModelScope.launch {
+            detailLoading = true
+            try {
+                runCatching { artworkSource.resolve(listOf(item)) }
+                val xtream = account?.takeIf { it !== M3U_ACCOUNT }
+                val info = xtream?.let { repository.vodInfo(it, item) }
+                detailFilm = vod.film(item, vod.merge(item, artwork.value[vod.key(item)], info))
+                if (item.section == XtreamSection.SERIES && xtream != null) {
+                    detailEpisodes = runCatching { repository.episodes(xtream, item.id) }.getOrDefault(emptyList())
+                }
+            } finally {
+                detailLoading = false
+            }
+        }
+    }
+
+    fun closeDetail() {
+        detailJob?.cancel()
+        detail = null
+        detailFilm = null
+        detailEpisodes = emptyList()
+    }
+
+    private val resumePrefs by lazy { context.getSharedPreferences("iptv_resume", Context.MODE_PRIVATE) }
+    private var resumeKey: String? = null
+
+    private fun resumeKeyOf(kind: String, id: String): String? = account?.let { "${it.key}/$kind/$id" }
+
+    /** Where a film or episode was left, in ms; 0 when it was not started or watched to the end. */
+    fun resumeOf(item: XtreamItem): Long = resumeKeyOf("m", item.id)?.let { resumePrefs.getLong(it, 0L) } ?: 0L
+    fun resumeOf(episode: XtreamEpisode): Long = resumeKeyOf("e", episode.id)?.let { resumePrefs.getLong(it, 0L) } ?: 0L
+
+    private fun saveResume() {
+        val key = resumeKey ?: return
+        val p = player ?: return
+        val pos = p.currentPosition
+        val dur = p.duration
+        val edit = resumePrefs.edit()
+        if (pos > 60_000 && dur > 0 && pos < dur - 120_000) edit.putLong(key, pos) else edit.remove(key)
+        edit.apply()
+    }
+
+    fun playFilm(item: XtreamItem, fromStart: Boolean) {
+        val account = account ?: return
+        val url = item.url.ifBlank { XtreamUrls.movie(account, item.id, item.extension) }
+        start(url, XtreamPlaying(item.name, item), live = false, account = account, startMs = if (fromStart) 0L else resumeOf(item), resume = resumeKeyOf("m", item.id))
     }
 
     private var player: ExoPlayer? = null
@@ -403,10 +482,18 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
-    fun playEpisode(episode: XtreamEpisode) {
+    fun playEpisode(episode: XtreamEpisode, show: XtreamItem? = series, fromStart: Boolean = false) {
         val account = account ?: return
+        val series = show
         val title = listOfNotNull(series?.name, "S${episode.season}E${episode.episode}".takeIf { episode.season > 0 }).joinToString(" · ")
-        start(XtreamUrls.episode(account, episode.id, episode.extension), XtreamPlaying("$title · ${episode.title}".trim(' ', '·'), series, episode), live = false, account = account)
+        start(
+            XtreamUrls.episode(account, episode.id, episode.extension),
+            XtreamPlaying("$title · ${episode.title}".trim(' ', '·'), series, episode),
+            live = false,
+            account = account,
+            startMs = if (fromStart) 0L else resumeOf(episode),
+            resume = resumeKeyOf("e", episode.id),
+        )
     }
 
     /** Channel up/down while a live channel plays: the next one in the open category. */
@@ -477,7 +564,9 @@ class XtreamViewModel @Inject constructor(
             }
     }
 
-    private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount) {
+    private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null) {
+        saveResume()
+        resumeKey = resume
         // Playlist addresses can carry a login anywhere: only the section is logged for those.
         if (account === M3U_ACCOUNT) EnigmaLog.network("IPTV play playlist entry (${what.item?.section})")
         else EnigmaLog.network("Xtream play ${XtreamUrls.redact(url, account).substringAfter("://").substringAfter('/')}")
@@ -492,7 +581,7 @@ class XtreamViewModel @Inject constructor(
         if (url.substringBefore('?').endsWith(".m3u8") && !url.endsWith(".m3u8")) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
         if (live && url.endsWith(".ts")) builder.setMimeType(MimeTypes.VIDEO_MP2T)
         player().apply {
-            setMediaItem(builder.build())
+            setMediaItem(builder.build(), startMs.coerceAtLeast(0L))
             prepare()
             playWhenReady = true
         }
@@ -533,6 +622,8 @@ class XtreamViewModel @Inject constructor(
 
     /** Leaving the page: the stream stops, the lists stay for next time. */
     fun stop() {
+        saveResume()
+        resumeKey = null
         playbackOwner.release(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         player?.stop()
         player?.clearMediaItems()

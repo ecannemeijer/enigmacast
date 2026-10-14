@@ -68,7 +68,7 @@ private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private fun time(sec: Long) = TimeFormat.format(Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()))
 
 /** Which columns the side panel shows, as in the Enigma2 channel list. */
-private enum class PanelColumn { SECTIONS, CATEGORIES, CHANNELS, GUIDE }
+private enum class PanelColumn { SECTIONS, CATEGORIES, CHANNELS, GUIDE, VOD_CATEGORIES, VOD_GRID }
 
 /**
  * IPTV in full screen, laid out and driven like the Enigma2 channel player. The list opens on
@@ -91,6 +91,7 @@ fun XtreamScreen(onBack: () -> Unit) {
     val categoryFocus = remember { FocusRequester() }
     val itemFocus = remember { FocusRequester() }
     val guideFocus = remember { FocusRequester() }
+    val gridFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
     var quickBar by remember { mutableStateOf(false) }
@@ -102,7 +103,11 @@ fun XtreamScreen(onBack: () -> Unit) {
         bannerUntil = System.currentTimeMillis() + if (withDetails) 10_000 else 5_000
     }
     fun openPanel() {
+        val vod = model.section != XtreamSection.LIVE
         column = when {
+            vod && model.items.isNotEmpty() -> PanelColumn.VOD_GRID
+            vod && model.categories.isNotEmpty() -> PanelColumn.VOD_CATEGORIES
+            vod -> PanelColumn.SECTIONS
             model.items.isNotEmpty() || model.series != null -> PanelColumn.CHANNELS
             model.categories.isNotEmpty() -> PanelColumn.CATEGORIES
             else -> PanelColumn.SECTIONS
@@ -117,14 +122,19 @@ fun XtreamScreen(onBack: () -> Unit) {
     // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
     LaunchedEffect(model.categoriesReady) {
         if (model.categoriesReady > 0 && panelOpen) {
-            if (column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE) column = PanelColumn.CATEGORIES
+            column = if (model.section != XtreamSection.LIVE) PanelColumn.VOD_CATEGORIES
+            else if (column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE) PanelColumn.CATEGORIES else column
             categoryFocus.requestWhenReady()
         }
     }
     LaunchedEffect(model.itemsReady) {
         if (model.itemsReady > 0 && panelOpen) {
-            column = PanelColumn.CHANNELS
-            itemFocus.requestWhenReady()
+            if (model.section != XtreamSection.LIVE) {
+                column = PanelColumn.VOD_GRID
+            } else {
+                column = PanelColumn.CHANNELS
+                itemFocus.requestWhenReady()
+            }
         }
     }
     LaunchedEffect(panelOpen, openRequest, column) {
@@ -134,12 +144,19 @@ fun XtreamScreen(onBack: () -> Unit) {
             PanelColumn.CHANNELS -> if (!itemFocus.requestWhenReady(4)) { column = PanelColumn.CATEGORIES }
             PanelColumn.CATEGORIES -> if (!categoryFocus.requestWhenReady(4)) { column = PanelColumn.SECTIONS }
             PanelColumn.SECTIONS -> sectionFocus.requestWhenReady()
+            PanelColumn.VOD_CATEGORIES -> if (!categoryFocus.requestWhenReady(4)) { column = PanelColumn.SECTIONS }
+            PanelColumn.VOD_GRID -> if (!gridFocus.requestWhenReady(4)) { column = PanelColumn.VOD_CATEGORIES }
         }
     }
     BackHandler {
         when {
             quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS }
+            // Films / Series: grid → categories → Live TV / Films / Series.
+            panelOpen && column == PanelColumn.VOD_GRID -> column = PanelColumn.VOD_CATEGORIES
+            panelOpen && column == PanelColumn.VOD_CATEGORIES -> column = PanelColumn.SECTIONS
+            // A film or episode in full screen: Back stops it and shows the grid again.
+            !panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE -> { model.stop(); openPanel() }
             model.series != null && panelOpen -> model.closeSeries()
             panelOpen && model.playing != null -> panelOpen = false
             else -> { model.stop(); onBack() }
@@ -198,6 +215,14 @@ fun XtreamScreen(onBack: () -> Unit) {
                 onDismiss = onBack,
                 stacked = true,
             )
+            panelOpen && (column == PanelColumn.VOD_CATEGORIES || column == PanelColumn.VOD_GRID) -> XtreamVodPage(
+                model = model,
+                gridActive = column == PanelColumn.VOD_GRID,
+                categoryFocus = categoryFocus,
+                gridFocus = gridFocus,
+                onGrid = { column = PanelColumn.VOD_GRID },
+                onCategories = { column = PanelColumn.VOD_CATEGORIES },
+            ) { panelOpen = false; showBanner(fromZap = false) }
             panelOpen -> SidePanel(
                 model = model,
                 column = column,
@@ -264,7 +289,9 @@ private fun SidePanel(
     ) {
         // Column 1: Live / Films / Series and the playlist name (Left from the categories).
         if (column == PanelColumn.SECTIONS) Column(
-            Modifier.width(150.dp).columnKeys(onLeft = {}, onRight = { onColumn(PanelColumn.CATEGORIES) }),
+            Modifier.width(150.dp).columnKeys(onLeft = {}, onRight = {
+                if (model.categories.isNotEmpty()) onColumn(if (model.section == XtreamSection.LIVE) PanelColumn.CATEGORIES else PanelColumn.VOD_CATEGORIES)
+            }),
         ) {
             Text(model.account?.name.orEmpty(), color = EnigmaColors.Accent, fontSize = 13.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
             XtreamSection.entries.forEachIndexed { index, s ->
@@ -276,7 +303,14 @@ private fun SidePanel(
                     },
                 )
                 CompactListRow(
-                    onClick = { model.selectSection(s) },
+                    onClick = {
+                        // OK on the section that is already loaded only moves on.
+                        if (s == model.section && model.categories.isNotEmpty()) {
+                            onColumn(if (s == XtreamSection.LIVE) PanelColumn.CATEGORIES else PanelColumn.VOD_CATEGORIES)
+                        } else {
+                            model.selectSection(s)
+                        }
+                    },
                     selected = s == model.section,
                     modifier = Modifier
                         .then(if (s == model.section) Modifier.focusRequester(sectionFocus) else Modifier)
@@ -290,7 +324,7 @@ private fun SidePanel(
             ) { Text(stringResource(R.string.xtream_refresh), fontSize = 13.sp, color = EnigmaColors.Muted) }
         }
         // Column 2: categories (Left from the channels). OK loads one.
-        if (column == PanelColumn.SECTIONS || column == PanelColumn.CATEGORIES) Column(
+        if (model.section == XtreamSection.LIVE && (column == PanelColumn.SECTIONS || column == PanelColumn.CATEGORIES)) Column(
             Modifier.width(240.dp).columnKeys(
                 onLeft = { onColumn(PanelColumn.SECTIONS) },
                 // Right only enters a list that is already there.
@@ -319,6 +353,8 @@ private fun SidePanel(
                 }
             }
         }
+        // Films / Series show only the sections here; their categories and grid are XtreamVodPage.
+        if (model.section == XtreamSection.LIVE) {
         // Column 3: channels, films, series or the episodes of the opened series.
         var focused by remember { mutableStateOf<XtreamItem?>(null) }
         Column(
@@ -402,6 +438,7 @@ private fun SidePanel(
                     }
                 }
             }
+        }
         }
         // Column 4: the programmes of the channel Right was pressed on.
         if (column == PanelColumn.GUIDE) Column(

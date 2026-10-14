@@ -48,6 +48,18 @@ data class XtreamItem(
 
 data class XtreamEpisode(val id: String, val season: Int, val episode: Int, val title: String, val extension: String)
 
+data class XtreamVodInfo(
+    val plot: String,
+    val rating: Double,
+    val year: Int?,
+    val genre: String,
+    val cover: String?,
+    val backdrop: String?,
+    val runtimeMin: Int?,
+    val director: String,
+    val tmdbId: Int?,
+)
+
 data class XtreamEpg(val title: String, val startSec: Long, val endSec: Long, val description: String = "")
 
 /** XStreamity's `playlists.txt` and `x-playlists.json`. */
@@ -197,6 +209,32 @@ object XtreamJson {
             val id = o.str("id") ?: return@mapNotNull null
             XtreamEpisode(id, o.str("season")?.toIntOrNull() ?: 0, o.str("episode_num")?.toIntOrNull() ?: 0, o.str("title") ?: id, o.str("container_extension").orEmpty())
         }.sortedWith(compareBy({ it.season }, { it.episode }))
+    }
+
+    /**
+     * The `info` block of `get_vod_info` / `get_series_info`: the playlist's own artwork and
+     * text, used when TMDB has no match (or no key).
+     */
+    fun vodInfo(body: String): XtreamVodInfo? {
+        val root = runCatching { lenient.parseToJsonElement(body) }.getOrNull() as? JsonObject ?: return null
+        val info = root["info"] as? JsonObject ?: return null
+        val backdrop = when (val b = info["backdrop_path"]) {
+            is JsonArray -> b.firstOrNull()?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            is kotlinx.serialization.json.JsonPrimitive -> b.content
+            else -> null
+        }?.takeIf { it.startsWith("http", true) }
+        val date = info.str("releasedate") ?: info.str("releaseDate") ?: info.str("release_date")
+        return XtreamVodInfo(
+            plot = (info.str("plot") ?: info.str("description")).orEmpty().trim(),
+            rating = info.str("rating")?.toDoubleOrNull()?.takeIf { it in 0.0..10.0 } ?: 0.0,
+            year = date?.take(4)?.toIntOrNull(),
+            genre = info.str("genre").orEmpty(),
+            cover = (info.str("cover_big") ?: info.str("movie_image") ?: info.str("cover"))?.takeIf { it.startsWith("http", true) },
+            backdrop = backdrop,
+            runtimeMin = info.str("duration_secs")?.toIntOrNull()?.div(60)?.takeIf { it > 0 } ?: info.str("episode_run_time")?.toIntOrNull(),
+            director = info.str("director").orEmpty(),
+            tmdbId = info.str("tmdb_id")?.toIntOrNull() ?: info.str("tmdb")?.toIntOrNull(),
+        )
     }
 
     /** `get_short_epg`: titles are base64. */

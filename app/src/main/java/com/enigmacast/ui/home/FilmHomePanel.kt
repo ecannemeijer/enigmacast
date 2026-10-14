@@ -257,7 +257,7 @@ fun FilmHomePanel(
 }
 
 @Composable
-private fun Backdrop(film: HomeFilm?) {
+internal fun Backdrop(film: HomeFilm?) {
     Box(Modifier.fillMaxWidth().height(420.dp)) {
         Crossfade(targetState = film?.movie?.backdropPath, animationSpec = tween(450), label = "homeBackdrop") { path ->
             if (path != null) {
@@ -432,59 +432,13 @@ private fun FilmCard(
     onClick: () -> Unit,
     model: HomeFilmsViewModel,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    LaunchedEffect(focused) { if (focused) onFocus() }
-    val spec = LocalMotionSpec.current
-    val scale by animateFloatAsState(if (focused && spec.animate) 1.08f else 1f, tween(spec.cardMs), label = "filmCard")
     val airing = film.event.isAiring(nowSec)
-    Column(
-        modifier
-            .width(CARD_WIDTH_DP.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .onKeyEvent { event ->
-                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
-                if (confirm && event.type == KeyEventType.KeyUp) onClick()
-                confirm
-            }
-            .focusable(interactionSource = interaction),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height((CARD_WIDTH_DP * 1.5f).dp)
-                .then(
-                    if (focused && spec.shadows) {
-                        Modifier.shadow(16.dp, PosterShape, ambientColor = EnigmaColors.Accent.copy(alpha = 0.35f), spotColor = EnigmaColors.Cyan.copy(alpha = 0.28f))
-                    } else {
-                        Modifier
-                    },
-                )
-                .clip(PosterShape)
-                .background(EnigmaColors.Card)
-                .border(if (focused) 2.dp else 1.dp, if (focused) EnigmaColors.Cyan else EnigmaColors.CardBorder, PosterShape),
-        ) {
-            val poster = film.movie.posterPath
-            if (poster != null) {
-                AsyncImage(
-                    model = TmdbJson.image(poster, "w342"),
-                    contentDescription = film.displayTitle,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Text(
-                    film.displayTitle,
-                    color = EnigmaColors.Text,
-                    fontSize = 15.sp,
-                    fontWeight = EnigmaType.Strong,
-                    modifier = Modifier.align(Alignment.Center).padding(10.dp),
-                )
-            }
+    PosterCard(
+        film = film,
+        modifier = modifier,
+        onFocus = onFocus,
+        onClick = onClick,
+        overlay = {
             Row(Modifier.align(Alignment.TopStart).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (airing) Badge(stringResource(R.string.home_live), LiveRed)
                 if (autoSwitchSet) Badge("⏰", EnigmaColors.Accent)
@@ -526,6 +480,88 @@ private fun FilmCard(
                     emphasized = false,
                 )
             }
+        },
+        lines = {
+            Text(film.candidate.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (airing) stringResource(R.string.home_card_live_left, FilmFormat.minutesLeft(film, nowSec)) else FilmFormat.slot(film),
+                color = if (airing) LiveRed else EnigmaColors.Accent,
+                fontSize = 12.sp,
+                fontWeight = EnigmaType.Strong,
+                maxLines = 1,
+            )
+        },
+    )
+}
+
+/**
+ * The poster card of the Movies and TV Series pages: TMDB poster (or the title), focus
+ * scale and glow, title, the caller's [lines] and the rating. [overlay] draws on the poster.
+ */
+@Composable
+internal fun PosterCard(
+    film: HomeFilm,
+    modifier: Modifier,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+    overlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
+    lines: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    LaunchedEffect(focused) { if (focused) onFocus() }
+    val spec = LocalMotionSpec.current
+    val scale by animateFloatAsState(if (focused && spec.animate) 1.08f else 1f, tween(spec.cardMs), label = "filmCard")
+    Column(
+        modifier
+            .width(CARD_WIDTH_DP.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .onKeyEvent { event ->
+                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (confirm && event.type == KeyEventType.KeyUp) onClick()
+                confirm
+            }
+            .focusable(interactionSource = interaction),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height((CARD_WIDTH_DP * 1.5f).dp)
+                .then(
+                    if (focused && spec.shadows) {
+                        Modifier.shadow(16.dp, PosterShape, ambientColor = EnigmaColors.Accent.copy(alpha = 0.35f), spotColor = EnigmaColors.Cyan.copy(alpha = 0.28f))
+                    } else {
+                        Modifier
+                    },
+                )
+                .clip(PosterShape)
+                .background(EnigmaColors.Card)
+                .border(if (focused) 2.dp else 1.dp, if (focused) EnigmaColors.Cyan else EnigmaColors.CardBorder, PosterShape),
+        ) {
+            val poster = film.movie.posterPath
+            var failed by remember(poster) { mutableStateOf(false) }
+            if (poster != null && !failed) {
+                AsyncImage(
+                    model = TmdbJson.image(poster, "w342"),
+                    contentDescription = film.displayTitle,
+                    contentScale = ContentScale.Crop,
+                    onError = { failed = true },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    film.displayTitle,
+                    color = EnigmaColors.Text,
+                    fontSize = 15.sp,
+                    fontWeight = EnigmaType.Strong,
+                    modifier = Modifier.align(Alignment.Center).padding(10.dp),
+                )
+            }
+            overlay()
         }
         Text(
             film.displayTitle,
@@ -535,14 +571,7 @@ private fun FilmCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(film.candidate.channelName, color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            if (airing) stringResource(R.string.home_card_live_left, FilmFormat.minutesLeft(film, nowSec)) else FilmFormat.slot(film),
-            color = if (airing) LiveRed else EnigmaColors.Accent,
-            fontSize = 12.sp,
-            fontWeight = EnigmaType.Strong,
-            maxLines = 1,
-        )
+        lines()
         RatingStars(film.movie.voteAverage, size = 10.sp)
     }
 }

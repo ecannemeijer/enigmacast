@@ -174,5 +174,8 @@ object TmdbJson {
     private fun JsonElement.isNull(): Boolean = this is JsonNull
 
     /** Image URL at a TMDB size such as w342, w780, w1280 or original. */
-    fun image(path: String?, size: String): String? = path?.takeIf { it.isNotBlank() }?.let { "https://image.tmdb.org/t/p/$size$it" }
+    /** A TMDB image path at [size]; a full URL (IPTV playlist covers) is used as it is. */
+    fun image(path: String?, size: String): String? = path?.takeIf { it.isNotBlank() }?.let {
+        if (it.startsWith("http://", true) || it.startsWith("https://", true)) it else "https://image.tmdb.org/t/p/$size$it"
+    }
 }

@@ -1277,4 +1277,11 @@ Profil: %2$s</string>
     <string name="iptv_err_http">Der Server hat mit einem Fehler geantwortet.</string>
     <string name="iptv_err_unreachable">Der Server ist nicht erreichbar.</string>
     <string name="iptv_err_empty">Die Playlist enthält keine Einträge.</string>
+    <string name="iptv_play">Abspielen</string>
+    <string name="iptv_play_start">Von vorne</string>
+    <string name="iptv_resume">Fortsetzen ab %1$s</string>
+    <string name="iptv_resume_badge">Weiterschauen</string>
+    <string name="iptv_season">Staffel %1$d</string>
+    <string name="iptv_no_episodes">Keine Folgen gefunden.</string>
+    <string name="iptv_vod_empty">Keine Titel in dieser Kategorie.</string>
 </resources>

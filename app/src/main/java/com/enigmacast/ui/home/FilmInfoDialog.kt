@@ -78,6 +78,8 @@ fun FilmInfoDialog(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     channel: BouquetEntry,
+    /** IPTV film or series: Play / Resume instead of channel, schedule and record; [VodDetail.below] (seasons and episodes) instead of the cast. */
+    vod: VodDetail? = null,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         NavigationSoundsForWindow()
@@ -165,15 +167,31 @@ fun FilmInfoDialog(
                                 Text(movie.directors.joinToString(", "), color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (vod == null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Picon(channel, picon, cachedPicon, Modifier.size(width = 44.dp, height = 26.dp), fallbackSize = 9.sp)
                             Text(film.candidate.channelName, color = EnigmaColors.Text, fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
                             Text(FilmFormat.slot(film), color = EnigmaColors.Accent, fontSize = 14.sp)
                             if (autoSwitchSet) Badge(stringResource(R.string.home_scheduled), EnigmaColors.Accent)
                             if (recordingSet) Badge(stringResource(R.string.home_recording_set), LiveRed)
                         }
-                        if (airing) EnigmaProgramProgress(film.event.progress(nowSec), Modifier.width(320.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        if (airing && vod == null) EnigmaProgramProgress(film.event.progress(nowSec), Modifier.width(320.dp))
+                        if (vod != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                            if (vod.resumeLabel != null && vod.onResume != null) {
+                                EnigmaGlassButton(vod.resumeLabel, vod.onResume, Modifier.focusRequester(watchFocus))
+                                vod.onPlay?.let { EnigmaGlassButton(stringResource(R.string.iptv_play_start), it) }
+                            } else if (vod.onPlay != null) {
+                                EnigmaGlassButton(stringResource(R.string.iptv_play), vod.onPlay, Modifier.focusRequester(watchFocus))
+                            }
+                            if (plot.length > PLOT_MORE_CHARS) {
+                                EnigmaGlassButton(stringResource(R.string.home_more), { showPlot = true })
+                            }
+                            EnigmaGlassButton(
+                                stringResource(R.string.home_close),
+                                onClose,
+                                if (vod.onPlay == null && vod.onResume == null) Modifier.focusRequester(watchFocus) else Modifier,
+                            )
+                        }
+                        if (vod == null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
                             EnigmaGlassButton(
                                 stringResource(if (airing || ended) R.string.home_watch else R.string.home_watch_channel),
                                 onWatch,
@@ -195,7 +213,9 @@ fun FilmInfoDialog(
                         }
                     }
                 }
-                if (movie.cast.isNotEmpty()) {
+                if (vod?.below != null) {
+                    vod.below.invoke()
+                } else if (movie.cast.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
@@ -213,6 +233,14 @@ fun FilmInfoDialog(
 }
 
 private const val PLOT_MORE_CHARS = 260
+
+/** The IPTV part of [FilmInfoDialog]. */
+data class VodDetail(
+    val onPlay: (() -> Unit)?,
+    val resumeLabel: String? = null,
+    val onResume: (() -> Unit)? = null,
+    val below: (@Composable () -> Unit)? = null,
+)
 
 /** "More": the whole plot (and tagline) in a small window; Back or OK closes it. */
 @Composable

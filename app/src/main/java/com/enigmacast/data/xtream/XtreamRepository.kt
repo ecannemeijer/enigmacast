@@ -114,6 +114,17 @@ class XtreamRepository @Inject constructor(
         cached(account, "get_short_epg/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "4")) }
     }.getOrDefault(emptyList())
 
+    /** The playlist's own info for a film or series. */
+    suspend fun vodInfo(account: XtreamAccount, item: com.enigmacast.domain.xtream.XtreamItem): com.enigmacast.domain.xtream.XtreamVodInfo? = runCatching {
+        if (item.section == XtreamSection.SERIES) {
+            cached(account, "series_info_meta/${item.id}", false) { Optional(XtreamJson.vodInfo(get(account, "get_series_info", "series_id" to item.id))) }.value
+        } else {
+            cached(account, "get_vod_info/${item.id}", false) { Optional(XtreamJson.vodInfo(get(account, "get_vod_info", "vod_id" to item.id))) }.value
+        }
+    }.getOrNull()
+
+    private data class Optional<T>(val value: T?)
+
     /** The programme column of one channel: up to 12 events. */
     suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
         cached(account, "get_short_epg12/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "12")) }
