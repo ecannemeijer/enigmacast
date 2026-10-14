@@ -90,7 +90,14 @@ class SyncEngine @Inject constructor(
 
             val hasChannels = dao.channelCount(rk) > 0
             val channelsDue = force || SyncPolicy.isDue(values.channelsPerDay, last(rk, SyncKind.CHANNELS), nowMs, hasChannels)
-            if (channelsDue || check || carryFrom != null) {
+            // App start/resume: one bouquet-list call against Room; channels only when that changed.
+            val startupChanged = check && !channelsDue && carryFrom == null && runCatching {
+                val live = api.televisionBouquets(receiver).map { it.reference to it.name }
+                val cached = dao.bouquets(rk).sortedBy { it.position }.map { it.reference to it.name }
+                com.enigmacast.domain.sync.StartupChannelCheck.bouquetsChanged(cached, live)
+            }.getOrDefault(false)
+            if (check && !channelsDue && carryFrom == null) EnigmaLog.service("startup channel check: bouquets changed=$startupChanged")
+            if (channelsDue || startupChanged || carryFrom != null) {
                 step(rk, 2, R.string.sync_step_channels)
                 attempt(rk, SyncKind.CHANNELS, keepHash = true) {
                     val outcome = syncChannels(receiver, rk, force = channelsDue, carryFrom = carryFrom?.takeIf { it != rk })
