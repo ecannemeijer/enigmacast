@@ -107,6 +107,18 @@ class XtreamRepository @Inject constructor(
         }
     }
 
+    /** Items of categories already fetched (memory cache only; no request). */
+    fun cachedCounts(account: XtreamAccount, section: XtreamSection): Map<String, Int> {
+        val action = when (section) {
+            XtreamSection.LIVE -> "get_live_streams"
+            XtreamSection.MOVIES -> "get_vod_streams"
+            XtreamSection.SERIES -> "get_series"
+        }
+        val prefix = "${account.key}/$action/"
+        return cache.entries.filter { it.key.startsWith(prefix) }
+            .mapNotNull { (k, v) -> (v.second as? List<*>)?.let { k.removePrefix(prefix) to it.size } }.toMap()
+    }
+
     suspend fun episodes(account: XtreamAccount, seriesId: String): List<XtreamEpisode> =
         cached(account, "get_series_info/$seriesId", false) { XtreamJson.episodes(get(account, "get_series_info", "series_id" to seriesId)) }
 

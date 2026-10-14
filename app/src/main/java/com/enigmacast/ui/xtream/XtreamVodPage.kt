@@ -94,6 +94,7 @@ internal fun XtreamVodPage(
 ) {
     val art by model.artwork.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf<HomeFilm?>(null) }
+    var focusedIndex by remember(model.cards) { mutableStateOf<Int?>(null) }
     // Built once per category (off the main thread); an artwork update only changes its own card.
     val cards = model.cards
     Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
@@ -142,6 +143,7 @@ internal fun XtreamVodPage(
                         ) {
                             Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             if (model.pendingCategory?.id == c.id) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
+                            else model.categoryCounts[c.id]?.let { Text(it.toString(), fontSize = 12.sp, color = EnigmaColors.Subtle, modifier = Modifier.padding(start = 6.dp)) }
                         }
                     }
                 }
@@ -150,7 +152,7 @@ internal fun XtreamVodPage(
             if (categoriesWidth > 0.dp) Spacer(Modifier.width(16.dp * (categoriesWidth / CATEGORIES_WIDTH).coerceIn(0f, 1f)))
             // The poster grid.
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                VodHeader(model.category?.name.orEmpty(), model.loading)
+                VodHeader(model.category?.name.orEmpty(), model.loading, VodPanelNav.position(focusedIndex.takeIf { gridActive }, cards.size))
                 if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp)
                 if (!model.loading && model.category != null && cards.isEmpty()) {
                     Text(stringResource(R.string.iptv_vod_empty), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
@@ -188,7 +190,7 @@ internal fun XtreamVodPage(
                                     if (index < columns) up = FocusRequester.Cancel
                                     if (index >= lastRowStart) down = FocusRequester.Cancel
                                 },
-                            onFocus = { focused = film },
+                            onFocus = { focused = film; focusedIndex = index },
                             onClick = { model.openDetail(item) },
                             overlay = {
                                 val progress = remember(item, model.resumeVersion) { model.progressOf(item) }
@@ -291,9 +293,10 @@ private fun EpisodeCard(e: XtreamEpisode, started: Boolean, modifier: Modifier, 
 }
 
 @Composable
-private fun VodHeader(text: String, loading: Boolean) {
+private fun VodHeader(text: String, loading: Boolean, position: String? = null) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) {
         Text(text, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (position != null) Text(position, color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 10.dp))
         if (loading) EnigmaLoadingIndicator(Modifier.padding(start = 8.dp))
     }
 }
@@ -322,6 +325,13 @@ internal object VodPanelNav {
     enum class Column { SECTIONS, CATEGORIES, GRID }
 
     fun canEnterGrid(cards: Int) = cards > 0
+
+    /** "5/60" for the focused card; just the total while the grid has no focus; null when empty. */
+    fun position(focusedIndex: Int?, total: Int): String? = when {
+        total <= 0 -> null
+        focusedIndex != null && focusedIndex in 0 until total -> "${focusedIndex + 1}/$total"
+        else -> total.toString()
+    }
 
     /** The categories column is shown unless the grid has focus. */
     fun categoriesShown(gridActive: Boolean) = !gridActive

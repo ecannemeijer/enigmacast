@@ -244,6 +244,9 @@ class IptvPlaylistSync @Inject constructor(
     private fun objects(input: InputStream): Sequence<JsonObject> =
         Json.decodeToSequence(input, JsonElement.serializer(), DecodeSequenceMode.ARRAY_WRAPPED).mapNotNull { it as? JsonObject }
 
+    suspend fun counts(section: XtreamSection): Map<String, Int> =
+        dao.countsByCategory(SOURCE, section.name).associate { it.categoryId to it.n }
+
     suspend fun categories(section: XtreamSection): List<XtreamCategory> =
         dao.categories(SOURCE, section.name).map { XtreamCategory(it.id, it.name) }
 

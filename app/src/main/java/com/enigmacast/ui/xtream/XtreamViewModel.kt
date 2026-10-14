@@ -89,6 +89,14 @@ class XtreamViewModel @Inject constructor(
     /** [items] as cards with the playlist's own name and cover; artwork replaces them per card. */
     var cards by mutableStateOf<List<IptvCard>>(emptyList())
         private set
+    /** Items per category id for the categories column (Room in playlist mode, fetched ones otherwise). */
+    var categoryCounts by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+    private suspend fun loadCounts(account: XtreamAccount, section: XtreamSection) {
+        categoryCounts = runCatching {
+            if (playlist != null) playlistSync.counts(section) else repository.cachedCounts(account, section)
+        }.getOrDefault(emptyMap())
+    }
     var loading by mutableStateOf(false)
         private set
     /** The category whose list is being fetched after OK; the shown list stays until it arrives. */
@@ -528,6 +536,7 @@ class XtreamViewModel @Inject constructor(
             runCatching { categoriesOf(account, section) }
                 .onSuccess { list ->
                     categories = list
+                    loadCounts(account, section)
                     categoriesReady++
                 }
                 .onFailure { error = true }
@@ -568,6 +577,7 @@ class XtreamViewModel @Inject constructor(
                     this.category = category
                     series = null; episodes = emptyList()
                     cards = base
+                    categoryCounts = categoryCounts + (category.id to list.size)
                     items = list
                     // Only an OK-loaded category moves focus into the grid; the auto-loaded first one does not.
                     if (announce) itemsReady++

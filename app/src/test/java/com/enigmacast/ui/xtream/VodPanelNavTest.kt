@@ -28,4 +28,11 @@ class VodPanelNavTest {
         assertEquals(6, wide)
         assertEquals(1, VodPanelNav.columns(10f, 132f, 16f))
     }
+
+    @Test fun focusedPosition() {
+        assertEquals("5/60", VodPanelNav.position(4, 60))
+        assertEquals("60", VodPanelNav.position(null, 60))
+        assertEquals("60", VodPanelNav.position(99, 60))
+        assertEquals(null, VodPanelNav.position(0, 0))
+    }
 }
