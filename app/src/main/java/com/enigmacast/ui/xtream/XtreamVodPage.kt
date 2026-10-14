@@ -1,5 +1,6 @@
 package com.enigmacast.ui.xtream
 
+import com.enigmacast.ui.theme.trapVertical
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.height
@@ -151,7 +152,7 @@ internal fun XtreamVodPage(
             }
             if (categoriesWidth > 0.dp) Spacer(Modifier.width(16.dp * (categoriesWidth / CATEGORIES_WIDTH).coerceIn(0f, 1f)))
             // The poster grid.
-            Column(Modifier.weight(1f).fillMaxHeight()) {
+            Column(Modifier.weight(1f).fillMaxHeight().trapVertical()) {
                 VodHeader(model.category?.name.orEmpty(), model.loading, VodPanelNav.position(focusedIndex.takeIf { gridActive }, cards.size))
                 if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp)
                 if (!model.loading && model.category != null && cards.isEmpty()) {

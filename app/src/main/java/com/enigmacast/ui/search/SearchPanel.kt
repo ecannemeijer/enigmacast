@@ -1,5 +1,6 @@
 package com.enigmacast.ui.search
 
+import com.enigmacast.ui.theme.trapVertical
 import com.enigmacast.ui.theme.EnigmaType
 import android.Manifest
 import android.content.Intent
@@ -125,6 +126,8 @@ fun SearchPanel(
     ).filter { it.second.isNotEmpty() }
     val body = modifier
         .fillMaxSize()
+        // Down at the last result / Up at the field stay on the page (Left still goes to the menu).
+        .trapVertical()
         .onFocusChanged { if (it.hasFocus && menuFocus != null) onRetreatTo?.invoke(menuFocus) }
         .onPreviewKeyEvent { event ->
             if (event.type != KeyEventType.KeyDown || event.key != Key.Search) return@onPreviewKeyEvent false

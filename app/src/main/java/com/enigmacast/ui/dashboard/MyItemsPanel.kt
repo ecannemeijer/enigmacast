@@ -1,5 +1,6 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.trapVertical
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.type
@@ -102,7 +103,9 @@ fun MyItemsPanel(
             .fillMaxSize()
             .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
             // The empty/loading line is replaced by the list: keep the focus on the page (first item).
-            .holdPageFocus(listFocus, sections.all.firstOrNull()?.id),
+            .holdPageFocus(listFocus, sections.all.firstOrNull()?.id)
+            // Up at the first row and Down at the last stay on the page (Left still goes to the menu).
+            .trapVertical(),
     ) {
         PanelHeader(stringResource(R.string.nav_my_items))
         val notice = viewModel.notice.asString()

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -180,4 +181,21 @@ fun Modifier.edgeLeft(): Modifier = composed {
 suspend fun FocusRequester.focusListRow(listState: LazyListState, index: Int) {
     listState.scrollToItem(index)
     requestWhenReady()
+}
+
+/**
+ * Page boundary: Up/Down that would leave this group (top or bottom edge) stay put, so focus
+ * never jumps to the drawer or a header. Left/Right still leave normally (Left → menu).
+ */
+fun Modifier.trapVertical(): Modifier = this
+    .focusProperties {
+        onExit = {
+            if (com.enigmacast.ui.theme.FocusEdges.blocks(requestedFocusDirection)) cancelFocusChange()
+        }
+    }
+    .focusGroup()
+
+object FocusEdges {
+    fun blocks(direction: androidx.compose.ui.focus.FocusDirection): Boolean =
+        direction == androidx.compose.ui.focus.FocusDirection.Up || direction == androidx.compose.ui.focus.FocusDirection.Down
 }
