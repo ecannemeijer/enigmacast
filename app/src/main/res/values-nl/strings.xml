@@ -1279,4 +1279,7 @@ Profiel: %2$s</string>
     <string name="iptv_season">Seizoen %1$d</string>
     <string name="iptv_no_episodes">Geen afleveringen gevonden.</string>
     <string name="iptv_vod_empty">Geen titels in deze categorie.</string>
+    <string name="nav_tv">TV</string>
+    <string name="nav_sport">Sport</string>
+    <string name="nav_library">Bibliotheek</string>
 </resources>

@@ -1288,4 +1288,7 @@ Profilo: %2$s</string>
     <string name="iptv_season">Stagione %1$d</string>
     <string name="iptv_no_episodes">Nessun episodio trovato.</string>
     <string name="iptv_vod_empty">Nessun titolo in questa categoria.</string>
+    <string name="nav_tv">TV</string>
+    <string name="nav_sport">Sport</string>
+    <string name="nav_library">Libreria</string>
 </resources>

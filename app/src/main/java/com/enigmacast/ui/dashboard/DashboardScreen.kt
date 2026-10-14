@@ -132,7 +132,7 @@ import com.enigmacast.util.isNotEmpty
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class DashSection {
+internal enum class DashSection {
     Home,
     Movies,
     Series,
@@ -242,6 +242,21 @@ fun DashboardScreen(
     /** Address form is open; focus landing on the main menu must not leave Settings. */
     var settingsFormOpen by remember { mutableStateOf(false) }
     val bouquetFocus = remember { FocusRequester() }
+    val tvMenuFocus = remember { FocusRequester() }
+    val libraryMenuFocus = remember { FocusRequester() }
+    val tabContext = androidx.compose.ui.platform.LocalContext.current
+    val tabMemory = remember { DashTabMemory(tabContext) }
+    /** The tab of [target] in its group's tab row (the old menu item's requester moved there). */
+    fun tabFocus(target: DashSection): FocusRequester = when (target) {
+        DashSection.Stream -> streamFocus
+        DashSection.Guide -> guideFocus
+        DashSection.Movies -> moviesFocus
+        DashSection.Series -> seriesFocus
+        DashSection.Radio -> radioFocus
+        DashSection.MyItems -> myItemsMenuFocus
+        DashSection.Search -> searchMenuFocus
+        else -> FocusRequester.Default
+    }
     val dashBack = remember { DashBack() }
     val retreat: (FocusRequester) -> Unit = { dashBack.target = it }
     val myItemsModel: MyItemsViewModel = hiltViewModel()
@@ -262,7 +277,7 @@ fun DashboardScreen(
     LaunchedEffect(premium) {
         if (lockedFeature(section) != null) section = DashSection.Home
     }
-    fun sectionMenu(): FocusRequester = when (section) {
+    fun sectionMenuOf(): FocusRequester = when (section) {
         DashSection.Home -> homeFocus
         DashSection.Movies -> moviesFocus
         DashSection.Series -> seriesFocus
@@ -273,6 +288,11 @@ fun DashboardScreen(
         DashSection.Search -> searchMenuFocus
         DashSection.MyItems -> myItemsMenuFocus
         DashSection.Settings -> settingsMenuFocus
+    }
+    fun sectionMenu(): FocusRequester = when (DashGroups.groupOf(section)) {
+        DashGroup.TV -> tvMenuFocus
+        DashGroup.LIBRARY -> libraryMenuFocus
+        null -> sectionMenuOf()
     }
     DisposableEffect(contentFocused, section, guideModel.askWake) {
         onBindBack {
@@ -297,7 +317,7 @@ fun DashboardScreen(
             }
             focusLanguageSetting || returnToMyItemsId != null -> Unit
             // Back from the player: Live TV opens the player, so focus its menu item.
-            focusPlayingChannel -> { streamFocus.requestWhenReady(); onPlayingChannelFocused() }
+            focusPlayingChannel -> { tvMenuFocus.requestWhenReady(); onPlayingChannelFocused() }
             else -> homeFocus.requestWhenReady()
         }
     }
@@ -342,6 +362,7 @@ fun DashboardScreen(
         section = DashSection.MyItems
         myItemsListFocus.requestWhenReady()
     }
+    LaunchedEffect(section) { DashGroups.groupOf(section)?.let { tabMemory.remember(it, section) } }
     fun openSection(target: DashSection) {
         if (lockedFeature(target) != null) return
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
@@ -409,55 +430,17 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Home) homeContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Home) },
                 )
+                // TV: Live TV · TV Guide · Movies · TV Series · Radio as tabs at the top of the page.
                 NavItem(
                     icon = EnigmaIcons.Tv,
-                    label = stringResource(R.string.nav_live),
-                    selected = section == DashSection.Stream,
+                    label = stringResource(R.string.nav_tv),
+                    selected = DashGroups.groupOf(section) == DashGroup.TV,
                     showLabel = drawerExpanded,
                     staggerIndex = 1,
                     modifier = Modifier
-                        .focusRequester(streamFocus)
-                        .onFocusChanged { streamItemFocused = it.isFocused }
-                        .focusProperties { right = if (section == DashSection.Stream) bouquetFocus else FocusRequester.Cancel },
-                    // Live TV opens the full-screen player: the running stream, else the last channel.
-                    onClick = { guideModel.openLive(onStream) },
-                )
-                NavItem(
-                    icon = EnigmaIcons.Guide,
-                    label = stringResource(R.string.nav_guide),
-                    selected = section == DashSection.Guide,
-                    showLabel = drawerExpanded,
-                    locked = lockedFeature(DashSection.Guide) != null,
-                    staggerIndex = 2,
-                    modifier = Modifier
-                        .focusRequester(guideFocus)
-                        .onFocusChanged { guideItemFocused = it.isFocused }
-                        .focusProperties { right = if (section == DashSection.Guide && lockedFeature(DashSection.Guide) == null) guideGridFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Guide) },
-                )
-                NavItem(
-                    icon = EnigmaIcons.Film,
-                    label = stringResource(R.string.nav_movies),
-                    selected = section == DashSection.Movies,
-                    showLabel = drawerExpanded,
-                    locked = lockedFeature(DashSection.Movies) != null,
-                    staggerIndex = 3,
-                    modifier = Modifier
-                        .focusRequester(moviesFocus)
-                        .focusProperties { right = if (section == DashSection.Movies && lockedFeature(DashSection.Movies) == null) moviesContentFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Movies) },
-                )
-                NavItem(
-                    icon = EnigmaIcons.Series,
-                    label = stringResource(R.string.nav_series),
-                    selected = section == DashSection.Series,
-                    showLabel = drawerExpanded,
-                    locked = lockedFeature(DashSection.Series) != null,
-                    staggerIndex = 4,
-                    modifier = Modifier
-                        .focusRequester(seriesFocus)
-                        .focusProperties { right = if (section == DashSection.Series && lockedFeature(DashSection.Series) == null) seriesContentFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Series) },
+                        .focusRequester(tvMenuFocus)
+                        .focusProperties { right = if (DashGroups.groupOf(section) == DashGroup.TV) tabFocus(section) else FocusRequester.Cancel },
+                    onClick = { enterSection(DashGroups.entry(DashGroup.TV, tabMemory.last(DashGroup.TV)) { lockedFeature(it) == null }) },
                 )
                 if (xtreamAvailable) {
                     NavItem(
@@ -466,7 +449,7 @@ fun DashboardScreen(
                         selected = false,
                         showLabel = drawerExpanded,
                         locked = !premium,
-                        staggerIndex = 4,
+                        staggerIndex = 2,
                         modifier = Modifier.focusProperties { right = FocusRequester.Cancel },
                         onClick = {
                             if (accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) onXtream()
@@ -475,7 +458,7 @@ fun DashboardScreen(
                 }
                 NavItem(
                     icon = EnigmaIcons.Soccer,
-                    label = stringResource(R.string.nav_soccer),
+                    label = stringResource(R.string.nav_sport),
                     selected = section == DashSection.Soccer,
                     showLabel = drawerExpanded,
                     locked = lockedFeature(DashSection.Soccer) != null,
@@ -485,66 +468,26 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Soccer && lockedFeature(DashSection.Soccer) == null) soccerContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Soccer) },
                 )
+                // Library: My items · Search as tabs.
                 NavItem(
-                    icon = EnigmaIcons.Radio,
-                    label = stringResource(R.string.nav_radio),
-                    selected = section == DashSection.Radio,
+                    icon = EnigmaIcons.Record,
+                    label = stringResource(R.string.nav_library),
+                    selected = DashGroups.groupOf(section) == DashGroup.LIBRARY,
                     showLabel = drawerExpanded,
                     staggerIndex = 4,
                     modifier = Modifier
-                        .focusRequester(radioFocus)
-                        .onFocusChanged { radioItemFocused = it.isFocused }
-                        .focusProperties { right = if (section == DashSection.Radio) bouquetFocus else FocusRequester.Cancel },
-                    onClick = { enterSection(DashSection.Radio) },
+                        .focusRequester(libraryMenuFocus)
+                        .focusProperties { right = if (DashGroups.groupOf(section) == DashGroup.LIBRARY) tabFocus(section) else FocusRequester.Cancel },
+                    onClick = { enterSection(DashGroups.entry(DashGroup.LIBRARY, tabMemory.last(DashGroup.LIBRARY)) { true }) },
                 )
-                NavItem(
-                    icon = Icons.Filled.Search,
-                    label = stringResource(R.string.nav_search),
-                    selected = section == DashSection.Search,
-                    showLabel = drawerExpanded,
-                    staggerIndex = 5,
-                    modifier = Modifier
-                        .focusRequester(searchMenuFocus)
-                        .onFocusChanged { if (it.isFocused) searchActive = false }
-                        .focusProperties { right = FocusRequester.Cancel }
-                        .onPreviewKeyEvent { event ->
-                            if (section != DashSection.Search) return@onPreviewKeyEvent false
-                            if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
-                            searchActive = true
-                            searchEnterToken += 1
-                            true
-                        },
-                    onClick = { enterSection(DashSection.Search) },
-                )
-                NavItem(
-                    icon = EnigmaIcons.Record,
-                    label = stringResource(R.string.nav_my_items),
-                    selected = section == DashSection.MyItems,
-                    showLabel = drawerExpanded,
-                    staggerIndex = 6,
-                    modifier = Modifier
-                        .focusRequester(myItemsMenuFocus)
-                        .onFocusChanged {
-                            if (it.isFocused && !myItemsModel.holdList && returnToMyItemsId == null) {
-                                myItemsListActive = false
-                            }
-                        }
-                        .focusProperties { right = FocusRequester.Cancel }
-                        .onPreviewKeyEvent { event ->
-                            if (section != DashSection.MyItems) return@onPreviewKeyEvent false
-                            if (event.type != KeyEventType.KeyDown || event.key != Key.DirectionRight) return@onPreviewKeyEvent false
-                            myItemsListActive = true
-                            myItemsEnterToken += 1
-                            true
-                        },
-                    onClick = { enterSection(DashSection.MyItems) },
-                )
+                Spacer(Modifier.weight(1f))
+                // Settings and Exit sit at the bottom, under the five sections (Down from Library).
                 NavItem(
                     icon = Icons.Filled.Settings,
                     label = stringResource(R.string.nav_settings),
                     selected = section == DashSection.Settings,
                     showLabel = drawerExpanded,
-                    staggerIndex = 8,
+                    staggerIndex = 5,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .focusProperties { right = if (section == DashSection.Settings) settingsPageFocus else FocusRequester.Cancel },
@@ -556,10 +499,9 @@ fun DashboardScreen(
                     label = stringResource(R.string.nav_exit),
                     selected = false,
                     showLabel = drawerExpanded,
-                    staggerIndex = 9,
+                    staggerIndex = 6,
                     onClick = onExit,
                 )
-                Spacer(Modifier.weight(1f))
                 if (drawerExpanded) {
                     Text(
                         "${BuildConfig.VERSION_NAME}  ·  build ${BuildConfig.VERSION_CODE}",
@@ -583,6 +525,54 @@ fun DashboardScreen(
                         .fillMaxSize()
                         .onFocusChanged { contentFocused = it.hasFocus },
                 ) {
+                    Column(Modifier.fillMaxSize()) {
+                    DashGroups.groupOf(section)?.let { group ->
+                        val tabs = DashGroups.tabs(group)
+                        DashTabRow(
+                            tabs = tabs.map { target ->
+                                DashTab(
+                                    section = target,
+                                    label = stringResource(DashGroups.label(target)),
+                                    focus = tabFocus(target),
+                                    locked = lockedFeature(target) != null,
+                                )
+                            },
+                            active = section,
+                            menuFocus = if (group == DashGroup.TV) tvMenuFocus else libraryMenuFocus,
+                            onFocused = { tab ->
+                                retreat(if (group == DashGroup.TV) tvMenuFocus else libraryMenuFocus)
+                                when (tab.section) {
+                                    DashSection.Stream -> streamItemFocused = true
+                                    DashSection.Guide -> guideItemFocused = true
+                                    DashSection.Radio -> radioItemFocused = true
+                                    else -> Unit
+                                }
+                                // Moving along the tabs switches the page; Live TV only on OK (it opens the player).
+                                if (tab.section != DashSection.Stream && !tab.locked) openSection(tab.section)
+                            },
+                            onUnfocused = { streamItemFocused = false; guideItemFocused = false; radioItemFocused = false },
+                            onClick = { tab ->
+                                when {
+                                    tab.section == DashSection.Stream -> guideModel.openLive(onStream)
+                                    else -> enterSection(tab.section)
+                                }
+                            },
+                            onDown = { tab ->
+                                if (tab.locked) return@DashTabRow
+                                when (tab.section) {
+                                    DashSection.Stream -> if (section == DashSection.Stream) runCatching { bouquetFocus.requestFocus() }
+                                    DashSection.Guide -> { guideModel.focusFirstInGrid(); runCatching { guideGridFocus.requestFocus() } }
+                                    DashSection.Movies -> runCatching { moviesContentFocus.requestFocus() }
+                                    DashSection.Series -> runCatching { seriesContentFocus.requestFocus() }
+                                    DashSection.Radio -> runCatching { bouquetFocus.requestFocus() }
+                                    DashSection.MyItems -> { myItemsListActive = true; myItemsEnterToken += 1 }
+                                    DashSection.Search -> { searchActive = true; searchEnterToken += 1 }
+                                    else -> Unit
+                                }
+                            },
+                        )
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
                     EnigmaScreenTransition(targetState = section, modifier = Modifier.fillMaxSize()) { shown ->
                     when (shown) {
                         DashSection.Home -> {
@@ -768,6 +758,8 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxSize(),
                         )
                         }
+                    }
+                    }
                     }
                     }
                 }
