@@ -131,6 +131,7 @@ fun XtreamScreen(onBack: () -> Unit) {
         if (model.itemsReady > 0 && panelOpen) {
             if (model.section != XtreamSection.LIVE) {
                 column = PanelColumn.VOD_GRID
+                openRequest++
             } else {
                 column = PanelColumn.CHANNELS
                 itemFocus.requestWhenReady()

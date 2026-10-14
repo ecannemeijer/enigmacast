@@ -387,8 +387,8 @@ class XtreamViewModel @Inject constructor(
                 }
                 .onFailure { error = true }
             loading = false
-            // Films and series show the first category's cards right away (focus stays on the list).
-            if (section != XtreamSection.LIVE) categories.firstOrNull()?.let { loadCategory(account, it, announce = false) }
+            // Every section shows its first category right away, with focus on its first card / channel.
+            categories.firstOrNull()?.let { loadCategory(account, it) }
         }
     }
 

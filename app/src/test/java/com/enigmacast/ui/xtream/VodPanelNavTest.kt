@@ -15,4 +15,17 @@ class VodPanelNavTest {
         assertEquals(Column.CATEGORIES, VodPanelNav.back(Column.GRID))
         assertEquals(Column.SECTIONS, VodPanelNav.back(Column.CATEGORIES))
     }
+
+    @Test fun categoriesCollapseWhileGridHasFocus() {
+        assertFalse(VodPanelNav.categoriesShown(gridActive = true))
+        assertTrue(VodPanelNav.categoriesShown(gridActive = false))
+    }
+
+    @Test fun collapsedGridGetsMoreColumns() {
+        val narrow = VodPanelNav.columns(1000f - 256f, 132f, 16f)
+        val wide = VodPanelNav.columns(1000f, 132f, 16f)
+        assertEquals(5, narrow)
+        assertEquals(6, wide)
+        assertEquals(1, VodPanelNav.columns(10f, 132f, 16f))
+    }
 }

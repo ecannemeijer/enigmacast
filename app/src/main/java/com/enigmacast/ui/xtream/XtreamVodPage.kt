@@ -1,5 +1,10 @@
 package com.enigmacast.ui.xtream
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -62,7 +67,9 @@ import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.requestWhenReady
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-private const val GRID_COLUMNS = 5
+private val CATEGORIES_WIDTH = 240.dp
+private const val CARD_DP = 132f
+private const val GAP_DP = 16f
 
 /**
  * IPTV Films / Series: the categories on the left and, to their right, the poster grid of the
@@ -88,13 +95,26 @@ internal fun XtreamVodPage(
     val cards = model.cards
     Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         Box(Modifier.padding(start = 260.dp)) { Backdrop(focused) }
-        Row(
+        // The categories slide away while the grid has focus; the column stays laid out (clipped to
+        // zero width) so Left from a first card can focus it at once and it slides back in.
+        val categoriesWidth by androidx.compose.animation.core.animateDpAsState(
+            if (VodPanelNav.categoriesShown(gridActive)) CATEGORIES_WIDTH else 0.dp,
+            androidx.compose.animation.core.tween(220),
+            label = "vodCategories",
+        )
+        androidx.compose.foundation.layout.BoxWithConstraints(
             Modifier.fillMaxSize().padding(horizontal = EnigmaColors.SafeHorizontal / 2, vertical = EnigmaColors.SafeVertical),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+        val gridWidth = maxWidth - if (VodPanelNav.categoriesShown(gridActive)) CATEGORIES_WIDTH + 16.dp else 0.dp
+        val columns = VodPanelNav.columns(gridWidth.value, CARD_DP, GAP_DP)
+        Row(Modifier.fillMaxSize()) {
+            Box(
+                Modifier.width(categoriesWidth).fillMaxHeight().clipToBounds()
+                    .graphicsLayer { alpha = (categoriesWidth / CATEGORIES_WIDTH).coerceIn(0f, 1f) },
+            ) {
             // Categories; Right enters a grid that is already there.
             Column(
-                Modifier.width(240.dp).fillMaxHeight().background(EnigmaColors.Canvas.copy(alpha = 0.9f)).onFocusChanged { if (it.hasFocus) onCategories() }.columnKeysVod(
+                Modifier.wrapContentWidth(Alignment.Start, unbounded = true).requiredWidth(CATEGORIES_WIDTH).fillMaxHeight().background(EnigmaColors.Canvas.copy(alpha = 0.9f)).onFocusChanged { if (it.hasFocus) onCategories() }.columnKeysVod(
                     onLeft = onSections,
                     onRight = { if (VodPanelNav.canEnterGrid(model.cards.size)) onGrid() },
                 ),
@@ -123,6 +143,8 @@ internal fun XtreamVodPage(
                     }
                 }
             }
+            }
+            if (categoriesWidth > 0.dp) Spacer(Modifier.width(16.dp * (categoriesWidth / CATEGORIES_WIDTH).coerceIn(0f, 1f)))
             // The poster grid.
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 VodHeader(model.category?.name.orEmpty(), model.loading)
@@ -140,7 +162,7 @@ internal fun XtreamVodPage(
                 }
                 LaunchedEffect(gridActive) { if (gridActive) gridFocus.requestWhenReady() }
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(GRID_COLUMNS),
+                    columns = GridCells.Fixed(columns),
                     state = grid,
                     contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -152,15 +174,15 @@ internal fun XtreamVodPage(
                         val base = card.base
                         val movie = art[IptvVod.key(item)]
                         val film = remember(base, movie) { if (movie == null) base else IptvVod.film(item, movie) }
-                        val lastRowStart = (cards.size - 1) / GRID_COLUMNS * GRID_COLUMNS
+                        val lastRowStart = (cards.size - 1) / columns * columns
                         PosterCard(
                             film = film,
                             modifier = Modifier
                                 .then(if (index == 0) Modifier.focusRequester(gridFocus) else Modifier)
                                 .focusProperties {
-                                    if (index % GRID_COLUMNS == 0) left = categoryFocus
-                                    if (index % GRID_COLUMNS == GRID_COLUMNS - 1 || index == cards.lastIndex) right = FocusRequester.Cancel
-                                    if (index < GRID_COLUMNS) up = FocusRequester.Cancel
+                                    if (index % columns == 0) left = categoryFocus
+                                    if (index % columns == columns - 1 || index == cards.lastIndex) right = FocusRequester.Cancel
+                                    if (index < columns) up = FocusRequester.Cancel
                                     if (index >= lastRowStart) down = FocusRequester.Cancel
                                 },
                             onFocus = { focused = film },
@@ -173,6 +195,7 @@ internal fun XtreamVodPage(
                     }
                 }
             }
+        }
         }
     }
 
@@ -287,6 +310,13 @@ internal object VodPanelNav {
     enum class Column { SECTIONS, CATEGORIES, GRID }
 
     fun canEnterGrid(cards: Int) = cards > 0
+
+    /** The categories column is shown unless the grid has focus. */
+    fun categoriesShown(gridActive: Boolean) = !gridActive
+
+    /** Poster columns that fit [widthDp] (minus the grid's 8 dp side padding), at least 1. */
+    fun columns(widthDp: Float, cardDp: Float, gapDp: Float): Int =
+        (((widthDp - 16f) + gapDp) / (cardDp + gapDp)).toInt().coerceAtLeast(1)
 
     fun back(column: Column): Column = when (column) {
         Column.GRID -> Column.CATEGORIES
