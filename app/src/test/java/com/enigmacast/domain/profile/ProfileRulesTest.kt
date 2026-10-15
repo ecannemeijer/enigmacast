@@ -40,6 +40,27 @@ class ProfileRulesTest {
         assertNull(ProfileRules.unscope(ProfileState.DEFAULT_ID, "p-1|rec1"))
         assertNull(ProfileRules.unscope("p-1", "rec1"))
         assertEquals("1:0:19:1|100", ProfileRules.unscope(ProfileState.DEFAULT_ID, "1:0:19:1|100"))
+        val uuid = "11111111-1111-4111-8111-111111111111"
+        assertNull(ProfileRules.unscope(ProfileState.DEFAULT_ID, "$uuid|rec1"))
+        assertEquals("rec1", ProfileRules.unscope(uuid, "$uuid|rec1"))
+    }
+
+    @Test fun playlistAudienceEmptyMeansEveryone() {
+        val kid = ProfileRules.add(base, "p-1", "Kid", 3, uuid = "kid")
+        assertTrue(ProfileRules.seesPlaylist(kid, ProfileState.LEGACY_UUID))
+        assertTrue(ProfileRules.seesPlaylist(kid, "kid"))
+        val onlyKid = ProfileRules.playlistAccess(kid, "kid", allowed = true)
+            .let { ProfileRules.playlistAccess(it, ProfileState.LEGACY_UUID, allowed = false) }
+        assertFalse(ProfileRules.seesPlaylist(onlyKid, ProfileState.LEGACY_UUID))
+        assertTrue(ProfileRules.seesPlaylist(onlyKid, "kid"))
+        assertTrue(ProfileRules.playlistAccess(onlyKid, ProfileState.LEGACY_UUID, allowed = true).playlistAudience.isEmpty())
+    }
+
+    @Test fun legacyProfileKeepsStableUuid() {
+        val ready = ProfileRules.ensureDefault(ProfileState(), "Me")
+        assertEquals(ProfileState.LEGACY_UUID, ready.active.uuid)
+        val again = ProfileRules.ensureDefault(ready, "Me")
+        assertEquals(ProfileState.LEGACY_UUID, again.active.uuid)
     }
 
     @Test fun cannotDeleteActiveOrLast() {

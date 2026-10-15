@@ -34,6 +34,7 @@ class MyItemsViewModel @Inject constructor(
     private val playlistStore: com.enigmacast.data.xtream.IptvPlaylistStore,
     private val xtream: com.enigmacast.data.xtream.XtreamRepository,
     private val settingsSource: SettingsRepository,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
 ) : ViewModel() {
     /** Playlist accounts that are configured now; Library hides (keeps) entries of others. */
     private val activeSources = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
@@ -42,6 +43,7 @@ class MyItemsViewModel @Inject constructor(
         val settings = settingsSource.current()
         activeSources.value = runCatching {
             if (settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+                if (!profiles.seesPlaylist()) return@runCatching emptySet()
                 val login = playlistStore.login.value
                 when (settings.iptvPlaylistKind) {
                     com.enigmacast.domain.model.IptvPlaylistKind.XTREAM -> setOfNotNull(login.xtreamAccount()?.key)
@@ -133,7 +135,10 @@ class MyItemsViewModel @Inject constructor(
         }
     }
 
-    init { viewModelScope.launch { settingsSource.settings.collect { loadSources() } } }
+    init {
+        viewModelScope.launch { settingsSource.settings.collect { loadSources() } }
+        viewModelScope.launch { profiles.state.collect { loadSources() } }
+    }
 
     /** Saved positions by recording id, for the progress bars. */
     val resumePoints: StateFlow<Map<String, com.enigmacast.domain.resume.ResumePoint>> = resume.points

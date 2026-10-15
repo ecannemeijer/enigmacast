@@ -32,4 +32,14 @@ class HomeBouquetStore @Inject constructor(
 
     /** A profile switch changes the selection: let Home recompute. */
     fun profileChanged() { _changes.value++ }
+
+    /** Removes bouquet picks stored under a non-default profile id. */
+    fun purge(profileId: String) {
+        if (profileId == com.enigmacast.domain.profile.ProfileState.DEFAULT_ID) return
+        val marker = "|" + profileId + "|"
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.contains(marker) }.forEach { editor.remove(it) }
+        editor.apply()
+        _changes.value++
+    }
 }

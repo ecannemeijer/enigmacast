@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,7 +42,9 @@ class ProfileStore @Inject constructor(
     private fun load(): ProfileState {
         val raw = prefs.getString(KEY, null)
         val parsed = raw?.let { runCatching { json.decodeFromString(ProfileState.serializer(), it) }.getOrNull() } ?: ProfileState()
-        return ProfileRules.ensureDefault(parsed, context.getString(R.string.profile_default_name))
+        val next = ProfileRules.ensureDefault(parsed, context.getString(R.string.profile_default_name))
+        if (next != parsed) prefs.edit().putString(KEY, json.encodeToString(ProfileState.serializer(), next)).apply()
+        return next
     }
 
     private fun save(next: ProfileState) {
@@ -69,14 +70,18 @@ class ProfileStore @Inject constructor(
     }
 
     fun add(name: String, avatar: Int): String {
-        val id = ProfileRules.PROFILE_PREFIX + UUID.randomUUID().toString().take(8)
-        save(ProfileRules.add(_state.value, id, name, avatar))
+        val id = java.util.UUID.randomUUID().toString()
+        save(ProfileRules.add(_state.value, id, name, avatar, uuid = id))
         return id
     }
 
     fun edit(id: String, name: String, avatar: Int) = save(ProfileRules.edit(_state.value, id, name, avatar))
 
     fun delete(id: String) = save(ProfileRules.delete(_state.value, id))
+
+    fun seesPlaylist(uuid: String = _state.value.activeUuid): Boolean = ProfileRules.seesPlaylist(_state.value, uuid)
+
+    fun setPlaylistAccess(uuid: String, allowed: Boolean) = save(ProfileRules.playlistAccess(_state.value, uuid, allowed))
 
     /** The app language chosen while this profile is active. */
     fun setLanguage(tag: String) {

@@ -23,12 +23,14 @@ class IptvSearchSource @Inject constructor(
     private val playlistStore: IptvPlaylistStore,
     private val playlist: IptvPlaylistSync,
     private val repository: XtreamRepository,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
 ) {
     suspend fun search(query: String): IptvSearchResults {
         if (!IptvSearch.searchable(query) || !gate.allows(PremiumFeature.XTREAM)) return IptvSearchResults()
         return runCatching {
             val s = settings.current()
             if (s.iptvSource == IptvSourceMode.PLAYLIST) {
+                if (!profiles.seesPlaylist()) return IptvSearchResults()
                 val login = playlistStore.login.value
                 val source = when (s.iptvPlaylistKind) {
                     IptvPlaylistKind.XTREAM -> login.xtreamAccount()?.key

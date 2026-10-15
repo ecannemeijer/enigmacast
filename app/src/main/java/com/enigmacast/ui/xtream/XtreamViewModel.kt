@@ -69,6 +69,7 @@ class XtreamViewModel @Inject constructor(
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
     private val library: com.enigmacast.data.xtream.IptvLibrary,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val sleepTimer: com.enigmacast.playback.AppSleepTimer,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -535,7 +536,8 @@ class XtreamViewModel @Inject constructor(
                 settingsRepository.settings.map { Triple(it.iptvSource, it.iptvPlaylistKind, it.activeReceiver()) },
                 playlistStore.login,
                 playlistSync.lastLoad,
-            ) { s, login, loaded -> Source(s.first, s.second, s.third?.let { it.id to it.host }, login, loaded) }
+                profiles.state.map { com.enigmacast.domain.profile.ProfileRules.seesPlaylist(it, it.activeUuid) },
+            ) { s, login, loaded, sees -> Source(s.first, s.second, s.third?.let { it.id to it.host }, login, loaded, sees) }
                 .distinctUntilChanged()
                 .collectLatest { source -> apply(source) }
         }
@@ -547,13 +549,14 @@ class XtreamViewModel @Inject constructor(
         val receiver: Pair<String, String>?,
         val login: com.enigmacast.data.xtream.IptvPlaylistLogin,
         val loaded: Int,
+        val seesPlaylist: Boolean,
     )
 
     private suspend fun apply(source: Source) {
         if (source.mode == IptvSourceMode.PLAYLIST) {
             val wasPlaylist = playlist != null
             playlist = source.kind
-            val playlistAccount = when (source.kind) {
+            val playlistAccount = if (!source.seesPlaylist) null else when (source.kind) {
                 IptvPlaylistKind.XTREAM -> source.login.xtreamAccount()?.copy(name = "Playlist")
                 IptvPlaylistKind.M3U -> M3U_ACCOUNT.takeIf { source.login.configured(IptvPlaylistKind.M3U) }
             }

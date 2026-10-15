@@ -40,17 +40,28 @@ interface ResumeDao {
 
     @Query("DELETE FROM resume_positions WHERE `key` = :key")
     suspend fun delete(key: String)
+
+    @Query("DELETE FROM resume_positions WHERE `key` LIKE :prefix || '%'")
+    suspend fun deletePrefix(prefix: String)
 }
 
 /**
  * The viewer's own data (unlike [EnigmaDatabase], which is a cache that a schema change
  * wipes). Kept separate so resume positions survive cache rebuilds.
  */
-@Database(entities = [ResumeRow::class, SeriesRuleRow::class, IptvLibraryRow::class, IptvResumeRow::class], version = 3, exportSchema = false)
+@Database(
+    entities = [
+        ResumeRow::class, SeriesRuleRow::class, IptvLibraryRow::class, IptvResumeRow::class,
+        SyncOutboxRow::class, SyncCursorRow::class,
+    ],
+    version = 4,
+    exportSchema = false,
+)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun resume(): ResumeDao
     abstract fun seriesRules(): SeriesRuleDao
     abstract fun iptvLibrary(): IptvLibraryDao
+    abstract fun syncOutbox(): SyncOutboxDao
 
     companion object {
         const val NAME = "enigmacast-user.db"
@@ -64,7 +75,7 @@ object UserDatabaseModule {
     @Singleton
     fun userDatabase(@ApplicationContext context: Context): UserDatabase =
         Room.databaseBuilder(context, UserDatabase::class.java, UserDatabase.NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
@@ -94,8 +105,17 @@ object UserDatabaseModule {
         }
     }
 
+    internal val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            UserMigrations.v3ToV4 { db.execSQL(it) }
+        }
+    }
+
     @Provides
     fun iptvLibraryDao(db: UserDatabase): IptvLibraryDao = db.iptvLibrary()
+
+    @Provides
+    fun syncOutboxDao(db: UserDatabase): SyncOutboxDao = db.syncOutbox()
 
     @Provides
     fun seriesRuleDao(db: UserDatabase): SeriesRuleDao = db.seriesRules()
@@ -140,7 +160,7 @@ interface SeriesRuleDao {
 }
 
 /** An IPTV film ([kind] "m") or series ("s") in Library › IPTV favorites. [source] is the playlist account key. */
-@Entity(tableName = "iptv_library", primaryKeys = ["source", "kind", "id"])
+@Entity(tableName = "iptv_library", primaryKeys = ["source", "kind", "id", "profileId"])
 data class IptvLibraryRow(
     val source: String,
     val kind: String,
@@ -153,10 +173,12 @@ data class IptvLibraryRow(
     val extension: String,
     val url: String,
     val addedMs: Long,
+    /** Viewer who owns this favorite. Legacy rows are the original profile. */
+    val profileId: String = com.enigmacast.domain.profile.ProfileState.LEGACY_UUID,
 )
 
 /** Where the viewer stopped in an IPTV film ("m") or episode ("e"), for Continue watching. */
-@Entity(tableName = "iptv_resume", primaryKeys = ["source", "kind", "id"])
+@Entity(tableName = "iptv_resume", primaryKeys = ["source", "kind", "id", "profileId"])
 data class IptvResumeRow(
     val source: String,
     val kind: String,
@@ -173,6 +195,7 @@ data class IptvResumeRow(
     val seriesTitle: String?,
     val season: Int,
     val episode: Int,
+    val profileId: String = com.enigmacast.domain.profile.ProfileState.LEGACY_UUID,
 )
 
 @Dao
@@ -183,18 +206,67 @@ interface IptvLibraryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putFavorite(row: IptvLibraryRow)
 
-    @Query("DELETE FROM iptv_library WHERE source = :source AND kind = :kind AND id = :id")
-    suspend fun deleteFavorite(source: String, kind: String, id: String)
+    @Query("SELECT * FROM iptv_library WHERE profileId = :profileId AND source = :source AND kind = :kind AND id = :id")
+    suspend fun favorite(profileId: String, source: String, kind: String, id: String): IptvLibraryRow?
+
+    @Query("DELETE FROM iptv_library WHERE profileId = :profileId AND source = :source AND kind = :kind AND id = :id")
+    suspend fun deleteFavorite(profileId: String, source: String, kind: String, id: String)
+
+    @Query("DELETE FROM iptv_library WHERE profileId = :profileId")
+    suspend fun deleteFavoritesFor(profileId: String)
 
     @Query("SELECT * FROM iptv_resume ORDER BY updatedMs DESC")
     fun resumes(): Flow<List<IptvResumeRow>>
 
-    @Query("SELECT * FROM iptv_resume WHERE source = :source AND kind = :kind AND id = :id")
-    suspend fun resume(source: String, kind: String, id: String): IptvResumeRow?
+    @Query("SELECT * FROM iptv_resume WHERE profileId = :profileId AND source = :source AND kind = :kind AND id = :id")
+    suspend fun resume(profileId: String, source: String, kind: String, id: String): IptvResumeRow?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putResume(row: IptvResumeRow)
 
-    @Query("DELETE FROM iptv_resume WHERE source = :source AND kind = :kind AND id = :id")
-    suspend fun deleteResume(source: String, kind: String, id: String)
+    @Query("DELETE FROM iptv_resume WHERE profileId = :profileId AND source = :source AND kind = :kind AND id = :id")
+    suspend fun deleteResume(profileId: String, source: String, kind: String, id: String)
+
+    @Query("DELETE FROM iptv_resume WHERE profileId = :profileId")
+    suspend fun deleteResumesFor(profileId: String)
+}
+
+/** A local change waiting for the EnigmaCast sync server. [op] is "upsert" or "delete". */
+@Entity(tableName = "sync_outbox")
+data class SyncOutboxRow(
+    @PrimaryKey val changeId: String,
+    val profileId: String,
+    val entity: String,
+    val op: String,
+    val payload: String,
+    val updatedMs: Long,
+    val deviceId: String,
+)
+
+/** Last pulled cursor per profile. The server's cursor is opaque. */
+@Entity(tableName = "sync_cursor")
+data class SyncCursorRow(
+    @PrimaryKey val profileId: String,
+    val cursor: String,
+)
+
+@Dao
+interface SyncOutboxDao {
+    @Query("SELECT * FROM sync_outbox ORDER BY updatedMs, changeId")
+    suspend fun pending(): List<SyncOutboxRow>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(row: SyncOutboxRow)
+
+    @Query("DELETE FROM sync_outbox WHERE changeId = :changeId")
+    suspend fun delete(changeId: String)
+
+    @Query("DELETE FROM sync_outbox WHERE profileId = :profileId")
+    suspend fun deleteProfile(profileId: String)
+
+    @Query("SELECT * FROM sync_cursor WHERE profileId = :profileId")
+    suspend fun cursor(profileId: String): SyncCursorRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putCursor(row: SyncCursorRow)
 }

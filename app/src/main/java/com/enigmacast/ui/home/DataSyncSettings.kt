@@ -130,4 +130,5 @@ fun DataSyncSettingsCard(model: DataSyncViewModel = hiltViewModel()) {
             TvButton(stringResource(R.string.sync_clear_cache), { model.clearCache { refreshKey++ } })
         }
     }
+    SyncServerCard()
 }

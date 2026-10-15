@@ -44,6 +44,8 @@ import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.domain.profile.Profile
 import com.enigmacast.domain.profile.ProfileState
+import com.enigmacast.domain.security.PinHash
+import com.enigmacast.ui.security.PinPad
 import com.enigmacast.ui.soccer.focusLook
 import com.enigmacast.ui.soccer.rememberTvFocus
 import com.enigmacast.ui.soccer.tvClick
@@ -77,9 +79,10 @@ fun AvatarImage(index: Int, size: Dp, modifier: Modifier = Modifier) {
 @Composable
 fun ProfilePicker(model: ProfileViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
-    var editing by remember { mutableStateOf<Profile?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var pinSetup by remember { mutableStateOf<Profile?>(null) }
     val first = remember { FocusRequester() }
+    val editing = state.profiles.firstOrNull { it.id == model.editorId }
     Dialog(onDismissRequest = model::closePicker, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true)) {
         LaunchedEffect(Unit) { first.requestWhenReady() }
         Column(
@@ -94,7 +97,7 @@ fun ProfilePicker(model: ProfileViewModel) {
             Row(Modifier.padding(top = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 state.profiles.forEachIndexed { i, p ->
                     ProfileTile(p.name, p.avatar, p.id == state.activeId, model.managing, Modifier.focusRequesterIf(i == 0, first)) {
-                        if (model.managing) editing = p else model.choose(p.id)
+                        model.choose(p.id)
                     }
                 }
                 if (state.profiles.size < MAX_PROFILES) AddTile { adding = true }
@@ -112,9 +115,14 @@ fun ProfilePicker(model: ProfileViewModel) {
             title = stringResource(R.string.profile_edit),
             initialName = p.name, initialAvatar = p.avatar,
             canDelete = model.canDelete(p.id),
-            onSave = { name, avatar -> model.edit(p.id, name, avatar); editing = null },
-            onDelete = { model.delete(p.id); editing = null },
-            onDismiss = { editing = null },
+            hasPin = model.hasPin(p),
+            playlist = model.seesPlaylist(p),
+            onSave = { name, avatar, playlist -> model.edit(p.id, name, avatar, playlist) },
+            onDelete = { model.delete(p.id) },
+            onDismiss = model::closeEditor,
+            showPin = true,
+            onSetPin = { pinSetup = p },
+            onClearPin = { model.clearPin(p.id) },
         )
     }
     if (adding) {
@@ -122,9 +130,33 @@ fun ProfilePicker(model: ProfileViewModel) {
             title = stringResource(R.string.profile_add),
             initialName = "", initialAvatar = state.profiles.size % ProfileState.AVATAR_COUNT,
             canDelete = false,
-            onSave = { name, avatar -> model.add(name, avatar); adding = false },
+            onSave = { name, avatar, playlist ->
+                val id = model.add(name, avatar)
+                model.edit(id, name, avatar, playlist)
+                adding = false
+            },
             onDelete = {},
             onDismiss = { adding = false },
+        )
+    }
+    val locking = model.pinProfile
+    if (locking != null) {
+        val wrong = stringResource(R.string.pin_wrong)
+        val cool = stringResource(R.string.pin_cooldown)
+        Dialog(onDismissRequest = model::cancelPin, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            PinPad(
+                title = stringResource(R.string.profile_pin_title, locking.name),
+                error = model.pinError,
+                busy = false,
+                onSubmit = { model.submitPin(it, { n -> wrong.format(n) }, { n -> cool.format(n) }) },
+                onCancel = model::cancelPin,
+            )
+        }
+    }
+    pinSetup?.let { profile ->
+        PinSetupDialog(
+            onSave = { pin -> model.setPin(profile.id, pin); pinSetup = null },
+            onDismiss = { pinSetup = null },
         )
     }
 }
@@ -179,12 +211,18 @@ fun ProfileEditor(
     initialName: String,
     initialAvatar: Int,
     canDelete: Boolean,
-    onSave: (String, Int) -> Unit,
+    onSave: (String, Int, Boolean) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
+    hasPin: Boolean = false,
+    playlist: Boolean = true,
+    showPin: Boolean = false,
+    onSetPin: () -> Unit = {},
+    onClearPin: () -> Unit = {},
 ) {
     var name by remember { mutableStateOf(initialName) }
     var avatar by remember { mutableIntStateOf(initialAvatar) }
+    var playlistOn by remember { mutableStateOf(playlist) }
     var confirmDelete by remember { mutableStateOf(false) }
     val field = remember { FocusRequester() }
     if (confirmDelete) {
@@ -228,8 +266,15 @@ fun ProfileEditor(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogButton(stringResource(R.string.profile_save), { if (name.isNotBlank()) onSave(name, avatar) }, destructive = false, enabled = name.isNotBlank(), compact = true)
+                DialogButton(stringResource(R.string.profile_save), { if (name.isNotBlank()) onSave(name, avatar, playlistOn) }, destructive = false, enabled = name.isNotBlank(), compact = true)
                 if (canDelete) DialogButton(stringResource(R.string.profile_delete), { confirmDelete = true }, destructive = true, enabled = true, compact = true)
+                if (showPin) {
+                    DialogButton(stringResource(if (hasPin) R.string.profile_pin_clear else R.string.profile_pin_set), { if (hasPin) onClearPin() else onSetPin() }, destructive = false, enabled = true, compact = true)
+                }
+                DialogButton(
+                    stringResource(if (playlistOn) R.string.profile_playlist_on else R.string.profile_playlist_off),
+                    { playlistOn = !playlistOn }, destructive = false, enabled = true, compact = true,
+                )
                 DialogButton(stringResource(R.string.cancel), onDismiss, destructive = false, enabled = true, compact = true)
             }
         }
@@ -289,5 +334,32 @@ fun ProfileMenu(model: ProfileViewModel, powerLabel: String, powerAction: String
             DialogButton(powerAction, { model.closeMenu(); onPower() }, destructive = false, enabled = true, compact = true, modifier = Modifier.fillMaxWidth())
             DialogButton(stringResource(R.string.close), model::closeMenu, destructive = false, enabled = true, compact = true, modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+/** Two-step PIN entry. The digits stay in memory only until [onSave]. */
+@Composable
+private fun PinSetupDialog(onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var first by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val mismatch = stringResource(R.string.pin_mismatch)
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        PinPad(
+            title = stringResource(if (first == null) R.string.pin_new_title else R.string.pin_repeat_title),
+            error = error,
+            busy = false,
+            onSubmit = { pin ->
+                if (!PinHash.valid(pin)) return@PinPad
+                val previous = first
+                if (previous == null) {
+                    first = pin
+                    error = null
+                } else if (previous == pin) onSave(pin) else {
+                    first = null
+                    error = mismatch
+                }
+            },
+            onCancel = onDismiss,
+        )
     }
 }

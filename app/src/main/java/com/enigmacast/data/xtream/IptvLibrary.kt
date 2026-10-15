@@ -4,6 +4,10 @@ import android.content.Context
 import com.enigmacast.data.db.IptvLibraryDao
 import com.enigmacast.data.db.IptvLibraryRow
 import com.enigmacast.data.db.IptvResumeRow
+import com.enigmacast.data.db.SyncOutboxDao
+import com.enigmacast.data.db.SyncOutboxRow
+import com.enigmacast.data.profile.ProfileStore
+import com.enigmacast.domain.profile.ProfileState
 import com.enigmacast.domain.xtream.XtreamItem
 import com.enigmacast.domain.xtream.XtreamSection
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -15,9 +19,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /** What Library or Search asks the IPTV page to open. */
 /** [origin] = where it was started ("home/<card key>" or "<row>/<card key>" in Library), to return there afterwards. */
@@ -41,12 +47,19 @@ data class IptvOpenRequest(
 @Singleton
 class IptvLibrary @Inject constructor(
     private val dao: IptvLibraryDao,
+    private val outbox: SyncOutboxDao,
+    private val profiles: ProfileStore,
+    private val trigger: com.enigmacast.data.enigmasync.SyncTrigger,
     @ApplicationContext private val context: Context,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val favorites: StateFlow<List<IptvLibraryRow>> = dao.favorites().stateIn(scope, SharingStarted.Eagerly, emptyList())
-    val resumes: StateFlow<List<IptvResumeRow>> = dao.resumes().stateIn(scope, SharingStarted.Eagerly, emptyList())
+    val favorites: StateFlow<List<IptvLibraryRow>> = combine(dao.favorites(), profiles.state) { rows, state ->
+        rows.filter { it.profileId == state.activeUuid }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+    val resumes: StateFlow<List<IptvResumeRow>> = combine(dao.resumes(), profiles.state) { rows, state ->
+        rows.filter { it.profileId == state.activeUuid }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyList())
     val resumeMap: StateFlow<Map<String, IptvResumeRow>> = resumes.map { list -> list.associateBy { key(it.source, it.kind, it.id) } }
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
     val favoriteKeys: StateFlow<Set<String>> = favorites.map { list -> list.map { key(it.source, it.kind, it.id) }.toSet() }
@@ -59,20 +72,75 @@ class IptvLibrary @Inject constructor(
 
     init { scope.launch { migratePrefs() } }
 
-    fun saveResume(row: IptvResumeRow) { scope.launch { dao.putResume(row) } }
-    fun clearResume(source: String, kind: String, id: String) { scope.launch { dao.deleteResume(source, kind, id) } }
+    fun saveResume(row: IptvResumeRow) {
+        val profileId = profiles.state.value.activeUuid
+        val stamped = row.copy(profileId = profileId)
+        scope.launch {
+            dao.putResume(stamped)
+            enqueue(profileId, "progress", "upsert", stamped.updatedMs, progressPayload(stamped))
+            trigger.nudge()
+        }
+    }
+
+    fun clearResume(source: String, kind: String, id: String) {
+        val profileId = profiles.state.value.activeUuid
+        val now = System.currentTimeMillis()
+        scope.launch {
+            dao.deleteResume(profileId, source, kind, id)
+            enqueue(profileId, "progress", "delete", now, """{"source":${json(source)},"kind":${json(kind)},"id":${json(id)}}""")
+            trigger.nudge()
+        }
+    }
 
     fun setFavorite(row: IptvLibraryRow, on: Boolean) {
-        scope.launch { if (on) dao.putFavorite(row) else dao.deleteFavorite(row.source, row.kind, row.id) }
+        val profileId = profiles.state.value.activeUuid
+        val stamped = row.copy(profileId = profileId)
+        val now = System.currentTimeMillis()
+        scope.launch {
+            if (on) {
+                dao.putFavorite(stamped)
+                enqueue(profileId, "favorite", "upsert", now, favoritePayload(stamped))
+            } else {
+                dao.deleteFavorite(profileId, stamped.source, stamped.kind, stamped.id)
+                enqueue(profileId, "favorite", "delete", now, """{"source":${json(stamped.source)},"kind":${json(stamped.kind)},"id":${json(stamped.id)}}""")
+            }
+            trigger.nudge()
+        }
+    }
+
+    private suspend fun enqueue(profileId: String, entity: String, op: String, updatedMs: Long, payload: String) {
+        outbox.put(SyncOutboxRow(UUID.randomUUID().toString(), profileId, entity, op, payload, updatedMs, ""))
     }
 
     private suspend fun migratePrefs() {
         val prefs = context.getSharedPreferences("iptv_resume", Context.MODE_PRIVATE)
         val rows = IptvResumeMigration.rows(prefs.all, System.currentTimeMillis())
         if (rows.isEmpty()) return
-        rows.forEach { if (dao.resume(it.source, it.kind, it.id) == null) dao.putResume(it) }
+        val profileId = ProfileState.LEGACY_UUID
+        rows.forEach { row ->
+            val stamped = row.copy(profileId = profileId)
+            if (dao.resume(profileId, stamped.source, stamped.kind, stamped.id) == null) dao.putResume(stamped)
+        }
         prefs.edit().clear().apply()
     }
+
+    private fun json(value: String) = buildString {
+        append('"')
+        value.forEach { ch ->
+            when (ch) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                else -> append(ch)
+            }
+        }
+        append('"')
+    }
+
+    private fun favoritePayload(row: IptvLibraryRow) =
+        """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"title":${json(row.title)},"addedMs":${row.addedMs}}"""
+
+    private fun progressPayload(row: IptvResumeRow) =
+        """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"positionMs":${row.positionMs},"durationMs":${row.durationMs},"updatedMs":${row.updatedMs},"season":${row.season},"episode":${row.episode}}"""
 
     companion object {
         fun key(source: String, kind: String, id: String) = "$source/$kind/$id"

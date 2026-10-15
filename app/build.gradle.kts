@@ -14,8 +14,8 @@ android {
         applicationId = libs.versions.applicationId.get()
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 39
-        versionName = "1.0.0-beta.36"
+        versionCode = 41
+        versionName = "1.0.0-beta.38"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey()}\"")
         buildConfigField("String", "FOOTBALL_DATA_API_KEY", "\"${localProperty("FOOTBALL_DATA_API_KEY")}\"")
         buildConfigField("String", "PITCH_API_KEY", "\"${localProperty("PITCH_API_KEY")}\"")
@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.timber)
     implementation(libs.commons.net)
+    implementation("com.github.mwiede:jsch:0.2.21")
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui.compose)
     implementation(libs.media3.datasource.okhttp)
@@ -97,6 +98,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("org.xerial:sqlite-jdbc:3.47.2.0")
 }
 
 /** TMDB v3 key from local.properties (TMDB_API_KEY=...), never from source control. Blank disables the film home page. */
