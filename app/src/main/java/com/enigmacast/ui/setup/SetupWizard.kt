@@ -278,6 +278,9 @@ private fun ProfileStep(model: SetupViewModel, focus: FocusRequester) {
         }
         return
     }
+    if (model.dashboardPassword.isNotBlank()) {
+        Text(stringResource(R.string.setup_profile_web_password, model.dashboardPassword), color = EnigmaColors.Muted, fontSize = 15.sp)
+    }
     TvTextField(
         label = stringResource(R.string.setup_profile_name),
         value = model.profileName,

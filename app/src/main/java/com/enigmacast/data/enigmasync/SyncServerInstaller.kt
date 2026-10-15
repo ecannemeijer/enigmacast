@@ -45,19 +45,13 @@ class SyncServerInstaller @Inject constructor() {
             val remote = "/usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync"
             val init = exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init || true")
             exec(session, "/etc/init.d/enigmacast-sync restart || true; /etc/init.d/enigmacast-web restart || true")
+            exec(session, setAdminPassword(dataDir))
+            exec(session, "/etc/init.d/enigmacast-web restart || true")
             val cert = exec(session, "cat '$dataDir/cert.pem'")
             val pin = pinOf(cert)
-            var webPassword = ""
-            repeat(8) {
-                if (webPassword.isBlank()) {
-                    webPassword = exec(session, "cat '$dataDir/web-password-once' 2>/dev/null || true").trim()
-                    if (webPassword.isBlank()) exec(session, "sleep 1")
-                }
-            }
-            if (webPassword.isNotBlank()) exec(session, "rm -f '$dataDir/web-password-once'")
             val scheme = if (cert.contains("BEGIN CERTIFICATE")) "https" else "http"
             val code = Regex(""""pairingCode"\s*:\s*"(\d+)"""").find(init)?.groupValues?.get(1).orEmpty()
-            return InstallReport(model, python, dataDir, code, pin, "$scheme://$host:8766/", webPassword)
+            return InstallReport(model, python, dataDir, code, pin, "$scheme://$host:8766/", "admin")
         } finally {
             session.disconnect()
         }
@@ -96,6 +90,25 @@ class SyncServerInstaller @Inject constructor() {
         if (channel.exitStatus != 0 && text.isBlank()) error(String(stderr.toByteArray(), Charsets.UTF_8).ifBlank { "SSH command failed" })
         return text
     }
+
+    private fun setAdminPassword(dataDir: String): String = """
+        python3 - '$dataDir' <<'PY'
+        import base64, hashlib, json, secrets, sys
+        from pathlib import Path
+        data = Path(sys.argv[1])
+        password = b"admin"
+        salt = secrets.token_bytes(16)
+        digest = hashlib.pbkdf2_hmac("sha256", password, salt, 200_000)
+        (data / "web-auth.json").write_text(json.dumps({
+            "salt": base64.b64encode(salt).decode("ascii"),
+            "hash": base64.b64encode(digest).decode("ascii"),
+            "iterations": 200_000,
+        }), encoding="utf-8")
+        once = data / "web-password-once"
+        if once.is_file():
+            once.unlink()
+        PY
+    """.trimIndent()
 
     private fun pinOf(pem: String): String {
         val cert = CertificateFactory.getInstance("X.509").generateCertificate(pem.byteInputStream()) as X509Certificate

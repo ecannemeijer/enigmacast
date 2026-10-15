@@ -1070,6 +1070,7 @@
     <string name="setup_sync_dashboard_open">Open Web Dashboard</string>
     <string name="setup_sync_dashboard_continue">Continue</string>
     <string name="setup_sync_link_profiles">Choose a profile. Signing in syncs it.</string>
+    <string name="setup_profile_web_password">The web dashboard password is %1$s.</string>
     <string name="setup_profile_name">Your name</string>
     <string name="setup_profile_avatar">Pick a picture</string>
     <string name="setup_viewing_title">How do you want to watch?</string>

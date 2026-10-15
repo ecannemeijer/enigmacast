@@ -1067,6 +1067,7 @@
     <string name="setup_sync_dashboard_open">Open webdashboard</string>
     <string name="setup_sync_dashboard_continue">Verder</string>
     <string name="setup_sync_link_profiles">Kies een profiel. Inloggen synchroniseert het meteen.</string>
+    <string name="setup_profile_web_password">Het wachtwoord van het webdashboard is %1$s.</string>
     <string name="setup_profile_name">Je naam</string>
     <string name="setup_profile_avatar">Kies een plaatje</string>
     <string name="setup_viewing_title">Hoe wil je kijken?</string>

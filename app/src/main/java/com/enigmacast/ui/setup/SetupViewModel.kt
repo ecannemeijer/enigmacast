@@ -16,6 +16,7 @@ import com.enigmacast.data.tmdb.HomeBouquetStore
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.model.StreamMode
+import com.enigmacast.domain.profile.ProfileState
 import com.enigmacast.data.enigmasync.EnigmaSyncClient
 import com.enigmacast.data.enigmasync.EnigmaSyncEngine
 import com.enigmacast.data.enigmasync.SyncDiscovery
@@ -209,6 +210,7 @@ class SetupViewModel @Inject constructor(
                     syncLinked = true
                     dashboardUrl = report.dashboardUrl
                     dashboardPassword = report.dashboardPassword
+                    go(SetupStep.next(step))
                 },
                 onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
             )
@@ -232,8 +234,12 @@ class SetupViewModel @Inject constructor(
         go(SetupStep.next(step))
     }
 
-    fun profilesForPicker() = profiles.state.value.profiles.filter { profile ->
-        (syncLinked || syncClient.config() != null) && profile.name.isNotBlank()
+    fun profilesForPicker(): List<com.enigmacast.domain.profile.Profile> {
+        if (!syncLinked && syncClient.config() == null) return emptyList()
+        val state = profiles.state.value
+        val onlySuggested = !state.chosenOnce && state.profiles.size == 1 && state.profiles[0].id == ProfileState.DEFAULT_ID
+        if (onlySuggested) return emptyList()
+        return state.profiles.filter { it.name.isNotBlank() }
     }
 
     fun chooseProfile(id: String) {
