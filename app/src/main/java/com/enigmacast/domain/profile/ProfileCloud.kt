@@ -1,8 +1,10 @@
 package com.enigmacast.domain.profile
 
+import com.enigmacast.domain.model.StartupLive
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 /** Home bouquet picks that belong to one profile. [all] lists receivers explicitly set back to every bouquet. */
 @Serializable
@@ -47,4 +49,15 @@ object ProfileCloud {
 
     /** Defaults only: do not upload them over a profile another device already filled in. */
     fun untouched(snapshot: ProfileSettingsSnapshot): Boolean = snapshot.normalized() == ProfileSettingsSnapshot().normalized()
+
+    /** Old server documents have no startup choice. Missing means "leave the value already stored". */
+    fun includesStartupLive(raw: String): Boolean = runCatching {
+        val scope = json.parseToJsonElement(raw).jsonObject["scope"]?.jsonObject ?: return false
+        "startupLive" in scope
+    }.getOrDefault(false)
+
+    fun keepStartupWhenMissing(snapshot: ProfileSettingsSnapshot, raw: String, keep: StartupLive): ProfileSettingsSnapshot {
+        if (includesStartupLive(raw) || snapshot.scope.startupLive == keep) return snapshot
+        return snapshot.copy(scope = snapshot.scope.copy(startupLive = keep))
+    }
 }

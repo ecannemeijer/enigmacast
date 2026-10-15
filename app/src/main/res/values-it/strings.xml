@@ -1046,6 +1046,10 @@
     <string name="setup_receiver_connected">Connesso a %1$s (%2$s). Premi Avanti per continuare, o modifica i dati qui sotto.</string>
     <string name="setup_profile_title">Chi sta guardando?</string>
     <string name="setup_profile_body">Dai un nome al tuo profilo e scegli un\'immagine. Più avanti ogni persona in casa potrà avere un profilo, con i propri canali e la propria lingua.</string>
+    <string name="setup_iptv_title">Portare l\'accesso IPTV?</string>
+    <string name="setup_iptv_body">Su questo server di sincronizzazione c\'è già una playlist M3U o un accesso Xtream Codes. Portarlo su questa TV? L\'elenco dei canali si scarica dopo i bouquet e la guida.</string>
+    <string name="setup_iptv_yes">Sì, portalo</string>
+    <string name="setup_iptv_no">No, lascialo</string>
     <string name="setup_profile_name">Il tuo nome</string>
     <string name="setup_profile_avatar">Scegli un\'immagine</string>
     <string name="setup_viewing_title">Come vuoi guardare?</string>

@@ -1057,7 +1057,11 @@
     <string name="setup_profile_title">Who is watching?</string>
     <string name="setup_profile_body">Give your profile a name and pick a picture. Each person in the house can have a profile later, with their own channels and language.</string>
     <string name="setup_sync_link_title">Sync server</string>
-    <string name="setup_sync_link_body">EnigmaCast looks on your home network for the sync server. Pair this TV, or keep it standalone. After pairing you choose a profile, and that profile syncs when you sign in.</string>
+    <string name="setup_sync_link_body">EnigmaCast looks on your home network for the sync server. Pair this TV, or keep it standalone. After pairing, the profile is chosen when setup finishes.</string>
+    <string name="setup_iptv_title">Take your IPTV login along?</string>
+    <string name="setup_iptv_body">This sync server already has an M3U playlist or Xtream Codes login. Take it onto this TV? The channel list downloads after the bouquets and the guide, so it does not slow those down.</string>
+    <string name="setup_iptv_yes">Yes, take it along</string>
+    <string name="setup_iptv_no">No, leave it</string>
     <string name="setup_sync_link_searching">Looking for the sync server…</string>
     <string name="setup_sync_link_found">Sync server found at %1$s. Pair this TV?</string>
     <string name="setup_sync_link_missing">No sync server found on this network.</string>

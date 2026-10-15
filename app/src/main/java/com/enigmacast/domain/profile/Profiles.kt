@@ -7,6 +7,7 @@ import com.enigmacast.domain.model.LastLiveSource
 import com.enigmacast.domain.model.MotionQuality
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.OsdSkinId
+import com.enigmacast.domain.model.StartupLive
 import com.enigmacast.domain.player.PictureMode
 import kotlinx.serialization.Serializable
 
@@ -35,6 +36,8 @@ data class ProfileScope(
     val osdInfo: OsdInfoFields = OsdInfoFields(),
     val navigationSounds: Boolean = true,
     val motionQuality: MotionQuality = MotionQuality.PREMIUM,
+    /** Settings › Playback: open fullscreen live TV on this source when the app starts. */
+    val startupLive: StartupLive = StartupLive.OFF,
 ) {
     fun applyTo(settings: AppSettings): AppSettings = settings.copy(
         lastChannels = lastChannels,
@@ -46,12 +49,14 @@ data class ProfileScope(
         osdInfo = osdInfo,
         navigationSounds = navigationSounds,
         motionQuality = motionQuality,
+        startupLive = startupLive,
     )
 
     companion object {
         fun of(settings: AppSettings) = ProfileScope(
             settings.lastChannels, settings.recentByReceiver, settings.lastLiveSource, settings.lastIptvChannels,
             settings.pictureModes, settings.osdSkin, settings.osdInfo, settings.navigationSounds, settings.motionQuality,
+            settings.startupLive,
         )
     }
 }

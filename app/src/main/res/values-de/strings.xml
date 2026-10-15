@@ -1042,6 +1042,10 @@
     <string name="setup_receiver_connected">Verbunden mit %1$s (%2$s). Drücke Weiter oder ändere die Angaben unten.</string>
     <string name="setup_profile_title">Wer schaut?</string>
     <string name="setup_profile_body">Gib deinem Profil einen Namen und wähle ein Bild. Jede Person im Haushalt kann später ein eigenes Profil haben, mit eigenen Sendern und eigener Sprache.</string>
+    <string name="setup_iptv_title">IPTV-Login übernehmen?</string>
+    <string name="setup_iptv_body">Auf diesem Sync-Server liegt bereits eine M3U-Playlist oder ein Xtream-Codes-Login. Auf diesen Fernseher übernehmen? Die Senderliste wird erst geladen, nachdem die Bouquets und die Programmzeitschrift da sind.</string>
+    <string name="setup_iptv_yes">Ja, übernehmen</string>
+    <string name="setup_iptv_no">Nein, nicht übernehmen</string>
     <string name="setup_profile_name">Dein Name</string>
     <string name="setup_profile_avatar">Wähle ein Bild</string>
     <string name="setup_viewing_title">Wie möchtest du schauen?</string>

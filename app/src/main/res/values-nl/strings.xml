@@ -1054,7 +1054,11 @@
     <string name="setup_profile_title">Wie kijkt er?</string>
     <string name="setup_profile_body">Geef je profiel een naam en kies een plaatje. Later kan iedereen in huis een eigen profiel krijgen, met eigen zenders en taal.</string>
     <string name="setup_sync_link_title">Syncserver</string>
-    <string name="setup_sync_link_body">EnigmaCast zoekt op je thuisnetwerk naar de syncserver. Koppel deze tv, of blijf zelfstandig. Na het koppelen kies je een profiel, en dat profiel synchroniseert bij het inloggen.</string>
+    <string name="setup_sync_link_body">EnigmaCast zoekt op je thuisnetwerk naar de syncserver. Koppel deze tv, of blijf zelfstandig. Na het koppelen kies je het profiel als de wizard klaar is.</string>
+    <string name="setup_iptv_title">IPTV-login meenemen?</string>
+    <string name="setup_iptv_body">Op deze syncserver staat al een M3U-playlist of Xtream Codes-login. Meenemen naar deze tv? De zenderlijst wordt pas gedownload nadat de boeketten en de gids binnen zijn, zodat dat elkaar niet in de weg zit.</string>
+    <string name="setup_iptv_yes">Ja, meenemen</string>
+    <string name="setup_iptv_no">Nee, laten</string>
     <string name="setup_sync_link_searching">Syncserver zoeken…</string>
     <string name="setup_sync_link_found">Syncserver gevonden op %1$s. Deze tv koppelen?</string>
     <string name="setup_sync_link_missing">Geen syncserver gevonden op dit netwerk.</string>

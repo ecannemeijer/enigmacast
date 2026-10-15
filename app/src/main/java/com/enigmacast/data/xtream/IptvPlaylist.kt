@@ -105,6 +105,19 @@ class IptvPlaylistStore @Inject constructor(
         revisionPrefs.edit().putBoolean(REV_DIRTY, false).apply()
     }
 
+    /** The wizard said no to this server revision, so a later sync does not take that same login. */
+    fun isDeclined(changeId: String): Boolean =
+        changeId.isNotBlank() && revisionPrefs.getString(DECLINED, null) == changeId
+
+    fun decline(changeId: String) {
+        if (changeId.isBlank()) return
+        revisionPrefs.edit().putString(DECLINED, changeId).apply()
+    }
+
+    fun clearDecline() {
+        revisionPrefs.edit().remove(DECLINED).apply()
+    }
+
     private fun read() = IptvPlaylistLogin(
         secrets.read(M3U).orEmpty(), secrets.read(SERVER).orEmpty(), secrets.read(USER).orEmpty(), secrets.read(PASS).orEmpty(),
     )
@@ -127,6 +140,7 @@ class IptvPlaylistStore @Inject constructor(
         const val REV_MS = "updated_ms"
         const val REV_CHANGE = "change_id"
         const val REV_DIRTY = "dirty"
+        const val DECLINED = "declined_change_id"
         const val LOADED = "iptv.playlist.loaded_at"
         const val M3U = "iptv.playlist.m3u"
         const val SERVER = "iptv.playlist.server"
@@ -153,6 +167,8 @@ class IptvPlaylistSync @Inject constructor(
     @Volatile var loadAfterCache: Boolean = false
 
     fun arm() { loadAfterCache = true }
+
+    fun hasLogin(kind: IptvPlaylistKind): Boolean = store.login.value.configured(kind)
     private val _lastLoad = MutableStateFlow(0)
     /** Goes up after every finished load, so pages reading Room reload. */
     val lastLoad: StateFlow<Int> = _lastLoad

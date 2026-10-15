@@ -19,6 +19,7 @@ import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.profile.ProfileState
 import com.enigmacast.data.enigmasync.EnigmaSyncClient
 import com.enigmacast.data.enigmasync.EnigmaSyncEngine
+import com.enigmacast.data.enigmasync.RemoteIptvOffer
 import com.enigmacast.data.enigmasync.SyncDiscovery
 import com.enigmacast.data.enigmasync.SyncServerInstaller
 import com.enigmacast.domain.setup.SetupStep
@@ -106,26 +107,38 @@ class SetupViewModel @Inject constructor(
         SetupStep.RECEIVER -> receiver.value != null
         SetupStep.SYNC_LINK -> syncLinked || syncClient.config() != null
         SetupStep.PROFILE -> profileName.isNotBlank() && (creatingProfile || namedProfiles(profiles.state.value).isEmpty())
+        SetupStep.IPTV_OFFER -> false
         else -> true
     }
 
+    /** A server IPTV login waiting for a yes or no. Null hides that wizard step. */
+    var iptvOffer by mutableStateOf<RemoteIptvOffer?>(null)
+        private set
+    var iptvMessage by mutableStateOf("")
+        private set
+    private var iptvOfferReady = false
+
     fun next() {
         if (step == SetupStep.DONE) return
+        if (step == SetupStep.SYNC_LINK) {
+            leaveSyncLink()
+            return
+        }
         if (step == SetupStep.PROFILE) {
             viewModelScope.launch {
                 saveProfile()
-                go(SetupStep.next(SetupStep.PROFILE))
+                go(forward(SetupStep.PROFILE))
             }
             return
         }
         if (step == SetupStep.BOUQUETS) saveBouquets()
-        go(SetupStep.next(step))
+        go(forward(step))
     }
 
     /** Optional steps: leave what is there and go on. */
     fun skip() {
         if (step == SetupStep.PROFILE) profiles.confirmActive()
-        go(SetupStep.next(step))
+        go(forward(step))
     }
 
     /** False on the first step: there is nothing to go back to. */
@@ -134,9 +147,65 @@ class SetupViewModel @Inject constructor(
             creatingProfile = false
             return true
         }
-        val previous = SetupStep.previous(step) ?: return false
+        val previous = backward(step) ?: return false
         go(previous)
         return true
+    }
+
+    /** Paired: the profile is chosen after the wizard, on "Who's watching?". */
+    private fun syncPaired(): Boolean = syncLinked || syncClient.config() != null
+
+    private fun omitted(target: SetupStep): Boolean = when (target) {
+        SetupStep.PROFILE -> syncPaired()
+        SetupStep.IPTV_OFFER -> iptvOffer == null
+        else -> false
+    }
+
+    private fun forward(from: SetupStep): SetupStep {
+        var target = SetupStep.next(from)
+        while (omitted(target) && target != SetupStep.DONE) target = SetupStep.next(target)
+        return target
+    }
+
+    private fun backward(from: SetupStep): SetupStep? {
+        var target = SetupStep.previous(from)
+        while (target != null && omitted(target)) target = SetupStep.previous(target)
+        return target
+    }
+
+    private fun leaveSyncLink() {
+        if (!syncPaired()) {
+            go(forward(SetupStep.SYNC_LINK))
+            return
+        }
+        viewModelScope.launch {
+            ensureIptvOffer()
+            if (step == SetupStep.SYNC_LINK) go(forward(SetupStep.SYNC_LINK))
+        }
+    }
+
+    private suspend fun ensureIptvOffer() {
+        if (iptvOfferReady) return
+        iptvOfferReady = true
+        iptvOffer = runCatching { syncEngine.peekPlaylist() }.getOrNull()
+    }
+
+    fun takeIptv() {
+        val offer = iptvOffer ?: return
+        iptvMessage = ""
+        viewModelScope.launch {
+            val result = runCatching { syncEngine.takePlaylist(offer) }
+            if (result.isFailure) {
+                iptvMessage = result.exceptionOrNull()?.message.orEmpty()
+                return@launch
+            }
+            go(forward(SetupStep.IPTV_OFFER))
+        }
+    }
+
+    fun leaveIptv() {
+        iptvOffer?.let { syncEngine.declinePlaylist(it.changeId) }
+        go(forward(SetupStep.IPTV_OFFER))
     }
 
     private fun go(target: SetupStep) {
@@ -191,7 +260,7 @@ class SetupViewModel @Inject constructor(
             result.fold(
                 onSuccess = {
                     syncLinked = true
-                    go(SetupStep.next(step))
+                    leaveSyncLink()
                 },
                 onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
             )
@@ -223,7 +292,6 @@ class SetupViewModel @Inject constructor(
                     syncLinked = true
                     dashboardUrl = report.dashboardUrl
                     dashboardPassword = report.dashboardPassword
-                    go(SetupStep.next(step))
                 },
                 onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
             )
@@ -232,7 +300,7 @@ class SetupViewModel @Inject constructor(
 
     fun continueAfterInstall() {
         dashboardPassword = ""
-        go(SetupStep.next(step))
+        leaveSyncLink()
     }
 
     fun openDashboard(context: Context) {
@@ -244,7 +312,7 @@ class SetupViewModel @Inject constructor(
     }
 
     fun stayStandalone() {
-        go(SetupStep.next(step))
+        leaveSyncLink()
     }
 
     val profileState = profiles.state
@@ -265,7 +333,7 @@ class SetupViewModel @Inject constructor(
             val active = profiles.state.value.active
             profileName = active.name
             avatar = active.avatar
-            go(SetupStep.next(step))
+            go(forward(step))
         }
     }
 
@@ -338,11 +406,17 @@ class SetupViewModel @Inject constructor(
         bouquetStore.set(homeFilms.receiverKey(config), if (all) null else selected)
     }
 
-    /** Done: the first full sync of guide, channels and Home starts now. */
+    /** Done: the first full sync of guide, channels and Home starts now. IPTV waits until that sync has finished. */
     fun finish() {
         profiles.confirmActive()
-        viewModelScope.launch { settings.update { it.copy(setupCompleted = true) } }
-        SyncScheduler.runNow(context, force = true)
+        viewModelScope.launch {
+            settings.update { it.copy(setupCompleted = true) }
+            val current = settings.current()
+            if (current.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+                syncEngine.armIptvLoad()
+            }
+            SyncScheduler.runNow(context, force = true)
+        }
         step = SetupStep.WELCOME
         profileLoaded = false
         bouquetsFor = null

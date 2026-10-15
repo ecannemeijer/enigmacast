@@ -76,6 +76,9 @@ class SyncEngine @Inject constructor(
         gate.withLock { }
     }
 
+    /** True while bouquets or the guide are being downloaded. */
+    fun busy(): Boolean = gate.isLocked
+
     /**
      * True when something was refreshed. Errors are stored per step and do not throw.
      * [check] compares the box's channel lists with the cache even when the channel step is not

@@ -115,6 +115,7 @@ fun SetupWizard(
                     SetupStep.ACCOUNT -> AccountStep(stepFocus, onSignedIn = { model.next() })
                     SetupStep.RECEIVER -> ReceiverStep(model, connection, stepFocus, onConnected = { model.next() })
                     SetupStep.SYNC_LINK -> SyncLinkStep(model, stepFocus)
+                    SetupStep.IPTV_OFFER -> IptvOfferStep(model, stepFocus)
                     SetupStep.PROFILE -> ProfileStep(model, stepFocus)
                     SetupStep.VIEWING -> ViewingStep(model, stepFocus)
                     SetupStep.BOUQUETS -> BouquetStep(model, stepFocus)
@@ -224,6 +225,18 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
         Text(stringResource(R.string.setup_sync_link_searching), color = EnigmaColors.Text, fontSize = 18.sp)
         return
     }
+    if (model.dashboardUrl.isNotBlank()) {
+        val context = LocalContext.current
+        Text(stringResource(R.string.setup_sync_dashboard_ready, model.dashboardUrl), color = EnigmaColors.Text, fontSize = 16.sp)
+        if (model.dashboardPassword.isNotBlank()) {
+            Text(stringResource(R.string.setup_sync_dashboard_password, model.dashboardPassword), color = EnigmaColors.Text, fontSize = 16.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TvButton(stringResource(R.string.setup_sync_dashboard_open), { model.openDashboard(context) })
+            TvButton(stringResource(R.string.setup_sync_dashboard_continue), { model.continueAfterInstall() }, Modifier.focusRequester(focus))
+        }
+        return
+    }
     val host = model.syncHost
     if (host != null) {
         Text(stringResource(R.string.setup_sync_link_found, host), color = EnigmaColors.Text, fontSize = 18.sp)
@@ -248,16 +261,16 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
         visualTransformation = PasswordVisualTransformation(),
     )
     TvButton(stringResource(R.string.setup_sync_link_install), { model.installSync() }, enabled = model.sshPassword.isNotBlank() && !model.syncSearching)
-    if (model.dashboardUrl.isNotBlank()) {
-        val context = LocalContext.current
-        Text(stringResource(R.string.setup_sync_dashboard_ready, model.dashboardUrl), color = EnigmaColors.Text, fontSize = 16.sp)
-        if (model.dashboardPassword.isNotBlank()) {
-            Text(stringResource(R.string.setup_sync_dashboard_password, model.dashboardPassword), color = EnigmaColors.Text, fontSize = 16.sp)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TvButton(stringResource(R.string.setup_sync_dashboard_open), { model.openDashboard(context) })
-            TvButton(stringResource(R.string.setup_sync_dashboard_continue), { model.continueAfterInstall() })
-        }
+}
+
+@Composable
+private fun IptvOfferStep(model: SetupViewModel, focus: FocusRequester) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        TvButton(stringResource(R.string.setup_iptv_yes), model::takeIptv, Modifier.focusRequester(focus))
+        TvButton(stringResource(R.string.setup_iptv_no), model::leaveIptv)
+    }
+    if (model.iptvMessage.isNotBlank()) {
+        Text(model.iptvMessage, color = EnigmaColors.Muted, fontSize = 15.sp)
     }
 }
 
@@ -381,6 +394,7 @@ private fun SetupStep.title(): Int = when (this) {
     SetupStep.ACCOUNT -> R.string.setup_account_title
     SetupStep.RECEIVER -> R.string.setup_receiver_title
     SetupStep.SYNC_LINK -> R.string.setup_sync_link_title
+    SetupStep.IPTV_OFFER -> R.string.setup_iptv_title
     SetupStep.PROFILE -> R.string.setup_profile_title
     SetupStep.VIEWING -> R.string.setup_viewing_title
     SetupStep.BOUQUETS -> R.string.setup_bouquets_title
@@ -394,6 +408,7 @@ private fun SetupStep.body(): Int = when (this) {
     SetupStep.ACCOUNT -> R.string.setup_account_body
     SetupStep.RECEIVER -> R.string.setup_receiver_body
     SetupStep.SYNC_LINK -> R.string.setup_sync_link_body
+    SetupStep.IPTV_OFFER -> R.string.setup_iptv_body
     SetupStep.PROFILE -> R.string.setup_profile_body
     SetupStep.VIEWING -> R.string.setup_viewing_body
     SetupStep.BOUQUETS -> R.string.setup_bouquets_body

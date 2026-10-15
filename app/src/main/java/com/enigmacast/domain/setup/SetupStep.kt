@@ -11,6 +11,8 @@ enum class SetupStep(val optional: Boolean = false) {
     RECEIVER,
     /** Search the home network for the sync server, then pair or stay standalone. */
     SYNC_LINK,
+    /** A server IPTV login, only when one is waiting. The channel list loads after the bouquets. */
+    IPTV_OFFER,
     PROFILE(optional = true),
     VIEWING,
     BOUQUETS(optional = true),

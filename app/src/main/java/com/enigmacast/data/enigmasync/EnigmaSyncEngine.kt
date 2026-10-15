@@ -15,6 +15,7 @@ import com.enigmacast.data.xtream.IptvPlaylistStore
 import com.enigmacast.data.xtream.IptvPlaylistSync
 import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.IptvSourceMode
+import com.enigmacast.domain.model.StartupLive
 import com.enigmacast.domain.profile.HomeBouquetCloud
 import com.enigmacast.domain.profile.ProfileCloud
 import com.enigmacast.domain.sync.SyncApply
@@ -26,6 +27,14 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+
+/** An M3U or Xtream login stored on the sync server, offered once in the wizard. */
+data class RemoteIptvOffer(
+    val kind: IptvPlaylistKind,
+    val login: IptvPlaylistLogin,
+    val updatedMs: Long,
+    val changeId: String,
+)
 
 /** Pushes the local outbox and pulls newer rows. A missing server leaves Room as it is. */
 @Singleton
@@ -71,9 +80,9 @@ class EnigmaSyncEngine @Inject constructor(
                 }
             }
             pushSettings(config)
-            syncPlaylist(config)
-            push(config)
         }
+        runCatching { syncPlaylist(config) }
+        runCatching { push(config) }
     }
 
     /** Sends local profile names to the receiver and removes profiles that no longer exist here. */
@@ -165,14 +174,64 @@ class EnigmaSyncEngine @Inject constructor(
         }
     }
 
+    /**
+     * The server login, without saving it. Null when there is nothing to offer, or the wizard
+     * already declined this revision.
+     */
+    suspend fun peekPlaylist(): RemoteIptvOffer? = withContext(Dispatchers.IO) {
+        val config = client.config() ?: return@withContext null
+        val text = runCatching { client.request(config, "GET", "/api/v1/playlists") }.getOrNull() ?: return@withContext null
+        val remote = JSONObject(text).optJSONObject("playlist") ?: return@withContext null
+        offerOf(remote)?.takeUnless { playlist.isDeclined(it.changeId) }
+    }
+
+    /** Wizard said yes: store the login and fetch the channel list only after bouquets. */
+    suspend fun takePlaylist(offer: RemoteIptvOffer) = withContext(Dispatchers.IO) {
+        playlist.clearDecline()
+        applyPlaylist(
+            JSONObject()
+                .put("m3uUrl", offer.login.m3uUrl)
+                .put("server", offer.login.server)
+                .put("username", offer.login.username)
+                .put("password", offer.login.password)
+                .put("kind", offer.kind.name)
+                .put("updatedMs", offer.updatedMs)
+                .put("changeId", offer.changeId),
+        )
+    }
+
+    fun declinePlaylist(changeId: String) {
+        playlist.decline(changeId)
+    }
+
+    /** The next pass after bouquets should download this device's IPTV channels. */
+    fun armIptvLoad() {
+        iptv.arm()
+    }
+
+    /**
+     * Settings just saved an M3U or Xtream login. Write that row to the server now.
+     * A missing sync server leaves the login on this TV.
+     */
+    suspend fun publishPlaylist(login: IptvPlaylistLogin, kind: IptvPlaylistKind) = withContext(Dispatchers.IO) {
+        val config = client.config() ?: return@withContext
+        if (!login.configured(kind)) return@withContext
+        playlist.clearDecline()
+        val rev = playlist.markDirty()
+        runCatching { postPlaylist(config, login, kind, rev) }
+    }
+
     /** One IPTV login for this device. A profile switch does not call this again. */
     private suspend fun syncPlaylist(config: SyncServerConfig) {
-        val text = runCatching { client.request(config, "GET", "/api/v1/playlists") }.getOrNull() ?: return
-        val remote = JSONObject(text).optJSONObject("playlist")
+        val text = runCatching { client.request(config, "GET", "/api/v1/playlists") }.getOrNull()
+        val remote = text?.let { JSONObject(it).optJSONObject("playlist") }
         val local = playlist.revision()
         if (remote != null) {
             val decision = SyncConflict.decide(local?.updatedMs, local?.changeId, remote.optLong("updatedMs"), remote.optString("changeId"))
+            val changeId = remote.optString("changeId")
             if (decision == SyncApply.ACCEPT) {
+                // The wizard asks first. After setup, a declined revision stays declined until a newer one arrives.
+                if (!settings.current().setupCompleted || playlist.isDeclined(changeId)) return
                 applyPlaylist(remote)
                 return
             }
@@ -185,17 +244,30 @@ class EnigmaSyncEngine @Inject constructor(
         val rev = playlist.revision() ?: return
         if (!rev.dirty) return
         if (now.iptvSource != IptvSourceMode.PLAYLIST || !login.configured(now.iptvPlaylistKind)) return
+        runCatching { postPlaylist(config, login, now.iptvPlaylistKind, rev) }
+    }
+
+    private fun postPlaylist(config: SyncServerConfig, login: IptvPlaylistLogin, kind: IptvPlaylistKind, rev: com.enigmacast.data.xtream.PlaylistRevision) {
         val body = JSONObject()
             .put("m3uUrl", login.m3uUrl)
             .put("server", login.server)
             .put("username", login.username)
             .put("password", login.password)
-            .put("kind", now.iptvPlaylistKind.name)
+            .put("kind", kind.name)
             .put("updatedMs", rev.updatedMs)
             .put("changeId", rev.changeId)
         val posted = client.request(config, "POST", "/api/v1/playlists", body.toString().toByteArray())
         val result = JSONObject(posted).optString("result")
         if ((result == "accept" || result == "replay") && playlist.revision()?.changeId == rev.changeId) playlist.clearDirty()
+    }
+
+    private fun offerOf(remote: JSONObject): RemoteIptvOffer? {
+        val kind = runCatching { IptvPlaylistKind.valueOf(remote.optString("kind")) }.getOrDefault(IptvPlaylistKind.M3U)
+        val login = IptvPlaylistLogin(
+            remote.optString("m3uUrl"), remote.optString("server"), remote.optString("username"), remote.optString("password"),
+        )
+        if (!login.configured(kind)) return null
+        return RemoteIptvOffer(kind, login, remote.optLong("updatedMs"), remote.optString("changeId"))
     }
 
     private suspend fun applyPlaylist(remote: JSONObject) {
@@ -225,8 +297,13 @@ class EnigmaSyncEngine @Inject constructor(
         val changeId = change.optString("change_id")
         val rev = meta.revision(profileUuid)
         if (SyncConflict.decide(rev?.updatedMs, rev?.changeId, updated, changeId) != SyncApply.ACCEPT) return
-        val snapshot = runCatching { ProfileCloud.decode(change.optString("payload")) }.getOrNull() ?: return
+        val raw = change.optString("payload")
+        val decoded = runCatching { ProfileCloud.decode(raw) }.getOrNull() ?: return
         val profile = profiles.state.value.profiles.firstOrNull { it.uuid == profileUuid } ?: return
+        val keepStartup = if (profile.id == profiles.state.value.activeId) settings.current().startupLive
+        else profiles.state.value.scopes[profile.id]?.startupLive ?: StartupLive.OFF
+        val snapshot = ProfileCloud.keepStartupWhenMissing(decoded, raw, keepStartup)
+        val startupWasMissing = !ProfileCloud.includesStartupLive(raw) && snapshot.scope.startupLive != decoded.scope.startupLive
         meta.applying = true
         meta.quietFingerprint = ProfileCloud.encode(snapshot)
         try {
@@ -235,6 +312,7 @@ class EnigmaSyncEngine @Inject constructor(
             bouquets.import(profile.id, HomeBouquetCloud(snapshot.homeBouquets, snapshot.homeAll))
             hidden.import(profile.id, snapshot.hiddenCategories)
             meta.accept(profileUuid, updated, changeId)
+            if (startupWasMissing) meta.markDirty(profileUuid)
         } finally {
             meta.applying = false
         }

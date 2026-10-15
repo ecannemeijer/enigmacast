@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.data.enigmasync.EnigmaSyncEngine
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.data.xtream.IptvLoadProgress
 import com.enigmacast.data.xtream.IptvLoadResult
@@ -76,6 +77,7 @@ class IptvSettingsViewModel @Inject constructor(
     private val sync: IptvPlaylistSync,
     private val xtream: com.enigmacast.data.xtream.XtreamRepository,
     private val hidden: com.enigmacast.data.xtream.IptvHiddenCategories,
+    private val syncEngine: EnigmaSyncEngine,
 ) : ViewModel() {
     /** Settings › IPTV › Categories: the open section's categories and which are hidden. */
     data class CategoryPage(
@@ -141,13 +143,15 @@ class IptvSettingsViewModel @Inject constructor(
     fun setMode(mode: IptvSourceMode) = viewModelScope.launch { settingsRepository.update { it.copy(iptvSource = mode) } }
     fun setKind(kind: IptvPlaylistKind) = viewModelScope.launch { settingsRepository.update { it.copy(iptvPlaylistKind = kind) } }
 
-    /** Saves the fields (encrypted) and loads the playlist into the app. */
+    /** Saves the fields (encrypted), writes that login to the sync server, and loads the channels. */
     fun saveAndLoad(login: IptvPlaylistLogin) {
+        val kind = mode.value.second
         store.save(login)
+        viewModelScope.launch { runCatching { syncEngine.publishPlaylist(login, kind) } }
         job?.cancel()
         _load.value = IptvLoadState(busy = true)
         job = viewModelScope.launch {
-            val result = sync.load(mode.value.second) { p -> _load.value = IptvLoadState(true, p) }
+            val result = sync.load(kind) { p -> _load.value = IptvLoadState(true, p) }
             _load.value = IptvLoadState(false, result = result)
         }
     }

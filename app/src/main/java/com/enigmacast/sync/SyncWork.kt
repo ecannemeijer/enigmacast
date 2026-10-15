@@ -1,6 +1,7 @@
 package com.enigmacast.sync
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -54,8 +55,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val latest = entry.settings().current()
         if (latest.iptvSource != com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) return
         val allow = latest.setupCompleted || inputData.getBoolean(KEY_FORCE, false)
-        runCatching { entry.iptvPlaylist().loadTail(latest.iptvPlaylistKind, allow) }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        if (!allow) return
+        if (!entry.iptvPlaylist().hasLogin(latest.iptvPlaylistKind)) return
+        // A new job, so the channel download is not cut off by the time already spent on bouquets.
+        SyncScheduler.runIptvTail(applicationContext)
     }
 
     companion object {
@@ -73,12 +76,12 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 class IptvTailWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val entry = EntryPointAccessors.fromApplication(applicationContext, SyncEntryPoint::class.java)
-        entry.engine().awaitIdle()
         val settings = entry.settings().current()
-        if (settings.setupCompleted && settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
-            runCatching { entry.iptvPlaylist().loadTail(settings.iptvPlaylistKind, allow = true) }
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-        }
+        if (!settings.setupCompleted || entry.engine().busy()) return Result.retry()
+        if (settings.iptvSource != com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) return Result.success()
+        if (!entry.iptvPlaylist().hasLogin(settings.iptvPlaylistKind)) return Result.success()
+        runCatching { entry.iptvPlaylist().loadTail(settings.iptvPlaylistKind, allow = true) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it else return Result.retry() }
         return Result.success()
     }
 }
@@ -114,8 +117,11 @@ object SyncScheduler {
 
     /** IPTV channels, after whatever bouquet and guide sync is already running. */
     fun runIptvTail(context: Context) {
-        val request = OneTimeWorkRequestBuilder<IptvTailWorker>().setConstraints(network).build()
-        WorkManager.getInstance(context).enqueueUniqueWork(IPTV, ExistingWorkPolicy.KEEP, request)
+        val request = OneTimeWorkRequestBuilder<IptvTailWorker>()
+            .setConstraints(network)
+            .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(IPTV, ExistingWorkPolicy.REPLACE, request)
     }
 
     /** [force] refreshes everything; otherwise only what is due or missing. */

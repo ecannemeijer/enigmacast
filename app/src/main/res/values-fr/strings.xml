@@ -1046,6 +1046,10 @@
     <string name="setup_receiver_connected">Connecté à %1$s (%2$s). Appuyez sur Suivant pour continuer, ou modifiez les informations ci-dessous.</string>
     <string name="setup_profile_title">Qui regarde ?</string>
     <string name="setup_profile_body">Donnez un nom à votre profil et choisissez une image. Chaque personne du foyer pourra ensuite avoir son profil, avec ses chaînes et sa langue.</string>
+    <string name="setup_iptv_title">Reprendre l\'identifiant IPTV ?</string>
+    <string name="setup_iptv_body">Ce serveur de synchronisation a déjà une playlist M3U ou un identifiant Xtream Codes. Le reprendre sur cette télé ? La liste des chaînes se télécharge après les bouquets et le guide.</string>
+    <string name="setup_iptv_yes">Oui, le reprendre</string>
+    <string name="setup_iptv_no">Non, le laisser</string>
     <string name="setup_profile_name">Votre nom</string>
     <string name="setup_profile_avatar">Choisissez une image</string>
     <string name="setup_viewing_title">Comment voulez-vous regarder ?</string>

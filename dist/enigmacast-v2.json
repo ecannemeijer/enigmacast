@@ -1,6 +1,6 @@
 {
-  "versionCode": 55,
-  "versionName": "1.0.0-beta.52",
+  "versionCode": 56,
+  "versionName": "1.0.0-beta.53",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Profile settings sync through the receiver. An IPTV login is stored once per device and its channels load after bouquets and the guide."
+  "notes": "Profiles come from the sync server in setup and when switching. The settings menu waits before opening the page behind it, and each TV keeps one account device id."
 }
