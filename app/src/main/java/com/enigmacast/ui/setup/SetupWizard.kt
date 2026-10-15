@@ -263,8 +263,14 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
 
 @Composable
 private fun ProfileStep(model: SetupViewModel, focus: FocusRequester) {
-    val profiles = model.profilesForPicker()
-    if (profiles.isNotEmpty()) {
+    val state by model.profileState.collectAsStateWithLifecycle()
+    val profiles = model.namedProfiles(state)
+    LaunchedEffect(model.profilesLoading, profiles.size, model.creatingProfile) { focus.requestWhenReady() }
+    if (model.profilesLoading && profiles.isEmpty()) {
+        Text(stringResource(R.string.loading), color = EnigmaColors.Muted, fontSize = 16.sp, modifier = Modifier.focusRequester(focus))
+        return
+    }
+    if (profiles.isNotEmpty() && !model.creatingProfile) {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             profiles.forEachIndexed { index, profile ->
                 ProfileTile(
@@ -275,6 +281,7 @@ private fun ProfileStep(model: SetupViewModel, focus: FocusRequester) {
                     modifier = if (index == 0) Modifier.focusRequester(focus) else Modifier,
                 ) { model.chooseProfile(profile.id) }
             }
+            TvButton(stringResource(R.string.profile_add), { model.startNewProfile() })
         }
         return
     }
@@ -285,7 +292,7 @@ private fun ProfileStep(model: SetupViewModel, focus: FocusRequester) {
         label = stringResource(R.string.setup_profile_name),
         value = model.profileName,
         onValueChange = { model.profileName = it.take(24) },
-        modifier = Modifier.widthIn(max = 480.dp).then(if (profiles.isEmpty()) Modifier.focusRequester(focus) else Modifier),
+        modifier = Modifier.widthIn(max = 480.dp).focusRequester(focus),
         large = true,
     )
     Text(stringResource(R.string.setup_profile_avatar), color = EnigmaColors.Text, fontSize = 16.sp)

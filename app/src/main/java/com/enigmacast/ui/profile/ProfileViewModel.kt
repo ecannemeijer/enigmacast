@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.enigmacast.data.enigmasync.EnigmaSyncEngine
 import com.enigmacast.data.profile.ProfileCleanup
 import com.enigmacast.data.profile.ProfileStore
 import com.enigmacast.data.security.ProfilePinLock
@@ -23,12 +24,17 @@ class ProfileViewModel @Inject constructor(
     private val bouquets: HomeBouquetStore,
     private val pins: ProfilePinLock,
     private val cleanup: ProfileCleanup,
+    private val sync: EnigmaSyncEngine,
 ) : ViewModel() {
     val state = store.state
 
     /** "Who's watching?" full screen: at start when [ProfileRules.askOnStart], or from the menu. */
     var pickerOpen by mutableStateOf(ProfileRules.askOnStart(store.state.value))
         private set
+
+    init {
+        if (pickerOpen) refreshProfiles()
+    }
     /** The picker in manage mode: OK edits a profile instead of switching. */
     var managing by mutableStateOf(false)
         private set
@@ -46,7 +52,17 @@ class ProfileViewModel @Inject constructor(
 
     fun openMenu() { menuOpen = true }
     fun closeMenu() { menuOpen = false }
-    fun openPicker(manage: Boolean) { menuOpen = false; managing = manage; pickerOpen = true }
+    fun openPicker(manage: Boolean) {
+        menuOpen = false
+        managing = manage
+        pickerOpen = true
+        refreshProfiles()
+    }
+
+    /** Asks the sync server for profiles. A missing server leaves the profiles already stored here. */
+    fun refreshProfiles() {
+        viewModelScope.launch { runCatching { sync.importProfiles() } }
+    }
     fun toggleManage() { managing = !managing }
 
     fun hasPin(profile: Profile) = pins.hasPin(profile.uuid.ifBlank { com.enigmacast.domain.profile.ProfileState.LEGACY_UUID })

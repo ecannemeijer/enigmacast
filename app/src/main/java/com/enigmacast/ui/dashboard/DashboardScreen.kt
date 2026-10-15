@@ -1260,15 +1260,23 @@ private fun SettingsHub(
 ) {
     var page by remember { mutableStateOf(if (focusLanguage) SettingPage.Appearance else SettingPage.Receivers) }
     var pageEnter by remember { mutableIntStateOf(0) }
+    var pendingPage by remember { mutableStateOf<SettingPage?>(null) }
     val pageContentFocus = remember { FocusRequester() }
     val navFocus = remember { SettingPage.entries.associateWith { FocusRequester() } }
     var formActive by remember { mutableStateOf(false) }
-    /** Shows the page and keeps focus on the submenu row. */
-    fun showPage(target: SettingPage) {
+    // Scrolling the menu stays on the current page until the row has been focused for half a second.
+    LaunchedEffect(pendingPage) {
+        val target = pendingPage ?: return@LaunchedEffect
+        delay(500)
         page = target
     }
-    /** OK or Right on a submenu row moves into that page's first option. */
+    /** Schedules the page behind the menu. A new row cancels the previous wait. */
+    fun showPage(target: SettingPage) {
+        pendingPage = if (target == page) null else target
+    }
+    /** OK or Right on a submenu row moves into that page's first option at once. */
     fun enterPage(target: SettingPage) {
+        pendingPage = null
         page = target
         pageEnter += 1
     }

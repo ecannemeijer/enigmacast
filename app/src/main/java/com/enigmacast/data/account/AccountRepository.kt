@@ -52,6 +52,7 @@ class AccountRepository @Inject constructor(
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val mutex = Mutex()
+    private val idLock = Any()
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -64,11 +65,24 @@ class AccountRepository @Inject constructor(
 
     fun isSignedIn(): Boolean = _account.value != null && secrets.read(TOKEN) != null
 
-    /** A random id for this installation, sent with login so the server can count devices. */
+    /**
+     * Stable id for this TV, sent with login so the server counts one device.
+     * An id already stored is kept. Otherwise the Android id of this TV is used, so a new
+     * install of the same app still matches the same row.
+     */
     val deviceId: String
-        get() = prefs.getString(DEVICE_ID, null) ?: ("ec-" + UUID.randomUUID().toString()).also {
-            prefs.edit().putString(DEVICE_ID, it).apply()
+        get() = synchronized(idLock) {
+            prefs.getString(DEVICE_ID, null)?.takeIf { it.isNotBlank() } ?: stableDeviceId().also {
+                prefs.edit().putString(DEVICE_ID, it).commit()
+            }
         }
+
+    private fun stableDeviceId(): String {
+        val androidId = runCatching {
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        }.getOrNull()?.takeIf { it.isNotBlank() && it != KNOWN_BROKEN_ANDROID_ID }
+        return "ec-" + (androidId ?: UUID.randomUUID().toString())
+    }
 
     suspend fun register(email: String, password: String): AccountResult = signIn("register", email, password)
 
@@ -192,6 +206,8 @@ class AccountRepository @Inject constructor(
         const val PREFS = "enigmacast_account"
         const val TOKEN = "account_token"
         const val DEVICE_ID = "device_id"
+        /** The emulator's old broken Android id; a real TV never has this. */
+        const val KNOWN_BROKEN_ANDROID_ID = "9774d56d682e549c"
         const val EMAIL = "email"
         const val PLAN = "plan"
         const val PREMIUM = "server_premium"

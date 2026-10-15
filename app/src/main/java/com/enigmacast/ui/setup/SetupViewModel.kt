@@ -83,6 +83,12 @@ class SetupViewModel @Inject constructor(
 
     var profileName by mutableStateOf("")
     var avatar by mutableIntStateOf(0)
+    /** True while the profile step is asking the sync server for existing profiles. */
+    var profilesLoading by mutableStateOf(false)
+        private set
+    /** The name form, after the viewer chose to make a new profile. */
+    var creatingProfile by mutableStateOf(false)
+        private set
     private var profileLoaded = false
 
     var bouquets by mutableStateOf<List<BouquetEntry>>(emptyList())
@@ -99,17 +105,20 @@ class SetupViewModel @Inject constructor(
         SetupStep.ACCOUNT -> accountState.value != null
         SetupStep.RECEIVER -> receiver.value != null
         SetupStep.SYNC_LINK -> syncLinked || syncClient.config() != null
-        SetupStep.PROFILE -> profileName.isNotBlank()
+        SetupStep.PROFILE -> profileName.isNotBlank() && (creatingProfile || namedProfiles(profiles.state.value).isEmpty())
         else -> true
     }
 
     fun next() {
         if (step == SetupStep.DONE) return
-        when (step) {
-            SetupStep.PROFILE -> saveProfile()
-            SetupStep.BOUQUETS -> saveBouquets()
-            else -> Unit
+        if (step == SetupStep.PROFILE) {
+            viewModelScope.launch {
+                saveProfile()
+                go(SetupStep.next(SetupStep.PROFILE))
+            }
+            return
         }
+        if (step == SetupStep.BOUQUETS) saveBouquets()
         go(SetupStep.next(step))
     }
 
@@ -121,6 +130,10 @@ class SetupViewModel @Inject constructor(
 
     /** False on the first step: there is nothing to go back to. */
     fun back(): Boolean {
+        if (step == SetupStep.PROFILE && creatingProfile && namedProfiles(profiles.state.value).isNotEmpty()) {
+            creatingProfile = false
+            return true
+        }
         val previous = SetupStep.previous(step) ?: return false
         go(previous)
         return true
@@ -234,12 +247,16 @@ class SetupViewModel @Inject constructor(
         go(SetupStep.next(step))
     }
 
-    fun profilesForPicker(): List<com.enigmacast.domain.profile.Profile> {
-        if (!syncLinked && syncClient.config() == null) return emptyList()
-        val state = profiles.state.value
-        val onlySuggested = !state.chosenOnce && state.profiles.size == 1 && state.profiles[0].id == ProfileState.DEFAULT_ID
-        if (onlySuggested) return emptyList()
-        return state.profiles.filter { it.name.isNotBlank() }
+    val profileState = profiles.state
+
+    /** Named profiles already on this device. Empty on a first run that has only the blank default. */
+    fun namedProfiles(state: ProfileState): List<com.enigmacast.domain.profile.Profile> =
+        state.profiles.filter { it.name.isNotBlank() }
+
+    fun startNewProfile() {
+        creatingProfile = true
+        profileName = ""
+        avatar = 0
     }
 
     fun chooseProfile(id: String) {
@@ -253,21 +270,37 @@ class SetupViewModel @Inject constructor(
     }
 
     private fun loadProfile() {
-        if (profileLoaded) return
-        profileLoaded = true
-        val state = profiles.state.value
-        val active = state.profiles.firstOrNull { it.id == state.activeId }
-        // A first run has only the unnamed default profile; suggest nothing so the name is the user's own.
-        profileName = if (state.chosenOnce) active?.name.orEmpty() else ""
-        avatar = active?.avatar ?: 0
+        creatingProfile = false
+        if (!profileLoaded) {
+            profileLoaded = true
+            val state = profiles.state.value
+            val active = state.profiles.firstOrNull { it.id == state.activeId }
+            // A first run has only the unnamed default profile; suggest nothing so the name is the user's own.
+            profileName = if (state.chosenOnce) active?.name.orEmpty() else ""
+            avatar = active?.avatar ?: 0
+        }
+        if (syncClient.config() == null) {
+            profilesLoading = false
+            return
+        }
+        profilesLoading = true
+        viewModelScope.launch {
+            runCatching { syncEngine.importProfiles() }
+            profilesLoading = false
+        }
     }
 
-    private fun saveProfile() {
+    private suspend fun saveProfile() {
         val state = profiles.state.value
-        if (state.profiles.any { it.id == state.activeId }) profiles.edit(state.activeId, profileName.trim(), avatar)
-        else profiles.add(profileName.trim(), avatar)
-        // The profile is chosen now; "Who's watching" does not ask again on this start.
-        profiles.confirmActive()
+        val named = namedProfiles(state)
+        if (named.isEmpty()) {
+            if (state.profiles.any { it.id == state.activeId }) profiles.edit(state.activeId, profileName.trim(), avatar)
+            else profiles.add(profileName.trim(), avatar)
+            profiles.confirmActive()
+            return
+        }
+        val id = profiles.add(profileName.trim(), avatar)
+        profiles.switchTo(id)
     }
 
     fun loadBouquets(force: Boolean = false) {
