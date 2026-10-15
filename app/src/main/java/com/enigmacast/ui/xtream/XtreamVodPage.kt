@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +43,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
@@ -282,14 +291,71 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
     }
 }
 
+private val EPISODE_WIDTH = 88.dp
+
 @Composable
 private fun EpisodeCard(e: XtreamEpisode, started: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    CompactListRow(onClick = onClick, modifier = modifier.width(200.dp)) {
-        Column {
-            Text(if (e.season > 0) "S${e.season}E${e.episode}" else "${e.episode}", fontSize = 12.sp, color = EnigmaColors.Accent)
-            Text(e.title, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (started) Text(stringResource(R.string.iptv_resume_badge), fontSize = 11.sp, color = EnigmaColors.Accent)
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        modifier
+            .width(EPISODE_WIDTH)
+            .onKeyEvent { event ->
+                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (confirm && event.type == KeyEventType.KeyUp) onClick()
+                confirm
+            }
+            .focusable(interactionSource = interaction),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(EPISODE_WIDTH * 1.5f)
+                .clip(shape)
+                .background(EnigmaColors.Card)
+                .border(if (focused) 2.dp else 1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, shape),
+        ) {
+            if (e.cover.isNotBlank()) {
+                AsyncImage(
+                    model = e.cover,
+                    contentDescription = e.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    e.title,
+                    color = EnigmaColors.Text,
+                    fontSize = 12.sp,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.align(Alignment.Center).padding(6.dp),
+                )
+            }
+            if (started) {
+                Text(
+                    stringResource(R.string.iptv_resume_badge),
+                    fontSize = 10.sp,
+                    color = EnigmaColors.Accent,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(4.dp),
+                )
+            }
         }
+        Text(
+            if (e.season > 0) "S${e.season}E${e.episode}" else "${e.episode}",
+            fontSize = 11.sp,
+            color = EnigmaColors.Accent,
+            maxLines = 1,
+        )
+        Text(
+            e.title,
+            fontSize = 12.sp,
+            color = if (focused) EnigmaColors.Text else EnigmaColors.Muted,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

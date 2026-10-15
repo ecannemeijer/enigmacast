@@ -348,7 +348,10 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             AppScreen.SignalMeter -> com.enigmacast.ui.settings.SignalMeterScreen(onBack = appViewModel::back)
             AppScreen.Oscam -> com.enigmacast.ui.settings.OscamScreen(onBack = appViewModel::back)
             AppScreen.SettingsImport -> com.enigmacast.ui.settingsimport.SettingsImportScreen(onBack = appViewModel::back)
-            AppScreen.Xtream -> com.enigmacast.ui.xtream.XtreamScreen(onBack = appViewModel::back)
+            AppScreen.Xtream -> com.enigmacast.ui.xtream.XtreamScreen(
+                onBack = appViewModel::back,
+                onSearch = appViewModel::openDashboardSearch,
+            )
         }
         val connectionModel: com.enigmacast.ui.connection.ConnectionViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
         com.enigmacast.ui.receivers.ReceiverSwitchHost(onAddReceiver = {

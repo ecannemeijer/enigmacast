@@ -1,6 +1,6 @@
 {
-  "versionCode": 36,
-  "versionName": "1.0.0-beta.33",
+  "versionCode": 39,
+  "versionName": "1.0.0-beta.36",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "D-pad stops at the top and bottom of My items, Search and the IPTV grid. An IPTV stream in front is no longer replaced by a background Enigma2 start."
+  "notes": "IPTV Live TV starts fullscreen on the last channel. IPTV OSD matches the player options, Live TV no longer returns to radio, and series episodes are artwork cards."
 }

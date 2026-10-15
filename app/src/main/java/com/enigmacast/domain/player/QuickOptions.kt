@@ -39,17 +39,23 @@ object QuickOptions {
     }
 
     /**
-     * IPTV (Xtream / playlist) in the full player: only what the app's own player does.
-     * Receiver-bound tiles are left out: search and guide (receiver EPG), record (box timer),
-     * quality (receiver transcoding), recent (receiver channels); also audio delay and sleep,
-     * which live in the receiver player's model. Restart only for films and episodes.
+     * IPTV (Xtream / playlist) in the full player: the same row as the own tuner, minus what
+     * belongs to the receiver. Record is a box timer and quality is receiver transcoding.
+     * The guide and recent channels are the IPTV list, so they only show for live.
      */
     fun iptvTiles(vod: Boolean): List<QuickOption> = buildList {
+        add(QuickOption.SEARCH)
         add(QuickOption.SUBTITLES)
         add(QuickOption.AUDIO)
         add(QuickOption.PICTURE)
+        add(QuickOption.AUDIO_DELAY)
+        if (!vod) {
+            add(QuickOption.GUIDE)
+            add(QuickOption.RECENT)
+        }
+        add(QuickOption.SLEEP)
         add(QuickOption.STREAM_INFO)
-        if (vod) add(QuickOption.RESTART)
+        add(QuickOption.RESTART)
     }
 }
 

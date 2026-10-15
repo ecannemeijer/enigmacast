@@ -273,6 +273,15 @@ class AppViewModel @Inject constructor(
         pendingSearchPlay = false
     }
 
+    /** IPTV quick bar: leave the player and open Search on the dashboard. */
+    fun openDashboardSearch() {
+        decided = true
+        pendingSearchQuery = ""
+        pendingSearchPlay = false
+        pendingSearchToken += 1
+        screen = AppScreen.Dashboard
+    }
+
     fun openStream() {
         decided = true
         focusPlayingChannel = false

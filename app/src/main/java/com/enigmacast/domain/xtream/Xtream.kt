@@ -46,7 +46,14 @@ data class XtreamItem(
     val url: String = "",
 )
 
-data class XtreamEpisode(val id: String, val season: Int, val episode: Int, val title: String, val extension: String)
+data class XtreamEpisode(
+    val id: String,
+    val season: Int,
+    val episode: Int,
+    val title: String,
+    val extension: String,
+    val cover: String = "",
+)
 
 data class XtreamVodInfo(
     val plot: String,
@@ -207,7 +214,11 @@ object XtreamJson {
         return lists.flatMap { (it as? JsonArray).orEmpty() }.mapNotNull { e ->
             val o = e as? JsonObject ?: return@mapNotNull null
             val id = o.str("id") ?: return@mapNotNull null
-            XtreamEpisode(id, o.str("season")?.toIntOrNull() ?: 0, o.str("episode_num")?.toIntOrNull() ?: 0, o.str("title") ?: id, o.str("container_extension").orEmpty())
+            val info = o["info"] as? JsonObject
+            val cover = listOf(info?.str("movie_image"), info?.str("cover"), o.str("movie_image"), o.str("cover"))
+                .firstOrNull { !it.isNullOrBlank() && it.startsWith("http", true) }
+                .orEmpty()
+            XtreamEpisode(id, o.str("season")?.toIntOrNull() ?: 0, o.str("episode_num")?.toIntOrNull() ?: 0, o.str("title") ?: id, o.str("container_extension").orEmpty(), cover)
         }.sortedWith(compareBy({ it.season }, { it.episode }))
     }
 

@@ -89,11 +89,12 @@ private enum class PanelColumn { CATEGORIES, CHANNELS, GUIDE, VOD_CATEGORIES, VO
  * OK shows the banner, Down on that banner opens the options row.
  */
 @Composable
-fun XtreamScreen(onBack: () -> Unit) {
+fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     val model: XtreamViewModel = hiltViewModel()
     val detection by model.detection.collectAsStateWithLifecycle()
     val bindings by model.keyBindings.collectAsStateWithLifecycle()
-    var panelOpen by remember { mutableStateOf(true) }
+    // Live TV from the menu starts on the last channel, so the list stays closed until playback fails.
+    var panelOpen by remember { mutableStateOf(!model.openLiveFullscreen) }
     var column by remember { mutableStateOf(PanelColumn.CATEGORIES) }
     var bannerUntil by remember { mutableStateOf(0L) }
     var bannerFromZap by remember { mutableStateOf(false) }
@@ -130,6 +131,16 @@ fun XtreamScreen(onBack: () -> Unit) {
         panelOpen = true
         openRequest++
     }
+    val openPlayingGuide: () -> Unit = {
+        val item = model.playing?.item?.takeIf { it.section == XtreamSection.LIVE }
+        if (item != null) {
+            model.openGuide(item)
+            column = PanelColumn.GUIDE
+            panelOpen = true
+            quickBar = false
+            openRequest++
+        }
+    }
 
     LaunchedEffect(detection) { model.open() }
     // Opened from Library: a film plays full screen, a series shows its info page over the grid.
@@ -139,7 +150,18 @@ fun XtreamScreen(onBack: () -> Unit) {
             model.stop(); model.exitToOrigin(); onBack()
         }
     }
-    LaunchedEffect(model.libraryPlayed) { if (model.libraryPlayed > 0) { panelOpen = false; showBanner(fromZap = false) } }
+    LaunchedEffect(model.libraryPlayed) {
+        if (model.libraryPlayed > 0 && model.playing != null) {
+            panelOpen = false
+            showBanner(fromZap = false)
+        }
+    }
+    LaunchedEffect(model.liveListNeeded) {
+        if (!model.liveListNeeded) return@LaunchedEffect
+        panelOpen = true
+        openRequest++
+        model.consumeLiveListNeeded()
+    }
     LaunchedEffect(model.libraryDetail) {
         // Search and Library info open the page itself; the grid must not take that focus.
         if (model.libraryDetail > 0 && model.detail == null) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ }
@@ -353,10 +375,10 @@ fun XtreamScreen(onBack: () -> Unit) {
                         onOptions = { quickBar = true; quickToken++ },
                         onTouch = { vodBarTouch++ },
                     )
-                    if (quickBar) IptvOsd(model, playing, true, quickToken, details, Modifier)
+                    if (quickBar) IptvOsd(model, playing, true, quickToken, details, Modifier, onGuide = openPlayingGuide, onSearch = onSearch)
                 }
             } else if (!panelOpen && (quickBar || now < bannerUntil)) {
-                IptvOsd(model, playing, quickBar, quickToken, details, Modifier.align(Alignment.BottomCenter))
+                IptvOsd(model, playing, quickBar, quickToken, details, Modifier.align(Alignment.BottomCenter), onGuide = openPlayingGuide, onSearch = onSearch)
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
             model.playerError?.let {
@@ -787,7 +809,16 @@ internal fun nowNext(list: List<XtreamEpg>, nowSec: Long = System.currentTimeMil
  * options row only has the player's own options.
  */
 @Composable
-private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Boolean, quickToken: Int, details: Boolean, modifier: Modifier) {
+private fun IptvOsd(
+    model: XtreamViewModel,
+    playing: XtreamPlaying,
+    quickBar: Boolean,
+    quickToken: Int,
+    details: Boolean,
+    modifier: Modifier,
+    onGuide: () -> Unit,
+    onSearch: () -> Unit,
+) {
     val look by model.osdLook.collectAsStateWithLifecycle()
     val scrim = EnigmaColors.scrim(look.second)
     val item = playing.item
@@ -822,26 +853,31 @@ private fun IptvOsd(model: XtreamViewModel, playing: XtreamPlaying, quickBar: Bo
                 playerState = model.playerState,
                 tracks = model.tracks,
                 pictureMode = model.pictureMode,
+                audioDelayMs = model.audioDelayMs,
+                audioDelayPassthrough = model.audioDelayPassthrough,
+                sleepEndsAtMs = model.sleepEndsAtMs,
+                recent = model.recentChannels,
                 quickBarToken = quickToken,
             )
             com.enigmacast.ui.remote.QuickOptionsBar(
                 ui = ui,
-                actions = remember(model) {
-                    com.enigmacast.ui.remote.QuickBarActions(
-                        onSubtitles = model::chooseSubtitles,
-                        onAudio = model::chooseAudio,
-                        onPassthrough = {},
-                        onPictureMode = model::choosePictureMode,
-                        onAudioDelay = {},
-                        onGuide = {},
-                        onRecent = {},
-                        onSleep = {},
-                        onRestart = model::restart,
-                        onQuality = {},
-                        onRecord = {},
-                        onSearch = {},
-                    )
-                },
+                actions = com.enigmacast.ui.remote.QuickBarActions(
+                    onSubtitles = model::chooseSubtitles,
+                    onAudio = model::chooseAudio,
+                    onPassthrough = {},
+                    onPictureMode = model::choosePictureMode,
+                    onAudioDelay = model::setAudioDelay,
+                    onGuide = onGuide,
+                    onRecent = model::playRecent,
+                    onSleep = model::setSleepTimer,
+                    onRestart = model::restart,
+                    onQuality = {},
+                    onRecord = {},
+                    onSearch = {
+                        model.stop()
+                        onSearch()
+                    },
+                ),
                 iptv = true,
                 modifier = Modifier
                     .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)

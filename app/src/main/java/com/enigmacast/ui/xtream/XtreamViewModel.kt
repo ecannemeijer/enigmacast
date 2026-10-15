@@ -14,7 +14,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.data.xtream.IptvPlaylistStore
@@ -66,6 +69,7 @@ class XtreamViewModel @Inject constructor(
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
     private val library: com.enigmacast.data.xtream.IptvLibrary,
+    private val sleepTimer: com.enigmacast.playback.AppSleepTimer,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -82,8 +86,21 @@ class XtreamViewModel @Inject constructor(
     var returnToMenu by mutableStateOf(false)
         private set
 
+    /** Live TV from the menu: play the last channel full screen, without the channel list. */
+    var openLiveFullscreen by mutableStateOf(false)
+        private set
+    /** No saved live channel, so the list opens after all. */
+    var liveListNeeded by mutableStateOf(false)
+        private set
+
     fun requestSection(section: XtreamSection) {
         requestedSection = section
+        openLiveFullscreen = section == XtreamSection.LIVE
+        liveListNeeded = false
+    }
+
+    fun consumeLiveListNeeded() {
+        liveListNeeded = false
     }
 
     fun markReturnToMenu() {
@@ -148,6 +165,16 @@ class XtreamViewModel @Inject constructor(
         private set
     var pictureMode by mutableStateOf(com.enigmacast.domain.player.PictureMode.AUTO)
         private set
+    var audioDelayMs by mutableStateOf(0)
+        private set
+    var audioDelayPassthrough by mutableStateOf(false)
+        private set
+    var sleepEndsAtMs by mutableStateOf(0L)
+        private set
+    /** Live channels zapped in this visit, newest first. The OSD Recent tile uses them. */
+    var recentChannels by mutableStateOf<List<com.enigmacast.domain.model.LastChannel>>(emptyList())
+        private set
+    private val audioSync = com.enigmacast.playback.AudioSyncOffsets()
 
     /** GUI skin and OSD transparency, as the receiver player uses them. */
     val osdLook: StateFlow<Pair<com.enigmacast.domain.model.OsdSkinId, Int>> = settingsRepository.settings
@@ -478,6 +505,19 @@ class XtreamViewModel @Inject constructor(
     private var epgJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            val playback = settingsRepository.current().playback
+            audioDelayMs = playback.audioDelayPcmMs
+            audioSync.set(playback.audioDelayPcmMs, playback.audioDelayPassthroughMs)
+        }
+        viewModelScope.launch { sleepTimer.endsAtMs.collect { sleepEndsAtMs = it } }
+        viewModelScope.launch {
+            audioSync.passthroughActive.collect { active ->
+                if (active == null) return@collect
+                audioDelayPassthrough = active
+                audioDelayMs = audioSync.delayFor(active)
+            }
+        }
         viewModelScope.launch { library.resumes.collect { resumeVersion++ } }
         viewModelScope.launch { library.favorites.collect { favoriteVersion++ } }
         viewModelScope.launch {
@@ -555,24 +595,27 @@ class XtreamViewModel @Inject constructor(
         when {
             account == null && accounts.size == 1 -> choose(accounts.first())
             account != null -> {
+                val fullscreen = openLiveFullscreen
                 applyRequested()
-                startRememberedLive()
+                if (fullscreen) playLastLiveFullscreen() else startRememberedLive()
             }
         }
     }
 
     fun choose(account: XtreamAccount) {
         val start = requestedSection
+        val fullscreen = openLiveFullscreen && (start == null || start == XtreamSection.LIVE)
         requestedSection = null
+        if (!fullscreen) openLiveFullscreen = false
         val same = this.account?.key == account.key && categories.isNotEmpty()
         this.account = account
         if (same) {
             if (start != null && start != section) selectSection(start)
-            startRememberedLive()
+            if (fullscreen) playLastLiveFullscreen() else startRememberedLive()
             return
         }
         selectSection(start ?: XtreamSection.LIVE, force = true)
-        startRememberedLive()
+        if (fullscreen) playLastLiveFullscreen() else startRememberedLive()
     }
 
     /**
@@ -594,6 +637,30 @@ class XtreamViewModel @Inject constructor(
             if (playing?.item?.id == last.streamId && playing?.item?.section == XtreamSection.LIVE) return@launch
             play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url))
             libraryPlayed++
+        }
+    }
+
+    /**
+     * IPTV Live TV in the menu: the last channel of this playlist, full screen.
+     * Without a saved channel the list stays, so there is something to pick.
+     */
+    private fun playLastLiveFullscreen() {
+        openLiveFullscreen = false
+        rememberedLive = true
+        viewModelScope.launch {
+            val settings = settingsRepository.current()
+            if (settings.streamMode != com.enigmacast.domain.model.StreamMode.OWN_TUNER) {
+                liveListNeeded = true
+                return@launch
+            }
+            val last = settings.lastIptvChannels[account?.key]
+            if (last == null || (last.streamId.isBlank() && last.url.isBlank())) {
+                liveListNeeded = true
+                return@launch
+            }
+            val item = XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url)
+            if (playing?.item?.id != item.id || playing?.item?.section != XtreamSection.LIVE) play(item)
+            if (playing != null) libraryPlayed++ else liveListNeeded = true
         }
     }
 
@@ -763,6 +830,7 @@ class XtreamViewModel @Inject constructor(
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(20_000)
         ExoPlayer.Builder(context)
+            .setRenderersFactory(IptvRenderersFactory(context, audioSync))
             .setMediaSourceFactory(DefaultMediaSourceFactory(http))
             .build()
             .also { p ->
@@ -840,6 +908,8 @@ class XtreamViewModel @Inject constructor(
         if (live) { tickJob?.cancel(); tickJob = null } else startTicker()
         val item = what.item
         if (live && item != null) {
+            val recent = com.enigmacast.domain.model.LastChannel(item.id, item.name, item.categoryId)
+            recentChannels = listOf(recent) + recentChannels.filter { it.reference != item.id }.take(11)
             viewModelScope.launch {
                 settingsRepository.update { settings ->
                     com.enigmacast.domain.model.ChannelMemory.rememberIptv(
@@ -874,9 +944,44 @@ class XtreamViewModel @Inject constructor(
 
     fun choosePictureMode(mode: com.enigmacast.domain.player.PictureMode) { pictureMode = mode }
 
-    /** Films and episodes only: back to the start. */
+    /** Same correction as the Enigma2 player: it applies at once and is kept in settings. */
+    fun setAudioDelay(ms: Int) {
+        val value = com.enigmacast.playback.AudioSync.clamp(ms)
+        audioDelayMs = value
+        val passthrough = audioDelayPassthrough
+        audioSync.set(
+            if (passthrough) audioSync.pcmMs else value,
+            if (passthrough) value else audioSync.passthroughMs,
+        )
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                val playback = if (passthrough) {
+                    settings.playback.copy(audioDelayPassthroughMs = value)
+                } else {
+                    settings.playback.copy(audioDelayPcmMs = value)
+                }
+                settings.copy(playback = playback)
+            }
+        }
+    }
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimer.set(minutes)
+    }
+
+    /** Recent tile: zap to a live channel watched earlier in this visit. */
+    fun playRecent(channel: com.enigmacast.domain.model.LastChannel) {
+        val known = items.firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference }
+        play(known ?: XtreamItem(channel.reference, channel.name, XtreamSection.LIVE, channel.bouquetReference))
+    }
+
+    /** Live reloads the stream. A film or episode goes back to the start. */
     fun restart() {
-        if (playing?.item?.section == XtreamSection.LIVE && playing?.episode == null) return
+        val item = playing?.item
+        if (item != null && item.section == XtreamSection.LIVE && playing?.episode == null) {
+            play(item)
+            return
+        }
         player?.seekTo(0)
     }
 
@@ -922,6 +1027,25 @@ class XtreamViewModel @Inject constructor(
         const val EPG_BATCH = 24
         /** Stand-in account of an M3U playlist: every entry has its own address. */
         val M3U_ACCOUNT = XtreamAccount("Playlist", "http://playlist.invalid", "", "", "ts")
+    }
+}
+
+/** IPTV player with the same audio-delay clock as the Enigma2 player. */
+@OptIn(UnstableApi::class)
+private class IptvRenderersFactory(
+    context: Context,
+    private val offsets: com.enigmacast.playback.AudioSyncOffsets,
+) : DefaultRenderersFactory(context) {
+    override fun buildAudioSink(
+        context: Context,
+        enableFloatOutput: Boolean,
+        enableAudioOutputPlaybackParams: Boolean,
+    ): AudioSink {
+        val sink = DefaultAudioSink.Builder(context)
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+            .build()
+        return com.enigmacast.playback.AudioSyncSink(sink, offsets)
     }
 }
 

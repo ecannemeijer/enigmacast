@@ -685,19 +685,28 @@ class StreamGuideViewModel @Inject constructor(
      * of this receiver (or the first channel of the list) and go full screen.
      */
     fun openLive(onFullscreen: () -> Unit) {
-        val running = session.state.value.channel != null &&
+        val state = session.state.value
+        val radio = isRadioReference(state.bouquetReference) || isRadioReference(state.channel?.reference.orEmpty())
+        val running = state.channel != null &&
             playback.state.value.playbackState.let { it != "IDLE" && it != "ENDED" }
-        if (running) {
+        if (running && !radio) {
             onFullscreen()
             return
         }
         viewModelScope.launch {
+            if (radio || medium == GuideMedium.Radio) show(GuideMedium.Television)
+            if (channels.isEmpty() || channels.all { isRadioReference(it.reference) }) {
+                val receiver = settingsRepository.current().activeReceiver()
+                if (receiver != null && bouquets.isEmpty()) bouquets = bouquetsFor(receiver, GuideMedium.Television)
+                val bouquet = bouquets.firstOrNull { !isRadioReference(it.reference) } ?: bouquets.firstOrNull()
+                if (bouquet != null) showBouquet(bouquet, ++bouquetToken)
+            }
             val settings = settingsRepository.current()
             val receiver = settings.activeReceiver()
             val last = receiver?.let { com.enigmacast.domain.model.ChannelMemory.lastFor(settings, it.id) }
-            val entry = last?.takeIf { it.reference.isNotBlank() }
+            val lastTv = last?.takeIf { it.reference.isNotBlank() && !isRadioReference(it.reference) }
                 ?.let { BouquetEntry(name = it.name, reference = it.reference) }
-                ?: channels.firstOrNull()
+            val entry = lastTv ?: channels.firstOrNull { !isRadioReference(it.reference) }
             if (entry == null) {
                 onFullscreen()
                 return@launch
@@ -705,6 +714,14 @@ class StreamGuideViewModel @Inject constructor(
             lastPressedReference = ""
             tune(entry, onFullscreen, onFullscreen)
         }
+    }
+
+    /** A radio bouquet (`1:7:2:`) or a radio service (`1:0:2:`). */
+    private fun isRadioReference(reference: String): Boolean {
+        if (reference.isBlank()) return false
+        if (BouquetChannels.isRadioBouquet(reference)) return true
+        val parts = reference.split(':')
+        return parts.getOrNull(0) == "1" && parts.getOrNull(2).equals("2", ignoreCase = true)
     }
 
     /**
