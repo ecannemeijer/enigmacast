@@ -1,6 +1,6 @@
 {
-  "versionCode": 51,
-  "versionName": "1.0.0-beta.48",
+  "versionCode": 52,
+  "versionName": "1.0.0-beta.49",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "The setup wizard installs the sync server from GitHub over SSH. Profiles appear before the home screen, and live TV starts only after a profile is chosen."
+  "notes": "The setup wizard installs the latest sync-server release over SSH and shows the web dashboard. Profiles appear before the home screen, and live TV starts only after a profile is chosen."
 }

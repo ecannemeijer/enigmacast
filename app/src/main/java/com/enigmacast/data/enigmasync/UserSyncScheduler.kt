@@ -5,6 +5,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Lets writers wake a sync without depending on the engine. */
@@ -25,6 +27,11 @@ class UserSyncScheduler @Inject constructor(
     fun start() {
         trigger.run = { scope.launch { engine.sync() } }
         scope.launch { profiles.entered.collect { engine.sync() } }
+        scope.launch {
+            profiles.state.map { state ->
+                state.profiles.map { profile -> listOf(profile.uuid, profile.name, profile.avatar, profile.language) }
+            }.distinctUntilChanged().collect { engine.sync() }
+        }
         scope.launch {
             runCatching { engine.importProfiles() }
             engine.sync()

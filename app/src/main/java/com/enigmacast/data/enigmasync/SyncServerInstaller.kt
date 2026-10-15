@@ -125,8 +125,8 @@ class SyncServerInstaller @Inject constructor() {
                 raise SystemExit("release has no ipk")
             open("/tmp/enigmacast-sync-release/url", "w", encoding="utf-8").write(url)
             PY
-            URL=\$(cat /tmp/enigmacast-sync-release/url)
-            if ! wget -O /tmp/enigmacast-sync.ipk "\$URL"; then
+            URL=${'$'}(cat /tmp/enigmacast-sync-release/url)
+            if ! wget -O /tmp/enigmacast-sync.ipk "${'$'}URL"; then
               python3 -c 'import urllib.request; urllib.request.urlretrieve(open("/tmp/enigmacast-sync-release/url", encoding="utf-8").read().strip(), "/tmp/enigmacast-sync.ipk")'
             fi
             opkg install --force-reinstall --force-overwrite /tmp/enigmacast-sync.ipk

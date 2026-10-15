@@ -38,12 +38,50 @@ class EnigmaSyncEngine @Inject constructor(
     suspend fun sync() = withContext(Dispatchers.IO) {
         val config = client.config() ?: return@withContext
         runCatching {
+            publishProfiles(config)
             push(config)
             profiles.state.value.profiles.forEach { profile ->
                 val uuid = profile.uuid.ifBlank { return@forEach }
                 pull(config, uuid)
             }
         }
+    }
+
+    /** Sends local profile names to the receiver and removes profiles that no longer exist here. */
+    private fun publishProfiles(config: SyncServerConfig) {
+        val local = profiles.state.value.profiles.filter { it.uuid.isNotBlank() }
+        val now = System.currentTimeMillis()
+        local.forEach { profile ->
+            runCatching { postProfile(config, profile.uuid, profile.name, profile.avatar, profile.language, false, now) }
+        }
+        val text = runCatching { client.request(config, "GET", "/api/v1/profiles") }.getOrNull() ?: return
+        val remote = JSONObject(text).optJSONArray("profiles") ?: return
+        val keep = local.map { it.uuid }.toSet()
+        for (index in 0 until remote.length()) {
+            val uuid = remote.getJSONObject(index).optString("uuid")
+            if (uuid.isBlank() || uuid in keep) continue
+            runCatching { postProfile(config, uuid, remote.getJSONObject(index).optString("name"), 0, null, true, now) }
+        }
+    }
+
+    private fun postProfile(
+        config: SyncServerConfig,
+        uuid: String,
+        name: String,
+        avatar: Int,
+        language: String?,
+        deleted: Boolean,
+        updatedMs: Long,
+    ) {
+        val body = JSONObject()
+            .put("uuid", uuid)
+            .put("name", name)
+            .put("avatar", avatar)
+            .put("updatedMs", updatedMs)
+            .put("changeId", "$uuid:$updatedMs:$deleted")
+            .put("deleted", deleted)
+        if (!language.isNullOrBlank()) body.put("language", language)
+        client.request(config, "POST", "/api/v1/profiles", body.toString().toByteArray())
     }
 
     private suspend fun push(config: SyncServerConfig) {
