@@ -83,8 +83,12 @@ class ProfileStore @Inject constructor(
         _entered.tryEmit(_state.value.active)
     }
 
+    /** Uuids the user removed on this TV. A profile that was never here is not in this set. */
+    fun deletedUuids(): Set<String> = prefs.getStringSet(DELETED, emptySet()).orEmpty()
+
     /** A profile that already exists on the sync server, matched by uuid. */
     fun importRemote(uuid: String, name: String, avatar: Int) {
+        if (uuid in deletedUuids()) return
         val trimmed = name.trim().ifBlank { return }
         val state = _state.value
         val existing = state.profiles.firstOrNull { it.uuid == uuid || it.id == uuid }
@@ -104,7 +108,11 @@ class ProfileStore @Inject constructor(
 
     fun edit(id: String, name: String, avatar: Int) = save(ProfileRules.edit(_state.value, id, name, avatar))
 
-    fun delete(id: String) = save(ProfileRules.delete(_state.value, id))
+    fun delete(id: String) {
+        val uuid = _state.value.profiles.firstOrNull { it.id == id }?.uuid.orEmpty()
+        save(ProfileRules.delete(_state.value, id))
+        if (uuid.isNotBlank()) prefs.edit().putStringSet(DELETED, deletedUuids() + uuid).apply()
+    }
 
     fun seesPlaylist(uuid: String = _state.value.activeUuid): Boolean = ProfileRules.seesPlaylist(_state.value, uuid)
 
@@ -133,5 +141,6 @@ class ProfileStore @Inject constructor(
 
     private companion object {
         const val KEY = "state"
+        const val DELETED = "deleted_uuids"
     }
 }

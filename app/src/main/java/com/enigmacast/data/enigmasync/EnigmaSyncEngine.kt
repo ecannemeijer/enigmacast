@@ -85,20 +85,26 @@ class EnigmaSyncEngine @Inject constructor(
         runCatching { push(config) }
     }
 
-    /** Sends local profile names to the receiver and removes profiles that no longer exist here. */
+    /**
+     * Sends local profile names to the receiver.
+     * A profile is removed on the server only after the user deleted it on this TV.
+     * One that this TV has never stored is left alone, so another viewer's profile is not wiped.
+     */
     private fun publishProfiles(config: SyncServerConfig) {
         val local = profiles.state.value.profiles.filter { it.uuid.isNotBlank() }
         val now = System.currentTimeMillis()
         local.forEach { profile ->
             runCatching { postProfile(config, profile.uuid, profile.name, profile.avatar, profile.language, false, now) }
         }
+        val removed = profiles.deletedUuids()
+        if (removed.isEmpty()) return
         val text = runCatching { client.request(config, "GET", "/api/v1/profiles") }.getOrNull() ?: return
         val remote = JSONObject(text).optJSONArray("profiles") ?: return
-        val keep = local.map { it.uuid }.toSet()
         for (index in 0 until remote.length()) {
-            val uuid = remote.getJSONObject(index).optString("uuid")
-            if (uuid.isBlank() || uuid in keep) continue
-            runCatching { postProfile(config, uuid, remote.getJSONObject(index).optString("name"), 0, null, true, now) }
+            val row = remote.getJSONObject(index)
+            val uuid = row.optString("uuid")
+            if (uuid.isBlank() || uuid !in removed) continue
+            runCatching { postProfile(config, uuid, row.optString("name"), 0, null, true, now) }
         }
     }
 
