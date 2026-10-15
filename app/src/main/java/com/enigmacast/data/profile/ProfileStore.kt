@@ -5,6 +5,7 @@ import com.enigmacast.R
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.profile.Profile
 import com.enigmacast.domain.profile.ProfileRules
+import com.enigmacast.domain.profile.ProfileScope
 import com.enigmacast.domain.profile.ProfileState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -108,6 +109,21 @@ class ProfileStore @Inject constructor(
     fun seesPlaylist(uuid: String = _state.value.activeUuid): Boolean = ProfileRules.seesPlaylist(_state.value, uuid)
 
     fun setPlaylistAccess(uuid: String, allowed: Boolean) = save(ProfileRules.playlistAccess(_state.value, uuid, allowed))
+
+    /** Keeps a profile's saved settings in step with a copy from the sync server. */
+    suspend fun rememberScope(profileId: String, scope: ProfileScope, language: String?) = gate.withLock {
+        val current = _state.value
+        val profiles = current.profiles.map { profile ->
+            if (profile.id != profileId || language.isNullOrBlank() || profile.language == language) profile
+            else profile.copy(language = language)
+        }
+        val next = current.copy(profiles = profiles, scopes = current.scopes + (profileId to scope))
+        save(next)
+        if (profileId == current.activeId) {
+            val updated = next.profiles.first { it.id == profileId }
+            if (updated.language != current.active.language && !updated.language.isNullOrBlank()) _switched.tryEmit(updated)
+        }
+    }
 
     /** The app language chosen while this profile is active. */
     fun setLanguage(tag: String) {

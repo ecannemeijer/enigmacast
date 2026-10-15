@@ -32,20 +32,30 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         val entry = EntryPointAccessors.fromApplication(applicationContext, SyncEntryPoint::class.java)
         val settings = entry.settings().current()
-        // Settings › IPTV › Playlist: reloaded once a day on the same schedule, receiver or not.
-        if (settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
-            runCatching { entry.iptvPlaylist().refreshIfDue(settings.iptvPlaylistKind) }
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        val receiver = settings.activeReceiver()
+        for (step in com.enigmacast.domain.sync.CacheWorkOrder.steps(receiver != null)) {
+            when (step) {
+                com.enigmacast.domain.sync.CacheWorkOrder.Step.SATELLITE -> {
+                    if (receiver != null) entry.engine().run(
+                        receiver,
+                        force = inputData.getBoolean(KEY_FORCE, false),
+                        refilm = inputData.getBoolean(KEY_REFILM, false),
+                        check = inputData.getBoolean(KEY_CHECK, false),
+                        carryFrom = inputData.getString(KEY_FROM),
+                    )
+                }
+                com.enigmacast.domain.sync.CacheWorkOrder.Step.IPTV -> loadIptv(entry)
+            }
         }
-        val receiver = settings.activeReceiver() ?: return Result.success()
-        entry.engine().run(
-            receiver,
-            force = inputData.getBoolean(KEY_FORCE, false),
-            refilm = inputData.getBoolean(KEY_REFILM, false),
-            check = inputData.getBoolean(KEY_CHECK, false),
-            carryFrom = inputData.getString(KEY_FROM),
-        )
         return Result.success()
+    }
+
+    private suspend fun loadIptv(entry: SyncEntryPoint) {
+        val latest = entry.settings().current()
+        if (latest.iptvSource != com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) return
+        val allow = latest.setupCompleted || inputData.getBoolean(KEY_FORCE, false)
+        runCatching { entry.iptvPlaylist().loadTail(latest.iptvPlaylistKind, allow) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
     }
 
     companion object {
@@ -56,11 +66,29 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     }
 }
 
+/**
+ * Loads the IPTV playlist only after a running bouquet/guide sync has finished.
+ * Used when a login arrives from the server outside the normal cache worker.
+ */
+class IptvTailWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val entry = EntryPointAccessors.fromApplication(applicationContext, SyncEntryPoint::class.java)
+        entry.engine().awaitIdle()
+        val settings = entry.settings().current()
+        if (settings.setupCompleted && settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+            runCatching { entry.iptvPlaylist().loadTail(settings.iptvPlaylistKind, allow = true) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        }
+        return Result.success()
+    }
+}
+
 /** WorkManager setup: an hourly check plus "now" requests (first connect, receiver change, Refresh now). */
 object SyncScheduler {
     private const val PERIODIC = "cache-sync-periodic"
     private const val NOW = "cache-sync-now"
     private const val REFILM = "cache-sync-refilm"
+    private const val IPTV = "cache-sync-iptv"
 
     private val network = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -82,6 +110,12 @@ object SyncScheduler {
         if (now - lastCheckMs < 2 * 60_000) return
         lastCheckMs = now
         runNow(context, force = false, check = true)
+    }
+
+    /** IPTV channels, after whatever bouquet and guide sync is already running. */
+    fun runIptvTail(context: Context) {
+        val request = OneTimeWorkRequestBuilder<IptvTailWorker>().setConstraints(network).build()
+        WorkManager.getInstance(context).enqueueUniqueWork(IPTV, ExistingWorkPolicy.KEEP, request)
     }
 
     /** [force] refreshes everything; otherwise only what is due or missing. */

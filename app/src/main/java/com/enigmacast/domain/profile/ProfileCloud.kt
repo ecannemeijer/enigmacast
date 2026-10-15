@@ -1,0 +1,50 @@
+package com.enigmacast.domain.profile
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+/** Home bouquet picks that belong to one profile. [all] lists receivers explicitly set back to every bouquet. */
+@Serializable
+data class HomeBouquetCloud(
+    val selected: Map<String, List<String>> = emptyMap(),
+    val all: List<String> = emptyList(),
+)
+
+/**
+ * Everything a profile keeps for itself: the live profile settings, its language, Home bouquets
+ * and hidden IPTV categories. Receivers and the IPTV login are not in here.
+ */
+@Serializable
+data class ProfileSettingsSnapshot(
+    val scope: ProfileScope = ProfileScope(),
+    val language: String? = null,
+    val homeBouquets: Map<String, List<String>> = emptyMap(),
+    val homeAll: List<String> = emptyList(),
+    val hiddenCategories: Map<String, List<String>> = emptyMap(),
+) {
+    fun normalized(): ProfileSettingsSnapshot = copy(
+        scope = scope.copy(
+            lastChannels = scope.lastChannels.toSortedMap(),
+            recentByReceiver = scope.recentByReceiver.mapValues { (_, channels) -> channels }.toSortedMap(),
+            lastIptvChannels = scope.lastIptvChannels.toSortedMap(),
+            pictureModes = scope.pictureModes.toSortedMap(),
+        ),
+        homeBouquets = homeBouquets.mapValues { (_, ids) -> ids.sorted() }.toSortedMap(),
+        homeAll = homeAll.distinct().sorted(),
+        hiddenCategories = hiddenCategories.mapValues { (_, ids) -> ids.sorted() }.toSortedMap(),
+    )
+}
+
+/** JSON for the sync server, and the rule for a device that has never edited a profile. */
+object ProfileCloud {
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = false }
+
+    fun encode(snapshot: ProfileSettingsSnapshot): String = json.encodeToString(snapshot.normalized())
+
+    fun decode(raw: String): ProfileSettingsSnapshot =
+        json.decodeFromString(ProfileSettingsSnapshot.serializer(), raw).normalized()
+
+    /** Defaults only: do not upload them over a profile another device already filled in. */
+    fun untouched(snapshot: ProfileSettingsSnapshot): Boolean = snapshot.normalized() == ProfileSettingsSnapshot().normalized()
+}

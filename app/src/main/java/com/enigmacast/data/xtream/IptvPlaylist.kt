@@ -19,6 +19,8 @@ import com.enigmacast.util.EnigmaLog
 import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.TimeUnit
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +29,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.DecodeSequenceMode
@@ -67,10 +71,39 @@ data class IptvLoadProgress(val step: Step, val count: Int) {
     enum class Step { CONNECT, LIVE, MOVIES, SERIES, M3U, SAVE }
 }
 
+/** When this device last agreed an IPTV login with the sync server. */
+data class PlaylistRevision(val updatedMs: Long, val changeId: String, val dirty: Boolean)
+
 @Singleton
-class IptvPlaylistStore @Inject constructor(private val secrets: SecretStore) {
+class IptvPlaylistStore @Inject constructor(
+    @ApplicationContext context: Context,
+    private val secrets: SecretStore,
+) {
+    private val revisionPrefs = context.getSharedPreferences(REVISION_PREFS, Context.MODE_PRIVATE)
     private val _login = MutableStateFlow(read())
     val login: StateFlow<IptvPlaylistLogin> = _login
+
+    /** Set while a server login is written locally, so that write is not uploaded again. */
+    @Volatile var applyingRemote: Boolean = false
+
+    fun revision(): PlaylistRevision? {
+        val changeId = revisionPrefs.getString(REV_CHANGE, null) ?: return null
+        return PlaylistRevision(revisionPrefs.getLong(REV_MS, 0L), changeId, revisionPrefs.getBoolean(REV_DIRTY, false))
+    }
+
+    fun markDirty(now: Long = System.currentTimeMillis()): PlaylistRevision {
+        val changeId = "$now-${java.util.UUID.randomUUID()}"
+        revisionPrefs.edit().putLong(REV_MS, now).putString(REV_CHANGE, changeId).putBoolean(REV_DIRTY, true).apply()
+        return PlaylistRevision(now, changeId, true)
+    }
+
+    fun acceptRevision(updatedMs: Long, changeId: String) {
+        revisionPrefs.edit().putLong(REV_MS, updatedMs).putString(REV_CHANGE, changeId).putBoolean(REV_DIRTY, false).apply()
+    }
+
+    fun clearDirty() {
+        revisionPrefs.edit().putBoolean(REV_DIRTY, false).apply()
+    }
 
     private fun read() = IptvPlaylistLogin(
         secrets.read(M3U).orEmpty(), secrets.read(SERVER).orEmpty(), secrets.read(USER).orEmpty(), secrets.read(PASS).orEmpty(),
@@ -90,6 +123,10 @@ class IptvPlaylistStore @Inject constructor(private val secrets: SecretStore) {
     fun markLoaded(at: Long) = secrets.write(LOADED, at.toString())
 
     private companion object {
+        const val REVISION_PREFS = "iptv_playlist_revision"
+        const val REV_MS = "updated_ms"
+        const val REV_CHANGE = "change_id"
+        const val REV_DIRTY = "dirty"
         const val LOADED = "iptv.playlist.loaded_at"
         const val M3U = "iptv.playlist.m3u"
         const val SERVER = "iptv.playlist.server"
@@ -110,12 +147,34 @@ class IptvPlaylistSync @Inject constructor(
     private val dao: IptvDao,
     private val store: IptvPlaylistStore,
 ) {
+    private val gate = Mutex()
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+    /** A login arrived from the server and the channel list still has to be fetched, after satellite sync. */
+    @Volatile var loadAfterCache: Boolean = false
+
+    fun arm() { loadAfterCache = true }
     private val _lastLoad = MutableStateFlow(0)
     /** Goes up after every finished load, so pages reading Room reload. */
     val lastLoad: StateFlow<Int> = _lastLoad
 
-    suspend fun load(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit = {}): IptvLoadResult = withContext(Dispatchers.IO) {
+    /**
+     * Fetches the playlist when a server login is waiting, or when the daily refresh is due.
+     * [allow] is false until setup has finished, so this does not run beside the wizard's bouquet and guide download.
+     */
+    suspend fun loadTail(kind: IptvPlaylistKind, allow: Boolean): IptvLoadResult? {
+        if (!allow) return null
+        val armed = loadAfterCache
+        if (!armed && System.currentTimeMillis() - store.loadedAt < 24 * 60 * 60_000L) return null
+        if (!store.login.value.configured(kind)) return null
+        loadAfterCache = false
+        val result = load(kind)
+        if (armed && result !is IptvLoadResult.Done) loadAfterCache = true
+        return result
+    }
+
+    suspend fun load(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit = {}): IptvLoadResult = gate.withLock { loadBody(kind, onProgress) }
+
+    private suspend fun loadBody(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit): IptvLoadResult = withContext(Dispatchers.IO) {
         val login = store.login.value
         if (!login.configured(kind)) return@withContext IptvLoadResult.Failure.NOT_CONFIGURED
         val started = System.currentTimeMillis()

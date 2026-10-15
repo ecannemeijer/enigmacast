@@ -71,6 +71,11 @@ class SyncEngine @Inject constructor(
 
     fun receiverKey(receiver: ReceiverConfig) = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
 
+    /** Returns when the bouquet and guide sync that is running now has finished. */
+    suspend fun awaitIdle() {
+        gate.withLock { }
+    }
+
     /**
      * True when something was refreshed. Errors are stored per step and do not throw.
      * [check] compares the box's channel lists with the cache even when the channel step is not

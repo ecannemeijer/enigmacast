@@ -39,6 +39,27 @@ class IptvHiddenCategories @Inject constructor(
 
     fun hidden(source: String, section: XtreamSection): Set<String> = prefs.getStringSet(key(source, section), emptySet()).orEmpty().toSet()
 
+    fun export(profileId: String): Map<String, List<String>> {
+        val out = LinkedHashMap<String, List<String>>()
+        prefs.all.keys.forEach { stored ->
+            val plain = ProfileRules.unscope(profileId, stored) ?: return@forEach
+            val ids = prefs.getStringSet(stored, emptySet()).orEmpty()
+            if (ids.isNotEmpty()) out[plain] = ids.sorted()
+        }
+        return out.toSortedMap()
+    }
+
+    /** Replaces this profile's hidden categories with [values]. Keys are `source/section`. */
+    fun import(profileId: String, values: Map<String, List<String>>) {
+        val editor = prefs.edit()
+        prefs.all.keys.filter { ProfileRules.unscope(profileId, it) != null }.forEach { editor.remove(it) }
+        values.forEach { (plain, ids) ->
+            if (ids.isNotEmpty()) editor.putStringSet(ProfileRules.scopedKey(profileId, plain), ids.toSet())
+        }
+        editor.apply()
+        if (profileId == profiles.activeId) _changes.value++
+    }
+
     fun set(source: String, section: XtreamSection, ids: Set<String>) {
         prefs.edit().apply { if (ids.isEmpty()) remove(key(source, section)) else putStringSet(key(source, section), ids) }.apply()
         _changes.value++
