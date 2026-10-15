@@ -248,6 +248,17 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
         visualTransformation = PasswordVisualTransformation(),
     )
     TvButton(stringResource(R.string.setup_sync_link_install), { model.installSync() }, enabled = model.sshPassword.isNotBlank() && !model.syncSearching)
+    if (model.dashboardUrl.isNotBlank()) {
+        val context = LocalContext.current
+        Text(stringResource(R.string.setup_sync_dashboard_ready, model.dashboardUrl), color = EnigmaColors.Text, fontSize = 16.sp)
+        if (model.dashboardPassword.isNotBlank()) {
+            Text(stringResource(R.string.setup_sync_dashboard_password, model.dashboardPassword), color = EnigmaColors.Text, fontSize = 16.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TvButton(stringResource(R.string.setup_sync_dashboard_open), { model.openDashboard(context) })
+            TvButton(stringResource(R.string.setup_sync_dashboard_continue), { model.continueAfterInstall() })
+        }
+    }
 }
 
 @Composable

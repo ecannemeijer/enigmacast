@@ -1063,8 +1063,12 @@
     <string name="setup_sync_link_missing">No sync server found on this network.</string>
     <string name="setup_sync_link_pair">Pair</string>
     <string name="setup_sync_link_alone">Stay standalone</string>
-    <string name="setup_sync_link_install_hint">Or install the sync server on the receiver over SSH. The box downloads it from GitHub.</string>
+    <string name="setup_sync_link_install_hint">Or install the sync server on the receiver over SSH. The box installs the latest GitHub release.</string>
     <string name="setup_sync_link_install">Install via SSH</string>
+    <string name="setup_sync_dashboard_ready">Sync server installed. Dashboard: %1$s</string>
+    <string name="setup_sync_dashboard_password">Dashboard password, shown once: %1$s</string>
+    <string name="setup_sync_dashboard_open">Open Web Dashboard</string>
+    <string name="setup_sync_dashboard_continue">Continue</string>
     <string name="setup_sync_link_profiles">Choose a profile. Signing in syncs it.</string>
     <string name="setup_profile_name">Your name</string>
     <string name="setup_profile_avatar">Pick a picture</string>

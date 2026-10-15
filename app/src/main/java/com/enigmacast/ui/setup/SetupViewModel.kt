@@ -1,6 +1,8 @@
 package com.enigmacast.ui.setup
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +72,8 @@ class SetupViewModel @Inject constructor(
     var syncMessage by mutableStateOf("")
         private set
     var syncLinked by mutableStateOf(false)
+    var dashboardUrl by mutableStateOf("")
+    var dashboardPassword by mutableStateOf("")
         private set
     private var syncSearchStarted = false
 
@@ -194,19 +198,34 @@ class SetupViewModel @Inject constructor(
                     val paired = JSONObject(syncClient.join(address, report.pin, "EnigmaCast"))
                     syncClient.save(address, report.pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
                     syncEngine.importProfiles()
+                    report
                 }
             }
             syncSearching = false
             sshPassword = ""
             result.fold(
-                onSuccess = {
+                onSuccess = { report ->
                     syncHost = address
                     syncLinked = true
-                    go(SetupStep.next(step))
+                    dashboardUrl = report.dashboardUrl
+                    dashboardPassword = report.dashboardPassword
                 },
                 onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
             )
         }
+    }
+
+    fun continueAfterInstall() {
+        dashboardPassword = ""
+        go(SetupStep.next(step))
+    }
+
+    fun openDashboard(context: Context) {
+        val url = dashboardUrl
+        if (url.isBlank()) return
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { syncMessage = it.message.orEmpty() }
     }
 
     fun stayStandalone() {

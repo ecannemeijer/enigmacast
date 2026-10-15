@@ -10,11 +10,20 @@ import java.security.cert.X509Certificate
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class InstallReport(val model: String, val python: String, val dataDir: String, val pairingCode: String, val pin: String)
+data class InstallReport(
+    val model: String,
+    val python: String,
+    val dataDir: String,
+    val pairingCode: String,
+    val pin: String,
+    val dashboardUrl: String = "",
+    val dashboardPassword: String = "",
+)
 
 /**
- * Installs the sync service over SSH by downloading the public GitHub repository on the receiver.
- * The password is used for this call and not stored. Only the EnigmaCast Sync directory and init script are written.
+ * Installs the sync service over SSH from the latest public GitHub release IPK.
+ * The password is used for this call and not stored. The package upgrades the API and the web dashboard
+ * without removing the data directory.
  */
 @Singleton
 class SyncServerInstaller @Inject constructor() {
@@ -34,13 +43,21 @@ class SyncServerInstaller @Inject constructor() {
             if (dataDir == "NO_EXTERNAL" || dataDir.isBlank()) error("No writable external storage on the receiver")
             exec(session, FETCH)
             val remote = "/usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync"
-            exec(session, "rm -rf '$remote' && mkdir -p '$remote' && cp -a /tmp/enigmacast-sync-src/enigmacast_sync '$remote/' && cp /tmp/enigmacast-sync-src/packaging/enigmacast-sync /etc/init.d/enigmacast-sync && chmod 755 /etc/init.d/enigmacast-sync")
             val init = exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init || true")
-            exec(session, "/etc/init.d/enigmacast-sync restart; sleep 1; wget -qO- --no-check-certificate https://127.0.0.1:8740/api/v1/health || true")
+            exec(session, "/etc/init.d/enigmacast-sync restart || true; /etc/init.d/enigmacast-web restart || true")
             val cert = exec(session, "cat '$dataDir/cert.pem'")
             val pin = pinOf(cert)
+            var webPassword = ""
+            repeat(8) {
+                if (webPassword.isBlank()) {
+                    webPassword = exec(session, "cat '$dataDir/web-password-once' 2>/dev/null || true").trim()
+                    if (webPassword.isBlank()) exec(session, "sleep 1")
+                }
+            }
+            if (webPassword.isNotBlank()) exec(session, "rm -f '$dataDir/web-password-once'")
+            val scheme = if (cert.contains("BEGIN CERTIFICATE")) "https" else "http"
             val code = Regex(""""pairingCode"\s*:\s*"(\d+)"""").find(init)?.groupValues?.get(1).orEmpty()
-            return InstallReport(model, python, dataDir, code, pin)
+            return InstallReport(model, python, dataDir, code, pin, "$scheme://$host:8766/", webPassword)
         } finally {
             session.disconnect()
         }
@@ -87,15 +104,33 @@ class SyncServerInstaller @Inject constructor() {
     }
 
     private companion object {
-        const val REPO = "https://github.com/ecannemeijer/enigmacast-enigma2-sync/archive/refs/heads/main.tar.gz"
+        const val RELEASE = "https://api.github.com/repos/ecannemeijer/enigmacast-enigma2-sync/releases/latest"
         val FETCH = """
-            rm -rf /tmp/enigmacast-sync-src /tmp/enigmacast-sync.tar.gz
-            if ! wget -O /tmp/enigmacast-sync.tar.gz '$REPO'; then
-              python3 -c 'import urllib.request; urllib.request.urlretrieve("$REPO", "/tmp/enigmacast-sync.tar.gz")'
+            set -eu
+            rm -rf /tmp/enigmacast-sync-release /tmp/enigmacast-sync.ipk
+            mkdir -p /tmp/enigmacast-sync-release
+            if ! wget -qO /tmp/enigmacast-sync-release/release.json '$RELEASE'; then
+              python3 -c 'import urllib.request; urllib.request.urlretrieve("$RELEASE", "/tmp/enigmacast-sync-release/release.json")'
             fi
-            mkdir -p /tmp/enigmacast-sync-src
-            tar -xzf /tmp/enigmacast-sync.tar.gz -C /tmp/enigmacast-sync-src --strip-components=1
-            test -d /tmp/enigmacast-sync-src/enigmacast_sync
+            python3 - <<'PY'
+            import json
+            data = json.load(open("/tmp/enigmacast-sync-release/release.json", encoding="utf-8"))
+            url = ""
+            for asset in data.get("assets") or []:
+                name = asset.get("name") or ""
+                if name.endswith("_all.ipk"):
+                    url = asset.get("browser_download_url") or ""
+                    break
+            if not url:
+                raise SystemExit("release has no ipk")
+            open("/tmp/enigmacast-sync-release/url", "w", encoding="utf-8").write(url)
+            PY
+            URL=\$(cat /tmp/enigmacast-sync-release/url)
+            if ! wget -O /tmp/enigmacast-sync.ipk "\$URL"; then
+              python3 -c 'import urllib.request; urllib.request.urlretrieve(open("/tmp/enigmacast-sync-release/url", encoding="utf-8").read().strip(), "/tmp/enigmacast-sync.ipk")'
+            fi
+            opkg install --force-reinstall --force-overwrite /tmp/enigmacast-sync.ipk
+            test -d /usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync/enigmacast_sync/web
         """.trimIndent()
     }
 }

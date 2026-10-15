@@ -1,6 +1,6 @@
 {
-  "versionCode": 50,
-  "versionName": "1.0.0-beta.47",
+  "versionCode": 51,
+  "versionName": "1.0.0-beta.48",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "IPTV Live TV starts fullscreen on the last channel. IPTV OSD matches the player options, Live TV no longer returns to radio, and series episodes are artwork cards."
+  "notes": "The setup wizard installs the sync server from GitHub over SSH. Profiles appear before the home screen, and live TV starts only after a profile is chosen."
 }
