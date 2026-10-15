@@ -10,7 +10,8 @@ class SetupStepTest {
     @Test fun order() {
         assertEquals(SetupStep.ACCOUNT, SetupStep.next(SetupStep.WELCOME))
         assertEquals(SetupStep.RECEIVER, SetupStep.next(SetupStep.ACCOUNT))
-        assertEquals(SetupStep.PROFILE, SetupStep.next(SetupStep.RECEIVER))
+        assertEquals(SetupStep.SYNC_LINK, SetupStep.next(SetupStep.RECEIVER))
+        assertEquals(SetupStep.PROFILE, SetupStep.next(SetupStep.SYNC_LINK))
         assertEquals(SetupStep.DONE, SetupStep.next(SetupStep.DONE))
         assertNull(SetupStep.previous(SetupStep.WELCOME))
         assertEquals(SetupStep.SYNC, SetupStep.previous(SetupStep.SOCCER))

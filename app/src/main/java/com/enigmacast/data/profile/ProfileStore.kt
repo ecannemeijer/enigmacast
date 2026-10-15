@@ -31,9 +31,18 @@ class ProfileStore @Inject constructor(
     private val prefs = context.getSharedPreferences("profiles", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
     private val gate = Mutex()
-    private val _state = MutableStateFlow(load())
+    private val initial = load()
+    private val _state = MutableStateFlow(initial)
     val state: StateFlow<ProfileState> = _state.asStateFlow()
+
+    /** Live TV startup waits until the viewer has picked a profile. */
+    @Volatile var holdLiveStart: Boolean = ProfileRules.askOnStart(initial)
+        private set
+
     private val _switched = MutableSharedFlow<Profile>(extraBufferCapacity = 2)
+    private val _entered = MutableSharedFlow<Profile>(extraBufferCapacity = 2)
+    /** Fired when a profile is chosen, including when the already active one is confirmed. */
+    val entered: SharedFlow<Profile> = _entered.asSharedFlow()
     /** After a switch: screens reload, and the app applies the profile's language. */
     val switched: SharedFlow<Profile> = _switched.asSharedFlow()
 
@@ -61,12 +70,29 @@ class ProfileStore @Inject constructor(
             applied
         }
         save(nextState)
+        releaseHold()
         _switched.tryEmit(nextState.active)
+        _entered.tryEmit(nextState.active)
     }
 
     /** Picker closed on the profile already active: remember that a choice was made. */
     fun confirmActive() {
         if (!_state.value.chosenOnce) save(_state.value.copy(chosenOnce = true))
+        releaseHold()
+        _entered.tryEmit(_state.value.active)
+    }
+
+    /** A profile that already exists on the sync server, matched by uuid. */
+    fun importRemote(uuid: String, name: String, avatar: Int) {
+        val trimmed = name.trim().ifBlank { return }
+        val state = _state.value
+        val existing = state.profiles.firstOrNull { it.uuid == uuid || it.id == uuid }
+        if (existing == null) save(ProfileRules.add(state, uuid, trimmed, avatar, uuid = uuid))
+        else if (existing.name != trimmed || existing.avatar != avatar) save(ProfileRules.edit(state, existing.id, trimmed, avatar))
+    }
+
+    private fun releaseHold() {
+        holdLiveStart = false
     }
 
     fun add(name: String, avatar: Int): String {

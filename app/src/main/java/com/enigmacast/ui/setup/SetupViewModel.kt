@@ -14,6 +14,9 @@ import com.enigmacast.data.tmdb.HomeBouquetStore
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.model.StreamMode
+import com.enigmacast.data.enigmasync.EnigmaSyncClient
+import com.enigmacast.data.enigmasync.EnigmaSyncEngine
+import com.enigmacast.data.enigmasync.SyncDiscovery
 import com.enigmacast.domain.setup.SetupStep
 import com.enigmacast.live.HomeFilmsRepository
 import com.enigmacast.live.ReceiverNames
@@ -25,7 +28,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 @HiltViewModel
 class SetupViewModel @Inject constructor(
@@ -36,6 +42,9 @@ class SetupViewModel @Inject constructor(
     private val homeFilms: HomeFilmsRepository,
     private val bouquetStore: HomeBouquetStore,
     private val account: com.enigmacast.data.account.AccountRepository,
+    private val discovery: SyncDiscovery,
+    private val syncClient: EnigmaSyncClient,
+    private val syncEngine: EnigmaSyncEngine,
     names: ReceiverNames,
 ) : ViewModel() {
     var step by mutableStateOf(SetupStep.WELCOME)
@@ -51,6 +60,16 @@ class SetupViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, StreamMode.OWN_TUNER)
     val receiverName: StateFlow<String> = names.active
     val accountState = account.account
+
+    var syncHost by mutableStateOf<String?>(null)
+        private set
+    var syncSearching by mutableStateOf(false)
+        private set
+    var syncMessage by mutableStateOf("")
+        private set
+    var syncLinked by mutableStateOf(false)
+        private set
+    private var syncSearchStarted = false
 
     var profileName by mutableStateOf("")
     var avatar by mutableIntStateOf(0)
@@ -69,6 +88,7 @@ class SetupViewModel @Inject constructor(
     fun canGoNext(): Boolean = when (step) {
         SetupStep.ACCOUNT -> accountState.value != null
         SetupStep.RECEIVER -> receiver.value != null
+        SetupStep.SYNC_LINK -> syncLinked || syncClient.config() != null
         SetupStep.PROFILE -> profileName.isNotBlank()
         else -> true
     }
@@ -100,6 +120,7 @@ class SetupViewModel @Inject constructor(
         step = target
         stepToken++
         when (target) {
+            SetupStep.SYNC_LINK -> searchSync()
             SetupStep.PROFILE -> loadProfile()
             SetupStep.BOUQUETS -> loadBouquets()
             else -> Unit
@@ -108,6 +129,68 @@ class SetupViewModel @Inject constructor(
 
     fun setMode(mode: StreamMode) {
         viewModelScope.launch { settings.update { it.copy(streamMode = mode) } }
+    }
+
+    fun searchSync() {
+        if (syncSearchStarted) return
+        syncSearchStarted = true
+        if (syncClient.config() != null) {
+            syncLinked = true
+            syncHost = syncClient.config()?.host
+            viewModelScope.launch { runCatching { syncEngine.importProfiles() } }
+            return
+        }
+        syncSearching = true
+        syncMessage = ""
+        viewModelScope.launch {
+            val host = runCatching { discovery.find(receiver.value?.host) }.getOrNull()
+            syncSearching = false
+            syncHost = host
+            if (host == null) syncMessage = "missing"
+        }
+    }
+
+    fun linkSync() {
+        val host = syncHost ?: return
+        if (syncSearching) return
+        syncSearching = true
+        syncMessage = ""
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val pin = syncClient.capturePin(host)
+                    val paired = JSONObject(syncClient.join(host, pin, "EnigmaCast"))
+                    syncClient.save(host, pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
+                    syncEngine.importProfiles()
+                }
+            }
+            syncSearching = false
+            result.fold(
+                onSuccess = {
+                    syncLinked = true
+                    go(SetupStep.next(step))
+                },
+                onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
+            )
+        }
+    }
+
+    fun stayStandalone() {
+        go(SetupStep.next(step))
+    }
+
+    fun profilesForPicker() = profiles.state.value.profiles.filter { profile ->
+        (syncLinked || syncClient.config() != null) && profile.name.isNotBlank()
+    }
+
+    fun chooseProfile(id: String) {
+        viewModelScope.launch {
+            profiles.switchTo(id)
+            val active = profiles.state.value.active
+            profileName = active.name
+            avatar = active.avatar
+            go(SetupStep.next(step))
+        }
     }
 
     private fun loadProfile() {

@@ -67,6 +67,30 @@ def server_info(db) -> dict:
     return {"api": "v1", "port": 8740, "adminDevices": admins, "initialized": _meta(db, "initialized") == "1"}
 
 
+def join(db, body: dict) -> dict:
+    """A TV running EnigmaCast joins without a pairing code. The first one is the only admin."""
+    name = str(body.get("name", "EnigmaCast"))[:64]
+    pubkey = _b64(body.get("publicKey", ""))
+    if not pubkey:
+        raise ApiError(400, "publicKey is required")
+    now = _now()
+    token = secrets.token_urlsafe(32)
+    existing = db.execute("SELECT * FROM devices WHERE pubkey=? AND revoked=0", (pubkey,)).fetchone()
+    if existing is not None:
+        db.execute("UPDATE devices SET token_hash=?, name=? WHERE id=?", (token_hash(token), name, existing["id"]))
+        db.commit()
+        return {"deviceId": existing["id"], "token": token, "role": existing["role"]}
+    admins = db.execute("SELECT COUNT(*) AS n FROM devices WHERE role='admin' AND revoked=0").fetchone()["n"]
+    role = "admin" if admins == 0 else "member"
+    device_id = secrets.token_hex(16)
+    db.execute(
+        "INSERT INTO devices (id, name, pubkey, token_hash, role, revoked, created_ms) VALUES (?,?,?,?,?,0,?)",
+        (device_id, name, pubkey, token_hash(token), role, now),
+    )
+    db.commit()
+    return {"deviceId": device_id, "token": token, "role": role}
+
+
 def pair(db, body: dict) -> dict:
     code = str(body.get("code", ""))
     name = str(body.get("name", "device"))[:64]
@@ -166,6 +190,14 @@ def list_devices(db, device: dict) -> dict:
     return {"devices": [dict(row) for row in rows]}
 
 
+def list_profiles(db, device: dict) -> dict:
+    del device
+    rows = db.execute(
+        "SELECT uuid, name, avatar, language FROM profiles WHERE deleted=0 ORDER BY name"
+    ).fetchall()
+    return {"profiles": [dict(row) for row in rows]}
+
+
 def upsert_profile(db, device: dict, body: dict) -> dict:
     uuid = str(body.get("uuid", ""))
     if not uuid:
@@ -248,12 +280,8 @@ def restore_backup(db, device: dict, folder: str) -> dict:
 
 
 def _allow_profile(device: dict, profile_id: str, db) -> None:
-    if device.get("role") == "admin":
-        return
-    allowed = _meta(db, f"device-profiles:{device['id']}")
-    ids = set(json.loads(allowed)) if allowed else set()
-    if profile_id not in ids:
-        raise ApiError(403, "profile not assigned")
+    """Any paired EnigmaCast TV may sync every profile. Revoked devices never reach this."""
+    del device, profile_id, db
 
 
 def assign_profiles(db, device: dict, device_id: str, profile_ids: list[str]) -> dict:

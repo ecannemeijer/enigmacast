@@ -22,6 +22,19 @@ class EnigmaSyncEngine @Inject constructor(
     private val library: IptvLibraryDao,
     private val profiles: ProfileStore,
 ) {
+    /** Copies server profiles onto this device so the picker can show them. */
+    suspend fun importProfiles() = withContext(Dispatchers.IO) {
+        val config = client.config() ?: return@withContext
+        val text = runCatching { client.request(config, "GET", "/api/v1/profiles") }.getOrNull() ?: return@withContext
+        val profilesJson = JSONObject(text).optJSONArray("profiles") ?: return@withContext
+        for (index in 0 until profilesJson.length()) {
+            val profile = profilesJson.getJSONObject(index)
+            val uuid = profile.optString("uuid")
+            if (uuid.isBlank()) continue
+            profiles.importRemote(uuid, profile.optString("name"), profile.optInt("avatar"))
+        }
+    }
+
     suspend fun sync() = withContext(Dispatchers.IO) {
         val config = client.config() ?: return@withContext
         runCatching {

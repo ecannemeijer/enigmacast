@@ -10,8 +10,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from enigmacast_sync.service import (
-    ApiError, assign_profiles, authenticate, health, issue_pairing, list_devices, make_backup,
-    pair, push, put_playlist, recover, require_admin, revoke_device, server_info, sync_pull, upsert_profile,
+    ApiError, assign_profiles, authenticate, health, issue_pairing, join, list_devices, list_profiles,
+    make_backup, pair, push, put_playlist, recover, require_admin, revoke_device, server_info, sync_pull, upsert_profile,
 )
 
 PORT = 8740
@@ -52,6 +52,8 @@ def make_handler(db):
                 return self._json(200, server_info(db))
             if path == "/api/v1/pair" and method == "POST":
                 return self._json(200, pair(db, _body(raw)))
+            if path == "/api/v1/join" and method == "POST":
+                return self._json(200, join(db, _body(raw)))
             if path == "/api/v1/recover" and method == "POST":
                 return self._json(200, recover(db, str(_body(raw).get("code", ""))))
             device = authenticate(db, {k: v for k, v in self.headers.items()}, method, signed_path, raw)
@@ -64,6 +66,8 @@ def make_handler(db):
                 return self._json(200, revoke_device(db, device, str(body.get("deviceId", ""))))
             if path == "/api/v1/devices/profiles" and method == "POST":
                 return self._json(200, assign_profiles(db, device, str(body.get("deviceId", "")), list(body.get("profiles") or [])))
+            if path == "/api/v1/profiles" and method == "GET":
+                return self._json(200, list_profiles(db, device))
             if path == "/api/v1/profiles" and method == "POST":
                 return self._json(200, upsert_profile(db, device, body))
             if path == "/api/v1/playlists" and method == "POST":

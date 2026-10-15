@@ -48,11 +48,17 @@ class SyncServerViewModel @Inject constructor(
     var freshRecovery by mutableStateOf<String?>(null)
     var status by mutableStateOf("")
     var busy by mutableStateOf(false)
+    var linkedHost by mutableStateOf("")
+    var linkedRole by mutableStateOf("")
 
     init {
         viewModelScope.launch {
             val receiver = settings.current().activeReceiver()
             if (host.isBlank()) host = receiver?.host.orEmpty()
+            client.config()?.let {
+                linkedHost = it.host
+                linkedRole = it.role
+            }
         }
     }
 
@@ -85,36 +91,51 @@ class SyncServerViewModel @Inject constructor(
     }
 
     /** Frees the single admin slot with the recovery code, then pairs this device as that admin. */
+    fun disconnect() {
+        client.clear()
+        linkedHost = ""
+        linkedRole = ""
+        freshRecovery = null
+    }
+
     fun claim() {
         if (busy || host.isBlank() || recoveryCode.isBlank()) return
         busy = true
-        status = ""
+        status = "Bezig met beheer overnemen…"
         freshRecovery = null
-        val typedPassword = password
         val typedRecovery = recoveryCode.trim()
-        password = ""
-        recoveryCode = ""
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val address = host.trim()
-                    val pin = client.storedPin(address)
-                        ?: installer.certificatePin(address, user.trim(), typedPassword)
+                    val pin = client.storedPin(address) ?: client.capturePin(address)
                     val recovered = JSONObject(client.recover(address, pin, typedRecovery))
-                    val paired = JSONObject(client.pair(address, pin, recovered.getString("pairingCode"), "EnigmaCast"))
+                    val newCode = recovered.getString("recoveryCode")
+                    val paired = try {
+                        JSONObject(client.pair(address, pin, recovered.getString("pairingCode"), "EnigmaCast"))
+                    } catch (error: Throwable) {
+                        throw IllegalStateException("${error.message}. Nieuwe herstelcode (bewaren): $newCode", error)
+                    }
                     if (paired.getString("role") != "admin") error("receiver did not grant admin")
                     client.save(address, pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
                     profiles.state.value.profiles.forEach { profile ->
                         val body = """{"uuid":${json(profile.uuid)},"name":${json(profile.name)},"avatar":${profile.avatar},"updatedMs":${System.currentTimeMillis()},"changeId":${json(profile.uuid + "-claim")}}"""
                         runCatching { client.request(client.config()!!, "POST", "/api/v1/profiles", body.toByteArray()) }
                     }
-                    engine.sync()
-                    recovered.getString("recoveryCode")
+                    runCatching { engine.sync() }
+                    newCode
                 }
             }
             busy = false
             result.fold(
-                onSuccess = { freshRecovery = it },
+                onSuccess = {
+                    freshRecovery = it
+                    password = ""
+                    recoveryCode = ""
+                    status = ""
+                    linkedHost = host.trim()
+                    linkedRole = "admin"
+                },
                 onFailure = { status = it.message ?: "Claim failed" },
             )
         }
@@ -137,6 +158,16 @@ class SyncServerViewModel @Inject constructor(
 fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
     SettingsCard(stringResource(R.string.sync_server_title)) {
         Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            model.freshRecovery?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_claimed, it)) }
+            if (model.status.isNotBlank()) InfoRow(stringResource(R.string.sync_server_status), model.status)
+            if (model.linkedHost.isNotBlank()) {
+                InfoRow(
+                    stringResource(R.string.sync_server_status),
+                    stringResource(R.string.sync_server_connected, model.linkedHost, model.linkedRole),
+                )
+                TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() })
+                return@Column
+            }
             TvTextField(stringResource(R.string.sync_server_host), model.host, { model.host = it }, kind = TvFieldKind.HOST)
             TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it })
             TvTextField(stringResource(R.string.sync_server_password), model.password, { model.password = it }, visualTransformation = PasswordVisualTransformation())
@@ -145,8 +176,6 @@ fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
                 TvButton(stringResource(R.string.sync_server_install), { model.install() }, enabled = !model.busy)
                 TvButton(stringResource(R.string.sync_server_claim), { model.claim() }, enabled = !model.busy && model.recoveryCode.isNotBlank())
             }
-            model.freshRecovery?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_claimed, it)) }
-            if (model.status.isNotBlank()) InfoRow(stringResource(R.string.sync_server_status), model.status)
         }
     }
 }

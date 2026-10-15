@@ -162,6 +162,7 @@ private enum class SettingPage {
     Viewing,
     Keys,
     Guide,
+    SyncServer,
     Iptv,
     Lock,
     Recordings,
@@ -1296,6 +1297,7 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_viewing), page == SettingPage.Viewing, navFocus.getValue(SettingPage.Viewing), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Viewing) }) { enterPage(SettingPage.Viewing) }
                 SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_keys), page == SettingPage.Keys, navFocus.getValue(SettingPage.Keys), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Keys) }) { enterPage(SettingPage.Keys) }
                 SettingNav(EnigmaIcons.Guide, stringResource(R.string.settings_guide_home), page == SettingPage.Guide, navFocus.getValue(SettingPage.Guide), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Guide) }) { enterPage(SettingPage.Guide) }
+                SettingNav(EnigmaIcons.Sync, stringResource(R.string.settings_sync_server), page == SettingPage.SyncServer, navFocus.getValue(SettingPage.SyncServer), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.SyncServer) }) { enterPage(SettingPage.SyncServer) }
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_lock), page == SettingPage.Lock, navFocus.getValue(SettingPage.Lock), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Lock) }) { enterPage(SettingPage.Lock) }
                 SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
@@ -1396,6 +1398,7 @@ private fun SettingsHub(
                     )
                     SettingPage.Keys -> com.enigmacast.ui.keys.RemoteKeysSettingsPanel(pageContentFocus, settings.streamMode)
                     SettingPage.Guide -> GuideHomeSettingsPanel(pageContentFocus)
+                    SettingPage.SyncServer -> SyncServerSettingsPanel(pageContentFocus)
                     SettingPage.Iptv -> IptvSettingsPanel(pageContentFocus)
                     SettingPage.Lock -> LockSettingsPanel(pageContentFocus)
                     SettingPage.Recordings -> PlaybackSettingsPanel(
@@ -1872,6 +1875,14 @@ private fun ProfilesSettingsPanel(contentFocus: FocusRequester, model: com.enigm
             description = stringResource(R.string.profile_manage_desc),
             onClick = { model.openPicker(true) },
         )
+    }
+}
+
+/** Settings › Syncserver: install the Enigma2 sync service or take over the single admin role. */
+@Composable
+private fun SyncServerSettingsPanel(contentFocus: FocusRequester) {
+    Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        com.enigmacast.ui.home.SyncServerCard()
     }
 }
 

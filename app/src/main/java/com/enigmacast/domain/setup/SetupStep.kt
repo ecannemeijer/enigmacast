@@ -9,6 +9,8 @@ enum class SetupStep(val optional: Boolean = false) {
     /** Create an EnigmaCast account or log in (starts the Premium trial). */
     ACCOUNT,
     RECEIVER,
+    /** Search the home network for the sync server, then pair or stay standalone. */
+    SYNC_LINK,
     PROFILE(optional = true),
     VIEWING,
     BOUQUETS(optional = true),

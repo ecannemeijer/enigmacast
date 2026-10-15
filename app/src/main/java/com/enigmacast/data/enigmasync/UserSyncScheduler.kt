@@ -24,7 +24,10 @@ class UserSyncScheduler @Inject constructor(
 
     fun start() {
         trigger.run = { scope.launch { engine.sync() } }
-        scope.launch { profiles.switched.collect { engine.sync() } }
-        scope.launch { engine.sync() }
+        scope.launch { profiles.entered.collect { engine.sync() } }
+        scope.launch {
+            runCatching { engine.importProfiles() }
+            engine.sync()
+        }
     }
 }

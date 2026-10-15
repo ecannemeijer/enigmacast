@@ -112,6 +112,7 @@ fun SetupWizard(
                     SetupStep.WELCOME -> LanguageStep(stepFocus, onChooseLanguage)
                     SetupStep.ACCOUNT -> AccountStep(stepFocus, onSignedIn = { model.next() })
                     SetupStep.RECEIVER -> ReceiverStep(model, connection, stepFocus, onConnected = { model.next() })
+                    SetupStep.SYNC_LINK -> SyncLinkStep(model, stepFocus)
                     SetupStep.PROFILE -> ProfileStep(model, stepFocus)
                     SetupStep.VIEWING -> ViewingStep(model, stepFocus)
                     SetupStep.BOUQUETS -> BouquetStep(model, stepFocus)
@@ -216,12 +217,45 @@ private fun ReceiverStep(model: SetupViewModel, connection: ConnectionViewModel,
 }
 
 @Composable
+private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
+    if (model.syncSearching) {
+        Text(stringResource(R.string.setup_sync_link_searching), color = EnigmaColors.Text, fontSize = 18.sp)
+        return
+    }
+    val host = model.syncHost
+    if (host != null) {
+        Text(stringResource(R.string.setup_sync_link_found, host), color = EnigmaColors.Text, fontSize = 18.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TvButton(stringResource(R.string.setup_sync_link_pair), { model.linkSync() }, Modifier.focusRequester(focus))
+            TvButton(stringResource(R.string.setup_sync_link_alone), { model.stayStandalone() })
+        }
+    } else {
+        Text(stringResource(R.string.setup_sync_link_missing), color = EnigmaColors.Text, fontSize = 18.sp)
+        TvButton(stringResource(R.string.setup_sync_link_alone), { model.stayStandalone() }, Modifier.focusRequester(focus))
+    }
+    if (model.syncMessage.isNotBlank() && model.syncMessage != "missing") {
+        Text(model.syncMessage, color = EnigmaColors.Muted, fontSize = 15.sp)
+    }
+}
+
+@Composable
 private fun ProfileStep(model: SetupViewModel, focus: FocusRequester) {
+    val profiles = model.profilesForPicker()
+    if (profiles.isNotEmpty()) {
+        Text(stringResource(R.string.setup_sync_link_profiles), color = EnigmaColors.Text, fontSize = 16.sp)
+        profiles.forEachIndexed { index, profile ->
+            TvButton(
+                profile.name,
+                { model.chooseProfile(profile.id) },
+                if (index == 0) Modifier.focusRequester(focus) else Modifier,
+            )
+        }
+    }
     TvTextField(
         label = stringResource(R.string.setup_profile_name),
         value = model.profileName,
         onValueChange = { model.profileName = it.take(24) },
-        modifier = Modifier.widthIn(max = 480.dp).focusRequester(focus),
+        modifier = Modifier.widthIn(max = 480.dp).then(if (profiles.isEmpty()) Modifier.focusRequester(focus) else Modifier),
         large = true,
     )
     Text(stringResource(R.string.setup_profile_avatar), color = EnigmaColors.Text, fontSize = 16.sp)
@@ -309,6 +343,7 @@ private fun SetupStep.title(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_welcome_title
     SetupStep.ACCOUNT -> R.string.setup_account_title
     SetupStep.RECEIVER -> R.string.setup_receiver_title
+    SetupStep.SYNC_LINK -> R.string.setup_sync_link_title
     SetupStep.PROFILE -> R.string.setup_profile_title
     SetupStep.VIEWING -> R.string.setup_viewing_title
     SetupStep.BOUQUETS -> R.string.setup_bouquets_title
@@ -321,6 +356,7 @@ private fun SetupStep.body(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_welcome_body
     SetupStep.ACCOUNT -> R.string.setup_account_body
     SetupStep.RECEIVER -> R.string.setup_receiver_body
+    SetupStep.SYNC_LINK -> R.string.setup_sync_link_body
     SetupStep.PROFILE -> R.string.setup_profile_body
     SetupStep.VIEWING -> R.string.setup_viewing_body
     SetupStep.BOUQUETS -> R.string.setup_bouquets_body

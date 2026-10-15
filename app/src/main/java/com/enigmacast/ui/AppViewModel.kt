@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -49,7 +50,8 @@ data class UpdatePrompt(
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val updates: AppUpdateClient,
     private val playback: LivePlaybackController,
     private val ownTuner: OwnTunerSession,
@@ -130,12 +132,18 @@ class AppViewModel @Inject constructor(
                     com.enigmacast.domain.setup.Start.SETUP -> AppScreen.Setup
                     com.enigmacast.domain.setup.Start.CONNECTION -> AppScreen.Connection
                 }
-                if (receiver != null) streamRunning = true
+                val waitForProfile = profiles.holdLiveStart
+                if (receiver != null && !waitForProfile) streamRunning = true
                 if (screen == AppScreen.Dashboard) {
-                    when (settings.startupLive) {
-                        StartupLive.SATELLITE -> if (receiver != null) openStream()
-                        StartupLive.IPTV -> screen = AppScreen.Xtream
-                        StartupLive.OFF -> Unit
+                    if (waitForProfile) {
+                        viewModelScope.launch {
+                            profiles.entered.first()
+                            val latest = settingsRepository.current()
+                            if (latest.activeReceiver() != null) streamRunning = true
+                            applyStartupLive(latest)
+                        }
+                    } else {
+                        applyStartupLive(settings)
                     }
                 }
             }
@@ -211,6 +219,14 @@ class AppViewModel @Inject constructor(
             runCatching { updates.install(apk) }.onFailure { error ->
                 updatePrompt = prompt.copy(message = error.uiMessage(UiText.res(R.string.update_installer_failed)), installing = false)
             }
+        }
+    }
+
+    private fun applyStartupLive(settings: com.enigmacast.domain.model.AppSettings) {
+        when (settings.startupLive) {
+            StartupLive.SATELLITE -> if (settings.activeReceiver() != null) openStream()
+            StartupLive.IPTV -> screen = AppScreen.Xtream
+            StartupLive.OFF -> Unit
         }
     }
 

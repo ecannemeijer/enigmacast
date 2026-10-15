@@ -977,6 +977,7 @@
     <string name="settings_viewing">Kijkmodus</string>
     <string name="settings_keys">Afstandsbedieningtoetsen</string>
     <string name="settings_guide_home">Gids &amp; Home</string>
+    <string name="settings_sync_server">Syncserver</string>
     <string name="settings_recordings">Opnames</string>
     <string name="settings_appearance">Weergave en taal</string>
     <string name="settings_about">Over</string>
@@ -996,6 +997,8 @@
     <string name="sync_server_recovery">Herstelcode</string>
     <string name="sync_server_claim">Beheer overnemen</string>
     <string name="sync_server_claimed">Dit toestel is nu de enige beheerder. Bewaar de nieuwe herstelcode: %1$s. De vorige code werkt niet meer.</string>
+    <string name="sync_server_connected">Verbonden met %1$s als %2$s. Een profiel kiezen synchroniseert meteen.</string>
+    <string name="sync_server_disconnect">Loskoppelen</string>
     <string name="setup_title">Installatie</string>
     <string name="setup_run_again">Installatiewizard opnieuw starten</string>
     <string name="setup_run_again_desc">Loopt ontvanger, profiel, kijkmodus, Home-boeketten en gegevenssync met je door. Je huidige instellingen blijven, tenzij je ze wijzigt.</string>
@@ -1050,6 +1053,14 @@
     <string name="setup_receiver_connected">Verbonden met %1$s (%2$s). Druk op Volgende, of wijzig hieronder de gegevens.</string>
     <string name="setup_profile_title">Wie kijkt er?</string>
     <string name="setup_profile_body">Geef je profiel een naam en kies een plaatje. Later kan iedereen in huis een eigen profiel krijgen, met eigen zenders en taal.</string>
+    <string name="setup_sync_link_title">Syncserver</string>
+    <string name="setup_sync_link_body">EnigmaCast zoekt op je thuisnetwerk naar de syncserver. Koppel deze tv, of blijf zelfstandig. Na het koppelen kies je een profiel, en dat profiel synchroniseert bij het inloggen.</string>
+    <string name="setup_sync_link_searching">Syncserver zoeken…</string>
+    <string name="setup_sync_link_found">Syncserver gevonden op %1$s. Deze tv koppelen?</string>
+    <string name="setup_sync_link_missing">Geen syncserver gevonden op dit netwerk.</string>
+    <string name="setup_sync_link_pair">Koppelen</string>
+    <string name="setup_sync_link_alone">Zelfstandig blijven</string>
+    <string name="setup_sync_link_profiles">Kies een profiel. Inloggen synchroniseert het meteen.</string>
     <string name="setup_profile_name">Je naam</string>
     <string name="setup_profile_avatar">Kies een plaatje</string>
     <string name="setup_viewing_title">Hoe wil je kijken?</string>

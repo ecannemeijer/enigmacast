@@ -980,6 +980,7 @@
     <string name="settings_viewing">Viewing mode</string>
     <string name="settings_keys">Remote control keys</string>
     <string name="settings_guide_home">Guide &amp; Home</string>
+    <string name="settings_sync_server">Sync server</string>
     <string name="settings_recordings">Recordings</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_about">About</string>
@@ -999,6 +1000,8 @@
     <string name="sync_server_recovery">Recovery code</string>
     <string name="sync_server_claim">Take over admin</string>
     <string name="sync_server_claimed">This device is now the only admin. Save the new recovery code: %1$s. The previous code no longer works.</string>
+    <string name="sync_server_connected">Connected to %1$s as %2$s. Choosing a profile syncs it.</string>
+    <string name="sync_server_disconnect">Disconnect</string>
     <string name="setup_title">Setup</string>
     <string name="setup_run_again">Run setup wizard again</string>
     <string name="setup_run_again_desc">Walks you through receiver, profile, viewing mode, Home bouquets and data sync. Your current settings stay unless you change them.</string>
@@ -1053,6 +1056,14 @@
     <string name="setup_receiver_connected">Connected to %1$s (%2$s). Press Next to continue, or change the details below.</string>
     <string name="setup_profile_title">Who is watching?</string>
     <string name="setup_profile_body">Give your profile a name and pick a picture. Each person in the house can have a profile later, with their own channels and language.</string>
+    <string name="setup_sync_link_title">Sync server</string>
+    <string name="setup_sync_link_body">EnigmaCast looks on your home network for the sync server. Pair this TV, or keep it standalone. After pairing you choose a profile, and that profile syncs when you sign in.</string>
+    <string name="setup_sync_link_searching">Looking for the sync server…</string>
+    <string name="setup_sync_link_found">Sync server found at %1$s. Pair this TV?</string>
+    <string name="setup_sync_link_missing">No sync server found on this network.</string>
+    <string name="setup_sync_link_pair">Pair</string>
+    <string name="setup_sync_link_alone">Stay standalone</string>
+    <string name="setup_sync_link_profiles">Choose a profile. Signing in syncs it.</string>
     <string name="setup_profile_name">Your name</string>
     <string name="setup_profile_avatar">Pick a picture</string>
     <string name="setup_viewing_title">How do you want to watch?</string>
