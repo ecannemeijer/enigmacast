@@ -1060,6 +1060,8 @@
     <string name="setup_sync_link_missing">Geen syncserver gevonden op dit netwerk.</string>
     <string name="setup_sync_link_pair">Koppelen</string>
     <string name="setup_sync_link_alone">Zelfstandig blijven</string>
+    <string name="setup_sync_link_install_hint">Of installeer de syncserver op de ontvanger via SSH. De box haalt hem van GitHub.</string>
+    <string name="setup_sync_link_install">Installeren via SSH</string>
     <string name="setup_sync_link_profiles">Kies een profiel. Inloggen synchroniseert het meteen.</string>
     <string name="setup_profile_name">Je naam</string>
     <string name="setup_profile_avatar">Kies een plaatje</string>

@@ -339,7 +339,10 @@ fun DashboardScreen(
         }
         onDispose { onBindBack(null) }
     }
-    LaunchedEffect(Unit) {
+    val profileModel: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()
+    val awaitProfile = profileModel.pickerOpen && !profileModel.managing
+    LaunchedEffect(awaitProfile) {
+        if (awaitProfile) return@LaunchedEffect
         when {
             returnToSettingsHub -> {
                 settingsMenuFocus.requestWhenReady()
@@ -353,7 +356,9 @@ fun DashboardScreen(
             else -> homeFocus.requestWhenReady()
         }
     }
-    LaunchedEffect(Unit) { guideModel.refresh() }
+    LaunchedEffect(awaitProfile) {
+        if (!awaitProfile) guideModel.refresh()
+    }
     LaunchedEffect(returnToMyItemsId) {
         val id = returnToMyItemsId ?: return@LaunchedEffect
         myItemsListActive = true
@@ -428,7 +433,6 @@ fun DashboardScreen(
             }
         }
     }
-    val profileModel: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()
     if (profileModel.menuOpen) {
         val standby = powerModel.powerState == com.enigmacast.domain.power.ReceiverPowerState.STANDBY
         com.enigmacast.ui.profile.ProfileMenu(
@@ -437,6 +441,10 @@ fun DashboardScreen(
             powerAction = stringResource(if (standby) R.string.profile_receiver_wake else R.string.profile_receiver_standby),
             onPower = { powerModel.request(if (standby) PowerAction.WAKE_UP else PowerAction.STANDBY) },
         )
+    }
+    if (awaitProfile) {
+        com.enigmacast.ui.profile.ProfilePickerContent(profileModel)
+        return
     }
     if (profileModel.pickerOpen) com.enigmacast.ui.profile.ProfilePicker(profileModel)
     Box(modifier = Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {

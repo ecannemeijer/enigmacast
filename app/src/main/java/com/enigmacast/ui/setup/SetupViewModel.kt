@@ -17,6 +17,7 @@ import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.data.enigmasync.EnigmaSyncClient
 import com.enigmacast.data.enigmasync.EnigmaSyncEngine
 import com.enigmacast.data.enigmasync.SyncDiscovery
+import com.enigmacast.data.enigmasync.SyncServerInstaller
 import com.enigmacast.domain.setup.SetupStep
 import com.enigmacast.live.HomeFilmsRepository
 import com.enigmacast.live.ReceiverNames
@@ -45,6 +46,7 @@ class SetupViewModel @Inject constructor(
     private val discovery: SyncDiscovery,
     private val syncClient: EnigmaSyncClient,
     private val syncEngine: EnigmaSyncEngine,
+    private val installer: SyncServerInstaller,
     names: ReceiverNames,
 ) : ViewModel() {
     var step by mutableStateOf(SetupStep.WELCOME)
@@ -70,6 +72,9 @@ class SetupViewModel @Inject constructor(
     var syncLinked by mutableStateOf(false)
         private set
     private var syncSearchStarted = false
+
+    var sshUser by mutableStateOf("root")
+    var sshPassword by mutableStateOf("")
 
     var profileName by mutableStateOf("")
     var avatar by mutableIntStateOf(0)
@@ -167,6 +172,35 @@ class SetupViewModel @Inject constructor(
             syncSearching = false
             result.fold(
                 onSuccess = {
+                    syncLinked = true
+                    go(SetupStep.next(step))
+                },
+                onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
+            )
+        }
+    }
+
+    fun installSync() {
+        val address = (syncHost ?: receiver.value?.host).orEmpty().trim()
+        if (address.isBlank() || sshPassword.isBlank() || syncSearching) return
+        syncSearching = true
+        syncMessage = ""
+        val user = sshUser.trim().ifBlank { "root" }
+        val password = sshPassword
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val report = installer.install(address, user, password)
+                    val paired = JSONObject(syncClient.join(address, report.pin, "EnigmaCast"))
+                    syncClient.save(address, report.pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
+                    syncEngine.importProfiles()
+                }
+            }
+            syncSearching = false
+            sshPassword = ""
+            result.fold(
+                onSuccess = {
+                    syncHost = address
                     syncLinked = true
                     go(SetupStep.next(step))
                 },

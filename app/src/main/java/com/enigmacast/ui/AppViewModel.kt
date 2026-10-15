@@ -245,12 +245,10 @@ class AppViewModel @Inject constructor(
         screen = AppScreen.Setup
     }
 
-    /** Wizard finished: on a first run the stream starts now; a re-run returns to the dashboard. */
+    /** Wizard finished: open Home. The profile was chosen in the wizard, so live TV may start from here. */
     fun finishSetup() {
-        val again = setupAgain
         setupAgain = false
         streamRunning = true
-        if (again) returnToSettingsHub = true
         openDashboard()
     }
 

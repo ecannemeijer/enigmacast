@@ -41,6 +41,7 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Text
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.enigmacast.R
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.setup.SetupStep
@@ -50,6 +51,7 @@ import com.enigmacast.ui.connection.ConnectionViewModel
 import com.enigmacast.ui.connection.ReceiverSetup
 import com.enigmacast.ui.profile.AvatarImage
 import com.enigmacast.ui.profile.Avatars
+import com.enigmacast.ui.profile.ProfileTile
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
@@ -236,20 +238,34 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
     if (model.syncMessage.isNotBlank() && model.syncMessage != "missing") {
         Text(model.syncMessage, color = EnigmaColors.Muted, fontSize = 15.sp)
     }
+    Text(stringResource(R.string.setup_sync_link_install_hint), color = EnigmaColors.Muted, fontSize = 15.sp)
+    TvTextField(stringResource(R.string.sync_server_user), model.sshUser, { model.sshUser = it }, modifier = Modifier.widthIn(max = 480.dp))
+    TvTextField(
+        stringResource(R.string.sync_server_password),
+        model.sshPassword,
+        { model.sshPassword = it },
+        modifier = Modifier.widthIn(max = 480.dp),
+        visualTransformation = PasswordVisualTransformation(),
+    )
+    TvButton(stringResource(R.string.setup_sync_link_install), { model.installSync() }, enabled = model.sshPassword.isNotBlank() && !model.syncSearching)
 }
 
 @Composable
 private fun ProfileStep(model: SetupViewModel, focus: FocusRequester) {
     val profiles = model.profilesForPicker()
     if (profiles.isNotEmpty()) {
-        Text(stringResource(R.string.setup_sync_link_profiles), color = EnigmaColors.Text, fontSize = 16.sp)
-        profiles.forEachIndexed { index, profile ->
-            TvButton(
-                profile.name,
-                { model.chooseProfile(profile.id) },
-                if (index == 0) Modifier.focusRequester(focus) else Modifier,
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            profiles.forEachIndexed { index, profile ->
+                ProfileTile(
+                    profile.name,
+                    profile.avatar,
+                    active = false,
+                    managing = false,
+                    modifier = if (index == 0) Modifier.focusRequester(focus) else Modifier,
+                ) { model.chooseProfile(profile.id) }
+            }
         }
+        return
     }
     TvTextField(
         label = stringResource(R.string.setup_profile_name),

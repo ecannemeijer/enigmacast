@@ -273,7 +273,7 @@ class OwnTunerSession @Inject constructor(
         if (startJob?.isActive == true) return
         scope.launch {
             val settings = settingsRepository.current()
-            if (profiles.holdLiveStart && settings.startupLive != StartupLive.OFF) return@launch
+            if (profiles.holdLiveStart) return@launch
             val id = settings.activeReceiver()?.id
             // IPTV startup leaves the decoder free. Satellite startup plays the saved channel
             // even when the last picture was IPTV. Off keeps the previous rule.

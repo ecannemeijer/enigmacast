@@ -72,7 +72,7 @@ class SyncServerViewModel @Inject constructor(
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val report = installer.install(host.trim(), user.trim(), typed)
-                    val paired = JSONObject(client.pair(host.trim(), report.pin, report.pairingCode, "EnigmaCast"))
+                    val paired = JSONObject(client.join(host.trim(), report.pin, "EnigmaCast"))
                     client.save(host.trim(), report.pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
                     profiles.state.value.profiles.forEach { profile ->
                         val body = """{"uuid":${json(profile.uuid)},"name":${json(profile.name)},"avatar":${profile.avatar},"updatedMs":${System.currentTimeMillis()},"changeId":${json(profile.uuid + "-import")}}"""

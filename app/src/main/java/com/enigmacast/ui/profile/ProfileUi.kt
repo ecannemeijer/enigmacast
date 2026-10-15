@@ -78,14 +78,21 @@ fun AvatarImage(index: Int, size: Dp, modifier: Modifier = Modifier) {
 /** "Who's watching?": one tile per profile and Add profile; Manage switches OK to editing. */
 @Composable
 fun ProfilePicker(model: ProfileViewModel) {
+    Dialog(onDismissRequest = model::closePicker, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true)) {
+        ProfilePickerContent(model)
+    }
+}
+
+/** Full-screen "Who's watching?" without a dialog, so the dashboard is not built underneath. */
+@Composable
+internal fun ProfilePickerContent(model: ProfileViewModel) {
     val state by model.state.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
     var pinSetup by remember { mutableStateOf<Profile?>(null) }
     val first = remember { FocusRequester() }
     val editing = state.profiles.firstOrNull { it.id == model.editorId }
-    Dialog(onDismissRequest = model::closePicker, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true)) {
-        LaunchedEffect(Unit) { first.requestWhenReady() }
-        Column(
+    LaunchedEffect(Unit) { first.requestWhenReady() }
+    Column(
             Modifier.fillMaxSize().background(EnigmaColors.Canvas).padding(48.dp).trapFocus(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -109,7 +116,6 @@ fun ProfilePicker(model: ProfileViewModel) {
                 )
             }
         }
-    }
     editing?.let { p ->
         ProfileEditor(
             title = stringResource(R.string.profile_edit),
@@ -164,7 +170,7 @@ fun ProfilePicker(model: ProfileViewModel) {
 private const val MAX_PROFILES = 6
 
 @Composable
-private fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val focus = rememberTvFocus()
     Column(
         modifier.width(132.dp).tvClick(focus, onClick).padding(6.dp),
