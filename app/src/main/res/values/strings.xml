@@ -1063,7 +1063,7 @@
     <string name="setup_iptv_yes">Yes, take it along</string>
     <string name="setup_iptv_no">No, leave it</string>
     <string name="setup_sync_link_searching">Looking for the sync server…</string>
-    <string name="setup_sync_link_found">Sync server found at %1$s. Pair this TV?</string>
+    <string name="setup_sync_link_found">A sync server is available at %1$s. Connect to it, or run standalone?</string>
     <string name="setup_sync_link_missing">No sync server found on this network.</string>
     <string name="setup_sync_link_pair">Pair</string>
     <string name="setup_sync_link_alone">Stay standalone</string>
@@ -1338,6 +1338,9 @@ Profile: %2$s</string>
     <string name="iptv_categories_title">Choose categories</string>
     <string name="iptv_categories_count">%1$d of %2$d shown</string>
     <string name="iptv_categories_none">This section has no categories.</string>
+    <string name="iptv_subtitles_manage">Subtitles</string>
+    <string name="iptv_subtitles_title">Subtitle languages</string>
+    <string name="iptv_subtitles_count">%1$d of %2$d on</string>
     <string name="iptv_library_add">Add to Library</string>
     <string name="iptv_library_remove">Remove from Library</string>
     <string name="library_continue">Continue watching</string>

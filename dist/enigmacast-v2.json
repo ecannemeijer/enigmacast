@@ -1,6 +1,6 @@
 {
-  "versionCode": 56,
-  "versionName": "1.0.0-beta.53",
+  "versionCode": 58,
+  "versionName": "1.0.0-beta.55",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Profiles come from the sync server in setup and when switching. The settings menu waits before opening the page behind it, and each TV keeps one account device id."
+  "notes": "The setup wizard is a quarter smaller. A detected receiver without an OpenWebif login is added immediately. If that receiver already runs a sync server, setup asks to connect or stay standalone."
 }

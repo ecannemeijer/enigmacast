@@ -390,12 +390,14 @@ class ConnectionViewModel @Inject constructor(
         onSaved()
     }
 
-    fun connect(onConnected: () -> Unit) = launchAction { config ->
+    fun connect(onConnected: () -> Unit, onFailed: () -> Unit = {}) = launchAction(onFailed) { config ->
         val result = api.testConnection(config)
         status = result.message
         if (result.success) {
             rememberStored(settingsRepository.upsertReceiver(config))
             onConnected()
+        } else {
+            onFailed()
         }
     }
 
@@ -459,11 +461,12 @@ class ConnectionViewModel @Inject constructor(
     fun isSelected(receiver: DiscoveredReceiver): Boolean =
         host.trim() == receiver.host && httpPort.trim() == receiver.httpPort.toString() && useHttps == receiver.useHttps
 
-    private fun launchAction(block: suspend (ReceiverConfig) -> Unit) {
+    private fun launchAction(onFailed: () -> Unit = {}, block: suspend (ReceiverConfig) -> Unit) {
         val config = currentConfig()
         val validation = ReceiverConfigValidator.validate(config)
         if (!validation.isValid) {
             status = UiText.Joined(validation.errors)
+            onFailed()
             return
         }
         if (busy) return
@@ -473,6 +476,7 @@ class ConnectionViewModel @Inject constructor(
                 block(config)
             } catch (error: Exception) {
                 status = error.uiMessage(UiText.res(R.string.conn_request_failed))
+                onFailed()
             } finally {
                 busy = false
             }

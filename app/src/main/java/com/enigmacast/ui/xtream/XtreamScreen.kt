@@ -111,7 +111,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     val rootFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
     var quickBar by remember { mutableStateOf(false) }
-    // Films and episodes: the recordings' seek bar (OK, Left/Right, FF/RW show it; Down opens the options).
+    // Films and episodes: OK, Left or Right show the progress line. OK again pauses. Down opens the options.
     var vodBar by remember { mutableStateOf(false) }
     var vodBarTouch by remember { mutableIntStateOf(0) }
     LaunchedEffect(vodBar, vodBarTouch, quickBar) {
@@ -310,7 +310,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 player = model.player(),
                 frame = null,
                 debugBorders = false,
-                cues = emptyList(),
+                cues = model.cues,
                 picture = com.enigmacast.ui.remote.VideoShape(model.pictureMode, ps.videoWidth, ps.videoHeight, ps.pixelRatio),
                 modifier = Modifier.fillMaxSize(),
             )
@@ -914,9 +914,9 @@ private fun IptvOsd(
 private const val VOD_BAR_MS = 5_000L
 
 /**
- * Keys while a film or episode plays in full screen. Without the bar, OK / Left / Right show it;
- * with it, the D-pad belongs to the bar (line, ±30, pause, Down to the options). FF / RW skip
- * and Play/Pause toggles in both cases; everything else goes to the IPTV player keys.
+ * Keys while a film or episode plays in full screen. OK, Left or Right show the progress line.
+ * OK again pauses or resumes. Down on the line opens the options. Left and Right on the line
+ * move through the file. FF / RW skip; everything else goes to the IPTV player keys.
  */
 internal object VodBarKeys {
     const val FF_MS = 30_000L
@@ -927,9 +927,12 @@ internal object VodBarKeys {
         android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> Action.FORWARD
         android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> Action.REWIND
         android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, android.view.KeyEvent.KEYCODE_MEDIA_PLAY, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> Action.PAUSE
-        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
-        android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
-        android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN -> if (barShown) Action.BAR else if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP || keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) Action.PLAYER else Action.SHOW
+        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER ->
+            if (barShown) Action.PAUSE else Action.SHOW
+        android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+            if (barShown) Action.BAR else Action.SHOW
+        android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN ->
+            if (barShown) Action.BAR else Action.PLAYER
         else -> if (barShown) Action.BAR else Action.PLAYER
     }
 }

@@ -1283,12 +1283,22 @@ class RemoteDisplayViewModel @Inject constructor(
             return event.keyCode == KeyEvent.KEYCODE_BACK
         }
         if (ui.fileBar) {
-            if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) hideFileBar()
-            return event.keyCode == KeyEvent.KEYCODE_BACK
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    if (event.action == KeyEvent.ACTION_UP) hideFileBar()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) toggleFilePause()
+                    return true
+                }
+            }
+            return false
         }
         when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (event.action == KeyEvent.ACTION_UP) showFileBar()
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) showFileBar()
             }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                 if (event.action == KeyEvent.ACTION_UP) playback.toggleFilePause()

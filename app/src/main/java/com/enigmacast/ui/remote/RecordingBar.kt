@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -41,7 +39,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,6 +81,7 @@ fun RecordingBar(
 )
 
 /** The same bar for any file the app plays itself (recordings, IPTV films and episodes). */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun RecordingBar(
     title: String,
@@ -102,7 +100,6 @@ fun RecordingBar(
     val scope = rememberCoroutineScope()
     var commit by remember { mutableStateOf<Job?>(null) }
     val lineFocus = remember { FocusRequester() }
-    val pauseFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { lineFocus.requestWhenReady() }
     LaunchedEffect(positionMs, scrubbing) {
         if (!scrubbing) shown = positionMs
@@ -150,7 +147,14 @@ fun RecordingBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(lineFocus)
-                .focusProperties { down = pauseFocus },
+                .onKeyEvent { event ->
+                    if (event.key == Key.DirectionDown && event.type == KeyEventType.KeyDown) {
+                        onOptions()
+                        true
+                    } else {
+                        false
+                    }
+                },
         )
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(clock(shown), color = Color.White, fontSize = 13.sp)
@@ -161,32 +165,6 @@ fun RecordingBar(
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
             )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .onKeyEvent { event ->
-                    if (event.key == Key.DirectionDown && event.type == KeyEventType.KeyDown) {
-                        onOptions()
-                        true
-                    } else {
-                        false
-                    }
-                },
-            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TransportButton("−30", -SKIP_STEP_MS, ::nudge, ::release)
-            TransportButton(
-                label = if (playing) "❚❚" else "▶",
-                stepMs = 0,
-                onNudge = { _: Long -> },
-                onRelease = {},
-                onClick = onTogglePause,
-                modifier = Modifier.focusRequester(pauseFocus),
-                large = true,
-            )
-            TransportButton("+30", SKIP_STEP_MS, ::nudge, ::release)
         }
     }
 }
@@ -241,44 +219,6 @@ private fun ProgressLine(
                 .size(if (focused) 16.dp else 12.dp)
                 .background(RecordRed, CircleShape)
                 .border(2.dp, Color.White, CircleShape),
-        )
-    }
-}
-
-@Composable
-private fun TransportButton(
-    label: String,
-    stepMs: Long,
-    onNudge: (Long) -> Unit,
-    onRelease: () -> Unit,
-    onClick: () -> Unit = {},
-    modifier: Modifier = Modifier,
-    large: Boolean = false,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val diameter = if (large) 56.dp else 48.dp
-    Box(
-        modifier = modifier
-            .size(diameter)
-            .background(if (focused) Color.White else Color.White.copy(alpha = 0.18f), CircleShape)
-            .onKeyEvent { event ->
-                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
-                if (!confirm) return@onKeyEvent false
-                if (stepMs != 0L && event.type == KeyEventType.KeyDown) onNudge(stepMs)
-                if (event.type == KeyEventType.KeyUp) {
-                    if (stepMs != 0L) onRelease() else onClick()
-                }
-                true
-            }
-            .focusable(interactionSource = interaction),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (focused) Color.Black else Color.White,
-            fontSize = if (large) 18.sp else 14.sp,
-            fontWeight = FontWeight.Bold,
         )
     }
 }

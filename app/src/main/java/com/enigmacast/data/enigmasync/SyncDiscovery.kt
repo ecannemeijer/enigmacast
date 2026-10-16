@@ -17,6 +17,12 @@ import kotlinx.coroutines.withContext
 class SyncDiscovery @Inject constructor(
     private val client: EnigmaSyncClient,
 ) {
+    /** The sync server on this receiver, or null when port 8740 is not one. */
+    suspend fun onReceiver(host: String?): String? = withContext(Dispatchers.IO) {
+        val hinted = host?.trim().orEmpty()
+        if (hinted.isNotEmpty() && isSyncServer(hinted)) hinted else null
+    }
+
     suspend fun find(preferred: String?): String? = withContext(Dispatchers.IO) {
         val hinted = preferred?.trim().orEmpty()
         if (hinted.isNotEmpty() && isSyncServer(hinted)) return@withContext hinted

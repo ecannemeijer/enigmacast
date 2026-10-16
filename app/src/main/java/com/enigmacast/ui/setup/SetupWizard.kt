@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -30,6 +31,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -81,6 +84,9 @@ fun SetupWizard(
         if (model.step == SetupStep.DONE || !stepFocus.requestWhenReady(attempts = 4)) nextFocus.requestWhenReady()
     }
     BackHandler { if (!model.back()) onLeave() }
+    // A quarter smaller than the rest of the app, so a step fits on one screen. Buttons scale with the text.
+    val density = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(density.density * 0.75f, density.fontScale)) {
     // Decided on the model's current step at click time, never on a value captured by an
     // earlier composition: the button keeps its node across steps, and a stale "step" made
     // Done run next() (staying on Done) instead of finishing.
@@ -142,6 +148,7 @@ fun SetupWizard(
                 TvButton(stringResource(nextLabel), ::next, Modifier.focusRequester(nextFocus))
             }
         }
+    }
     }
 }
 
@@ -214,6 +221,7 @@ private fun ReceiverStep(model: SetupViewModel, connection: ConnectionViewModel,
         viewModel = connection,
         autodetectFocus = focus,
         showConnect = true,
+        autoConnectOpen = true,
         onConnected = onConnected,
         modifier = Modifier.widthIn(max = 760.dp),
     )
@@ -244,6 +252,10 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
             TvButton(stringResource(R.string.setup_sync_link_pair), { model.linkSync() }, Modifier.focusRequester(focus))
             TvButton(stringResource(R.string.setup_sync_link_alone), { model.stayStandalone() })
         }
+        if (model.syncMessage.isNotBlank() && model.syncMessage != "missing") {
+            Text(model.syncMessage, color = EnigmaColors.Muted, fontSize = 15.sp)
+        }
+        return
     } else {
         Text(stringResource(R.string.setup_sync_link_missing), color = EnigmaColors.Text, fontSize = 18.sp)
         TvButton(stringResource(R.string.setup_sync_link_alone), { model.stayStandalone() }, Modifier.focusRequester(focus))

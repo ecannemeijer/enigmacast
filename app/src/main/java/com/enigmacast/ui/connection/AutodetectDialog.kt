@@ -64,7 +64,7 @@ import kotlinx.coroutines.delay
 fun AutodetectDialogHost(
     viewModel: ConnectionViewModel,
     returnFocus: FocusRequester,
-    onChosen: () -> Unit = {},
+    onChosen: (DiscoveredReceiver) -> Unit = {},
 ) {
     val state = viewModel.autodetectState
     var wasOpen by remember { mutableStateOf(false) }
@@ -83,7 +83,7 @@ fun AutodetectDialogHost(
         isSelected = viewModel::isSelected,
         onChoose = { receiver ->
             viewModel.chooseDetected(receiver)
-            onChosen()
+            onChosen(receiver)
         },
         onRetry = viewModel::startAutodetect,
         onClose = viewModel::closeAutodetect,

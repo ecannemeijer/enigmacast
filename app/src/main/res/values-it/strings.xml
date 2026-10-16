@@ -1307,6 +1307,9 @@ Profilo: %2$s</string>
     <string name="iptv_categories_title">Scegli le categorie</string>
     <string name="iptv_categories_count">%1$d di %2$d visibili</string>
     <string name="iptv_categories_none">Questa sezione non ha categorie.</string>
+    <string name="iptv_subtitles_manage">Sottotitoli</string>
+    <string name="iptv_subtitles_title">Lingue dei sottotitoli</string>
+    <string name="iptv_subtitles_count">%1$d di %2$d attive</string>
     <string name="iptv_library_add">Aggiungi alla Libreria</string>
     <string name="iptv_library_remove">Rimuovi dalla Libreria</string>
     <string name="library_continue">Continua a guardare</string>

@@ -207,7 +207,7 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         NavigationSoundsForWindow()
         Column(
             modifier = Modifier
-                .widthIn(min = 220.dp, max = 340.dp)
+                .widthIn(min = 220.dp, max = if (option == QuickOption.SUBTITLES) 640.dp else 340.dp)
                 .background(EnigmaColors.Selected, skinShape(12.dp))
                 .border(1.dp, EnigmaColors.CardBorder, skinShape(12.dp))
                 .padding(12.dp),
@@ -222,7 +222,7 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
                         color = EnigmaColors.Subtle,
                         fontSize = 11.sp,
                     )
-                    PickerList(pickerItems(option, ui, actions, iptv, onClose), onClose)
+                    PickerList(pickerItems(option, ui, actions, iptv, onClose), onClose, wrap = option == QuickOption.SUBTITLES)
                 }
                 else -> {
                     val items = pickerItems(option, ui, actions, iptv, onClose)
@@ -230,7 +230,7 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
                         Text(emptyText(option), color = EnigmaColors.Muted, fontSize = 13.sp)
                         CloseOnOk(onClose)
                     } else {
-                        PickerList(items, onClose)
+                        PickerList(items, onClose, wrap = option == QuickOption.SUBTITLES)
                     }
                 }
             }
@@ -310,7 +310,7 @@ private fun qualityReason(reason: QualityReason): String = stringResource(
 )
 
 @Composable
-private fun PickerList(items: List<PickerItem>, onClose: () -> Unit) {
+private fun PickerList(items: List<PickerItem>, onClose: () -> Unit, wrap: Boolean = false) {
     val listState = rememberLazyListState()
     val focus = remember { FocusRequester() }
     val start = items.indexOfFirst { it.selected }.coerceAtLeast(0)
@@ -331,7 +331,13 @@ private fun PickerList(items: List<PickerItem>, onClose: () -> Unit) {
                         Icon(Icons.Filled.Check, contentDescription = null, tint = if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, modifier = Modifier.size(16.dp))
                     }
                 }
-                Text(item.label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    item.label,
+                    modifier = if (wrap) Modifier.weight(1f) else Modifier,
+                    fontSize = 13.sp,
+                    maxLines = if (wrap) Int.MAX_VALUE else 1,
+                    overflow = if (wrap) TextOverflow.Clip else TextOverflow.Ellipsis,
+                )
             }
         }
     }

@@ -26,6 +26,7 @@ class IptvVodPlaybackTest {
     }
 
     @Test fun barOwnsDpad() {
+        assertEquals(VodBarKeys.Action.PAUSE, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_CENTER, true))
         assertEquals(VodBarKeys.Action.BAR, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_DOWN, true))
         assertEquals(VodBarKeys.Action.BAR, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_LEFT, true))
     }

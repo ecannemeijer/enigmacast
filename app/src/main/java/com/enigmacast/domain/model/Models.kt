@@ -249,6 +249,11 @@ data class AppSettings(
     /** Settings › IPTV: where the IPTV page gets its lists. Logins of a playlist are in the SecretStore. */
     val iptvSource: IptvSourceMode = IptvSourceMode.XSTREAMITY,
     val iptvPlaylistKind: IptvPlaylistKind = IptvPlaylistKind.M3U,
+    /**
+     * SubSource language slugs offered for IPTV films and series.
+     * Null means the choice was never saved, so the app language is used.
+     */
+    val iptvSubtitleLanguages: List<String>? = null,
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()

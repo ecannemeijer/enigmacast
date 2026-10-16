@@ -235,7 +235,7 @@ class SetupViewModel @Inject constructor(
         syncSearching = true
         syncMessage = ""
         viewModelScope.launch {
-            val host = runCatching { discovery.find(receiver.value?.host) }.getOrNull()
+            val host = runCatching { discovery.onReceiver(receiver.value?.host) }.getOrNull()
             syncSearching = false
             syncHost = host
             if (host == null) syncMessage = "missing"

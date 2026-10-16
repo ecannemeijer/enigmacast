@@ -45,13 +45,24 @@ fun ReceiverSetup(
     onConnected: () -> Unit = {},
     onSaved: () -> Unit = {},
     onSettings: (() -> Unit)? = null,
+    /** Wizard only: a detected receiver that does not ask for a login is saved and the step advances. */
+    autoConnectOpen: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var step by remember { mutableStateOf(ReceiverSetupStep.Choose) }
     AutodetectDialogHost(
         viewModel = viewModel,
         returnFocus = autodetectFocus,
-        onChosen = { step = ReceiverSetupStep.Detected },
+        onChosen = { receiver ->
+            if (autoConnectOpen && !receiver.loginRequired) {
+                viewModel.username = ""
+                viewModel.password = ""
+                viewModel.connect(onConnected) { step = ReceiverSetupStep.Detected }
+                if (!viewModel.busy) step = ReceiverSetupStep.Detected
+            } else {
+                step = ReceiverSetupStep.Detected
+            }
+        },
     )
     BackHandler(enabled = step != ReceiverSetupStep.Choose) {
         step = ReceiverSetupStep.Choose

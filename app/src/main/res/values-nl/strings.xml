@@ -1060,7 +1060,7 @@
     <string name="setup_iptv_yes">Ja, meenemen</string>
     <string name="setup_iptv_no">Nee, laten</string>
     <string name="setup_sync_link_searching">Syncserver zoeken…</string>
-    <string name="setup_sync_link_found">Syncserver gevonden op %1$s. Deze tv koppelen?</string>
+    <string name="setup_sync_link_found">Er is een sync-server beschikbaar op %1$s. Wil je verbinden of zelfstandig draaien?</string>
     <string name="setup_sync_link_missing">Geen syncserver gevonden op dit netwerk.</string>
     <string name="setup_sync_link_pair">Koppelen</string>
     <string name="setup_sync_link_alone">Zelfstandig blijven</string>
@@ -1330,6 +1330,9 @@ Profiel: %2$s</string>
     <string name="iptv_categories_title">Categorieën kiezen</string>
     <string name="iptv_categories_count">%1$d van %2$d getoond</string>
     <string name="iptv_categories_none">Deze sectie heeft geen categorieën.</string>
+    <string name="iptv_subtitles_manage">Ondertitels</string>
+    <string name="iptv_subtitles_title">Ondertiteltalen</string>
+    <string name="iptv_subtitles_count">%1$d van %2$d aan</string>
     <string name="iptv_library_add">Toevoegen aan Bibliotheek</string>
     <string name="iptv_library_remove">Verwijderen uit Bibliotheek</string>
     <string name="library_continue">Verder kijken</string>

@@ -45,7 +45,10 @@ import com.enigmacast.data.xtream.IptvPlaylistSync
 import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.IptvSourceMode
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
+import com.enigmacast.domain.subsource.SubSourceLanguages
+import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.ui.theme.ChoiceRow
+import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
@@ -127,6 +130,20 @@ class IptvSettingsViewModel @Inject constructor(
     fun hideAllCategories() = _categories.value?.let { saveHidden(com.enigmacast.domain.xtream.IptvCategoryFilter.none(it.categories)) }
     fun closeCategories() { categoryJob?.cancel(); _categories.value = null }
 
+    /** Saved SubSource slugs. Null until the viewer saves a choice. */
+    val subtitleLanguages: StateFlow<List<String>?> = settingsRepository.settings
+        .map { it.iptvSubtitleLanguages }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    private val _subtitlesOpen = MutableStateFlow(false)
+    val subtitlesOpen: StateFlow<Boolean> = _subtitlesOpen
+
+    fun openSubtitles() { _subtitlesOpen.value = true }
+    fun closeSubtitles() { _subtitlesOpen.value = false }
+
+    fun setSubtitleLanguages(slugs: List<String>) = viewModelScope.launch {
+        settingsRepository.update { it.copy(iptvSubtitleLanguages = slugs.distinct()) }
+    }
+
     val mode: StateFlow<Pair<IptvSourceMode, IptvPlaylistKind>> = settingsRepository.settings
         .map { it.iptvSource to it.iptvPlaylistKind }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IptvSourceMode.XSTREAMITY to IptvPlaylistKind.M3U)
@@ -179,9 +196,10 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     LaunchedEffect(loads) { count = model.count() }
 
     SettingsCard(stringResource(R.string.iptv_settings_card)) {
-        // Which categories the IPTV page shows, per section.
+        // Which categories the IPTV page shows, and which SubSource languages a film or series may use.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TvButton(stringResource(R.string.iptv_categories_manage), { model.openCategories() })
+            CompactButton(stringResource(R.string.iptv_categories_manage), model::openCategories)
+            CompactButton(stringResource(R.string.iptv_subtitles_manage), model::openSubtitles)
         }
         val sources = IptvSourceMode.entries
         ChoiceRow(
@@ -226,6 +244,9 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     load?.let { IptvLoadDialog(it, onCancel = model::cancel, onClose = model::close) }
     val categoryPage by model.categoryPage.collectAsStateWithLifecycle()
     categoryPage?.let { IptvCategoriesDialog(it, model) }
+    val subtitlesOpen by model.subtitlesOpen.collectAsStateWithLifecycle()
+    val subtitleLanguages by model.subtitleLanguages.collectAsStateWithLifecycle()
+    if (subtitlesOpen) IptvSubtitlesDialog(subtitleLanguages, model)
 }
 
 @Composable
@@ -376,6 +397,76 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Settings › IPTV › Subtitles: the languages SubSource may offer under the OSD
+ * for the film or episode that is playing.
+ */
+@Composable
+private fun IptvSubtitlesDialog(saved: List<String>?, model: IptvSettingsViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appSlug = SubSourceLanguages.forAppTag(AppLanguageStore.current(context).tag)
+    val selected = saved ?: listOfNotNull(appSlug)
+    val languages = SubSourceLanguages.ordered
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = model::closeSubtitles,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        NavigationSoundsForWindow()
+        val allFocus = remember { FocusRequester() }
+        val noneFocus = remember { FocusRequester() }
+        val listFocus = remember { FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(Unit) { allFocus.requestWhenReady() }
+        val Cancel = FocusRequester.Cancel
+        Column(
+            Modifier
+                .width(520.dp)
+                .heightIn(max = 560.dp)
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.iptv_subtitles_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
+                CompactButton(
+                    stringResource(R.string.import_select_all),
+                    { model.setSubtitleLanguages(languages.map { it.slug }) },
+                    modifier = Modifier.focusRequester(allFocus).focusProperties { up = Cancel; down = listFocus; left = Cancel; right = noneFocus },
+                    icon = androidx.compose.material.icons.Icons.Filled.Check,
+                )
+                CompactButton(
+                    stringResource(R.string.import_select_none),
+                    { model.setSubtitleLanguages(emptyList()) },
+                    modifier = Modifier.focusRequester(noneFocus).focusProperties { up = Cancel; down = listFocus; left = allFocus; right = Cancel },
+                )
+                Text(
+                    stringResource(R.string.iptv_subtitles_count, selected.size, languages.size),
+                    color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1,
+                )
+            }
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                itemsIndexed(languages, key = { _, language -> language.slug }) { index, language ->
+                    com.enigmacast.ui.settingsimport.CompactToggle(
+                        title = SubSourceLanguages.display(language),
+                        checked = language.slug in selected,
+                        onToggle = {
+                            val next = if (language.slug in selected) selected - language.slug else selected + language.slug
+                            model.setSubtitleLanguages(next)
+                        },
+                        modifier = Modifier
+                            .then(if (index == 0) Modifier.focusRequester(listFocus) else Modifier)
+                            .focusProperties {
+                                left = Cancel; right = Cancel
+                                if (index == 0) up = allFocus
+                                if (index == languages.lastIndex) down = Cancel
+                            },
+                    )
                 }
             }
         }
