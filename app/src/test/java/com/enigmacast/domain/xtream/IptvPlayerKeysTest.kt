@@ -31,7 +31,18 @@ class IptvPlayerKeysTest {
 
     @Test fun namesMatch() {
         assertEquals(IptvNames.normalize("NPO 1"), IptvNames.normalize("NL: NPO 1 HD"))
+        assertEquals(IptvNames.normalize("NPO 1"), IptvNames.normalize("NL - NPO 1 HD"))
+        assertEquals(IptvNames.normalize("NPO 1"), IptvNames.normalize("NL \u2013 NPO 1 HD"))
         assertEquals("rtl7", IptvNames.normalize("RTL-7 FHD"))
         assertEquals(IptvNames.normalize("Das Erste"), IptvNames.normalize("DE | Das Erste (Backup)"))
+    }
+
+    @Test fun satelliteGuideWinsWhenXtreamHasNoCurrentProgramme() {
+        val now = 1_500L
+        val past = listOf(XtreamEpg("Earlier", 100, 200))
+        val live = listOf(XtreamEpg("NOS Journaal", 1000, 2000))
+        assertEquals(live, chooseGuide(past, live, now))
+        assertEquals(live, chooseGuide(live, past, now))
+        assertEquals(past, chooseGuide(past, emptyList(), now))
     }
 }

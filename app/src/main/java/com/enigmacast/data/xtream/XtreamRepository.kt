@@ -129,9 +129,13 @@ class XtreamRepository @Inject constructor(
     suspend fun episodes(account: XtreamAccount, seriesId: String): List<XtreamEpisode> =
         cached(account, "get_series_info/$seriesId", false) { XtreamJson.episodes(get(account, "get_series_info", "series_id" to seriesId)) }
 
-    /** Now and next of a live channel; empty when the server has no guide for it. */
-    suspend fun shortEpg(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
-        cached(account, "get_short_epg/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "4")) }
+    /**
+     * Programme listings of a live channel, shared by the channel row and the programme column.
+     * The limit covers a morning of short programmes so the one on now is in the list.
+     * Empty when the server has no guide for it.
+     */
+    suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
+        cached(account, "get_short_epg/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "24")) }
     }.getOrDefault(emptyList())
 
     /** The playlist's own info for a film or series. */
@@ -144,11 +148,6 @@ class XtreamRepository @Inject constructor(
     }.getOrNull()
 
     private data class Optional<T>(val value: T?)
-
-    /** The programme column of one channel: up to 12 events. */
-    suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
-        cached(account, "get_short_epg12/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "12")) }
-    }.getOrDefault(emptyList())
 
     /**
      * Fresh entries come straight from memory; a stale one is still shown at once and refreshed

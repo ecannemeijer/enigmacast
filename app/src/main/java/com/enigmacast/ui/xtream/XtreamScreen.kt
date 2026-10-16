@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +66,10 @@ import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.TvChoiceDialog
+import com.enigmacast.ui.theme.focusListRow
+import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.wrapListEnds
 import com.enigmacast.ui.theme.skinShape
 import java.time.Instant
 import java.time.LocalDate
@@ -73,6 +77,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private fun time(sec: Long) = TimeFormat.format(Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()))
@@ -427,8 +432,10 @@ private fun SidePanel(
             .padding(horizontal = EnigmaColors.SafeHorizontal / 2, vertical = EnigmaColors.SafeVertical),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Categories are the left column. Left returns to the menu, except while live plays.
-        if (model.section == XtreamSection.LIVE && column == PanelColumn.CATEGORIES) Column(
+        // Categories stay beside the channel list, the same way Enigma2 keeps the channels next to the bouquets.
+        val liveList = model.section == XtreamSection.LIVE &&
+            (column == PanelColumn.CATEGORIES || column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)
+        if (liveList && column == PanelColumn.CATEGORIES) Column(
             Modifier.width(240.dp).columnKeys(
                 onLeft = if (model.playing?.item?.section == XtreamSection.LIVE) null else onLeave,
                 // Right only enters a list that is already there.
@@ -437,6 +444,10 @@ private fun SidePanel(
         ) {
             Header(stringResource(R.string.xtream_categories), model.loading && model.categories.isEmpty())
             val state = rememberLazyListState()
+            val scope = rememberCoroutineScope()
+            val firstFocus = remember { FocusRequester() }
+            val lastFocus = remember { FocusRequester() }
+            val lastIndex = model.categories.lastIndex
             val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
             LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
             val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
@@ -447,11 +458,15 @@ private fun SidePanel(
                         onClick = { model.selectCategory(c) },
                         selected = c.id == model.category?.id,
                         modifier = Modifier
-                            .then(if (index == selectedIndex) Modifier.focusRequester(categoryFocus) else Modifier)
-                            .focusProperties {
-                                if (index == 0) up = FocusRequester.Cancel
-                                if (index == model.categories.lastIndex) down = FocusRequester.Cancel
-                            },
+                            .focusRequesterIf(index == selectedIndex, categoryFocus)
+                            .focusRequesterIf(index == 0, firstFocus)
+                            .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
+                            .wrapListEnds(
+                                index = index,
+                                lastIndex = lastIndex,
+                                onWrapToFirst = { scope.launch { firstFocus.focusListRow(state, 0) } },
+                                onWrapToLast = { scope.launch { lastFocus.focusListRow(state, lastIndex) } },
+                            ),
                     ) {
                         Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         if (model.pendingCategory?.id == c.id) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
@@ -460,7 +475,7 @@ private fun SidePanel(
             }
         }
         // Films / Series show only the sections here; their categories and grid are XtreamVodPage.
-        if (model.section == XtreamSection.LIVE && (column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)) {
+        if (liveList) {
         // Column 3: channels, films, series or the episodes of the opened series.
         var focused by remember { mutableStateOf<XtreamItem?>(null) }
         val guideOpen = column == PanelColumn.GUIDE
@@ -490,7 +505,7 @@ private fun SidePanel(
         ) {
             val series = model.series
             if (series != null) Header(series.name, model.loading)
-            else LiveListHeader(model.category?.name.orEmpty(), model.loading, guideOpen)
+            else LiveListHeader(model.category?.name.orEmpty(), model.loading, guideOpen || column == PanelColumn.CATEGORIES)
             if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
             val state = rememberLazyListState()
             if (series != null) {
@@ -524,6 +539,10 @@ private fun SidePanel(
                 }
                 var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
                 LaunchedEffect(Unit) { while (true) { delay(30_000); nowSec = System.currentTimeMillis() / 1000 } }
+                val scope = rememberCoroutineScope()
+                val firstFocus = remember { FocusRequester() }
+                val lastFocus = remember { FocusRequester() }
+                val lastIndex = model.items.lastIndex
                 val keyedItems = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     itemsIndexed(keyedItems, key = { _, k -> k.key }) { index, k ->
@@ -533,12 +552,16 @@ private fun SidePanel(
                             onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
                             selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
                             modifier = Modifier
-                                .then(if (index == playingIndex) Modifier.focusRequester(itemFocus) else Modifier)
+                                .focusRequesterIf(index == playingIndex, itemFocus)
+                                .focusRequesterIf(index == 0, firstFocus)
+                                .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
                                 .onFocusChanged { if (it.isFocused) { focused = item; model.focusLive(item) } }
-                                .focusProperties {
-                                    if (index == 0) up = FocusRequester.Cancel
-                                    if (index == model.items.lastIndex) down = FocusRequester.Cancel
-                                },
+                                .wrapListEnds(
+                                    index = index,
+                                    lastIndex = lastIndex,
+                                    onWrapToFirst = { scope.launch { firstFocus.focusListRow(state, 0) } },
+                                    onWrapToLast = { scope.launch { lastFocus.focusListRow(state, lastIndex) } },
+                                ),
                         ) { rowFocused ->
                             IptvChannelRow(model, item, now, nowSec, rowFocused)
                         }

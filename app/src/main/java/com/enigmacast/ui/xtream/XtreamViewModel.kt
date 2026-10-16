@@ -26,6 +26,8 @@ import com.enigmacast.data.xtream.XtreamDetection
 import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.IptvSourceMode
 import com.enigmacast.data.xtream.XtreamRepository
+import com.enigmacast.domain.xtream.airingAt
+import com.enigmacast.domain.xtream.chooseGuide
 import com.enigmacast.domain.xtream.XtreamAccount
 import com.enigmacast.domain.xtream.XtreamCategory
 import com.enigmacast.domain.xtream.XtreamEpg
@@ -224,8 +226,8 @@ class XtreamViewModel @Inject constructor(
     /**
      * Now/next for the rows on screen: called on every scroll, the previous batch is cancelled,
      * so only rows that stay visible for a moment are fetched, at most 4 requests at a time.
-     * Xtream channels use get_short_epg; M3U channels (and Xtream ones without data) the
-     * receiver's satellite guide matched by name. Rows without any guide are remembered too.
+     * Xtream channels use the same listings as the programme column. When none of them is on
+     * now, the receiver's satellite guide is matched by name. Rows without any guide are remembered too.
      */
     fun requestEpg(visible: List<XtreamItem>) {
         visibleJob?.cancel()
@@ -233,19 +235,22 @@ class XtreamViewModel @Inject constructor(
             delay(250)
             val todo = visible.filter { it.section == XtreamSection.LIVE && !epg.containsKey(it.id) }.take(EPG_BATCH)
             if (todo.isEmpty()) return@launch
+            val now = System.currentTimeMillis() / 1000
             val xtream = account?.takeIf { it !== M3U_ACCOUNT }
             val found = HashMap<String, List<XtreamEpg>>()
             if (xtream != null) {
                 val gate = kotlinx.coroutines.sync.Semaphore(4)
                 kotlinx.coroutines.coroutineScope {
-                    todo.map { item -> async { gate.withPermitCompat { item.id to repository.shortEpg(xtream, item.id) } } }
+                    todo.map { item -> async { gate.withPermitCompat { item.id to repository.guide(xtream, item.id) } } }
                         .map { it.await() }
                 }.forEach { (id, list) -> found[id] = list }
             }
-            val missing = todo.filter { found[it.id].isNullOrEmpty() }
+            val missing = todo.filter { found[it.id].orEmpty().airingAt(now) == null }
             if (missing.isNotEmpty()) {
                 val sat = runCatching { satelliteEpg.byName(missing.map { it.name }) }.getOrDefault(emptyMap())
-                missing.forEach { found[it.id] = sat[it.name].orEmpty() }
+                missing.forEach { item ->
+                    found[item.id] = chooseGuide(found[item.id].orEmpty(), sat[item.name].orEmpty(), now)
+                }
             }
             epg = epg + found
         }
@@ -264,14 +269,25 @@ class XtreamViewModel @Inject constructor(
         guideJob = viewModelScope.launch {
             guideLoading = true
             try {
-                val xtream = account?.takeIf { it !== M3U_ACCOUNT }
-                var list = if (xtream != null) repository.guide(xtream, item.id) else emptyList()
-                if (list.isEmpty()) list = runCatching { satelliteEpg.byName(listOf(item.name), hours = 24)[item.name] }.getOrNull().orEmpty()
-                if (list.isNotEmpty()) guideEvents = list
+                val list = loadGuide(item, hours = 24)
+                if (list.isNotEmpty()) {
+                    guideEvents = list
+                    epg = epg + (item.id to list)
+                }
             } finally {
                 guideLoading = false
             }
         }
+    }
+
+    /** Xtream listings, or the satellite guide when those have no programme on now. */
+    private suspend fun loadGuide(item: XtreamItem, hours: Int = 12): List<XtreamEpg> {
+        val now = System.currentTimeMillis() / 1000
+        val xtream = account?.takeIf { it !== M3U_ACCOUNT }
+        val listings = if (xtream != null) repository.guide(xtream, item.id) else emptyList()
+        if (listings.airingAt(now) != null) return listings
+        val sat = runCatching { satelliteEpg.byName(listOf(item.name), hours = hours)[item.name] }.getOrNull().orEmpty()
+        return chooseGuide(listings, sat, now)
     }
 
     fun closeGuide() {
@@ -779,14 +795,11 @@ class XtreamViewModel @Inject constructor(
 
     /** Loads now/next for a live channel once focus rests on it. */
     fun focusLive(item: XtreamItem) {
-        if (item.section != XtreamSection.LIVE || epg.containsKey(item.id)) return
-        val account = account ?: return
+        if (item.section != XtreamSection.LIVE || epg.containsKey(item.id) || account == null) return
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
             delay(350)
-            var list = if (account === M3U_ACCOUNT) emptyList() else repository.shortEpg(account, item.id)
-            if (list.isEmpty()) list = runCatching { satelliteEpg.byName(listOf(item.name))[item.name] }.getOrNull().orEmpty()
-            epg = epg + (item.id to list)
+            epg = epg + (item.id to loadGuide(item))
         }
     }
 

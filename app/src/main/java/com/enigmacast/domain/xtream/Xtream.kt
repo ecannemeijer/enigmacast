@@ -69,6 +69,20 @@ data class XtreamVodInfo(
 
 data class XtreamEpg(val title: String, val startSec: Long, val endSec: Long, val description: String = "")
 
+/** The listing on air at [nowSec], when one of these covers that moment. */
+fun List<XtreamEpg>.airingAt(nowSec: Long): XtreamEpg? =
+    firstOrNull { it.startSec <= nowSec && nowSec < it.endSec }
+
+/**
+ * The channel row and the programme column share one list. Xtream listings that have
+ * already ended lose to the satellite guide when that one has the programme on now.
+ */
+fun chooseGuide(xtream: List<XtreamEpg>, satellite: List<XtreamEpg>, nowSec: Long): List<XtreamEpg> {
+    if (xtream.airingAt(nowSec) != null) return xtream
+    if (satellite.airingAt(nowSec) != null) return satellite
+    return xtream.ifEmpty { satellite }
+}
+
 /** XStreamity's `playlists.txt` and `x-playlists.json`. */
 private val NAME_MARK = Regex("\\s#")
 

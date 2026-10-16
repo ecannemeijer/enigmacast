@@ -139,6 +139,7 @@ suspend fun FocusRequester.requestWhenReady(attempts: Int = 10): Boolean {
 /**
  * Up on the first row and Down on the last row jump to the other end.
  * A list of one row stays put. The caller scrolls the target on screen and focuses it.
+ * Holding the key repeats it; wrapping on a repeat would loop the list, so the end stays put.
  */
 fun Modifier.wrapListEnds(
     index: Int,
@@ -147,21 +148,12 @@ fun Modifier.wrapListEnds(
     onWrapToLast: () -> Unit,
 ): Modifier = onPreviewKeyEvent { event ->
     if (event.type != KeyEventType.KeyDown || lastIndex <= 0) return@onPreviewKeyEvent false
-    when (event.key) {
-        Key.DirectionUp -> if (index == 0) {
-            onWrapToLast()
-            true
-        } else {
-            false
-        }
-        Key.DirectionDown -> if (index == lastIndex) {
-            onWrapToFirst()
-            true
-        } else {
-            false
-        }
-        else -> false
-    }
+    val atFirst = event.key == Key.DirectionUp && index == 0
+    val atLast = event.key == Key.DirectionDown && index == lastIndex
+    if (!atFirst && !atLast) return@onPreviewKeyEvent false
+    if (event.nativeKeyEvent.repeatCount > 0) return@onPreviewKeyEvent true
+    if (atFirst) onWrapToLast() else onWrapToFirst()
+    true
 }
 
 /**

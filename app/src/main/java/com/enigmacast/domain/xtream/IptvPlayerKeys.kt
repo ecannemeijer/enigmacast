@@ -46,9 +46,9 @@ object IptvPlayerKeys {
     }
 }
 
-/** Channel names of a playlist and of the receiver, made comparable: "NL: NPO 1 HD" → "npo1". */
+/** Channel names of a playlist and of the receiver, made comparable: "NL - NPO 1 HD" → "npo1". */
 object IptvNames {
-    private val PREFIX = Regex("^\\s*[A-Za-z]{2,3}\\s*[:|]\\s*")
+    private val PREFIX = Regex("^\\s*[A-Za-z]{2,3}\\s*[:|\\-\\u2013\\u2014]\\s+")
     private val SUFFIX = Regex("\\b(fhd|uhd|hd|sd|4k|hevc|h265|backup|\\+1)\\b")
     private val NON = Regex("[^a-z0-9]")
 
