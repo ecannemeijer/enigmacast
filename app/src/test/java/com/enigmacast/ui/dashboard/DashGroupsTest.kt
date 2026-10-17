@@ -41,9 +41,9 @@ class DashGroupsTest {
         assertNull(DashGroups.current(DashGroup.TV, DashSection.Home, DashSection.Search))
     }
 
-    @Test fun flyoutStartsOnCurrentEntry() {
+    @Test fun flyoutStartsOnTheFirstEntry() {
         val tv = DashGroups.tabs(DashGroup.TV)
-        assertEquals(2, DashGroups.flyoutStart(tv, DashSection.Movies))
+        assertEquals(0, DashGroups.flyoutStart(tv, DashSection.Movies))
         assertEquals(0, DashGroups.flyoutStart(tv, null))
     }
 }

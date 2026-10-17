@@ -350,7 +350,7 @@ internal fun IptvLibraryPage(
     }
 }
 
-/** Next episode, bottom-right: cover, a 15 second countdown, Next and Cancel. */
+/** Next episode, a small half-transparent card in the bottom-right corner. */
 @Composable
 internal fun NextEpisodeCard(
     episode: com.enigmacast.domain.xtream.XtreamEpisode,
@@ -363,17 +363,18 @@ internal fun NextEpisodeCard(
     LaunchedEffect(Unit) { playFocus.requestWhenReady() }
     Row(
         modifier
-            .width(440.dp)
-            .background(EnigmaColors.Selected, skinShape(12.dp))
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .width(240.dp)
+            .background(EnigmaColors.Selected.copy(alpha = 0.5f), skinShape(8.dp))
+            .padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
-                .width(96.dp)
-                .height(144.dp)
-                .clip(skinShape(8.dp))
-                .background(EnigmaColors.Card),
+                .width(42.dp)
+                .height(62.dp)
+                .clip(skinShape(4.dp))
+                .background(EnigmaColors.Card.copy(alpha = 0.5f)),
         ) {
             if (episode.cover.isNotBlank()) {
                 AsyncImage(
@@ -384,25 +385,43 @@ internal fun NextEpisodeCard(
                 )
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 episode.title.ifBlank { stringResource(R.string.iptv_next) },
                 color = EnigmaColors.Text,
-                fontSize = 16.sp,
+                fontSize = 12.sp,
                 fontWeight = EnigmaType.Strong,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(stringResource(R.string.iptv_next_in, seconds), color = EnigmaColors.Muted, fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactListRow(onClick = onPlay, modifier = Modifier.focusRequester(playFocus)) {
-                    Text(stringResource(R.string.iptv_next), fontSize = 14.sp)
-                }
-                CompactListRow(onClick = onCancel) {
-                    Text(stringResource(R.string.iptv_next_cancel), fontSize = 14.sp)
-                }
+            Text(stringResource(R.string.iptv_next_in, seconds), color = EnigmaColors.Text, fontSize = 11.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                NextCardButton(stringResource(R.string.iptv_next), onPlay, edgeLeft = true, modifier = Modifier.focusRequester(playFocus).weight(1f))
+                NextCardButton(stringResource(R.string.iptv_next_cancel), onCancel, edgeRight = true, modifier = Modifier.weight(1f))
             }
         }
+    }
+}
+
+@Composable
+private fun NextCardButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    edgeLeft: Boolean = false,
+    edgeRight: Boolean = false,
+) {
+    CompactListRow(
+        onClick = onClick,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+        modifier = modifier.focusProperties {
+            up = FocusRequester.Cancel
+            down = FocusRequester.Cancel
+            if (edgeLeft) left = FocusRequester.Cancel
+            if (edgeRight) right = FocusRequester.Cancel
+        },
+    ) {
+        Text(label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

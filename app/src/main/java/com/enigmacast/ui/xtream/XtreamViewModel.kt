@@ -579,7 +579,7 @@ class XtreamViewModel @Inject constructor(
         if (nextDismissedFor == current.id) return null
         val duration = playerState.durationMs
         val left = duration - playerState.positionMs
-        if (duration <= 0L || left !in 1L..30_000L) return null
+        if (duration <= 0L || left !in 1L..60_000L) return null
         return com.enigmacast.domain.xtream.NextEpisode.after(current, playbackEpisodes)
     }
 

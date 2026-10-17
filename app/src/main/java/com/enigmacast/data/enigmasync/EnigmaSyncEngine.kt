@@ -353,8 +353,16 @@ class EnigmaSyncEngine @Inject constructor(
             else library.putResume(
                 IptvResumeRow(
                     source, kind, id, payload.optLong("positionMs"), payload.optLong("durationMs"), updated,
-                    payload.optString("title"), null, "", "", "", payload.optString("seriesId").ifBlank { null },
-                    null, payload.optInt("season"), payload.optInt("episode"), profileId,
+                    payload.optString("title").ifBlank { current?.title.orEmpty() },
+                    payload.optString("poster").ifBlank { null } ?: current?.poster,
+                    payload.optString("extension").ifBlank { current?.extension.orEmpty() },
+                    payload.optString("url").ifBlank { current?.url.orEmpty() },
+                    payload.optString("categoryId").ifBlank { current?.categoryId.orEmpty() },
+                    payload.optString("seriesId").ifBlank { null } ?: current?.seriesId,
+                    payload.optString("seriesTitle").ifBlank { null } ?: current?.seriesTitle,
+                    if (payload.has("season")) payload.optInt("season") else current?.season ?: 0,
+                    if (payload.has("episode")) payload.optInt("episode") else current?.episode ?: 0,
+                    profileId,
                 ),
             )
         }

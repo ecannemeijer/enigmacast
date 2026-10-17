@@ -147,7 +147,7 @@ class IptvLibrary @Inject constructor(
         """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"title":${json(row.title)},"addedMs":${row.addedMs}}"""
 
     private fun progressPayload(row: IptvResumeRow) =
-        """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"positionMs":${row.positionMs},"durationMs":${row.durationMs},"updatedMs":${row.updatedMs},"season":${row.season},"episode":${row.episode}}"""
+        """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"positionMs":${row.positionMs},"durationMs":${row.durationMs},"updatedMs":${row.updatedMs},"title":${json(row.title)},"poster":${json(row.poster.orEmpty())},"extension":${json(row.extension)},"url":${json(row.url)},"categoryId":${json(row.categoryId)},"seriesId":${json(row.seriesId.orEmpty())},"seriesTitle":${json(row.seriesTitle.orEmpty())},"season":${row.season},"episode":${row.episode}}"""
 
     companion object {
         fun key(source: String, kind: String, id: String) = "$source/$kind/$id"

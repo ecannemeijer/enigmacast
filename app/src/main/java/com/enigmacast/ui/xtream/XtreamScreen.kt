@@ -278,6 +278,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         }
     }
 
+    var nextCardFocused by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxSize()
@@ -287,6 +288,17 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 val code = e.nativeKeyEvent.keyCode
                 // Consume Back before the focused row can drop focus, then act once on release.
                 if (model.showPipPicker || model.pip.listOpen.value) return@onPreviewKeyEvent false
+                // Volgende / Annuleren have focus: Left, Right and OK belong to those buttons.
+                if (nextCardFocused && model.nextOffer() != null) {
+                    val steer = code == android.view.KeyEvent.KEYCODE_DPAD_LEFT ||
+                        code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT ||
+                        code == android.view.KeyEvent.KEYCODE_DPAD_UP ||
+                        code == android.view.KeyEvent.KEYCODE_DPAD_DOWN ||
+                        code == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                        code == android.view.KeyEvent.KEYCODE_ENTER ||
+                        code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                    if (steer) return@onPreviewKeyEvent false
+                }
                 if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
                     if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
                     return@onPreviewKeyEvent true
@@ -451,11 +463,11 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             }
             val upcoming = model.nextOffer()
             val episodeId = playing.episode?.id
-            var secondsLeft by remember(episodeId) { mutableIntStateOf(15) }
+            var secondsLeft by remember(episodeId) { mutableIntStateOf(60) }
             LaunchedEffect(episodeId, upcoming?.id) {
                 if (upcoming == null) return@LaunchedEffect
-                secondsLeft = 15
-                var left = 15
+                secondsLeft = 60
+                var left = 60
                 while (left > 0) {
                     delay(1000)
                     left -= 1
@@ -469,7 +481,10 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     seconds = secondsLeft,
                     onPlay = model::playUpcoming,
                     onCancel = model::dismissUpcoming,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = if (vodBar) 120.dp else 36.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .onFocusChanged { nextCardFocused = it.hasFocus }
+                        .padding(end = 28.dp, bottom = if (vodBar) 120.dp else 36.dp),
                 )
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
