@@ -85,6 +85,7 @@ class XtreamViewModel @Inject constructor(
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
     private val library: com.enigmacast.data.xtream.IptvLibrary,
+    private val watchNext: com.enigmacast.data.xtream.WatchNextPublisher,
     private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val sleepTimer: com.enigmacast.playback.AppSleepTimer,
     private val subtitles: SubSourceClient,
@@ -140,6 +141,10 @@ class XtreamViewModel @Inject constructor(
     var series by mutableStateOf<XtreamItem?>(null)
         private set
     var episodes by mutableStateOf<List<XtreamEpisode>>(emptyList())
+    /** Episodes of the series that is playing, so the next one can start on its own. */
+    private var playbackEpisodes by mutableStateOf<List<XtreamEpisode>>(emptyList())
+    /** Episode id for which autoplay of the next one was cancelled. */
+    private var nextDismissedFor by mutableStateOf<String?>(null)
         private set
     /** [items] as cards with the playlist's own name and cover; artwork replaces them per card. */
     var cards by mutableStateOf<List<IptvCard>>(emptyList())
@@ -448,26 +453,29 @@ class XtreamViewModel @Inject constructor(
         if (parts.size != 3) return
         val (source, kind, id) = parts
         when (val keep = IptvResume.toStore(p.currentPosition, p.duration)) {
-            null -> library.clearResume(source, kind, id)
+            null -> {
+                library.clearResume(source, kind, id)
+                watchNext.remove(source, kind, id)
+            }
             else -> {
                 val what = playing
                 val item = what?.item
                 val episode = what?.episode
-                library.saveResume(
-                    com.enigmacast.data.db.IptvResumeRow(
-                        source = source, kind = kind, id = id,
-                        positionMs = keep, durationMs = p.duration.coerceAtLeast(0), updatedMs = System.currentTimeMillis(),
-                        title = if (episode != null) episode.title.ifBlank { what.title } else item?.name ?: what?.title.orEmpty(),
-                        poster = item?.let(::posterOf),
-                        extension = episode?.extension ?: item?.extension.orEmpty(),
-                        url = if (episode == null) item?.url.orEmpty() else "",
-                        categoryId = item?.categoryId.orEmpty(),
-                        seriesId = if (episode != null) item?.id else null,
-                        seriesTitle = if (episode != null) item?.name else null,
-                        season = episode?.season ?: 0,
-                        episode = episode?.episode ?: 0,
-                    ),
+                val row = com.enigmacast.data.db.IptvResumeRow(
+                    source = source, kind = kind, id = id,
+                    positionMs = keep, durationMs = p.duration.coerceAtLeast(0), updatedMs = System.currentTimeMillis(),
+                    title = if (episode != null) episode.title.ifBlank { what.title } else item?.name ?: what?.title.orEmpty(),
+                    poster = item?.let(::posterOf),
+                    extension = episode?.extension ?: item?.extension.orEmpty(),
+                    url = if (episode == null) item?.url.orEmpty() else "",
+                    categoryId = item?.categoryId.orEmpty(),
+                    seriesId = if (episode != null) item?.id else null,
+                    seriesTitle = if (episode != null) item?.name else null,
+                    season = episode?.season ?: 0,
+                    episode = episode?.episode ?: 0,
                 )
+                library.saveResume(row)
+                watchNext.publish(row)
             }
         }
         resumeVersion++
@@ -524,14 +532,16 @@ class XtreamViewModel @Inject constructor(
             libraryPlayed++
         } else if (episode != null) {
             selectSection(XtreamSection.SERIES)
-            requestEpisode(episode, item) { libraryPlayed++ }
+            if (request.resume) { playEpisode(episode, item, fromStart = false); libraryPlayed++ }
+            else requestEpisode(episode, item) { libraryPlayed++ }
         } else if (item.section == XtreamSection.SERIES || request.detail) {
             selectSection(item.section)
             openDetail(item)
             libraryDetail++
         } else {
             selectSection(XtreamSection.MOVIES)
-            requestFilm(item) { libraryPlayed++ }
+            if (request.resume) { playFilm(item, fromStart = false); libraryPlayed++ }
+            else requestFilm(item) { libraryPlayed++ }
         }
     }
 
@@ -550,11 +560,41 @@ class XtreamViewModel @Inject constructor(
         else resumeAsk = ResumeAsk(item.name, offer) { fromStart -> playFilm(item, fromStart); onStarted() }
     }
 
+    /** Keeps the series list across closing the info page, which clears [detailEpisodes]. */
+    fun holdEpisodes(list: List<XtreamEpisode>) {
+        if (list.isNotEmpty()) playbackEpisodes = list
+    }
+
     fun requestEpisode(episode: XtreamEpisode, show: XtreamItem? = series, onStarted: () -> Unit) {
+        if (detailEpisodes.any { it.id == episode.id }) playbackEpisodes = detailEpisodes
+        else if (episodes.any { it.id == episode.id }) playbackEpisodes = episodes
         val offer = IptvResume.offer(resumeOf(episode))
         if (offer == null) { playEpisode(episode, show, fromStart = true); onStarted() }
         else resumeAsk = ResumeAsk(episode.title, offer) { fromStart -> playEpisode(episode, show, fromStart); onStarted() }
     }
+
+    /** The next episode, once this one has 30 seconds or less left and autoplay was not cancelled. */
+    fun nextOffer(): XtreamEpisode? {
+        val current = playing?.episode ?: return null
+        if (nextDismissedFor == current.id) return null
+        val duration = playerState.durationMs
+        val left = duration - playerState.positionMs
+        if (duration <= 0L || left !in 1L..30_000L) return null
+        return com.enigmacast.domain.xtream.NextEpisode.after(current, playbackEpisodes)
+    }
+
+    fun dismissUpcoming() { nextDismissedFor = playing?.episode?.id }
+
+    /** Starts the next episode from the beginning. */
+    fun playUpcoming() {
+        val current = playing?.episode ?: return
+        val next = com.enigmacast.domain.xtream.NextEpisode.after(current, playbackEpisodes) ?: return
+        nextDismissedFor = null
+        playEpisode(next, playing?.item, fromStart = true)
+    }
+
+    /** A Watch Next card is waiting: do not start the remembered live channel over it. */
+    fun choosingStartsLive() = library.openRequest.value == null
 
     fun answerResume(fromStart: Boolean) { val ask = resumeAsk ?: return; resumeAsk = null; ask.play(fromStart) }
     fun dismissResume() { resumeAsk = null }
@@ -734,7 +774,17 @@ class XtreamViewModel @Inject constructor(
 
     /** Opens the page: one playlist is chosen right away; several leave [account] null for the chooser. */
     fun open() {
+        val pending = library.openRequest.value
         val accounts = _detection.value?.accounts.orEmpty()
+        if (pending != null) {
+            openLiveFullscreen = false
+            val match = accounts.firstOrNull { it.key == pending.source }
+            when {
+                match != null && account?.key != pending.source -> choose(match, startLive = false)
+                account == null && accounts.size == 1 -> choose(accounts.first(), startLive = false)
+            }
+            return
+        }
         when {
             account == null && accounts.size == 1 -> choose(accounts.first())
             account != null -> {
@@ -965,6 +1015,12 @@ class XtreamViewModel @Inject constructor(
         val account = account ?: return
         if (launchOrigin == null) vodFromDashboard = true
         val series = show
+        if (playbackEpisodes.none { it.id == episode.id } && series != null) {
+            viewModelScope.launch {
+                val list = runCatching { repository.episodes(account, series.id) }.getOrDefault(emptyList())
+                if (playing?.episode?.id == episode.id && list.any { it.id == episode.id }) playbackEpisodes = list
+            }
+        }
         val title = listOfNotNull(series?.name, "S${episode.season}E${episode.episode}".takeIf { episode.season > 0 }).joinToString(" · ")
         start(
             XtreamUrls.episode(account, episode.id, episode.extension),

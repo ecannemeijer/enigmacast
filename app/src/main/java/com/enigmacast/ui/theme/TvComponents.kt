@@ -117,7 +117,9 @@ fun NavItem(
     )
     CompactListRow(
         onClick = onClick,
-        selected = selected,
+        // The drawer draws one sliding pill. A selected row must stay transparent or that pill
+        // disappears behind the selected colour when focus lands on the open page.
+        selected = selected && cursor == null,
         drawFocus = cursor == null,
         modifier = modifier.onFocusChanged {
             if (it.isFocused) onFocus()

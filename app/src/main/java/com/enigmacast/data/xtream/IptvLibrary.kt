@@ -35,6 +35,8 @@ data class IptvOpenRequest(
     val origin: String? = null,
     val detail: Boolean = false,
     val episode: com.enigmacast.domain.xtream.XtreamEpisode? = null,
+    /** Watch Next: play from the saved position, without the resume question. */
+    val resume: Boolean = false,
     val token: Long = System.nanoTime(),
 )
 
@@ -80,6 +82,11 @@ class IptvLibrary @Inject constructor(
             enqueue(profileId, "progress", "upsert", stamped.updatedMs, progressPayload(stamped))
             trigger.nudge()
         }
+    }
+
+    suspend fun findResume(source: String, kind: String, id: String): com.enigmacast.data.db.IptvResumeRow? {
+        val profileId = profiles.state.value.activeUuid
+        return dao.resume(profileId, source, kind, id)
     }
 
     fun clearResume(source: String, kind: String, id: String) {

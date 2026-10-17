@@ -700,6 +700,7 @@ fun DashboardScreen(
                             model = xtreamModel,
                             menuFocus = iptvMenuFocus,
                             sectionEnter = sectionEnter,
+                            section = if (shown == DashSection.IptvSeries) com.enigmacast.domain.xtream.XtreamSection.SERIES else com.enigmacast.domain.xtream.XtreamSection.MOVIES,
                             onRetreatTo = retreat,
                             onPlay = onXtream,
                         )

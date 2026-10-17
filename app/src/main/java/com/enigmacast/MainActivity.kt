@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var remoteInputBus: RemoteInputBus
     @Inject lateinit var receiverSwitcher: com.enigmacast.live.ReceiverSwitcher
     @Inject lateinit var settingsRepository: com.enigmacast.data.settings.SettingsRepository
+    @Inject lateinit var iptvLibrary: com.enigmacast.data.xtream.IptvLibrary
     private var menuKeys: com.enigmacast.domain.remote.Bindings =
         com.enigmacast.domain.remote.KeyBindings.defaults(com.enigmacast.domain.remote.KeyMode.MENU)
     private val appViewModel: AppViewModel by viewModels()
@@ -118,12 +119,29 @@ class MainActivity : ComponentActivity() {
             }
         }
         handleSearchIntent(intent)
+        handleWatchNext(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleSearchIntent(intent)
+        handleWatchNext(intent)
+    }
+
+    /** A Watch Next card on the Android TV home resumes that film or episode. */
+    private fun handleWatchNext(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "enigmacast" || data.host != "watchnext") return
+        val source = data.getQueryParameter("source") ?: return
+        val kind = data.getQueryParameter("kind") ?: return
+        val id = data.getQueryParameter("id") ?: return
+        lifecycleScope.launch {
+            val row = iptvLibrary.findResume(source, kind, id) ?: return@launch
+            val request = com.enigmacast.data.xtream.WatchNextPublisher.request(row) ?: return@launch
+            iptvLibrary.openRequest.value = request
+            appViewModel.openXtream()
+        }
     }
 
     /** Assistant and the TV search orb send SEARCH or MEDIA_PLAY_FROM_SEARCH with a query extra. */

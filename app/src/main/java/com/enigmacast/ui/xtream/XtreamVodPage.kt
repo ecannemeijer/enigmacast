@@ -78,6 +78,7 @@ import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.skinShape
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val CATEGORIES_WIDTH = 240.dp
@@ -257,6 +258,7 @@ internal fun IptvLibraryPage(
     model: XtreamViewModel,
     menuFocus: FocusRequester,
     sectionEnter: Int,
+    section: XtreamSection,
     onRetreatTo: (FocusRequester) -> Unit,
     onPlay: () -> Unit,
 ) {
@@ -264,14 +266,16 @@ internal fun IptvLibraryPage(
     val gridFocus = remember { FocusRequester() }
     var gridActive by remember { mutableStateOf(false) }
     val detection by model.detection.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) {
+    LaunchedEffect(section) {
+        model.requestSection(section)
         model.prepareLibrary()
         if (model.detail != null) return@LaunchedEffect
         if (model.vodFromDashboard && model.cards.isNotEmpty()) {
             gridActive = true
             gridFocus.requestWhenReady(24)
             model.consumeVodFromDashboard()
-        } else if (model.categories.isNotEmpty()) {
+        } else {
+            gridActive = false
             categoryFocus.requestWhenReady()
         }
     }
@@ -346,6 +350,62 @@ internal fun IptvLibraryPage(
     }
 }
 
+/** Next episode, bottom-right: cover, a 15 second countdown, Next and Cancel. */
+@Composable
+internal fun NextEpisodeCard(
+    episode: com.enigmacast.domain.xtream.XtreamEpisode,
+    seconds: Int,
+    onPlay: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val playFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { playFocus.requestWhenReady() }
+    Row(
+        modifier
+            .width(440.dp)
+            .background(EnigmaColors.Selected, skinShape(12.dp))
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier
+                .width(96.dp)
+                .height(144.dp)
+                .clip(skinShape(8.dp))
+                .background(EnigmaColors.Card),
+        ) {
+            if (episode.cover.isNotBlank()) {
+                AsyncImage(
+                    model = episode.cover,
+                    contentDescription = episode.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                episode.title.ifBlank { stringResource(R.string.iptv_next) },
+                color = EnigmaColors.Text,
+                fontSize = 16.sp,
+                fontWeight = EnigmaType.Strong,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(stringResource(R.string.iptv_next_in, seconds), color = EnigmaColors.Muted, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CompactListRow(onClick = onPlay, modifier = Modifier.focusRequester(playFocus)) {
+                    Text(stringResource(R.string.iptv_next), fontSize = 14.sp)
+                }
+                CompactListRow(onClick = onCancel) {
+                    Text(stringResource(R.string.iptv_next_cancel), fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
 /** Info page of a film or series, above the grid so Search can open it at once. */
 @Composable
 internal fun IptvInfoDialog(model: XtreamViewModel, onPlayed: () -> Unit) {
@@ -407,6 +467,7 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
                     if (index == list.lastIndex) right = FocusRequester.Cancel
                     down = FocusRequester.Cancel
                 }) {
+                    model.holdEpisodes(episodes)
                     model.closeDetail()
                     model.requestEpisode(e, show, onPlayed)
                 }

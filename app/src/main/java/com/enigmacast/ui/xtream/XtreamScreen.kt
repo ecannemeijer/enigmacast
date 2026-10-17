@@ -254,6 +254,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             return@BackHandler
         }
         when {
+            !panelOpen && model.nextOffer() != null -> model.dismissUpcoming()
             quickBar -> { quickBar = false; vodBar = true; vodBarTouch++; openRequest++ }
             vodBar -> { vodBar = false; openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
@@ -393,7 +394,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 title = stringResource(R.string.xtream_choose_playlist),
                 message = stringResource(R.string.xtream_choose_playlist_desc),
                 choices = accounts.map { it.name },
-                onChoose = { model.choose(accounts[it]) },
+                onChoose = { model.choose(accounts[it], startLive = model.choosingStartsLive()) },
                 onDismiss = onBack,
                 stacked = true,
             )
@@ -446,6 +447,29 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     showIcons = !bannerFromZap || quickBar,
                     onGuide = openPlayingGuide,
                     onSearch = onSearch,
+                )
+            }
+            val upcoming = model.nextOffer()
+            val episodeId = playing.episode?.id
+            var secondsLeft by remember(episodeId) { mutableIntStateOf(15) }
+            LaunchedEffect(episodeId, upcoming?.id) {
+                if (upcoming == null) return@LaunchedEffect
+                secondsLeft = 15
+                var left = 15
+                while (left > 0) {
+                    delay(1000)
+                    left -= 1
+                    secondsLeft = left
+                }
+                model.playUpcoming()
+            }
+            if (upcoming != null && !panelOpen) {
+                NextEpisodeCard(
+                    episode = upcoming,
+                    seconds = secondsLeft,
+                    onPlay = model::playUpcoming,
+                    onCancel = model::dismissUpcoming,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = if (vodBar) 120.dp else 36.dp),
                 )
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
@@ -577,7 +601,7 @@ private fun SidePanel(
                     itemsIndexed(keyedEpisodes, key = { _, k -> k.key }) { index, k ->
                         val e = k.value
                         CompactListRow(
-                            onClick = { model.requestEpisode(e, onStarted = onPlayed) },
+                            onClick = { model.holdEpisodes(model.episodes); model.requestEpisode(e, onStarted = onPlayed) },
                             selected = model.playing?.episode?.id == e.id,
                             modifier = Modifier
                                 .then(if (index == 0) Modifier.focusRequester(itemFocus) else Modifier)
