@@ -196,6 +196,10 @@ enum class LastLiveSource { ENIGMA2, IPTV }
 @Serializable
 enum class StartupLive { OFF, SATELLITE, IPTV }
 
+/** Settings › Playback: when the large live picture stays down, try the same channel on the other source. */
+@Serializable
+enum class TvFallback { OFF, SAT_TO_IPTV, IPTV_TO_SAT, BOTH }
+
 /** The last live IPTV channel of one playlist (source = the account key). */
 @Serializable
 data class LastIptvChannel(
@@ -254,6 +258,8 @@ data class AppSettings(
      * Null means the choice was never saved, so the app language is used.
      */
     val iptvSubtitleLanguages: List<String>? = null,
+    /** Missing in older settings, so a dropped channel stays dropped. */
+    val tvFallback: TvFallback = TvFallback.OFF,
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()

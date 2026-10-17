@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -82,6 +83,15 @@ import kotlinx.coroutines.launch
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private fun time(sec: Long) = TimeFormat.format(Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()))
 
+/** Clock, or day and clock when the programme is not today, so the past stays readable. */
+private fun guideWhen(sec: Long, nowSec: Long): String {
+    val zone = ZoneId.systemDefault()
+    val start = Instant.ofEpochSecond(sec).atZone(zone)
+    val today = Instant.ofEpochSecond(nowSec).atZone(zone).toLocalDate()
+    val clock = TimeFormat.format(start)
+    return if (start.toLocalDate() == today) clock else "${start.dayOfMonth}/${start.monthValue} $clock"
+}
+
 /** Which columns the side panel shows, as in the Enigma2 channel list. */
 private enum class PanelColumn { CATEGORIES, CHANNELS, GUIDE, VOD_CATEGORIES, VOD_GRID }
 
@@ -114,6 +124,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     // Films and episodes: OK, Left or Right show the progress line. OK again pauses. Down opens the options.
     var vodBar by remember { mutableStateOf(false) }
     var vodBarTouch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(model.catchup) { if (model.catchup) { vodBar = true; vodBarTouch++ } }
     LaunchedEffect(vodBar, vodBarTouch, quickBar) {
         if (vodBar && !quickBar) { delay(VOD_BAR_MS); vodBar = false; openRequest++ }
     }
@@ -171,7 +182,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         // Search and Library info open the page itself; the grid must not take that focus.
         if (model.libraryDetail > 0 && model.detail == null) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ }
     }
-    DisposableEffect(Unit) { onDispose { model.stop() } }
+    DisposableEffect(Unit) { onDispose { model.stop(); model.pip.stop() } }
     // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
     LaunchedEffect(model.categoriesReady) {
         if (model.categoriesReady > 0 && panelOpen) {
@@ -231,6 +242,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 openRequest++
             }
             bannerShown -> { bannerUntil = 0L; details = false; openRequest++ }
+            model.pip.playing() -> model.pip.stop()
             else -> leave()
         }
     }
@@ -267,13 +279,14 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             .onPreviewKeyEvent { e ->
                 val code = e.nativeKeyEvent.keyCode
                 // Consume Back before the focused row can drop focus, then act once on release.
+                if (model.showPipPicker || model.pip.listOpen.value) return@onPreviewKeyEvent false
                 if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
                     if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
                     return@onPreviewKeyEvent true
                 }
                 if (panelOpen || quickBar || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (code == android.view.KeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent false
-                val playingVod = model.playing?.let { it.episode != null || it.item?.section == XtreamSection.MOVIES } == true
+                val playingVod = model.playing?.let { it.episode != null || it.item?.section == XtreamSection.MOVIES } == true || model.catchup
                 if (playingVod) {
                     when (VodBarKeys.action(code, vodBar)) {
                         VodBarKeys.Action.SHOW -> { if (e.nativeKeyEvent.repeatCount == 0) { vodBar = true; vodBarTouch++ }; return@onPreviewKeyEvent true }
@@ -289,13 +302,19 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 val vod = playing != null && (playing.episode != null || playing.item?.section == XtreamSection.MOVIES)
                 val repeat = e.nativeKeyEvent.repeatCount
                 when (val action = IptvPlayerKeys.action(code, bindings, bannerShown, bannerFromZap, vod)) {
-                    is IptvKeyAction.Zap -> if (repeat % 4 == 0) { model.zap(action.step); showBanner(fromZap = true) }
-                    IptvKeyAction.Banner -> if (repeat == 0 && model.playing != null) showBanner(fromZap = false)
+                    is IptvKeyAction.Zap -> if (repeat % 4 == 0) {
+                        if (model.pip.playing() && model.pip.swapped.value) model.pip.zap(action.step)
+                        else { model.zap(action.step); showBanner(fromZap = true) }
+                    }
+                    IptvKeyAction.Banner -> if (repeat == 0 && model.pip.playing() && !panelOpen) model.pip.swap()
+                    else if (repeat == 0 && model.playing != null) showBanner(fromZap = false)
                     IptvKeyAction.Details -> if (repeat == 0 && model.playing != null) {
                         if (bannerShown && details) bannerUntil = 0L else showBanner(fromZap = false, withDetails = true)
                     }
                     IptvKeyAction.Options -> if (repeat == 0 && model.playing != null) { quickBar = true; quickToken++ }
-                    IptvKeyAction.ChannelList -> if (repeat == 0) openPanel()
+                    IptvKeyAction.ChannelList -> if (repeat == 0) {
+                        if (model.pip.playing() && model.pip.swapped.value) model.pip.openList() else openPanel()
+                    }
                     IptvKeyAction.Pause -> if (repeat == 0) { model.togglePause(); showBanner(fromZap = false) }
                     IptvKeyAction.None -> return@onPreviewKeyEvent false
                 }
@@ -305,14 +324,45 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     ) {
         if (model.playing != null) {
             val ps = model.playerState
+            val pipOn by model.pip.active.collectAsStateWithLifecycle()
+            val pipSwap by model.pip.swapped.collectAsStateWithLifecycle()
             @Suppress("UNUSED_EXPRESSION") model.playerVersion
+            val main = model.player()
+            com.enigmacast.ui.remote.PipAudio(main, model.pip)
             com.enigmacast.ui.remote.EnigmaVideoPlayer(
-                player = model.player(),
+                player = if (pipOn && pipSwap) model.pip.player() else main,
                 frame = null,
                 debugBorders = false,
                 cues = model.cues,
                 picture = com.enigmacast.ui.remote.VideoShape(model.pictureMode, ps.videoWidth, ps.videoHeight, ps.pixelRatio),
                 modifier = Modifier.fillMaxSize(),
+            )
+            if (pipOn) {
+                com.enigmacast.ui.remote.PipInset(
+                    player = if (pipSwap) main else model.pip.player(),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(28.dp).size(width = 320.dp, height = 180.dp),
+                )
+            }
+        }
+        val pipList by model.pip.listOpen.collectAsStateWithLifecycle()
+        val pipNames by model.pip.names.collectAsStateWithLifecycle()
+        if (pipList) {
+            com.enigmacast.ui.remote.PipChannelList(pipNames, model.pip::choose, model.pip::closeList)
+        }
+        if (model.showPipPicker) {
+            com.enigmacast.ui.remote.PipPicker(
+                loadCategories = model.pip::categories,
+                loadChannels = model.pip::channels,
+                onStart = { list, index -> model.pip.startResolved(list, index) },
+                onDismiss = { model.showPipPicker = false },
+            )
+        }
+        if (model.notice.isNotBlank()) {
+            Text(
+                model.notice,
+                color = Color.White,
+                fontSize = 20.sp,
+                modifier = Modifier.align(Alignment.TopCenter).padding(32.dp).background(EnigmaColors.Card, skinShape(10.dp)).padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
 
@@ -576,7 +626,12 @@ private fun SidePanel(
                 model,
                 guideFocus,
                 onLeft = { model.closeGuide(); onColumn(PanelColumn.CHANNELS) },
-            ) { model.guideItem?.let { model.play(it) }; onPlayed() }
+            ) { event ->
+                val item = model.guideItem
+                if (item != null && com.enigmacast.domain.xtream.Catchup.canPlay(item, event, System.currentTimeMillis() / 1000)) model.playCatchup(item, event)
+                else item?.let { model.play(it) }
+                onPlayed()
+            }
         }
     }
 }
@@ -627,14 +682,28 @@ private fun androidx.compose.foundation.layout.RowScope.IptvChannelRow(
     )
     ChannelLogo(model, item.icon, item.name)
     Spacer(Modifier.width(8.dp))
-    Text(
-        item.name,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Medium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(0.38f),
-    )
+        Row(Modifier.weight(0.38f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                item.name,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (item.hasArchive) {
+                Text(
+                    stringResource(R.string.catchup_badge),
+                    color = EnigmaColors.OnAccent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .background(EnigmaColors.Accent, skinShape(4.dp))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+            }
+        }
     Spacer(Modifier.width(8.dp))
     Column(modifier = Modifier.weight(0.62f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -688,16 +757,25 @@ private fun IptvEpgPanel(
     model: XtreamViewModel,
     guideFocus: FocusRequester,
     onLeft: () -> Unit,
-    onPlay: () -> Unit,
+    onPlay: (XtreamEpg) -> Unit,
 ) {
     val events = model.guideEvents
-    var focusedIndex by remember(model.guideItem?.id) { mutableIntStateOf(0) }
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000)
             nowSec = System.currentTimeMillis() / 1000
         }
+    }
+    val nowIndex = events.indexOfFirst { it.startSec <= nowSec && nowSec < it.endSec }
+        .let { if (it >= 0) it else events.indexOfFirst { event -> event.startSec >= nowSec }.coerceAtLeast(0) }
+    var focusedIndex by remember(model.guideItem?.id) { mutableIntStateOf(nowIndex) }
+    val listState = rememberLazyListState()
+    LaunchedEffect(model.guideItem?.id, events.size) {
+        if (events.isEmpty()) return@LaunchedEffect
+        focusedIndex = nowIndex
+        listState.scrollToItem(nowIndex)
+        guideFocus.requestWhenReady()
     }
     Column(
         Modifier
@@ -727,15 +805,16 @@ private fun IptvEpgPanel(
             }
             return@Column
         }
-        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             itemsIndexed(events, key = { i, e -> "${e.startSec}/$i" }) { index, event ->
                 val airing = event.startSec <= nowSec && nowSec < event.endSec
+                val catchup = model.guideItem?.let { com.enigmacast.domain.xtream.Catchup.canPlay(it, event, nowSec) } == true
                 CompactListRow(
-                    onClick = onPlay,
+                    onClick = { onPlay(event) },
                     selected = airing,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier
-                        .then(if (index == 0) Modifier.focusRequester(guideFocus) else Modifier)
+                        .then(if (index == nowIndex) Modifier.focusRequester(guideFocus) else Modifier)
                         .onFocusChanged { if (it.isFocused) focusedIndex = index }
                         .focusProperties {
                             if (index == 0) up = FocusRequester.Cancel
@@ -743,7 +822,12 @@ private fun IptvEpgPanel(
                         },
                 ) { rowFocused ->
                     val secondary = if (rowFocused) EnigmaColors.OnFocus.copy(alpha = 0.8f) else EnigmaColors.Muted
-                    Text(time(event.startSec), color = secondary, fontSize = 12.sp, modifier = Modifier.width(44.dp))
+                    Text(
+                        guideWhen(event.startSec, nowSec),
+                        color = if (catchup && !rowFocused) EnigmaColors.Accent else secondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.width(78.dp),
+                    )
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -900,6 +984,7 @@ private fun IptvOsd(
                         model.stop()
                         onSearch()
                     },
+                    onPip = model::openPipPicker,
                 ),
                 iptv = true,
                 modifier = Modifier

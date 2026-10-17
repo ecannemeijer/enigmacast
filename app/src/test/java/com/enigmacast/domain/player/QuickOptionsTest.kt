@@ -18,6 +18,11 @@ class QuickOptionsTest {
         assertFalse(QuickOption.GUIDE in follow)
         assertFalse(QuickOption.RECENT in follow)
         assertTrue(QuickOption.PICTURE in follow)
+        assertTrue(QuickOption.PIP in QuickOptions.tiles(ownTuner = true))
+        assertFalse(QuickOption.PIP in follow)
+        assertFalse(QuickOption.PIP in QuickOptions.tiles(ownTuner = true, file = true))
+        assertTrue(QuickOption.PIP in QuickOptions.iptvTiles(vod = false))
+        assertFalse(QuickOption.PIP in QuickOptions.iptvTiles(vod = true))
     }
 
     @Test

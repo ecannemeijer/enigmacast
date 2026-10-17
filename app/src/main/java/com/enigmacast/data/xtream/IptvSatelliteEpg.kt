@@ -35,14 +35,14 @@ class IptvSatelliteEpg @Inject constructor(
         (key to map as Map<String, String>).also { index = it }
     }
 
-    /** Now and the coming events per name, for the names that match a receiver channel. */
-    suspend fun byName(names: Collection<String>, hours: Int = 12): Map<String, List<XtreamEpg>> = withContext(Dispatchers.IO) {
+    /** Events per name, from [pastHours] ago through the coming [hours], for names that match a receiver channel. */
+    suspend fun byName(names: Collection<String>, hours: Int = 12, pastHours: Int = 0): Map<String, List<XtreamEpg>> = withContext(Dispatchers.IO) {
         val (key, map) = index() ?: return@withContext emptyMap()
         if (map.isEmpty()) return@withContext emptyMap()
         val wanted = names.associateWith { map[IptvNames.normalize(it)] }.filterValues { it != null }.mapValues { it.value!! }
         if (wanted.isEmpty()) return@withContext emptyMap()
         val now = System.currentTimeMillis() / 1000
-        val rows = dao.eventsFor(key, wanted.values.distinct(), now, now + hours * 3600L).groupBy { it.serviceKey }
+        val rows = dao.eventsFor(key, wanted.values.distinct(), now - pastHours * 3600L, now + hours * 3600L).groupBy { it.serviceKey }
         wanted.mapValues { (_, service) -> rows[service].orEmpty().map { XtreamEpg(it.title, it.beginSec, it.endSec, it.shortDescription.ifBlank { it.longDescription }) } }
             .filterValues { it.isNotEmpty() }
     }

@@ -97,6 +97,7 @@ data class QuickBarActions(
     val onQuality: (StreamLevel?) -> Unit,
     val onRecord: () -> Unit,
     val onSearch: () -> Unit,
+    val onPip: () -> Unit = {},
 )
 
 private val TileShape get() = skinShape(10.dp)
@@ -148,6 +149,7 @@ fun QuickOptionsBar(
                             QuickOption.GUIDE -> actions.onGuide()
                             QuickOption.RESTART -> actions.onRestart()
                             QuickOption.RECORD -> actions.onRecord()
+                            QuickOption.PIP -> actions.onPip()
                             else -> open = option
                         }
                     },
@@ -287,7 +289,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }
-        QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD -> emptyList()
+        QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP -> emptyList()
     }
 }
 
@@ -435,6 +437,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     QuickOption.QUALITY -> qualityLabel(ui.quality.level)
     QuickOption.SEARCH -> ""
     QuickOption.RESTART -> ""
+    QuickOption.PIP -> ""
     QuickOption.RECORD -> if (ui.recordingTitle.isNotBlank()) ui.recordingTitle else {
         val nowSec = nowMs / 1000
         val reference = ui.own.channel?.reference ?: ui.currentService?.reference.orEmpty()
@@ -459,6 +462,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.RESTART -> R.string.quick_restart
         QuickOption.SEARCH -> R.string.nav_search
         QuickOption.RECORD -> R.string.epg_record
+        QuickOption.PIP -> R.string.pip
     },
 )
 
@@ -475,6 +479,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.RESTART -> Icons.Filled.Refresh
     QuickOption.SEARCH -> Icons.Filled.Search
     QuickOption.RECORD -> EnigmaIcons.Record
+    QuickOption.PIP -> EnigmaIcons.Tv
 }
 
 @Composable

@@ -135,12 +135,20 @@ class IptvPlaylistStore @Inject constructor(
 
     fun markLoaded(at: Long) = secrets.write(LOADED, at.toString())
 
+    /** Playlists saved before catch-up was stored still have every channel at 0 days. */
+    fun needsCatchupIndex(): Boolean = !revisionPrefs.getBoolean(CATCHUP_INDEX, false)
+
+    fun markCatchupIndex() {
+        revisionPrefs.edit().putBoolean(CATCHUP_INDEX, true).apply()
+    }
+
     private companion object {
         const val REVISION_PREFS = "iptv_playlist_revision"
         const val REV_MS = "updated_ms"
         const val REV_CHANGE = "change_id"
         const val REV_DIRTY = "dirty"
         const val DECLINED = "declined_change_id"
+        const val CATCHUP_INDEX = "catchup_v1"
         const val LOADED = "iptv.playlist.loaded_at"
         const val M3U = "iptv.playlist.m3u"
         const val SERVER = "iptv.playlist.server"
@@ -180,7 +188,8 @@ class IptvPlaylistSync @Inject constructor(
     suspend fun loadTail(kind: IptvPlaylistKind, allow: Boolean): IptvLoadResult? {
         if (!allow) return null
         val armed = loadAfterCache
-        if (!armed && System.currentTimeMillis() - store.loadedAt < 24 * 60 * 60_000L) return null
+        val indexCatchup = store.needsCatchupIndex()
+        if (!armed && !indexCatchup && System.currentTimeMillis() - store.loadedAt < 24 * 60 * 60_000L) return null
         if (!store.login.value.configured(kind)) return null
         loadAfterCache = false
         val result = load(kind)
@@ -211,6 +220,7 @@ class IptvPlaylistSync @Inject constructor(
             }
             EnigmaLog.network("IPTV playlist ($kind) loaded: ${counts.first} categories, ${counts.second} entries in ${System.currentTimeMillis() - started} ms")
             store.markLoaded(System.currentTimeMillis())
+            store.markCatchupIndex()
             _lastLoad.value++
             IptvLoadResult.Done(counts.first, counts.second)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -257,7 +267,7 @@ class IptvPlaylistSync @Inject constructor(
                     val key = e.section to group
                     val catId = categories.getOrPut(key) { "g${categories.size}" }
                     total++
-                    batch += IptvItemRow(STAGING, e.section.name, catId, "m$total", e.name, e.logo, e.url.substringAfterLast('.', "").take(5), e.number, e.url, total)
+                    batch += IptvItemRow(STAGING, e.section.name, catId, "m$total", e.name, e.logo, e.url.substringAfterLast('.', "").take(5), e.number, e.url, total, e.archiveDays, e.catchupSource)
                     if (batch.size >= CHUNK) {
                         outer.ensureActive()
                         flushBlocking(batch)
@@ -302,7 +312,7 @@ class IptvPlaylistSync @Inject constructor(
                 for (o in objects(input)) {
                     val item: XtreamItem = XtreamJson.item(o, section) ?: continue
                     total++
-                    batch += IptvItemRow(STAGING, section.name, item.categoryId, item.id, item.name, item.icon, item.extension, item.number, "", total)
+                    batch += IptvItemRow(STAGING, section.name, item.categoryId, item.id, item.name, item.icon, item.extension, item.number, "", total, item.archiveDays, item.catchupSource)
                     if (batch.size >= CHUNK) {
                         flush(batch)
                         onProgress(IptvLoadProgress(step, total))
@@ -323,7 +333,7 @@ class IptvPlaylistSync @Inject constructor(
     suspend fun search(query: String, limit: Int = com.enigmacast.domain.xtream.IptvSearch.LIMIT): List<XtreamItem> = withContext(Dispatchers.IO) {
         val pattern = com.enigmacast.domain.xtream.IptvSearch.likePattern(query)
         XtreamSection.entries.flatMap { section ->
-            dao.search(SOURCE, section.name, pattern, limit).map { XtreamItem(it.id, it.name, section, it.categoryId, it.icon, it.extension, it.number, it.url) }
+            dao.search(SOURCE, section.name, pattern, limit).map { it.toItem(section) }
         }
     }
 
@@ -339,7 +349,7 @@ class IptvPlaylistSync @Inject constructor(
         var offset = 0
         while (true) {
             val page = dao.itemsPage(SOURCE, section.name, categoryId, PAGE, offset)
-            page.mapTo(out) { XtreamItem(it.id, it.name, section, it.categoryId, it.icon, it.extension, it.number, it.url) }
+            page.mapTo(out) { it.toItem(section) }
             if (page.size < PAGE) break
             offset += PAGE
         }
@@ -354,6 +364,9 @@ class IptvPlaylistSync @Inject constructor(
     }
 
     suspend fun count(): Int = dao.itemCount(SOURCE)
+
+    private fun IptvItemRow.toItem(section: XtreamSection) =
+        XtreamItem(id, name, section, categoryId, icon, extension, number, url, archiveDays, catchupSource)
 
     companion object {
         const val SOURCE = "playlist"

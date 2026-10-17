@@ -36,6 +36,61 @@ class TunerBoardTest {
         assertEquals(StopOption.NOT_POSSIBLE_OTHER, other[1].stopOption())
     }
 
+    @Test fun aSecondTransponderWithoutATunerNumberLeavesTheFirstCard() {
+        // OpenWebif on 192.168.1.209 reports tuner_number only for the first stream client
+        // and leaves Tuner B's label empty, while the second frequency is really playing.
+        val rtl5 = "1:0:19:1B6F:C88:3:EB0000:0:0:0:"
+        val npo1 = "1:0:19:5225:C99:3:EB0000:0:0:0:"
+        val snap = TunerSnapshot(
+            tuners = listOf(
+                TunerSlot(0, "Tuner A", "DVB-S2", stream = "23.5°E / RTL5 HD"),
+                TunerSlot(1, "Tuner B", "DVB-S2"),
+            ),
+            streams = listOf(
+                StreamClient(rtl5, "RTL5 HD", "::ffff:192.168.1.100", tunerNumber = 0),
+                StreamClient(npo1, "NPO1 HD", "::ffff:192.168.1.100"),
+            ),
+            inStandby = true,
+        )
+        val cards = TunerBoard.cards(snap, setOf("192.168.1.100"))
+        assertEquals("RTL5 HD", cards[0].primary?.channelName)
+        assertEquals("NPO1 HD", cards[1].primary?.channelName)
+        assertEquals(false, cards[1].idle)
+    }
+
+    @Test fun aShorterNameDoesNotStickToTheTunersLabel() {
+        val npo1hd = "1:0:19:5225:C99:3:EB0000:0:0:0:"
+        val npo2 = "1:0:19:17C0:C82:3:EB0000:0:0:0:"
+        val snap = TunerSnapshot(
+            tuners = listOf(
+                TunerSlot(0, "Tuner A", "DVB-S2", stream = "23.5°E / NPO1 HD"),
+                TunerSlot(1, "Tuner B", "DVB-S2"),
+            ),
+            streams = listOf(
+                StreamClient(npo1hd, "NPO1 HD", "::ffff:192.168.1.100", tunerNumber = 0),
+                StreamClient(npo2, "NPO1", "::ffff:192.168.1.100"),
+            ),
+        )
+        val cards = TunerBoard.cards(snap, emptySet())
+        assertEquals("NPO1 HD", cards[0].primary?.channelName)
+        assertEquals("NPO1", cards[1].primary?.channelName)
+    }
+
+    @Test fun streamsWithoutATunerNumberTakeOneCardPerTransponder() {
+        val sbs = "1:0:19:1B1D:3F6:1:C00000:0:0:0:"
+        val npo = "1:0:19:4651:3FC:1:C00000:0:0:0:"
+        val snap = TunerSnapshot(
+            tuners = listOf(TunerSlot(0, "A", "DVB-S2"), TunerSlot(1, "B", "DVB-S2")),
+            streams = listOf(
+                StreamClient(sbs, "SBS6 HD", "::ffff:192.168.1.102"),
+                StreamClient(npo, "NPO 1", "::ffff:192.168.1.100"),
+            ),
+        )
+        val cards = TunerBoard.cards(snap, emptySet())
+        assertEquals("SBS6 HD", cards[0].primary?.channelName)
+        assertEquals("NPO 1", cards[1].primary?.channelName)
+    }
+
     @Test fun standbyHidesLivePicture() {
         val cards = TunerBoard.cards(snapshot.copy(inStandby = true), emptySet())
         assertTrue(cards[0].idle)

@@ -52,9 +52,12 @@ object TunerBoard {
                     ?: running.firstOrNull { it.reference in snapshot.recordingReferences }?.takeIf { running.size == 1 }
                 uses += TunerUse(TunerUseKind.RECORDING, timer?.name ?: name, timer?.reference.orEmpty())
             }
+            val named = streamChannelName(slot.stream)
             val clients = snapshot.streams.filter { it.tunerNumber == slot.index } +
                 snapshot.streams.filter { c ->
-                    c.tunerNumber == null && slot.stream.isNotBlank() && c.name.isNotBlank() && slot.stream.contains(c.name, ignoreCase = true)
+                    // The label is "23.5°E / NPO1 HD". A shorter name such as "NPO1" must not
+                    // stick to that card: it can be another transponder, which belongs on a free tuner.
+                    c.tunerNumber == null && named.isNotBlank() && c.name.equals(named, ignoreCase = true)
                 }
             for (c in clients.distinct()) {
                 placed += c
@@ -66,21 +69,43 @@ object TunerBoard {
             }
             TunerCard(slot.index, letter(slot.index), slot.name, slot.type, uses)
         }
-        // Streams OpenWebif did not tie to a tuner go on the first card that shows a stream, else the first.
-        val loose = snapshot.streams.filter { it !in placed }
+        // A stream without tuner_number is not piled onto the first card. Each transponder
+        // takes a card that does not already hold a different one, so a second satellite
+        // shows on the next tuner instead of looking like it shares the first.
+        return placeLoose(cards, snapshot.streams.filter { it !in placed }, own)
+    }
+
+    private fun placeLoose(cards: List<TunerCard>, loose: List<StreamClient>, own: Set<String>): List<TunerCard> {
         if (loose.isEmpty() || cards.isEmpty()) return cards
-        val target = cards.indexOfFirst { c -> c.uses.any { it.kind == TunerUseKind.OTHER_STREAM && it.reference.isBlank() } }.takeIf { it >= 0 } ?: 0
-        return cards.mapIndexed { i, card ->
-            if (i != target) return@mapIndexed card
-            val kept = card.uses.filterNot { it.kind == TunerUseKind.OTHER_STREAM && it.reference.isBlank() }
-            card.copy(uses = kept + loose.map { c ->
-                val mine = ServiceRef.normalizeAddress(c.address) in own
-                TunerUse(if (mine) TunerUseKind.OWN_STREAM else TunerUseKind.OTHER_STREAM, c.name, c.reference, c.address)
-            })
+        val uses = cards.map { card ->
+            card.uses.filterNot { it.kind == TunerUseKind.OTHER_STREAM && it.reference.isBlank() }.toMutableList()
         }
+        val held = uses.map { list -> list.mapNotNull { ServiceRef.transponderKey(it.reference) }.toMutableSet() }
+        loose.groupBy { ServiceRef.transponderKey(it.reference) ?: it.reference }.values.forEach { group ->
+            val key = ServiceRef.transponderKey(group.first().reference)
+            val slot = when {
+                key != null -> held.indexOfFirst { key in it }.takeIf { it >= 0 }
+                    ?: held.indexOfFirst { it.isEmpty() }.takeIf { it >= 0 }
+                    ?: 0
+                else -> held.indexOfFirst { it.isEmpty() }.takeIf { it >= 0 } ?: 0
+            }
+            if (key != null) held[slot] += key
+            group.forEach { client ->
+                val mine = ServiceRef.normalizeAddress(client.address) in own
+                uses[slot] += TunerUse(
+                    if (mine) TunerUseKind.OWN_STREAM else TunerUseKind.OTHER_STREAM,
+                    client.name, client.reference, client.address,
+                )
+            }
+        }
+        return cards.mapIndexed { index, card -> card.copy(uses = uses[index]) }
     }
 
     fun letter(index: Int): String = if (index in 0..25) ('A' + index).toString() else (index + 1).toString()
+
+    /** Channel name in an OpenWebif tuner text such as "23.5°E / RTL5 HD" or "RTL5 HD (ip)". */
+    internal fun streamChannelName(stream: String): String =
+        stream.substringAfterLast(" / ").substringBefore(" (").trim()
 }
 
 /** What "Stop stream" on a tuner card can do. */

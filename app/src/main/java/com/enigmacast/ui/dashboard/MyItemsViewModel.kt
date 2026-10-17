@@ -30,6 +30,7 @@ class MyItemsViewModel @Inject constructor(
     private val artwork: com.enigmacast.live.RecordingArtwork,
     receiverNames: com.enigmacast.live.ReceiverNames,
     private val iptv: com.enigmacast.data.xtream.IptvLibrary,
+    private val iptvArt: com.enigmacast.data.xtream.IptvArtwork,
     private val gate: com.enigmacast.live.PremiumGate,
     private val playlistStore: com.enigmacast.data.xtream.IptvPlaylistStore,
     private val xtream: com.enigmacast.data.xtream.XtreamRepository,
@@ -65,6 +66,15 @@ class MyItemsViewModel @Inject constructor(
         combine(iptv.favorites, iptv.resumeMap, activeSources) { rows, resumes, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.favorites(rows, resumes, sources) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     fun iptvAllowed(): Boolean = gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM)
+
+    /** TMDB matches for the IPTV cards, the same artwork the film and series lists use. */
+    val iptvPosters: StateFlow<Map<String, com.enigmacast.domain.films.TmdbMovie?>> = iptvArt.movies
+
+    fun iptvPoster(card: com.enigmacast.domain.xtream.IptvLibraryCard, art: Map<String, com.enigmacast.domain.films.TmdbMovie?>): String? {
+        val movie = art[com.enigmacast.data.xtream.IptvVod.key(card.open)]
+        val tmdb = movie?.posterPath?.let { com.enigmacast.data.tmdb.TmdbJson.image(it, "w342") }
+        return tmdb ?: card.poster?.takeIf { it.isNotBlank() } ?: card.open.icon.ifBlank { null }
+    }
 
     /** OK on an IPTV card: the IPTV page plays the film (resume dialog) or shows the series. */
     /** The card to focus after coming back from the IPTV player (see [IptvLibrary.returnTo]). */
@@ -138,6 +148,10 @@ class MyItemsViewModel @Inject constructor(
     init {
         viewModelScope.launch { settingsSource.settings.collect { loadSources() } }
         viewModelScope.launch { profiles.state.collect { loadSources() } }
+        viewModelScope.launch {
+            combine(iptvFavorites, iptvContinue) { favorites, watching -> favorites + watching }
+                .collect { cards -> iptvArt.resolve(cards.map { it.open }) }
+        }
     }
 
     /** Saved positions by recording id, for the progress bars. */

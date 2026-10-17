@@ -25,6 +25,8 @@ data class StreamTarget(
     val internet: Boolean = false,
     /** Same transcoded stream on the normal stream port, when that port differs from the encoder port. */
     val fallbackUrl: String? = null,
+    /** Original stream, when [url] is transcoded and the encoder cannot be opened. */
+    val directUrl: String? = null,
 )
 
 /**
@@ -62,6 +64,28 @@ class StreamTargets @Inject constructor(
                 "auth=${if (authorization == null) "none" else "basic"} url=${EnigmaLog.sanitizeUrl(url)}",
         )
         return StreamTarget(url, authorization, route, choice.level, internet = false)
+    }
+
+    /**
+     * A second satellite picture while one is already playing.
+     * The original stream opens its own client. A different transponder is given the next
+     * free tuner; the same transponder stays on the tuner that already has it.
+     * The encoder is not used: on these boxes it transcodes the tuner that is already
+     * tuned, so the inset never reaches the free one.
+     */
+    suspend fun inset(config: ReceiverConfig, reference: String): StreamTarget {
+        val route = router.route(config)
+        val internetUrl = ServiceStreams.internetUrl(reference)
+        if (internetUrl != null) {
+            return StreamTarget(internetUrl, authorization = null, route = route, level = StreamLevel.DIRECT, internet = true)
+        }
+        val effective = ReceiverRouting.effective(config, route)
+        val url = url(endpoints, effective, reference, StreamLevel.DIRECT)
+        val authorization = endpoints.streamAuthorization(effective)
+        EnigmaLog.player(
+            "pip inset route=${route.name.lowercase()} level=direct url=${EnigmaLog.sanitizeUrl(url)}",
+        )
+        return StreamTarget(url, authorization, route, StreamLevel.DIRECT, internet = false)
     }
 
     /**

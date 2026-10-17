@@ -64,6 +64,18 @@ fun SettingsScreen(
                 ToggleRow(stringResource(R.string.hdmi_audio_passthrough), settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
                 ToggleRow(stringResource(R.string.dvb_subtitles), settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
                 ToggleRow(stringResource(R.string.auto_reconnect), settings.playback.autoReconnect, viewModel::setAutoReconnect)
+                ChoiceRow(
+                    title = stringResource(R.string.tv_fallback),
+                    description = stringResource(R.string.tv_fallback_desc),
+                    options = listOf(
+                        stringResource(R.string.off),
+                        stringResource(R.string.tv_fallback_sat_iptv),
+                        stringResource(R.string.tv_fallback_iptv_sat),
+                        stringResource(R.string.tv_fallback_both),
+                    ),
+                    selectedIndex = com.enigmacast.domain.model.TvFallback.entries.indexOf(settings.tvFallback).coerceAtLeast(0),
+                    onSelect = { viewModel.setTvFallback(com.enigmacast.domain.model.TvFallback.entries[it]) },
+                )
             }
             SettingsCard(stringResource(R.string.osd)) {
                 StepperRow(

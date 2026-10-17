@@ -1355,4 +1355,19 @@ Profiel: %2$s</string>
     <string name="search_iptv_live">IPTV Live</string>
     <string name="search_iptv_films">IPTV Films</string>
     <string name="search_iptv_series">IPTV Series</string>
+    <string name="pip">Beeld in beeld</string>
+    <string name="pip_step_source">Kies de bron</string>
+    <string name="pip_step_category">Kies een categorie</string>
+    <string name="pip_step_channel">Kies een zender</string>
+    <string name="pip_sat">Satelliet</string>
+    <string name="pip_iptv">IPTV</string>
+    <string name="pip_none">Geen zenders</string>
+    <string name="catchup_badge">Catch-up</string>
+    <string name="tv_fallback">Als een zender wegvalt</string>
+    <string name="tv_fallback_desc">Na de gewone herpogingen dezelfde zender van de andere bron. De vervanger wordt niet meteen teruggeschakeld.</string>
+    <string name="tv_fallback_sat_iptv">Satelliet naar IPTV</string>
+    <string name="tv_fallback_iptv_sat">IPTV naar satelliet</string>
+    <string name="tv_fallback_both">Beide</string>
+    <string name="notice_fallback_iptv">Overgeschakeld naar IPTV · %1$s</string>
+    <string name="notice_fallback_sat">Overgeschakeld naar satelliet · %1$s</string>
 </resources>

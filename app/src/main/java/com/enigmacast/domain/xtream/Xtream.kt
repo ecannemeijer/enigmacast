@@ -44,7 +44,13 @@ data class XtreamItem(
     val number: Int = 0,
     /** Direct stream address (M3U playlists); empty for Xtream items, whose address is built. */
     val url: String = "",
-)
+    /** Days of server archive (Xtream `tv_archive_duration`, or M3U `catchup-days`). 0 means live only. */
+    val archiveDays: Int = 0,
+    /** M3U `catchup-source` template; empty when the archive uses the Xtream timeshift path. */
+    val catchupSource: String = "",
+) {
+    val hasArchive: Boolean get() = archiveDays > 0 || catchupSource.isNotBlank()
+}
 
 data class XtreamEpisode(
     val id: String,
@@ -193,6 +199,18 @@ internal val lenient = Json { ignoreUnknownKeys = true; isLenient = true }
 
 private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.takeIf { it.isNotBlank() }
 
+/** `tv_archive` 1 (or true) plus `tv_archive_duration` in days. A duration alone also counts. */
+private fun archiveDays(o: JsonObject): Int {
+    val flag = o.str("tv_archive")?.lowercase()
+    val days = o.str("tv_archive_duration")?.toIntOrNull() ?: 0
+    val on = flag == "1" || flag == "true"
+    return when {
+        on -> days.coerceAtLeast(1)
+        days > 0 && flag != "0" && flag != "false" -> days
+        else -> 0
+    }
+}
+
 /** Xtream answers mix numbers and strings freely; everything is read as text. */
 object XtreamJson {
     fun categories(body: String): List<XtreamCategory> = array(body).mapNotNull { o ->
@@ -214,6 +232,7 @@ object XtreamJson {
             icon = o.str("stream_icon") ?: o.str("cover") ?: "",
             extension = o.str("container_extension").orEmpty(),
             number = o.str("num")?.toIntOrNull() ?: 0,
+            archiveDays = archiveDays(o),
         )
     }
 

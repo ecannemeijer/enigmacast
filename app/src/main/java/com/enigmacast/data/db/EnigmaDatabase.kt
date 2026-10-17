@@ -14,7 +14,7 @@ import javax.inject.Singleton
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
         SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvCategoryRow::class, IptvItemRow::class],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
@@ -52,6 +52,14 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_iptv_item_source_section_categoryId_sort` ON `iptv_item` (`source`, `section`, `categoryId`, `sort`)")
             }
         }
+
+        /** 8 → 9: catch-up days and the M3U catchup-source on playlist channels. */
+        val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE iptv_item ADD COLUMN archiveDays INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE iptv_item ADD COLUMN catchupSource TEXT NOT NULL DEFAULT ''")
+            }
+        }
     }
 }
 
@@ -63,7 +71,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9)
             // A cache only: an older build reading a newer database just starts empty instead of crashing.
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .fallbackToDestructiveMigration(dropAllTables = true)

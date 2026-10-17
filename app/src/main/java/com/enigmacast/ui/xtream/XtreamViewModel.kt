@@ -84,6 +84,8 @@ class XtreamViewModel @Inject constructor(
     private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val sleepTimer: com.enigmacast.playback.AppSleepTimer,
     private val subtitles: SubSourceClient,
+    val pip: com.enigmacast.playback.PipController,
+    private val fallbackFinder: com.enigmacast.live.TvFallbackFinder,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
@@ -162,6 +164,15 @@ class XtreamViewModel @Inject constructor(
     var playing by mutableStateOf<XtreamPlaying?>(null)
         private set
     var playerError by mutableStateOf<String?>(null)
+    var catchup by mutableStateOf(false)
+        private set
+    var showPipPicker by mutableStateOf(false)
+    var notice by mutableStateOf("")
+        private set
+    private var catchupDurationMs = 0L
+    private var fallbackLatched = false
+    private var catchupIndexStarted = false
+    private var noticeJob: Job? = null
         private set
     var buffering by mutableStateOf(false)
         private set
@@ -192,6 +203,11 @@ class XtreamViewModel @Inject constructor(
     var recentChannels by mutableStateOf<List<com.enigmacast.domain.model.LastChannel>>(emptyList())
         private set
     private val audioSync = com.enigmacast.playback.AudioSyncOffsets()
+    private val httpFactory = DefaultHttpDataSource.Factory()
+        .setUserAgent(XtreamRepository.USER_AGENT)
+        .setAllowCrossProtocolRedirects(true)
+        .setConnectTimeoutMs(10_000)
+        .setReadTimeoutMs(20_000)
     /** Playback setting at start: unknown-language text tracks are selected when this is on. */
     private var playbackSubtitles = true
     private var mediaUrl = ""
@@ -294,7 +310,7 @@ class XtreamViewModel @Inject constructor(
         guideJob = viewModelScope.launch {
             guideLoading = true
             try {
-                val list = loadGuide(item, hours = 24)
+                val list = loadGuide(item)
                 if (list.isNotEmpty()) {
                     guideEvents = list
                     epg = epg + (item.id to list)
@@ -305,14 +321,24 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
-    /** Xtream listings, or the satellite guide when those have no programme on now. */
-    private suspend fun loadGuide(item: XtreamItem, hours: Int = 12): List<XtreamEpg> {
+    /**
+     * Xtream's full table when the account has one (that includes the past), otherwise the
+     * short list, and the satellite guide when those have no programme on now. The column
+     * keeps the archive window so Up reaches programmes catch-up can play.
+     */
+    private suspend fun loadGuide(item: XtreamItem): List<XtreamEpg> {
         val now = System.currentTimeMillis() / 1000
+        val pastDays = com.enigmacast.domain.xtream.Catchup.windowDays(item).coerceAtLeast(1)
         val xtream = account?.takeIf { it !== M3U_ACCOUNT }
-        val listings = if (xtream != null) repository.guide(xtream, item.id) else emptyList()
-        if (listings.airingAt(now) != null) return listings
-        val sat = runCatching { satelliteEpg.byName(listOf(item.name), hours = hours)[item.name] }.getOrNull().orEmpty()
-        return chooseGuide(listings, sat, now)
+        val full = if (xtream != null) repository.guideFull(xtream, item.id) else emptyList()
+        val listings = full.ifEmpty { if (xtream != null) repository.guide(xtream, item.id) else emptyList() }
+        val chosen = if (listings.airingAt(now) != null) listings else {
+            val sat = runCatching {
+                satelliteEpg.byName(listOf(item.name), hours = 36, pastHours = pastDays * 24)[item.name]
+            }.getOrNull().orEmpty()
+            chooseGuide(listings, sat, now)
+        }
+        return com.enigmacast.domain.xtream.Catchup.listed(chosen, now, pastDays)
     }
 
     fun closeGuide() {
@@ -514,6 +540,33 @@ class XtreamViewModel @Inject constructor(
 
     /** Films and episodes: position for the seek bar twice a second, the resume place every 5 s. */
     private var tickJob: Job? = null
+    private fun showNotice(text: String) {
+        notice = text
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch {
+            delay(5_000)
+            notice = ""
+        }
+    }
+
+    private fun trySatelliteFallback() {
+        if (fallbackLatched || catchup) return
+        val name = playing?.item?.name ?: return
+        if (playing?.item?.section != XtreamSection.LIVE && !mediaLive) return
+        viewModelScope.launch {
+            val mode = settingsRepository.current().tvFallback
+            if (mode != com.enigmacast.domain.model.TvFallback.IPTV_TO_SAT && mode != com.enigmacast.domain.model.TvFallback.BOTH) return@launch
+            if (fallbackLatched) return@launch
+            val hit = fallbackFinder.satellite(name) ?: return@launch
+            fallbackLatched = true
+            val headers = hit.authorization?.let { mapOf("Authorization" to it) } ?: emptyMap()
+            httpFactory.setDefaultRequestProperties(headers)
+            val login = account ?: M3U_ACCOUNT
+            showNotice(context.getString(com.enigmacast.R.string.notice_fallback_sat, hit.name))
+            start(hit.url, XtreamPlaying(hit.name, null), live = true, account = login)
+        }
+    }
+
     private fun startTicker() {
         tickJob?.cancel()
         tickJob = viewModelScope.launch {
@@ -521,7 +574,8 @@ class XtreamViewModel @Inject constructor(
             while (true) {
                 delay(500)
                 val p = player ?: continue
-                playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = p.duration.takeIf { it > 0 } ?: 0L)
+                val duration = p.duration.takeIf { it > 0 } ?: catchupDurationMs
+                playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = duration)
                 sinceSave += 500
                 if (sinceSave >= com.enigmacast.domain.resume.ResumePolicy.SAVE_EVERY_MS && p.isPlaying) { sinceSave = 0; saveResume() }
             }
@@ -604,6 +658,13 @@ class XtreamViewModel @Inject constructor(
             }
             val hasRows = playlistAccount != null && playlistSync.count() > 0
             _detection.value = XtreamDetection(false, listOfNotNull(playlistAccount?.takeIf { hasRows }))
+            if (hasRows && !catchupIndexStarted && playlistStore.needsCatchupIndex()) {
+                catchupIndexStarted = true
+                viewModelScope.launch {
+                    val result = playlistSync.load(source.kind)
+                    if (result !is com.enigmacast.data.xtream.IptvLoadResult.Done) catchupIndexStarted = false
+                }
+            }
             // A new load or another playlist: the lists start over from Room.
             if (wasPlaylist || account != null) { account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList(); series = null }
             open()
@@ -830,6 +891,10 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun play(item: XtreamItem) {
+        catchup = false
+        catchupDurationMs = 0L
+        fallbackLatched = false
+        httpFactory.setDefaultRequestProperties(emptyMap())
         val account = account ?: return
         if (item.url.isNotBlank() && item.section != XtreamSection.SERIES) {
             start(item.url, XtreamPlaying(item.name, item), live = item.section == XtreamSection.LIVE, account = account)
@@ -840,6 +905,20 @@ class XtreamViewModel @Inject constructor(
             XtreamSection.LIVE -> start(XtreamUrls.live(account, item.id), XtreamPlaying(item.name, item), live = true, account = account).also { focusLive(item) }
             XtreamSection.MOVIES -> start(XtreamUrls.movie(account, item.id, item.extension), XtreamPlaying(item.name, item), live = false, account = account)
         }
+    }
+
+    fun playCatchup(item: XtreamItem, event: XtreamEpg) {
+        val loginAccount = account ?: return
+        val login = loginAccount.takeIf { it !== M3U_ACCOUNT }
+        val url = com.enigmacast.domain.xtream.Catchup.url(login, item, event) ?: return
+        catchup = true
+        catchupDurationMs = (event.endSec - event.startSec).coerceAtLeast(1) * 1000
+        fallbackLatched = false
+        start(url, XtreamPlaying(event.title, item), live = false, account = loginAccount, archive = true)
+    }
+
+    fun openPipPicker() {
+        if (pip.playing()) pip.stop() else showPipPicker = true
     }
 
     fun playEpisode(episode: XtreamEpisode, show: XtreamItem? = series, fromStart: Boolean = false) {
@@ -858,6 +937,12 @@ class XtreamViewModel @Inject constructor(
 
     /** Channel up/down while a live channel plays: the next one in the open category. */
     fun zap(step: Int) {
+        if (pip.playing() && pip.swapped.value) {
+            pip.zap(step)
+            return
+        }
+        fallbackLatched = false
+        catchup = false
         val current = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return
         val list = items.filter { it.section == XtreamSection.LIVE }
         val index = list.indexOfFirst { it.id == current.id }.takeIf { it >= 0 } ?: return
@@ -866,11 +951,7 @@ class XtreamViewModel @Inject constructor(
 
     @OptIn(UnstableApi::class)
     fun player(): ExoPlayer = player ?: run {
-        val http = DefaultHttpDataSource.Factory()
-            .setUserAgent(XtreamRepository.USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(10_000)
-            .setReadTimeoutMs(20_000)
+        val http = httpFactory
         val selector = DefaultTrackSelector(context)
         selector.parameters = selector.buildUponParameters()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackSubtitles)
@@ -925,13 +1006,14 @@ class XtreamViewModel @Inject constructor(
                         // The message never has the URL: only the error code name.
                         EnigmaLog.networkError("Xtream playback: ${error.errorCodeName}")
                         playerError = error.errorCodeName
+                        trySatelliteFallback()
                     }
                 })
                 player = p
             }
     }
 
-    private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null) {
+    private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null, archive: Boolean = false) {
         saveResume()
         resumeKey = resume
         // Playlist addresses can carry a login anywhere: only the section is logged for those.
@@ -953,10 +1035,10 @@ class XtreamViewModel @Inject constructor(
             prepare()
             playWhenReady = true
         }
-        if (!live) loadExternalSubtitles(what, account)
-        if (live) { tickJob?.cancel(); tickJob = null } else startTicker()
+        if (!live && !archive) loadExternalSubtitles(what, account)
+        if (live && !archive) { tickJob?.cancel(); tickJob = null } else startTicker()
         val item = what.item
-        if (live && item != null) {
+        if (live && !archive && item != null) {
             val recent = com.enigmacast.domain.model.LastChannel(item.id, item.name, item.categoryId)
             recentChannels = listOf(recent) + recentChannels.filter { it.reference != item.id }.take(11)
             viewModelScope.launch {

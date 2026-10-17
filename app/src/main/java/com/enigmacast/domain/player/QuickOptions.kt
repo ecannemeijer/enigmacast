@@ -17,6 +17,7 @@ enum class QuickOption {
     SLEEP,
     STREAM_INFO,
     RESTART,
+    PIP,
 }
 
 object QuickOptions {
@@ -35,7 +36,7 @@ object QuickOptions {
             QuickOption.SLEEP,
         )
         ownTuner -> QuickOption.entries
-        else -> QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT)
+        else -> QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT, QuickOption.PIP)
     }
 
     /**
@@ -52,6 +53,7 @@ object QuickOptions {
         if (!vod) {
             add(QuickOption.GUIDE)
             add(QuickOption.RECENT)
+            add(QuickOption.PIP)
         }
         add(QuickOption.SLEEP)
         add(QuickOption.STREAM_INFO)

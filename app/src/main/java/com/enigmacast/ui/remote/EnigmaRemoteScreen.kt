@@ -68,6 +68,9 @@ fun EnigmaRemoteScreen(
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
     searchModel: SearchViewModel = hiltViewModel(),
 ) {
+    DisposableEffect(Unit) {
+        onDispose { viewModel.pip.stop() }
+    }
     DisposableEffect(onLeaveToDashboard, onLeaveToMyItems) {
         viewModel.onLeaveToDashboard = onLeaveToDashboard
         viewModel.onLeaveToMyItems = onLeaveToMyItems
@@ -105,6 +108,7 @@ fun EnigmaRemoteScreen(
             onQuality = viewModel::chooseQuality,
             onRecord = viewModel::recordWatching,
             onSearch = viewModel::openSearch,
+            onPip = viewModel::openPipPicker,
         )
     }
     val guideActions = remember(viewModel) {
@@ -116,9 +120,15 @@ fun EnigmaRemoteScreen(
             onDismissProgramme = viewModel::dismissProgramme,
         )
     }
+    val pipOn by viewModel.pip.active.collectAsStateWithLifecycle()
+    val pipSwap by viewModel.pip.swapped.collectAsStateWithLifecycle()
+    val pipList by viewModel.pip.listOpen.collectAsStateWithLifecycle()
+    val pipNames by viewModel.pip.names.collectAsStateWithLifecycle()
+    val big = if (pipOn && pipSwap) viewModel.pip.player() else player
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        PipAudio(player, viewModel.pip)
         EnigmaVideoPlayer(
-            player = player,
+            player = big,
             frame = if (ui.playerState.filePlayback) null else ui.osdFrame,
             debugBorders = ui.osdDebugBorders,
             cues = ui.cues,
@@ -126,6 +136,23 @@ fun EnigmaRemoteScreen(
             osdAlpha = (100 - ui.panelTransparency.coerceIn(0, 100)) / 100f,
             modifier = Modifier.fillMaxSize(),
         )
+        if (pipOn) {
+            PipInset(
+                player = if (pipSwap) player else viewModel.pip.player(),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(28.dp).size(width = 320.dp, height = 180.dp),
+            )
+        }
+        if (pipList) {
+            PipChannelList(pipNames, viewModel.pip::choose, viewModel.pip::closeList)
+        }
+        if (viewModel.showPipPicker) {
+            PipPicker(
+                loadCategories = viewModel.pip::categories,
+                loadChannels = viewModel.pip::channels,
+                onStart = { list, index -> viewModel.pip.startResolved(list, index) },
+                onDismiss = { viewModel.showPipPicker = false },
+            )
+        }
         val radioChannel = ui.own.channel
         if (ui.ownTuner && !ui.playerState.filePlayback && radioChannel != null &&
             BouquetChannels.isRadioBouquet(ui.own.bouquetReference)

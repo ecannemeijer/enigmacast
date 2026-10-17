@@ -1363,4 +1363,19 @@ Profile: %2$s</string>
     <string name="search_iptv_live">IPTV Live</string>
     <string name="search_iptv_films">IPTV Films</string>
     <string name="search_iptv_series">IPTV Series</string>
+    <string name="pip">Picture in picture</string>
+    <string name="pip_step_source">Choose the source</string>
+    <string name="pip_step_category">Choose a category</string>
+    <string name="pip_step_channel">Choose a channel</string>
+    <string name="pip_sat">Satellite</string>
+    <string name="pip_iptv">IPTV</string>
+    <string name="pip_none">No channels</string>
+    <string name="catchup_badge">Catch-up</string>
+    <string name="tv_fallback">If a channel drops out</string>
+    <string name="tv_fallback_desc">After the usual retries, play the same channel from the other source. The replacement is not switched straight back.</string>
+    <string name="tv_fallback_sat_iptv">Satellite to IPTV</string>
+    <string name="tv_fallback_iptv_sat">IPTV to satellite</string>
+    <string name="tv_fallback_both">Both</string>
+    <string name="notice_fallback_iptv">Switched to IPTV · %1$s</string>
+    <string name="notice_fallback_sat">Switched to satellite · %1$s</string>
 </resources>

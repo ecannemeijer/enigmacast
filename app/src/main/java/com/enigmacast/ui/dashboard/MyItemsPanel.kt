@@ -115,6 +115,7 @@ fun MyItemsPanel(
         // IPTV: Continue watching and favorites, above the recordings (Premium IPTV only).
         val iptvContinue by viewModel.iptvContinue.collectAsStateWithLifecycle()
         val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
+        val iptvArt by viewModel.iptvPosters.collectAsStateWithLifecycle()
         val iptvBlocks = if (viewModel.iptvAllowed()) {
             listOf(R.string.library_continue to iptvContinue, R.string.library_iptv_favorites to iptvFavorites).filter { it.second.isNotEmpty() }
         } else emptyList()
@@ -129,6 +130,7 @@ fun MyItemsPanel(
                     itemsIndexed(cards, key = { _, c -> c.key }) { i, card ->
                         IptvCard(
                             card = card,
+                            poster = viewModel.iptvPoster(card, iptvArt),
                             modifier = Modifier
                                 .then(if (viewModel.returnKey == "$header/${card.key}") Modifier.focusRequester(iptvReturnFocus) else Modifier)
                                 .focusProperties {
@@ -488,6 +490,7 @@ internal fun IptvCard(
     modifier: Modifier,
     onClick: () -> Unit,
     onOptions: () -> Unit,
+    poster: String? = card.poster,
 ) {
     val focus = com.enigmacast.ui.soccer.rememberTvFocus()
     var held by remember { mutableStateOf(false) }
@@ -519,7 +522,7 @@ internal fun IptvCard(
                 com.enigmacast.domain.films.FilmCandidate(
                     com.enigmacast.domain.epg.GuideEvent(-1, "iptv:${card.id}", card.title, "", "", 0, 0), "", card.title, null,
                 ),
-                com.enigmacast.domain.films.TmdbMovie(id = 0, title = card.title, posterPath = card.poster, isSeries = card.kind != "m"),
+                com.enigmacast.domain.films.TmdbMovie(id = 0, title = card.title, posterPath = poster, isSeries = card.kind != "m"),
             )
             com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
             if (card.progress > 0f) {

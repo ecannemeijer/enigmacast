@@ -7,8 +7,18 @@ package com.enigmacast.domain.xtream
  */
 object M3uPlaylist {
     private val ATTR = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
+    private val ATTR_BARE = Regex("""([A-Za-z0-9_-]+)=([^"'\s,]+)""")
 
-    data class Entry(val name: String, val group: String, val logo: String, val url: String, val section: XtreamSection, val number: Int)
+    data class Entry(
+        val name: String,
+        val group: String,
+        val logo: String,
+        val url: String,
+        val section: XtreamSection,
+        val number: Int,
+        val archiveDays: Int = 0,
+        val catchupSource: String = "",
+    )
 
     /** Calls [onEntry] for each channel in order; lines are read one by one, never all at once. */
     fun parse(lines: Sequence<String>, onEntry: (Entry) -> Unit) {
@@ -23,7 +33,18 @@ object M3uPlaylist {
                 line.startsWith("#EXTGRP:", ignoreCase = true) -> group = line.substringAfter(':').trim()
                 line.startsWith("#") -> Unit
                 info != null -> {
-                    val attrs = ATTR.findAll(info.substringBefore(',', info)).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
+                    val head = info.substringBefore(',', info)
+                    val bare = ATTR_BARE.findAll(head).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
+                    val attrs = bare + ATTR.findAll(head).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
+                    val catchup = attrs["catchup"].orEmpty()
+                    val days = attrs["catchup-days"]?.toIntOrNull() ?: 0
+                    val template = attrs["catchup-source"].orEmpty()
+                    val archiveDays = when {
+                        days > 0 -> days
+                        catchup.isNotBlank() && catchup != "0" -> 1
+                        template.isNotBlank() -> 1
+                        else -> 0
+                    }
                     val name = info.substringAfterLast("\",", "").ifBlank { info.substringAfter(',', "") }.trim()
                         .ifBlank { attrs["tvg-name"].orEmpty() }.ifBlank { line.substringAfterLast('/') }
                     count++
@@ -35,6 +56,8 @@ object M3uPlaylist {
                             url = line,
                             section = sectionOf(line),
                             number = attrs["tvg-chno"]?.toIntOrNull() ?: count,
+                            archiveDays = archiveDays,
+                            catchupSource = template,
                         ),
                     )
                     info = null

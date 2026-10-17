@@ -173,6 +173,14 @@ class LivePlaybackController @Inject constructor(
      * that ends, or stays silent, before any picture.
      */
     val health: StateFlow<StreamHealth> = _health.asStateFlow()
+
+    /**
+     * The live picture stayed down: unreachable at once, or still failed after the reconnects.
+     * One signal per play, so a fallback that also fails does not switch straight back.
+     */
+    private val _gaveUp = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val gaveUp: SharedFlow<Unit> = _gaveUp.asSharedFlow()
+    private var gaveUpSent = false
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
     private val _cues = MutableStateFlow<List<Cue>>(emptyList())
@@ -342,8 +350,10 @@ class LivePlaybackController @Inject constructor(
         authorization: String? = null,
         checkStart: Boolean = false,
         internet: Boolean = false,
+        keepFailure: Boolean = false,
     ) {
         if (!playbackEnabled) return
+        if (!keepFailure) gaveUpSent = false
         // The IPTV page plays in front: a background Enigma2 start (reconnect, mini player) must not
         // take the decoder and the output from it (black IPTV picture with Enigma2 sound).
         if (!owner.mayStart(PlaybackOwner.Owner.ENIGMA2)) { EnigmaLog.player("enigma2 start refused: IPTV in front"); return }
@@ -581,6 +591,7 @@ class LivePlaybackController @Inject constructor(
                 exo.stop()
                 _health.value = action.health
                 publish()
+                noteGaveUp()
             }
         }
     }
@@ -693,6 +704,7 @@ class LivePlaybackController @Inject constructor(
                 true
             }
             StreamHealth.NO_TUNER, StreamHealth.AUTH_REQUIRED, StreamHealth.UNREACHABLE -> {
+                if (health == StreamHealth.UNREACHABLE) noteGaveUp()
                 // Hang up so the receiver frees whatever it had set up, and do not retry.
                 reconnectJob?.cancel()
                 reconnectJob = null
@@ -987,13 +999,26 @@ class LivePlaybackController @Inject constructor(
         }
     }
 
+    private fun noteGaveUp() {
+        if (gaveUpSent || filePlayback) return
+        gaveUpSent = true
+        _gaveUp.tryEmit(Unit)
+    }
+
     private fun scheduleReconnect() {
         if (filePlayback) return
-        if (!settings.autoReconnect) return
+        if (!settings.autoReconnect) {
+            noteGaveUp()
+            return
+        }
         // A refused start is final; the screen offers to try again.
-        if (checkStart && _health.value in FINAL_REFUSALS) return
+        if (checkStart && _health.value in FINAL_REFUSALS) {
+            noteGaveUp()
+            return
+        }
         val owner = scope ?: return
         failures += 1
+        if (failures >= 3) noteGaveUp()
         reconnectJob?.cancel()
         reconnectJob = owner.launch {
             delay((1_000L * failures).coerceAtMost(8_000L))

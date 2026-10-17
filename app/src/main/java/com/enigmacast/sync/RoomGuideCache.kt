@@ -50,14 +50,7 @@ class RoomGuideCache @Inject constructor(
         val now = System.currentTimeMillis()
         // An IPTV channel reads the guide of the satellite channel with the same name.
         val source = aliases.resolve(key(receiver), serviceReference) ?: serviceReference
-        val started = System.nanoTime()
         val rows = runCatching { dao.serviceEvents(key(receiver), NowEvents.key(source), now / 1000) }.getOrNull()
-        // #region agent log
-        android.util.Log.i(
-            "DBG-ee9576",
-            """{"sessionId":"ee9576","runId":"post-fix","hypothesisId":"B","location":"RoomGuideCache.kt:serviceEvents","message":"service epg","data":{"rows":${rows?.size ?: -1},"ms":${(System.nanoTime() - started) / 1_000_000}},"timestamp":$now}""",
-        )
-        // #endregion
         if (rows.isNullOrEmpty()) return null
         // Programmes that started earlier today are kept by the query (it filters on end time).
         return rows.map(CacheMappers::event).map { it.copy(reference = serviceReference) }
@@ -85,7 +78,6 @@ class RoomGuideCache @Inject constructor(
     override suspend fun bouquetOf(receiver: ReceiverConfig, serviceReference: String): BouquetEntry? = runCatching {
         val rk = key(receiver)
         val want = NowEvents.key(serviceReference)
-        val started = System.nanoTime()
         val direct = dao.bouquetHolding(rk, want)
         val row = direct ?: dao.channelsWithoutServiceKey(rk)
             .filter { NowEvents.key(it.reference) == want }
@@ -93,12 +85,6 @@ class RoomGuideCache @Inject constructor(
             .toSet()
             .let { holding -> dao.bouquets(rk).firstOrNull { it.reference in holding } }
             ?.let { BouquetNameRow(it.name, it.reference) }
-        // #region agent log
-        android.util.Log.i(
-            "DBG-ee9576",
-            """{"sessionId":"ee9576","runId":"post-fix","hypothesisId":"D","location":"RoomGuideCache.kt:bouquetOf","message":"bouquet lookup","data":{"hit":${row != null},"fallback":${direct == null},"ms":${(System.nanoTime() - started) / 1_000_000}},"timestamp":${System.currentTimeMillis()}}""",
-        )
-        // #endregion
         row?.let { BouquetEntry(it.name, it.reference) }
     }.getOrNull()
 

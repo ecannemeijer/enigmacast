@@ -9,6 +9,9 @@ import android.net.NetworkRequest
 import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.text.Cue
@@ -28,6 +31,7 @@ import com.enigmacast.domain.model.EnigmaService
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.OsdSkinId
+import com.enigmacast.domain.model.TvFallback
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.network.PlainHttpRisk
 import com.enigmacast.domain.network.ReceiverRoute
@@ -212,6 +216,8 @@ class RemoteDisplayViewModel @Inject constructor(
     private val switcher: com.enigmacast.live.ReceiverSwitcher,
     private val premiumGate: com.enigmacast.live.PremiumGate,
     private val listEvents: com.enigmacast.sync.ChannelListEvents,
+    val pip: com.enigmacast.playback.PipController,
+    private val fallbackFinder: com.enigmacast.live.TvFallbackFinder,
 ) : ViewModel() {
     /** The receiver whose bouquets are in [RemoteDisplayUiState.bouquets]; another box loads its own. */
     private var bouquetsReceiverId: String? = null
@@ -220,6 +226,8 @@ class RemoteDisplayViewModel @Inject constructor(
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
     private val analyzer = AndroidOsdAnalyzer()
     private var settingsSnapshot = AppSettings()
+    var showPipPicker by mutableStateOf(false)
+    private var fallbackLatched = false
     private var sessionSignature: List<Any?>? = null
     private var session: Job? = null
     private var osdController: OsdController? = null
@@ -343,6 +351,18 @@ class RemoteDisplayViewModel @Inject constructor(
         viewModelScope.launch {
             playback.timeshiftFull.collect {
                 if (_ui.value.ownTuner) showNotice(UiText.res(R.string.timeshift_full), NOTICE_LONG_MS)
+            }
+        }
+        viewModelScope.launch {
+            playback.gaveUp.collect {
+                if (fallbackLatched || !_ui.value.ownTuner || _ui.value.playerState.filePlayback) return@collect
+                val mode = settingsSnapshot.tvFallback
+                if (mode != TvFallback.SAT_TO_IPTV && mode != TvFallback.BOTH) return@collect
+                val name = _ui.value.own.channel?.name ?: _ui.value.currentService?.name ?: return@collect
+                val hit = fallbackFinder.iptv(name) ?: return@collect
+                fallbackLatched = true
+                playback.play(hit.url, force = true, internet = true, keepFailure = true)
+                showNotice(UiText.res(R.string.notice_fallback_iptv, hit.name), 5_000)
             }
         }
         viewModelScope.launch {
@@ -760,8 +780,13 @@ class RemoteDisplayViewModel @Inject constructor(
     fun numberOf(entry: BouquetEntry): Int = ownSession.numberOf(entry)
 
     fun zapTo(entry: BouquetEntry) {
+        fallbackLatched = false
         closeChannelList()
         ownSession.start(entry)
+    }
+
+    fun openPipPicker() {
+        if (pip.playing()) pip.stop() else showPipPicker = true
     }
 
     private fun listPane(ui: RemoteDisplayUiState = _ui.value): ListPane = when {
@@ -824,7 +849,8 @@ class RemoteDisplayViewModel @Inject constructor(
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
             val now = nowSec()
-            val events = guideRepository.serviceEvents(receiver, entry.reference).filter { it.endEpochSec > now }
+            val events = guideRepository.serviceEvents(receiver, entry.reference)
+                .filter { it.endEpochSec > now - 7 * 86_400L }
             _ui.update {
                 if (BouquetChannels.sameService(it.epgChannel?.reference.orEmpty(), entry.reference)) {
                     it.copy(epgEvents = events, epgLoading = false)
@@ -840,10 +866,11 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /** OK on a programme: watch the channel when it is on now, else offer AutoSwitch or Record. */
     fun chooseProgramme(channel: BouquetEntry, event: GuideEvent) {
-        if (event.beginEpochSec <= nowSec()) {
+        if (event.isAiring(nowSec())) {
             watchFromGuide(channel)
             return
         }
+        if (event.endEpochSec <= nowSec()) return
         val prompt = ProgrammePrompt(event, channel.name, reminders.isScheduled(event.programmeKey))
         _ui.update { it.copy(programmePrompt = prompt) }
     }
@@ -1091,10 +1118,13 @@ class RemoteDisplayViewModel @Inject constructor(
         val ui = _ui.value
         lastKey = KeyEvent.keyCodeToString(event.keyCode)
         if (action == OwnKeyAction.BACK) {
+            if (showPipPicker || pip.listOpen.value) return false
             if (event.action == KeyEvent.ACTION_UP) ownBack()
             return true
         }
         // The quick bar is plain Compose focus (Left/Right between tiles, OK opens a picker).
+        if (showPipPicker) return false
+        if (pip.listOpen.value) return false
         if (ui.quickBar) return false
         // Down on a banner that OK, Info or Right brought up opens the quick bar;
         // after a zap Down keeps zapping.
@@ -1187,11 +1217,11 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun perform(action: PlayerAction) {
         val ui = _ui.value
         when (action) {
-            PlayerAction.CHANNEL_UP -> ownSession.zapRelative(1)
-            PlayerAction.CHANNEL_DOWN -> ownSession.zapRelative(-1)
-            PlayerAction.CHANNEL_LIST -> openChannelList()
+            PlayerAction.CHANNEL_UP -> zapLarge(1)
+            PlayerAction.CHANNEL_DOWN -> zapLarge(-1)
+            PlayerAction.CHANNEL_LIST -> if (pip.playing() && pip.swapped.value) pip.openList() else openChannelList()
             PlayerAction.INFO -> if (ui.banner && ui.details) hideBanner() else showBanner(details = true)
-            PlayerAction.BANNER -> showBanner()
+            PlayerAction.BANNER -> if (pip.playing() && !ui.channelList && !pip.listOpen.value) pip.swap() else showBanner()
             PlayerAction.OPTIONS -> openQuickBar()
             PlayerAction.GUIDE -> openGuideFromBar()
             PlayerAction.SEARCH -> {
@@ -1235,6 +1265,11 @@ class RemoteDisplayViewModel @Inject constructor(
         PictureMode.STRETCH -> R.string.picture_stretch
     }
 
+    private fun zapLarge(step: Int) {
+        fallbackLatched = false
+        if (pip.playing() && pip.swapped.value) pip.zap(step) else ownSession.zapRelative(step)
+    }
+
     private fun ownBack() {
         val ui = _ui.value
         when {
@@ -1251,6 +1286,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 _ui.update { it.copy(numberEntry = "") }
             }
             ui.banner && !playingRadio(ui) -> hideBanner()
+            pip.playing() -> pip.stop()
             // Back on the bare picture returns to the dashboard (the programme grid, on this channel).
             else -> onLeaveToDashboard?.invoke()
         }

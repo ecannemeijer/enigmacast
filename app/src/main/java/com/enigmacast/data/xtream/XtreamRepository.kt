@@ -96,6 +96,10 @@ class XtreamRepository @Inject constructor(
         return cached(account, action, force) { XtreamJson.categories(get(account, action)) }
     }
 
+    /** Every live stream of the account, for a name match when a satellite channel drops out. */
+    suspend fun liveStreams(account: XtreamAccount): List<XtreamItem> =
+        cached(account, "get_live_streams/all", false) { XtreamJson.items(get(account, "get_live_streams"), XtreamSection.LIVE) }
+
     suspend fun items(account: XtreamAccount, section: XtreamSection, categoryId: String, force: Boolean = false): List<XtreamItem> {
         val action = when (section) {
             XtreamSection.LIVE -> "get_live_streams"
@@ -136,6 +140,16 @@ class XtreamRepository @Inject constructor(
      */
     suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
         cached(account, "get_short_epg/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "24")) }
+    }.getOrDefault(emptyList())
+
+    /**
+     * The channel's full listings, including programmes that have already ended.
+     * `get_short_epg` starts at now, so catch-up has nothing to scroll back to.
+     */
+    suspend fun guideFull(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
+        cached(account, "get_simple_data_table/$streamId", false, ttl = EPG_TTL_MS) {
+            XtreamJson.shortEpg(get(account, "get_simple_data_table", "stream_id" to streamId))
+        }
     }.getOrDefault(emptyList())
 
     /** The playlist's own info for a film or series. */

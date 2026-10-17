@@ -509,7 +509,6 @@ fun ChannelEpgPanel(
     val channel = ui.epgChannel ?: return
     val events = ui.epgEvents
     val focus = remember { FocusRequester() }
-    var focusedIndex by remember(channel.reference) { mutableIntStateOf(0) }
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -517,7 +516,17 @@ fun ChannelEpgPanel(
             nowSec = System.currentTimeMillis() / 1000
         }
     }
-    LaunchedEffect(channel.reference, ui.epgLoading, events.isEmpty()) {
+    val nowIndex = events.indexOfFirst { it.isAiring(nowSec) }
+        .let { if (it >= 0) it else events.indexOfFirst { event -> event.beginEpochSec >= nowSec }.coerceAtLeast(0) }
+    var focusedIndex by remember(channel.reference) { mutableIntStateOf(nowIndex) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(channel.reference, events.size, ui.epgLoading) {
+        if (events.isEmpty()) {
+            if (!ui.epgLoading) focus.requestWhenReady()
+            return@LaunchedEffect
+        }
+        focusedIndex = nowIndex
+        listState.scrollToItem(nowIndex)
         focus.requestWhenReady()
     }
     Column(
@@ -537,14 +546,14 @@ fun ChannelEpgPanel(
             }
             return@Column
         }
-        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             itemsIndexed(events, key = { _, event -> "${event.eventId}:${event.beginEpochSec}" }) { index, event ->
                 val airing = event.isAiring(nowSec)
                 CompactListRow(
                     onClick = { actions.onChooseProgramme(channel, event) },
                     selected = airing,
                     modifier = Modifier
-                        .focusRequesterIf(index == 0, focus)
+                        .focusRequesterIf(index == nowIndex, focus)
                         .onFocusChanged { if (it.isFocused) focusedIndex = index },
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 ) { focused ->

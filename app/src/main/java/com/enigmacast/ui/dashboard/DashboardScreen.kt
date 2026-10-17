@@ -1602,6 +1602,21 @@ private fun PlaybackSettingsPanel(
             onSelect = { viewModel.setSubtitlesEnabled(it == 1) },
         )
     }
+    val fallback = viewModel.settings.collectAsStateWithLifecycle().value.tvFallback
+    SettingsCard(stringResource(R.string.tv_fallback)) {
+        ChoiceRow(
+            title = stringResource(R.string.tv_fallback),
+            description = stringResource(R.string.tv_fallback_desc),
+            options = listOf(
+                stringResource(R.string.off),
+                stringResource(R.string.tv_fallback_sat_iptv),
+                stringResource(R.string.tv_fallback_iptv_sat),
+                stringResource(R.string.tv_fallback_both),
+            ),
+            selectedIndex = com.enigmacast.domain.model.TvFallback.entries.indexOf(fallback).coerceAtLeast(0),
+            onSelect = { viewModel.setTvFallback(com.enigmacast.domain.model.TvFallback.entries[it]) },
+        )
+    }
     SettingsCard(stringResource(R.string.connection)) {
         ToggleRow(
             title = stringResource(R.string.auto_resume),

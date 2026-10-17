@@ -7,6 +7,8 @@ import javax.inject.Singleton
  * The one player that may sound at a time, app-wide. The Enigma2 player (full screen, mini
  * player, recordings) and the IPTV player each register how to stop themselves; whoever starts
  * playing claims the output and the other one is stopped first, so two streams never play at once.
+ * The picture-in-picture inset is a third player: it never registers and never claims, so the
+ * large picture keeps the output and the sound.
  * Called on the main thread (players are driven from there).
  */
 @Singleton

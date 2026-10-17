@@ -147,6 +147,8 @@ data class IptvItemRow(
     val number: Int,
     val url: String,
     val sort: Int,
+    @androidx.room.ColumnInfo(defaultValue = "0") val archiveDays: Int = 0,
+    @androidx.room.ColumnInfo(defaultValue = "''") val catchupSource: String = "",
 )
 
 /** A receiver channel name and its guide key (not a table). */
