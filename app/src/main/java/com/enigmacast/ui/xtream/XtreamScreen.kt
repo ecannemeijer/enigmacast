@@ -109,7 +109,9 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     val detection by model.detection.collectAsStateWithLifecycle()
     val bindings by model.keyBindings.collectAsStateWithLifecycle()
     // Live TV from the menu starts on the last channel, so the list stays closed until playback fails.
-    var panelOpen by remember { mutableStateOf(!model.openLiveFullscreen) }
+    // A film or episode that is already playing (or about to, from the dashboard) keeps the list closed.
+    val vodOnScreen = model.vodFromDashboard || model.playing?.item?.section.let { it != null && it != XtreamSection.LIVE } == true
+    var panelOpen by remember { mutableStateOf(!model.openLiveFullscreen && !vodOnScreen) }
     var column by remember { mutableStateOf(PanelColumn.CATEGORIES) }
     var bannerUntil by remember { mutableStateOf(0L) }
     var bannerFromZap by remember { mutableStateOf(false) }
@@ -202,7 +204,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             }
         }
     }
-    LaunchedEffect(panelOpen, openRequest, column, model.detail) {
+    LaunchedEffect(panelOpen, openRequest, column) {
         if (model.detail != null) return@LaunchedEffect
         if (!panelOpen) { rootFocus.requestWhenReady(); return@LaunchedEffect }
         when (column) {
@@ -266,6 +268,10 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             // A film or episode in full screen: Back stops it and shows the grid again.
             // Started from Home/Library: stopping goes back there (focus on that card).
             model.launchOrigin != null && !panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE -> leave()
+            model.vodFromDashboard && !panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE -> {
+                model.stop()
+                onBack()
+            }
             !panelOpen && model.playing != null && model.playing?.item?.section != XtreamSection.LIVE -> { model.stop(); openPanel() }
             else -> leave()
         }

@@ -139,6 +139,8 @@ internal enum class DashSection {
     Movies,
     Series,
     Soccer,
+    IptvMovies,
+    IptvSeries,
     Stream,
     Guide,
     Radio,
@@ -207,6 +209,7 @@ fun DashboardScreen(
     var sectionEnter by remember { mutableIntStateOf(0) }
     // Back from an IPTV film/series started on Home or in My items: reopen that page (the panel focuses the card).
     val returnItems: MyItemsViewModel = hiltViewModel()
+    val xtreamModel: com.enigmacast.ui.xtream.XtreamViewModel = hiltViewModel()
     val iptvReturn = remember { returnItems.returnKey }
     var section by remember {
         mutableStateOf(
@@ -214,6 +217,8 @@ fun DashboardScreen(
                 focusLanguageSetting || returnToSettingsHub -> DashSection.Settings
                 returnToMyItemsId != null -> DashSection.MyItems
                 iptvReturn != null && !iptvReturn.startsWith("home/") -> DashSection.MyItems
+                xtreamModel.vodFromDashboard && xtreamModel.section == com.enigmacast.domain.xtream.XtreamSection.SERIES -> DashSection.IptvSeries
+                xtreamModel.vodFromDashboard -> DashSection.IptvMovies
                 else -> DashSection.Home
             },
         )
@@ -286,7 +291,6 @@ fun DashboardScreen(
     val accountModel: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
     val account by accountModel.account.collectAsState()
     val premium = accountModel.isPremium(account)
-    val xtreamModel: com.enigmacast.ui.xtream.XtreamViewModel = hiltViewModel()
     val xtreamAvailable = xtreamModel.detection.collectAsState().value?.available == true
     val iptvLive = xtreamModel.playing?.let { it.episode == null && it.item?.section == com.enigmacast.domain.xtream.XtreamSection.LIVE } == true
     val showStream = showMiniPlayer || iptvLive
@@ -313,6 +317,7 @@ fun DashboardScreen(
         DashSection.Search -> searchMenuFocus
         DashSection.MyItems -> myItemsMenuFocus
         DashSection.Settings -> settingsMenuFocus
+        DashSection.IptvMovies, DashSection.IptvSeries -> iptvMenuFocus
     }
     fun sectionMenu(): FocusRequester = when (DashGroups.groupOf(section)) {
         DashGroup.TV -> tvMenuFocus
@@ -352,6 +357,7 @@ fun DashboardScreen(
             iptvReturn != null -> { if (!iptvReturn.startsWith("home/")) { myItemsListActive = true; onMyItemsFocused() } }
             // Back from the player: Live TV opens the player, so focus its menu item.
             focusPlayingChannel -> { tvMenuFocus.requestWhenReady(); onPlayingChannelFocused() }
+            xtreamModel.vodFromDashboard || section == DashSection.IptvMovies || section == DashSection.IptvSeries -> Unit
             xtreamModel.returnToMenu -> { iptvMenuFocus.requestWhenReady(); xtreamModel.consumeReturnToMenu() }
             else -> homeFocus.requestWhenReady()
         }
@@ -503,7 +509,7 @@ fun DashboardScreen(
                         icon = EnigmaIcons.Tv,
                         label = stringResource(R.string.nav_iptv),
                         subtitle = if (xtreamModel.categories.isNotEmpty()) stringResource(xtreamSectionLabel(xtreamModel.section)) else null,
-                        selected = false,
+                        selected = DashGroups.groupOf(section) == DashGroup.IPTV,
                         showLabel = drawerExpanded,
                         locked = !premium,
                         staggerIndex = 2,
@@ -687,6 +693,15 @@ fun DashboardScreen(
                                 } ?: BouquetEntry(name = last.name, reference = last.reference)
                                 guideModel.tune(entry, onStream, onStream)
                             },
+                        )
+                        }
+                        DashSection.IptvMovies, DashSection.IptvSeries -> {
+                        com.enigmacast.ui.xtream.IptvLibraryPage(
+                            model = xtreamModel,
+                            menuFocus = iptvMenuFocus,
+                            sectionEnter = sectionEnter,
+                            onRetreatTo = retreat,
+                            onPlay = onXtream,
                         )
                         }
                         DashSection.Soccer -> {
@@ -873,7 +888,11 @@ fun DashboardScreen(
                             runCatching { iptvMenuFocus.requestFocus() }
                         } else {
                             xtreamModel.requestSection(entry.id)
-                            onXtream()
+                            when (entry.id) {
+                                com.enigmacast.domain.xtream.XtreamSection.LIVE -> onXtream()
+                                com.enigmacast.domain.xtream.XtreamSection.MOVIES -> enterSection(DashSection.IptvMovies)
+                                com.enigmacast.domain.xtream.XtreamSection.SERIES -> enterSection(DashSection.IptvSeries)
+                            }
                         }
                     },
                 )

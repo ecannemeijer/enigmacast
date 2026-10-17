@@ -16,7 +16,7 @@ class VodPanelNavTest {
         assertEquals(Column.SECTIONS, VodPanelNav.back(Column.CATEGORIES))
     }
 
-    @Test fun categoriesCollapseWhileGridHasFocus() {
+    @Test fun categoriesHideOnceTheGridHasFocus() {
         assertFalse(VodPanelNav.categoriesShown(gridActive = true))
         assertTrue(VodPanelNav.categoriesShown(gridActive = false))
     }

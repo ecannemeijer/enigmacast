@@ -8,6 +8,8 @@ class DashGroupsTest {
     @Test fun groups() {
         assertEquals(DashGroup.TV, DashGroups.groupOf(DashSection.Movies))
         assertEquals(DashGroup.TV, DashGroups.groupOf(DashSection.Stream))
+        assertEquals(DashGroup.IPTV, DashGroups.groupOf(DashSection.IptvMovies))
+        assertEquals(DashGroup.IPTV, DashGroups.groupOf(DashSection.IptvSeries))
         assertNull(DashGroups.groupOf(DashSection.Search))
         assertNull(DashGroups.groupOf(DashSection.MyItems))
         assertNull(DashGroups.groupOf(DashSection.Soccer))

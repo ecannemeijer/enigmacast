@@ -90,6 +90,7 @@ private const val GAP_DP = 16f
  * OK on a category loads it; OK on a card opens the same info page, with Play / Resume and,
  * for a series, its seasons and episodes from the playlist.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 internal fun XtreamVodPage(
     model: XtreamViewModel,
@@ -109,8 +110,8 @@ internal fun XtreamVodPage(
     val cards = model.cards
     Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
         Box(Modifier.padding(start = 260.dp)) { Backdrop(focused) }
-        // The categories slide away while the grid has focus; the column stays laid out (clipped to
-        // zero width) so Left from a first card can focus it at once and it slides back in.
+        // After a category is chosen the column slides away. It stays laid out at zero width so Left
+        // from the first poster can focus it and it slides back open.
         val categoriesWidth by androidx.compose.animation.core.animateDpAsState(
             if (VodPanelNav.categoriesShown(gridActive)) CATEGORIES_WIDTH else 0.dp,
             androidx.compose.animation.core.tween(220),
@@ -142,7 +143,7 @@ internal fun XtreamVodPage(
                     itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
                         val c = k.value
                         CompactListRow(
-                            onClick = { model.selectCategory(c) },
+                            onClick = { model.selectCategory(c); onGrid() },
                             selected = c.id == model.category?.id,
                             modifier = Modifier
                                 .then(if (index == selectedIndex) Modifier.focusRequester(categoryFocus) else Modifier)
@@ -168,14 +169,38 @@ internal fun XtreamVodPage(
                     Text(stringResource(R.string.iptv_vod_empty), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
                 }
                 val grid = rememberLazyGridState()
-                LaunchedEffect(cards) { if (cards.isNotEmpty()) grid.scrollToItem(0) }
+                // Where focus is restored (enter the grid, close info). It does not follow every poster:
+                // moving the requester onto the focused card drops focus for a frame and the page jumps.
+                var pinFocus by remember { mutableIntStateOf(-1) }
+                suspend fun pin(index: Int) {
+                    if (cards.isEmpty()) return
+                    val target = index.coerceIn(0, cards.lastIndex)
+                    grid.scrollToItem(target)
+                    pinFocus = target
+                    gridFocus.requestWhenReady(24)
+                }
+                LaunchedEffect(model.category?.id, model.itemsReady) {
+                    if (model.category == null || cards.isEmpty() || !gridActive) return@LaunchedEffect
+                    pin(model.gridAnchor)
+                }
+                var detailWasOpen by remember { mutableStateOf(false) }
+                LaunchedEffect(model.detail) {
+                    val open = model.detail != null
+                    if (detailWasOpen && !open && gridActive) pin(model.gridAnchor)
+                    detailWasOpen = open
+                }
                 // Artwork for the cards on screen only; a scroll cancels the waiting batch.
                 LaunchedEffect(grid, cards) {
                     snapshotFlow { grid.layoutInfo.visibleItemsInfo.map { it.index } }
                         .distinctUntilChanged()
                         .collect { rows -> model.requestArtwork(rows.mapNotNull { cards.getOrNull(it)?.item }) }
                 }
-                LaunchedEffect(gridActive) { if (gridActive) gridFocus.requestWhenReady() }
+                LaunchedEffect(gridActive) { if (gridActive) pin(model.gridAnchor) }
+                // TV's default scroll pulls the focused poster toward the middle, so every move
+                // shifts the grid and then settles. Only scroll when a poster is actually off screen.
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.MinimalBringIntoView,
+                ) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
@@ -193,14 +218,14 @@ internal fun XtreamVodPage(
                         PosterCard(
                             film = film,
                             modifier = Modifier
-                                .then(if (index == 0) Modifier.focusRequester(gridFocus) else Modifier)
+                                .then(if (index == pinFocus) Modifier.focusRequester(gridFocus) else Modifier)
                                 .focusProperties {
                                     if (index % columns == 0) left = categoryFocus
                                     if (index % columns == columns - 1 || index == cards.lastIndex) right = FocusRequester.Cancel
                                     if (index < columns) up = FocusRequester.Cancel
                                     if (index >= lastRowStart) down = FocusRequester.Cancel
                                 },
-                            onFocus = { focused = film; focusedIndex = index },
+                            onFocus = { focused = film; focusedIndex = index; model.rememberGridAnchor(index) },
                             onClick = { model.openDetail(item) },
                             overlay = {
                                 val progress = remember(item, model.resumeVersion) { model.progressOf(item) }
@@ -216,9 +241,108 @@ internal fun XtreamVodPage(
                         )
                     }
                 }
+                }
             }
         }
         }
+    }
+}
+
+/**
+ * IPTV Films or Series inside the dashboard: the same poster grid as Enigma Movies.
+ * The category column hides after a choice and opens again on Left. Playing a title opens the full player.
+ */
+@Composable
+internal fun IptvLibraryPage(
+    model: XtreamViewModel,
+    menuFocus: FocusRequester,
+    sectionEnter: Int,
+    onRetreatTo: (FocusRequester) -> Unit,
+    onPlay: () -> Unit,
+) {
+    val categoryFocus = remember { FocusRequester() }
+    val gridFocus = remember { FocusRequester() }
+    var gridActive by remember { mutableStateOf(false) }
+    val detection by model.detection.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        model.prepareLibrary()
+        if (model.detail != null) return@LaunchedEffect
+        if (model.vodFromDashboard && model.cards.isNotEmpty()) {
+            gridActive = true
+            gridFocus.requestWhenReady(24)
+            model.consumeVodFromDashboard()
+        } else if (model.categories.isNotEmpty()) {
+            categoryFocus.requestWhenReady()
+        }
+    }
+    LaunchedEffect(sectionEnter) {
+        if (sectionEnter == 0) return@LaunchedEffect
+        gridActive = false
+        categoryFocus.requestWhenReady()
+    }
+    LaunchedEffect(model.categoriesReady) {
+        if (model.categoriesReady > 0 && !gridActive && model.detail == null) {
+            categoryFocus.requestWhenReady()
+        }
+    }
+    LaunchedEffect(model.itemsReady) {
+        if (gridActive && model.itemsReady > 0 && model.cards.isNotEmpty() && model.detail == null) {
+            gridFocus.requestWhenReady(24)
+        }
+    }
+    val accounts = detection?.accounts.orEmpty()
+    Box(Modifier.fillMaxSize()) {
+        when {
+            detection == null -> EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
+            accounts.isEmpty() -> Text(
+                stringResource(R.string.xtream_none),
+                color = EnigmaColors.Muted,
+                fontSize = 16.sp,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            model.account == null && accounts.size > 1 -> Unit
+            else -> XtreamVodPage(
+                model = model,
+                gridActive = gridActive,
+                categoryFocus = categoryFocus,
+                gridFocus = gridFocus,
+                onGrid = { gridActive = true },
+                onCategories = {
+                    gridActive = false
+                    onRetreatTo(menuFocus)
+                },
+                onSections = { runCatching { menuFocus.requestFocus() } },
+                onGridFocused = {
+                    gridActive = true
+                    onRetreatTo(categoryFocus)
+                },
+                onPlayed = onPlay,
+            )
+        }
+    }
+    if (model.account == null && accounts.size > 1) {
+        com.enigmacast.ui.theme.TvChoiceDialog(
+            title = stringResource(R.string.xtream_choose_playlist),
+            message = stringResource(R.string.xtream_choose_playlist_desc),
+            choices = accounts.map { it.name },
+            onChoose = { model.choose(accounts[it], startLive = false) },
+            onDismiss = { runCatching { menuFocus.requestFocus() } },
+            stacked = true,
+        )
+    }
+    IptvInfoDialog(model, onPlayed = onPlay)
+    model.resumeAsk?.let { ask ->
+        com.enigmacast.ui.theme.TvChoiceDialog(
+            title = stringResource(R.string.resume_title),
+            message = ask.title,
+            choices = listOf(
+                stringResource(R.string.resume_from, com.enigmacast.domain.resume.ResumePolicy.clock(ask.positionMs)),
+                stringResource(R.string.resume_start_over),
+            ),
+            onChoose = { i -> model.answerResume(fromStart = i == 1) },
+            onDismiss = model::dismissResume,
+            compact = true,
+        )
     }
 }
 
@@ -400,7 +524,7 @@ internal object VodPanelNav {
         else -> total.toString()
     }
 
-    /** The categories column is shown unless the grid has focus. */
+    /** The categories column hides once the posters have focus, and Left opens it again. */
     fun categoriesShown(gridActive: Boolean) = !gridActive
 
     /** Poster columns that fit [widthDp] (minus the grid's 8 dp side padding), at least 1. */

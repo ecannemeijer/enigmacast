@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
@@ -143,6 +144,20 @@ class XtreamViewModel @Inject constructor(
     /** [items] as cards with the playlist's own name and cover; artwork replaces them per card. */
     var cards by mutableStateOf<List<IptvCard>>(emptyList())
         private set
+    /** Poster that had focus in the film or series grid, so Back from info or the player returns there. */
+    var gridAnchor by mutableIntStateOf(0)
+        private set
+    /** This film or episode was started from the dashboard list, so Back returns there. */
+    var vodFromDashboard by mutableStateOf(false)
+        private set
+
+    fun rememberGridAnchor(index: Int) {
+        if (index >= 0) gridAnchor = index
+    }
+
+    fun consumeVodFromDashboard() {
+        vodFromDashboard = false
+    }
     /** Items per category id for the categories column (Room in playlist mode, fetched ones otherwise). */
     var categoryCounts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
@@ -598,6 +613,7 @@ class XtreamViewModel @Inject constructor(
 
     fun playFilm(item: XtreamItem, fromStart: Boolean) {
         val account = account ?: return
+        if (launchOrigin == null) vodFromDashboard = true
         val url = item.url.ifBlank { XtreamUrls.movie(account, item.id, item.extension) }
         start(url, XtreamPlaying(item.name, item), live = false, account = account, startMs = if (fromStart) 0L else resumeOf(item), resume = resumeKeyOf("m", item.id))
     }
@@ -703,6 +719,19 @@ class XtreamViewModel @Inject constructor(
     private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, id: String, force: Boolean) =
         if (playlist != null) playlistSync.items(section, id) else repository.items(account, section, id, force)
 
+    /**
+     * Films or series inside the dashboard: pick the playlist and the requested section,
+     * without starting the remembered live channel.
+     */
+    fun prepareLibrary() {
+        openLiveFullscreen = false
+        val accounts = _detection.value?.accounts.orEmpty()
+        when {
+            account == null && accounts.size == 1 -> choose(accounts.first(), startLive = false)
+            account != null -> applyRequested()
+        }
+    }
+
     /** Opens the page: one playlist is chosen right away; several leave [account] null for the chooser. */
     fun open() {
         val accounts = _detection.value?.accounts.orEmpty()
@@ -716,20 +745,20 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
-    fun choose(account: XtreamAccount) {
+    fun choose(account: XtreamAccount, startLive: Boolean = true) {
         val start = requestedSection
-        val fullscreen = openLiveFullscreen && (start == null || start == XtreamSection.LIVE)
+        val fullscreen = startLive && openLiveFullscreen && (start == null || start == XtreamSection.LIVE)
         requestedSection = null
         if (!fullscreen) openLiveFullscreen = false
         val same = this.account?.key == account.key && categories.isNotEmpty()
         this.account = account
         if (same) {
             if (start != null && start != section) selectSection(start)
-            if (fullscreen) playLastLiveFullscreen() else startRememberedLive()
+            if (fullscreen) playLastLiveFullscreen() else if (startLive) startRememberedLive()
             return
         }
-        selectSection(start ?: XtreamSection.LIVE, force = true)
-        if (fullscreen) playLastLiveFullscreen() else startRememberedLive()
+        selectSection(start ?: if (startLive) XtreamSection.LIVE else section, force = true)
+        if (fullscreen) playLastLiveFullscreen() else if (startLive) startRememberedLive()
     }
 
     /**
@@ -749,6 +778,7 @@ class XtreamViewModel @Inject constructor(
             if (settings.lastLiveSource != com.enigmacast.domain.model.LastLiveSource.IPTV && !startupIptv) return@launch
             val last = settings.lastIptvChannels[account?.key] ?: return@launch
             if (playing?.item?.id == last.streamId && playing?.item?.section == XtreamSection.LIVE) return@launch
+            if (vodFromDashboard || playing?.item?.section.let { it != null && it != XtreamSection.LIVE } == true) return@launch
             play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url))
             libraryPlayed++
         }
@@ -786,6 +816,7 @@ class XtreamViewModel @Inject constructor(
 
     fun selectSection(section: XtreamSection, force: Boolean = false) {
         if (!force && section == this.section && categories.isNotEmpty()) return
+        if (section != this.section) gridAnchor = 0
         this.section = section
         val account = account ?: return
         loadJob?.cancel()
@@ -836,6 +867,7 @@ class XtreamViewModel @Inject constructor(
             }
                 .onSuccess { (list, base) ->
                     if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: ${list.size} items in ${System.currentTimeMillis() - started} ms")
+                    if (this.category?.id != category.id) gridAnchor = 0
                     this.category = category
                     series = null; episodes = emptyList()
                     cards = base
@@ -931,6 +963,7 @@ class XtreamViewModel @Inject constructor(
 
     fun playEpisode(episode: XtreamEpisode, show: XtreamItem? = series, fromStart: Boolean = false) {
         val account = account ?: return
+        if (launchOrigin == null) vodFromDashboard = true
         val series = show
         val title = listOfNotNull(series?.name, "S${episode.season}E${episode.episode}".takeIf { episode.season > 0 }).joinToString(" · ")
         start(

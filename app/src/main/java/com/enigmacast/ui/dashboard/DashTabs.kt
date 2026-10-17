@@ -49,6 +49,7 @@ internal object DashGroups {
     private val TV = listOf(DashSection.Stream, DashSection.Guide, DashSection.Movies, DashSection.Series, DashSection.Radio)
 
     fun groupOf(section: DashSection): DashGroup? = when (section) {
+        DashSection.IptvMovies, DashSection.IptvSeries -> DashGroup.IPTV
         in TV -> DashGroup.TV
         else -> null
     }
