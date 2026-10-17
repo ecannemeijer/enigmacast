@@ -65,7 +65,10 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
         oneStream?.let { return it }
         synchronized(this) {
             oneStream?.let { return it }
-            val created = OneEnigmaStream(streamClient())
+            // A pulled cable leaves the open live socket with no bytes. Eight seconds of
+            // silence ends that read, so playback can retry and then give the channel up.
+            val live = streamClient().newBuilder().readTimeout(8, TimeUnit.SECONDS).build()
+            val created = OneEnigmaStream(live)
             oneStream = created
             return created
         }

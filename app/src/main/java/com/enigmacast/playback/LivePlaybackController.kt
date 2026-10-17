@@ -1018,7 +1018,10 @@ class LivePlaybackController @Inject constructor(
         }
         val owner = scope ?: return
         failures += 1
-        if (failures >= 3) noteGaveUp()
+        if (failures >= 3) {
+            noteGaveUp()
+            return
+        }
         reconnectJob?.cancel()
         reconnectJob = owner.launch {
             delay((1_000L * failures).coerceAtMost(8_000L))
