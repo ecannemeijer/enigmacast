@@ -129,7 +129,7 @@ fun RecordingBar(
         modifier = modifier
             .fillMaxWidth()
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC000000), Color(0xF0000000))))
-            .padding(start = 48.dp, end = 48.dp, top = 36.dp, bottom = 28.dp),
+            .padding(start = 48.dp, end = 48.dp, top = 28.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(

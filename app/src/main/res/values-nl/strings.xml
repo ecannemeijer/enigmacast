@@ -361,6 +361,8 @@
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Beeld</string>
     <string name="quick_audio_delay">Geluidsvertraging</string>
+    <string name="quick_subtitle_delay">Ondertitelvertraging</string>
+    <string name="quick_subtitle_delay_hint">Positief begint later, negatief eerder</string>
     <string name="quick_guide">Gids</string>
     <string name="quick_recent">Recent</string>
     <string name="quick_stream_info">Streaminfo</string>

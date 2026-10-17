@@ -3,6 +3,7 @@
 package com.enigmacast.ui.xtream
 
 import android.content.Context
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,8 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -197,12 +200,15 @@ class XtreamViewModel @Inject constructor(
         private set
     var audioDelayPassthrough by mutableStateOf(false)
         private set
+    var subtitleDelayMs by mutableStateOf(0)
+        private set
     var sleepEndsAtMs by mutableStateOf(0L)
         private set
     /** Live channels zapped in this visit, newest first. The OSD Recent tile uses them. */
     var recentChannels by mutableStateOf<List<com.enigmacast.domain.model.LastChannel>>(emptyList())
         private set
     private val audioSync = com.enigmacast.playback.AudioSyncOffsets()
+    private val subtitleSync = com.enigmacast.playback.SubtitleSyncOffset()
     private val httpFactory = DefaultHttpDataSource.Factory()
         .setUserAgent(XtreamRepository.USER_AGENT)
         .setAllowCrossProtocolRedirects(true)
@@ -606,6 +612,8 @@ class XtreamViewModel @Inject constructor(
             playbackSubtitles = playback.subtitlesEnabled
             audioDelayMs = playback.audioDelayPcmMs
             audioSync.set(playback.audioDelayPcmMs, playback.audioDelayPassthroughMs)
+            subtitleDelayMs = playback.subtitleDelayMs
+            subtitleSync.set(playback.subtitleDelayMs)
         }
         viewModelScope.launch { sleepTimer.endsAtMs.collect { sleepEndsAtMs = it } }
         viewModelScope.launch {
@@ -958,7 +966,7 @@ class XtreamViewModel @Inject constructor(
             .setSelectUndeterminedTextLanguage(playbackSubtitles)
             .build()
         ExoPlayer.Builder(context)
-            .setRenderersFactory(IptvRenderersFactory(context, audioSync))
+            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync))
             .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .build()
@@ -1115,6 +1123,17 @@ class XtreamViewModel @Inject constructor(
     fun choosePictureMode(mode: com.enigmacast.domain.player.PictureMode) { pictureMode = mode }
 
     /** Same correction as the Enigma2 player: it applies at once and is kept in settings. */
+    fun setSubtitleDelay(ms: Int) {
+        val value = com.enigmacast.playback.SubtitleSync.clamp(ms)
+        subtitleDelayMs = value
+        subtitleSync.set(value)
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                settings.copy(playback = settings.playback.copy(subtitleDelayMs = value))
+            }
+        }
+    }
+
     fun setAudioDelay(ms: Int) {
         val value = com.enigmacast.playback.AudioSync.clamp(ms)
         audioDelayMs = value
@@ -1331,7 +1350,18 @@ class XtreamViewModel @Inject constructor(
 private class IptvRenderersFactory(
     context: Context,
     private val offsets: com.enigmacast.playback.AudioSyncOffsets,
+    private val subtitleSync: com.enigmacast.playback.SubtitleSyncOffset,
 ) : DefaultRenderersFactory(context) {
+    override fun buildTextRenderers(
+        context: Context,
+        output: TextOutput,
+        outputLooper: Looper,
+        extensionRendererMode: Int,
+        out: ArrayList<Renderer>,
+    ) {
+        out.add(com.enigmacast.playback.OffsetTextRenderer(output, outputLooper, subtitleSync))
+    }
+
     override fun buildAudioSink(
         context: Context,
         enableFloatOutput: Boolean,

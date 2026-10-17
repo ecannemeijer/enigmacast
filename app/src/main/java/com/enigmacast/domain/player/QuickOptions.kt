@@ -11,6 +11,7 @@ enum class QuickOption {
     AUDIO,
     PICTURE,
     AUDIO_DELAY,
+    SUBTITLE_DELAY,
     QUALITY,
     GUIDE,
     RECENT,
@@ -31,6 +32,7 @@ object QuickOptions {
             QuickOption.AUDIO,
             QuickOption.PICTURE,
             QuickOption.AUDIO_DELAY,
+            QuickOption.SUBTITLE_DELAY,
             QuickOption.STREAM_INFO,
             QuickOption.RESTART,
             QuickOption.SLEEP,
@@ -50,6 +52,7 @@ object QuickOptions {
         add(QuickOption.AUDIO)
         add(QuickOption.PICTURE)
         add(QuickOption.AUDIO_DELAY)
+        add(QuickOption.SUBTITLE_DELAY)
         if (!vod) {
             add(QuickOption.GUIDE)
             add(QuickOption.RECENT)

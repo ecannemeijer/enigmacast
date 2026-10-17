@@ -76,6 +76,11 @@ data class PlaybackSettings(
     val audioDelayPcmMs: Int = 0,
     /** Audio delay correction for AC3/E-AC3 sent undecoded over HDMI, -500..500 ms. */
     val audioDelayPassthroughMs: Int = 0,
+    /**
+     * Subtitle delay in milliseconds, -5000..5000. Positive starts them later, negative earlier.
+     * Missing in older settings, so those stay in sync with the picture.
+     */
+    val subtitleDelayMs: Int = 0,
     /** Where Record stores the programme. Missing in older settings, so the TV is the default. */
     val recordingTarget: RecordingTarget = RecordingTarget.TV,
     /**

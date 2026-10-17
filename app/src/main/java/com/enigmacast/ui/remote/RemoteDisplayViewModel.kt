@@ -154,6 +154,8 @@ data class RemoteDisplayUiState(
     /** The audio delay of the output in use (HDMI passthrough or stereo). */
     val audioDelayMs: Int = 0,
     val audioDelayPassthrough: Boolean = false,
+    /** Subtitle delay. Positive starts them later, negative earlier. */
+    val subtitleDelayMs: Int = 0,
     val sleepEndsAtMs: Long = 0L,
     val recent: List<LastChannel> = emptyList(),
     val receiverAddress: String = "",
@@ -253,6 +255,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private var numberJob: Job? = null
     private var noticeJob: Job? = null
     private var nowEpgJob: Job? = null
+    private var bouquetLoad: Job? = null
     private var bouquetJob: Job? = null
     private var epgJob: Job? = null
     private val numberEntry = NumberEntry()
@@ -413,7 +416,14 @@ class RemoteDisplayViewModel @Inject constructor(
         val mode = if (reference.isBlank()) PictureMode.AUTO else settingsSnapshot.pictureModes[NowEvents.key(reference)] ?: PictureMode.AUTO
         val passthrough = playback.audioPassthroughActive.value ?: settingsSnapshot.playback.hdmiPassthrough
         val delay = if (passthrough) settingsSnapshot.playback.audioDelayPassthroughMs else settingsSnapshot.playback.audioDelayPcmMs
-        _ui.update { it.copy(pictureMode = mode, audioDelayMs = delay, audioDelayPassthrough = passthrough) }
+        _ui.update {
+            it.copy(
+                pictureMode = mode,
+                audioDelayMs = delay,
+                audioDelayPassthrough = passthrough,
+                subtitleDelayMs = settingsSnapshot.playback.subtitleDelayMs,
+            )
+        }
     }
 
     fun openQuickBar() {
@@ -483,7 +493,12 @@ class RemoteDisplayViewModel @Inject constructor(
     fun closeQuickBar() {
         if (!_ui.value.quickBar) return
         _ui.update { it.copy(quickBar = false, searchOpen = false) }
-        if (_ui.value.ownTuner && _ui.value.banner) showBanner()
+        if (_ui.value.playerState.filePlayback) {
+            _ui.update { it.copy(fileBar = true) }
+            armFileBarHide()
+        } else if (_ui.value.ownTuner && _ui.value.banner) {
+            showBanner()
+        }
     }
 
     fun chooseSubtitles(id: String?) {
@@ -512,6 +527,16 @@ class RemoteDisplayViewModel @Inject constructor(
             settingsRepository.update { settings ->
                 val modes = if (mode == PictureMode.AUTO) settings.pictureModes - key else settings.pictureModes + (key to mode)
                 settings.copy(pictureModes = modes)
+            }
+        }
+    }
+
+    fun setSubtitleDelay(ms: Int) {
+        val value = com.enigmacast.playback.SubtitleSync.clamp(ms)
+        _ui.update { it.copy(subtitleDelayMs = value) }
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                settings.copy(playback = settings.playback.copy(subtitleDelayMs = value))
             }
         }
     }
@@ -999,12 +1024,15 @@ class RemoteDisplayViewModel @Inject constructor(
         val radio = BouquetChannels.isRadioBouquet(ownSession.state.value.bouquetReference)
         val cached = _ui.value.bouquets
         val activeId = settingsSnapshot.activeReceiver()?.id
-        if (cached.isNotEmpty() && activeId == bouquetsReceiverId &&
-            cached.any { BouquetChannels.isRadioBouquet(it.reference) } == radio
+        // Radio does not follow bouquets.tv. Television does, so the panel asks the box again
+        // each time it opens: Enigma2 may have reloaded the file since the last look.
+        if (radio && cached.isNotEmpty() && activeId == bouquetsReceiverId &&
+            cached.any { BouquetChannels.isRadioBouquet(it.reference) }
         ) {
             return
         }
-        viewModelScope.launch {
+        bouquetLoad?.cancel()
+        bouquetLoad = viewModelScope.launch {
             val receiver = settingsSnapshot.activeReceiver() ?: return@launch
             val loaded = runCatching {
                 if (radio) serviceSource.radioBouquets(receiver) else serviceSource.televisionBouquets(receiver)

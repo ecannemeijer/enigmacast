@@ -101,6 +101,7 @@ fun EnigmaRemoteScreen(
             onPassthrough = viewModel::setPassthrough,
             onPictureMode = viewModel::choosePictureMode,
             onAudioDelay = viewModel::setAudioDelay,
+            onSubtitleDelay = viewModel::setSubtitleDelay,
             onGuide = viewModel::openGuideFromBar,
             onRecent = viewModel::zapRecent,
             onSleep = viewModel::setSleepTimer,
@@ -175,8 +176,11 @@ fun EnigmaRemoteScreen(
             )
         }
         if (ui.playerState.filePlayback) {
-            Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                if (ui.fileBar) {
+            Column(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (ui.fileBar && !ui.quickBar) {
                     RecordingBar(
                         ui = ui,
                         onSeek = viewModel::seekFile,
@@ -185,14 +189,12 @@ fun EnigmaRemoteScreen(
                         onTouch = viewModel::touchFileBar,
                     )
                 }
-                if (ui.quickBar) {
+                if (ui.fileBar || ui.quickBar) {
                     QuickOptionsBar(
                         ui = ui,
                         actions = quickBarActions,
-                        modifier = Modifier
-                            .padding(horizontal = 36.dp, vertical = 12.dp)
-                            .background(scrim, skinShape(14.dp))
-                            .padding(8.dp),
+                        interactive = ui.quickBar,
+                        modifier = Modifier.padding(bottom = 2.dp),
                     )
                 }
             }
@@ -213,9 +215,7 @@ fun EnigmaRemoteScreen(
                 actions = quickBarActions,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = 44.dp, vertical = 32.dp)
-                    .background(scrim, skinShape(14.dp))
-                    .padding(8.dp),
+                    .padding(bottom = 2.dp),
             )
         }
         if (ui.searchOpen) {

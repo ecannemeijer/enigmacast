@@ -1,6 +1,6 @@
 {
-  "versionCode": 58,
-  "versionName": "1.0.0-beta.55",
+  "versionCode": 59,
+  "versionName": "1.0.0-beta.56",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "The setup wizard is a quarter smaller. A detected receiver without an OpenWebif login is added immediately. If that receiver already runs a sync server, setup asks to connect or stay standalone."
+  "notes": "Subtitle delay under the OSD. Option icons sit under the banner, grow when focused, and the banner hides while they have focus. Bouquet order follows bouquets.tv."
 }

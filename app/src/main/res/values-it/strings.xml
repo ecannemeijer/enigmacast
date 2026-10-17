@@ -361,6 +361,8 @@
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Immagine</string>
     <string name="quick_audio_delay">Ritardo audio</string>
+    <string name="quick_subtitle_delay">Ritardo sottotitoli</string>
+    <string name="quick_subtitle_delay_hint">Positivo li ritarda, negativo li anticipa</string>
     <string name="quick_guide">Guida</string>
     <string name="quick_recent">Recenti</string>
     <string name="quick_stream_info">Info stream</string>

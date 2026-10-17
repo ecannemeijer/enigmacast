@@ -2,6 +2,7 @@ package com.enigmacast.playback
 
 import android.content.Context
 import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -26,6 +27,8 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioOutputProvider
 import androidx.media3.exoplayer.audio.AudioSink
@@ -213,6 +216,7 @@ class LivePlaybackController @Inject constructor(
     private var stalls = 0
     private var wasReady = false
     private val audioSync = AudioSyncOffsets()
+    private val subtitleSync = SubtitleSyncOffset()
 
     /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
     val audioPassthroughActive: StateFlow<Boolean?> = audioSync.passthroughActive
@@ -226,13 +230,14 @@ class LivePlaybackController @Inject constructor(
 
     fun updateSettings(settings: PlaybackSettings) {
         audioSync.set(settings.audioDelayPcmMs, settings.audioDelayPassthroughMs)
+        subtitleSync.set(settings.subtitleDelayMs)
         if (this.settings == settings) return
         val inPlace = this.settings.withoutInPlaceOptions() == settings.withoutInPlaceOptions()
         this.settings = settings
         if (inPlace) {
             // The sink reads a new delay on its next position update, and subtitles switch
             // through the track selection; neither needs a new player.
-            EnigmaLog.player("audio delay pcm=${settings.audioDelayPcmMs}ms hdmi=${settings.audioDelayPassthroughMs}ms subtitles=${settings.subtitlesEnabled}")
+            EnigmaLog.player("audio delay pcm=${settings.audioDelayPcmMs}ms hdmi=${settings.audioDelayPassthroughMs}ms subtitles=${settings.subtitlesEnabled} subtitleDelay=${settings.subtitleDelayMs}ms")
             player?.let { exo ->
                 selectSubtitles(exo)
                 publish()
@@ -818,7 +823,7 @@ class LivePlaybackController @Inject constructor(
             val byName = infos.associateBy { it.name }
             VideoOutput.order(decoderMode, infos.map { it.name to it.hardwareAccelerated }).mapNotNull { byName[it] }
         }
-        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync)
+        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync, subtitleSync)
             .setEnableDecoderFallback(true)
             .setMediaCodecSelector(selector)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
@@ -1159,7 +1164,18 @@ private class LiveRenderersFactory(
     context: Context,
     private val passthrough: Boolean,
     private val audioSync: AudioSyncOffsets,
+    private val subtitleSync: SubtitleSyncOffset,
 ) : DefaultRenderersFactory(context) {
+    override fun buildTextRenderers(
+        context: Context,
+        output: TextOutput,
+        outputLooper: Looper,
+        extensionRendererMode: Int,
+        out: ArrayList<Renderer>,
+    ) {
+        out.add(OffsetTextRenderer(output, outputLooper, subtitleSync))
+    }
+
     override fun buildAudioRenderers(
         context: Context,
         extensionRendererMode: Int,
@@ -1247,6 +1263,11 @@ private val STEREO_AUDIO = arrayOf(
 )
 
 /** Settings that can change while a stream plays, without building a new player. */
-private fun PlaybackSettings.withoutInPlaceOptions() = copy(audioDelayPcmMs = 0, audioDelayPassthroughMs = 0, subtitlesEnabled = true)
+private fun PlaybackSettings.withoutInPlaceOptions() = copy(
+    audioDelayPcmMs = 0,
+    audioDelayPassthroughMs = 0,
+    subtitlesEnabled = true,
+    subtitleDelayMs = 0,
+)
 
 private const val STATS_INTERVAL_MS = 1_000L

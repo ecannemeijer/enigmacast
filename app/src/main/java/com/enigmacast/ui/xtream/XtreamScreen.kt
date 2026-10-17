@@ -233,7 +233,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         liveBackAt[0] = now
         val bannerShown = System.currentTimeMillis() < bannerUntil
         when {
-            quickBar -> { quickBar = false; bannerUntil = 0L; openRequest++ }
+            quickBar -> { quickBar = false; showBanner(fromZap = false); openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
             panelOpen && column == PanelColumn.CHANNELS && model.series != null -> { model.closeSeries(); openRequest++ }
             panelOpen && (column == PanelColumn.CHANNELS || column == PanelColumn.CATEGORIES) -> {
@@ -252,7 +252,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             return@BackHandler
         }
         when {
-            quickBar -> { quickBar = false; vodBar = false; bannerUntil = 0L; openRequest++ }
+            quickBar -> { quickBar = false; vodBar = true; vodBarTouch++; openRequest++ }
             vodBar -> { vodBar = false; openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
             panelOpen && column == PanelColumn.VOD_GRID -> { column = PanelColumn.VOD_CATEGORIES; openRequest++ }
@@ -418,9 +418,9 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
             LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay(500) } }
-            if (!panelOpen && vodBar) {
+            if (!panelOpen && (vodBar || quickBar) && model.section != XtreamSection.LIVE) {
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                    com.enigmacast.ui.remote.RecordingBar(
+                    if (!quickBar) com.enigmacast.ui.remote.RecordingBar(
                         title = playing.title,
                         positionMs = model.playerState.positionMs,
                         durationMs = model.playerState.durationMs,
@@ -430,10 +430,17 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                         onOptions = { quickBar = true; quickToken++ },
                         onTouch = { vodBarTouch++ },
                     )
-                    if (quickBar) IptvOsd(model, playing, true, quickToken, details, Modifier, onGuide = openPlayingGuide, onSearch = onSearch)
+                    IptvOsd(model, playing, quickBar, quickToken, details, Modifier, showChannelBanner = false, onGuide = openPlayingGuide, onSearch = onSearch)
                 }
             } else if (!panelOpen && (quickBar || now < bannerUntil)) {
-                IptvOsd(model, playing, quickBar, quickToken, details, Modifier.align(Alignment.BottomCenter), onGuide = openPlayingGuide, onSearch = onSearch)
+                IptvOsd(
+                    model, playing, quickBar, quickToken, details,
+                    Modifier.align(Alignment.BottomCenter),
+                    showChannelBanner = !quickBar,
+                    showIcons = !bannerFromZap || quickBar,
+                    onGuide = openPlayingGuide,
+                    onSearch = onSearch,
+                )
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
             model.playerError?.let {
@@ -923,6 +930,8 @@ private fun IptvOsd(
     quickToken: Int,
     details: Boolean,
     modifier: Modifier,
+    showChannelBanner: Boolean = true,
+    showIcons: Boolean = true,
     onGuide: () -> Unit,
     onSearch: () -> Unit,
 ) {
@@ -937,8 +946,8 @@ private fun IptvOsd(
         picon = logo,
     )
     val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epg[it.id] }?.let { IptvOsdModel.guide(entry, it) }
-    Column(modifier) {
-        if (!quickBar) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (showChannelBanner) {
             com.enigmacast.ui.remote.ChannelBanner(
                 channel = entry,
                 number = entry.number,
@@ -946,7 +955,7 @@ private fun IptvOsd(
                 player = model.playerState,
                 tuner = com.enigmacast.live.TunerState(),
                 details = details,
-                optionsHint = true,
+                optionsHint = !quickBar,
                 recording = false,
                 osdInfo = IptvOsdModel.INFO,
                 osdFields = IptvOsdModel.FIELDS,
@@ -954,14 +963,17 @@ private fun IptvOsd(
                 picon = { model.logo(it.picon) },
                 cachedPicon = { model.cachedLogo(it.picon) },
                 scrim = scrim,
+                docked = showIcons,
             )
-        } else {
+        }
+        if (showIcons) {
             val ui = com.enigmacast.ui.remote.RemoteDisplayUiState(
                 playerState = model.playerState,
                 tracks = model.tracks,
                 pictureMode = model.pictureMode,
                 audioDelayMs = model.audioDelayMs,
                 audioDelayPassthrough = model.audioDelayPassthrough,
+                subtitleDelayMs = model.subtitleDelayMs,
                 sleepEndsAtMs = model.sleepEndsAtMs,
                 recent = model.recentChannels,
                 quickBarToken = quickToken,
@@ -974,6 +986,7 @@ private fun IptvOsd(
                     onPassthrough = {},
                     onPictureMode = model::choosePictureMode,
                     onAudioDelay = model::setAudioDelay,
+                    onSubtitleDelay = model::setSubtitleDelay,
                     onGuide = onGuide,
                     onRecent = model::playRecent,
                     onSleep = model::setSleepTimer,
@@ -987,10 +1000,8 @@ private fun IptvOsd(
                     onPip = model::openPipPicker,
                 ),
                 iptv = true,
-                modifier = Modifier
-                    .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
-                    .background(scrim, skinShape(14.dp))
-                    .padding(8.dp),
+                interactive = quickBar,
+                modifier = Modifier.padding(bottom = 2.dp),
             )
         }
     }

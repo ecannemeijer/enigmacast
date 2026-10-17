@@ -361,6 +361,8 @@
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Bild</string>
     <string name="quick_audio_delay">Tonverzögerung</string>
+    <string name="quick_subtitle_delay">Untertitelverzögerung</string>
+    <string name="quick_subtitle_delay_hint">Positiv startet später, negativ früher</string>
     <string name="quick_guide">TV-Guide</string>
     <string name="quick_recent">Zuletzt</string>
     <string name="quick_stream_info">Stream-Info</string>

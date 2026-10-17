@@ -177,7 +177,7 @@ fun OwnTunerOverlay(
             )
         }
         val radio = channel != null && BouquetChannels.isRadioBouquet(own.bouquetReference)
-        if (ui.banner && !ui.bannerFromZap && !ui.channelList && ui.numberEntry.isEmpty() && channel != null && !radio) {
+        if (ui.banner && !ui.quickBar && !ui.bannerFromZap && !ui.channelList && ui.numberEntry.isEmpty() && channel != null && !radio) {
             OsdClock(
                 scrim = scrim,
                 modifier = Modifier
@@ -191,16 +191,15 @@ fun OwnTunerOverlay(
                 actions = quickBarActions,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
-                    .background(scrim, skinShape(14.dp))
-                    .padding(8.dp),
+                    .padding(bottom = 2.dp),
             )
         }
-        val showBanner = ui.banner && channel != null && !ui.channelList && !radio
-        EnigmaAnimatedOsd(visible = showBanner, modifier = Modifier.align(Alignment.BottomCenter)) {
+        val showBanner = ui.banner && !ui.quickBar && channel != null && !ui.channelList && !radio
+        val showStrip = channel != null && !ui.channelList && !radio && (ui.banner || ui.quickBar)
+        EnigmaAnimatedOsd(visible = showStrip, modifier = Modifier.align(Alignment.BottomCenter)) {
             if (channel != null) {
-            Column {
-                if (!ui.quickBar) ChannelBanner(
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (showBanner) ChannelBanner(
                     channel = channel,
                     number = numberOf(channel),
                     guide = own.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) },
@@ -215,15 +214,14 @@ fun OwnTunerOverlay(
                     picon = picon,
                     cachedPicon = cachedPicon,
                     scrim = scrim,
+                    docked = !ui.bannerFromZap,
                 )
-                if (ui.quickBar) {
+                if (!ui.bannerFromZap) {
                     QuickOptionsBar(
                         ui = ui,
                         actions = quickBarActions,
-                        modifier = Modifier
-                            .padding(start = 44.dp, end = 44.dp, bottom = 24.dp)
-                            .background(scrim, skinShape(14.dp))
-                            .padding(8.dp),
+                        interactive = ui.quickBar,
+                        modifier = Modifier.padding(bottom = 2.dp),
                     )
                 }
             }
@@ -262,6 +260,8 @@ internal fun ChannelBanner(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     scrim: Color,
+    /** Icons sit directly under the banner, so it does not keep the usual gap above the screen edge. */
+    docked: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
@@ -286,7 +286,7 @@ internal fun ChannelBanner(
             return
         }
         OsdLayout.FLAT -> {
-            FlatBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, modifier)
+            FlatBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, docked, modifier)
             return
         }
         else -> Unit
@@ -299,7 +299,12 @@ internal fun ChannelBanner(
     }
     Row(
         modifier = modifier
-            .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
+            .padding(
+                start = EnigmaColors.SafeHorizontal,
+                end = EnigmaColors.SafeHorizontal,
+                top = EnigmaColors.SafeVertical,
+                bottom = if (docked) 0.dp else EnigmaColors.SafeVertical,
+            )
             .fillMaxWidth()
             .background(fill, cardShape)
             .then(if (layout == OsdLayout.MINIMAL) Modifier else Modifier.border(1.dp, EnigmaColors.GlassEdge, cardShape))

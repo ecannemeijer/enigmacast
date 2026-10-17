@@ -27,7 +27,10 @@ import com.enigmacast.domain.osd.GrabbedImage
 import com.enigmacast.domain.osd.PngInspector
 import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
+import com.enigmacast.data.settingsimport.FtpReceiverClient
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.BouquetOrder
+import com.enigmacast.domain.settingsimport.SettingsFiles
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
 import com.enigmacast.domain.source.RemoteControlSource
@@ -184,6 +187,7 @@ class OpenWebifApi @Inject constructor(
 
     private var startPositions: Pair<String, Map<String, Int>>? = null
     private var startPositionsAtMs = 0L
+    private var bouquetsTvText: TextStamp? = null
 
     /**
      * Turns positions within a bouquet into the numbers the receiver shows, by adding the
@@ -266,7 +270,56 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry> {
-        return OpenWebifJson.parseBouquets(get(config, endpoints.bouquets(config)))
+        // getservices of bouquets.tv is the list Enigma2 itself shows. /api/bouquets is not
+        // always that order (stream bouquets first on some images).
+        val root = """1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet"""
+        val fromBox = runCatching {
+            OpenWebifJson.parseServices(get(config, endpoints.services(config, root, picons = false)))
+        }.getOrNull().orEmpty().filter { BouquetChannels.isTelevisionBouquet(it.reference) }
+        val parsed = fromBox.ifEmpty {
+            runCatching { OpenWebifJson.parseBouquets(get(config, endpoints.bouquets(config))) }.getOrDefault(emptyList())
+        }
+        val file = readBouquetsTv(config)
+        val matched = if (file.isNullOrBlank()) 0 else BouquetOrder.matched(parsed, file)
+        if (file.isNullOrBlank() || matched == 0) {
+            EnigmaLog.service("bouquet order unchanged: file=${!file.isNullOrBlank()} matched=$matched of ${parsed.size}, first=${parsed.firstOrNull()?.name}")
+            return parsed
+        }
+        val ordered = BouquetOrder.apply(parsed, file)
+        EnigmaLog.service("bouquet order from bouquets.tv ($matched): ${ordered.take(4).joinToString { it.name }}")
+        return ordered
+    }
+
+    /**
+     * bouquets.tv from the box. OpenWebif's `/file` answer is only accepted when it really
+     * lists bouquets; a "forbidden" page used to count as success and the old order stayed.
+     * FTP is the same route the settings download already uses to read /etc/enigma2.
+     */
+    internal suspend fun readBouquetsTv(config: ReceiverConfig): String? {
+        val key = "${config.host}:${config.httpPort}:${config.ftpPort}"
+        val now = System.currentTimeMillis()
+        bouquetsTvText?.takeIf { it.key == key && now - it.atMs < 15_000 }?.let { return it.text }
+        val path = "${SettingsFiles.ENIGMA_DIR}/bouquets.tv"
+        val urls = LinkedHashSet<String>()
+        urls += endpoints.recordedFile(config, path)
+        endpoints.fileDownload(config, path).forEach { urls += it }
+        for (url in urls) {
+            val text = runCatching { fetchFile(config, url) }.getOrNull() ?: continue
+            if (BouquetOrder.filesIn(text).isNotEmpty()) {
+                bouquetsTvText = TextStamp(key, text, now)
+                return text
+            }
+        }
+        val ftp = withContext(Dispatchers.IO) {
+            runCatching {
+                FtpReceiverClient.open(config).use { it.download(path)?.toString(Charsets.UTF_8) }
+            }.onFailure { EnigmaLog.service("bouquets.tv FTP failed: ${it.javaClass.simpleName}") }.getOrNull()
+        }
+        if (!ftp.isNullOrBlank() && BouquetOrder.filesIn(ftp).isNotEmpty()) {
+            bouquetsTvText = TextStamp(key, ftp, now)
+            return ftp
+        }
+        return null
     }
 
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
@@ -491,6 +544,39 @@ class OpenWebifApi @Inject constructor(
         return text.takeUnless { OpenWebifFiles.isNotFound(text, path) }
     }
 
+    /**
+     * The same file, trying every OpenWebif download route. Some images only answer
+     * `/file?action=download`, and `/file?file=` then comes back empty or as "not found".
+     * Null when none of the routes returns the file. Authentication failures still throw.
+     */
+    suspend fun receiverFile(config: ReceiverConfig, path: String): String? {
+        val urls = LinkedHashSet<String>()
+        urls += endpoints.recordedFile(config, path)
+        endpoints.fileDownload(config, path).forEach { urls += it }
+        for (url in urls) {
+            try {
+                val response = execute(config, url, accept = "*/*")
+                if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
+                if (response.code !in 200..299) continue
+                val text = response.bytes.toString(Charsets.UTF_8)
+                if (OpenWebifFiles.isReadable(text, path)) return text
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (error: OpenWebifException) {
+                if (error.statusCode == 401) throw error
+            } catch (error: Exception) {
+                EnigmaLog.service("file $path failed: ${error.javaClass.simpleName}")
+            }
+        }
+        return null
+    }
+
+    private suspend fun fetchFile(config: ReceiverConfig, url: String): String? {
+        val response = execute(config, url, accept = "*/*")
+        if (response.code !in 200..299) return null
+        return response.bytes.toString(Charsets.UTF_8)
+    }
+
     private suspend fun get(config: ReceiverConfig, url: String): String {
         val response = execute(config, url, accept = "application/json")
         if (response.code == 401) throw OpenWebifException("Authentication failed", 401, UiText.res(R.string.error_auth_failed))
@@ -569,6 +655,8 @@ class OpenWebifApi @Inject constructor(
         val capabilities: ReceiverCapabilities?,
         val failure: String?,
     )
+
+    private data class TextStamp(val key: String, val text: String, val atMs: Long)
 }
 
 /** OpenWebif's answer for a missing file in `/file?file=`. */
@@ -576,5 +664,12 @@ object OpenWebifFiles {
     fun isNotFound(body: String, path: String): Boolean {
         val head = body.trimStart().take(path.length + 40)
         return head.startsWith("File ") && head.contains(path) && head.contains("not found", ignoreCase = true)
+    }
+
+    /** A body that is the file itself: not the "not found" text and not an HTML error page. */
+    fun isReadable(body: String, path: String): Boolean {
+        if (body.isBlank() || isNotFound(body, path)) return false
+        val head = body.trimStart().take(15).lowercase()
+        return !head.startsWith("<!doctype") && !head.startsWith("<html")
     }
 }

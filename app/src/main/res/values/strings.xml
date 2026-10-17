@@ -364,6 +364,8 @@
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Picture</string>
     <string name="quick_audio_delay">Audio delay</string>
+    <string name="quick_subtitle_delay">Subtitle delay</string>
+    <string name="quick_subtitle_delay_hint">Positive starts them later, negative earlier</string>
     <string name="quick_guide">Guide</string>
     <string name="quick_recent">Recent</string>
     <string name="quick_stream_info">Stream info</string>

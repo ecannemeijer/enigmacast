@@ -23,6 +23,10 @@ class QuickOptionsTest {
         assertFalse(QuickOption.PIP in QuickOptions.tiles(ownTuner = true, file = true))
         assertTrue(QuickOption.PIP in QuickOptions.iptvTiles(vod = false))
         assertFalse(QuickOption.PIP in QuickOptions.iptvTiles(vod = true))
+        assertTrue(QuickOption.SUBTITLE_DELAY in QuickOptions.tiles(ownTuner = true))
+        assertTrue(QuickOption.SUBTITLE_DELAY in QuickOptions.tiles(ownTuner = true, file = true))
+        assertTrue(QuickOption.SUBTITLE_DELAY in QuickOptions.tiles(ownTuner = false))
+        assertTrue(QuickOption.SUBTITLE_DELAY in QuickOptions.iptvTiles(vod = true))
     }
 
     @Test

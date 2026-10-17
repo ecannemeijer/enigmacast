@@ -98,6 +98,7 @@ class SyncEngine @Inject constructor(
 
             val hasChannels = dao.channelCount(rk) > 0
             val channelsDue = force || SyncPolicy.isDue(values.channelsPerDay, last(rk, SyncKind.CHANNELS), nowMs, hasChannels)
+            var channelsReplaced = false
             // App start/resume: one bouquet-list call against Room; channels only when that changed.
             val startupChanged = check && !channelsDue && carryFrom == null && runCatching {
                 val live = api.televisionBouquets(receiver).map { it.reference to it.name }
@@ -109,7 +110,10 @@ class SyncEngine @Inject constructor(
                 step(rk, 2, R.string.sync_step_channels)
                 attempt(rk, SyncKind.CHANNELS, keepHash = true) {
                     val outcome = syncChannels(receiver, rk, force = channelsDue, carryFrom = carryFrom?.takeIf { it != rk })
-                    if (outcome.replaced) changed = true
+                    if (outcome.replaced) {
+                        changed = true
+                        channelsReplaced = true
+                    }
                 }
             }
             val horizonSec = today.startSec + values.epgDays * 24 * 3600L
@@ -140,6 +144,7 @@ class SyncEngine @Inject constructor(
             // Series rules: add timers for episodes that the new guide shows.
             runCatching { seriesRecorder.get().rescan(receiver) }
                 .onFailure { EnigmaLog.service("series rescan failed: ${it.javaClass.simpleName}") }
+            if (channelsReplaced) listEvents.notifyChanged(receiver.id)
             changed
         } finally {
             _progress.value = null
@@ -153,26 +158,35 @@ class SyncEngine @Inject constructor(
      * Settings › Receivers: fetches the box's bouquets and channels now and replaces the cache
      * when anything differs. Throws when the box cannot be reached. The guide follows in the background.
      * With [force] the cache is replaced even when the content hash matches (after a settings import).
-     * Screens are told through [ChannelListEvents] whenever the cache was replaced.
+     * Screens are told through [ChannelListEvents] whenever the cache was replaced, and also
+     * after a forced refresh (settings import) so an open bouquet list loads again even when
+     * the channel download itself failed.
      */
     suspend fun refreshChannelsNow(receiver: ReceiverConfig, force: Boolean = false): ChannelOutcome {
         val rk = receiverKey(receiver)
-        val outcome = gate.withLock {
-            try {
-                step(rk, 2, R.string.sync_step_channels)
-                var result: ChannelOutcome? = null
-                var failure: Exception? = null
-                attempt(rk, SyncKind.CHANNELS, keepHash = true, onError = { failure = it }) {
-                    result = syncChannels(receiver, rk, force = force, carryFrom = null)
+        try {
+            val outcome = gate.withLock {
+                try {
+                    step(rk, 2, R.string.sync_step_channels)
+                    var result: ChannelOutcome? = null
+                    var failure: Exception? = null
+                    attempt(rk, SyncKind.CHANNELS, keepHash = true, onError = { failure = it }) {
+                        result = syncChannels(receiver, rk, force = force, carryFrom = null)
+                    }
+                    failure?.let { throw it }
+                    result!!
+                } finally {
+                    _progress.value = null
                 }
-                failure?.let { throw it }
-                result!!
-            } finally {
-                _progress.value = null
             }
+            if (outcome.replaced || force) listEvents.notifyChanged(receiver.id)
+            return outcome
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (error: Exception) {
+            if (force) listEvents.notifyChanged(receiver.id)
+            throw error
         }
-        if (outcome.replaced) listEvents.notifyChanged(receiver.id)
-        return outcome
     }
 
     /**

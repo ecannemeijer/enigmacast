@@ -74,12 +74,18 @@ internal fun FlatBanner(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     scrim: androidx.compose.ui.graphics.Color,
     info: @Composable () -> Unit,
+    docked: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val p = ActiveSkin.current.palette
     Row(
         modifier
-            .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
+            .padding(
+                start = EnigmaColors.SafeHorizontal,
+                end = EnigmaColors.SafeHorizontal,
+                top = EnigmaColors.SafeVertical,
+                bottom = if (docked) 0.dp else EnigmaColors.SafeVertical,
+            )
             .fillMaxWidth()
             .background(EnigmaColors.scrimOf(p.osdFill, scrim)),
     ) {

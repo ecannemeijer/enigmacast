@@ -3,6 +3,7 @@ package com.enigmacast.ui.remote
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -39,7 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -48,6 +51,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -74,6 +78,7 @@ import com.enigmacast.domain.player.QuickOptions
 import com.enigmacast.domain.player.SleepTimerChoices
 import com.enigmacast.domain.tuner.NowEvents
 import com.enigmacast.playback.AudioSync
+import com.enigmacast.playback.SubtitleSync
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
@@ -90,6 +95,7 @@ data class QuickBarActions(
     val onPassthrough: (Boolean) -> Unit,
     val onPictureMode: (PictureMode) -> Unit,
     val onAudioDelay: (Int) -> Unit,
+    val onSubtitleDelay: (Int) -> Unit,
     val onGuide: () -> Unit,
     val onRecent: (LastChannel) -> Unit,
     val onSleep: (Int) -> Unit,
@@ -100,11 +106,10 @@ data class QuickBarActions(
     val onPip: () -> Unit = {},
 )
 
-private val TileShape get() = skinShape(10.dp)
-
 /**
- * TiviMate-style options under the channel banner: a row of tiles (icon, name, current
- * value), Left/Right to move, OK to open a small picker above the tile, Back to close.
+ * Options under the channel banner: a row of small icons. Left/Right to move, OK to open
+ * a picker above the icon, Back to leave the row. The name and value show only on the
+ * icon that has the focus.
  */
 @Composable
 fun QuickOptionsBar(
@@ -113,6 +118,8 @@ fun QuickOptionsBar(
     modifier: Modifier = Modifier,
     /** IPTV playback: only player options, nothing that belongs to the receiver. */
     iptv: Boolean = false,
+    /** False while the icons only sit under the OSD; Down makes them take the focus. */
+    interactive: Boolean = true,
 ) {
     val tiles = if (iptv) QuickOptions.iptvTiles(ui.playerState.filePlayback) else QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback)
     val firstFocus = remember { FocusRequester() }
@@ -124,14 +131,15 @@ fun QuickOptionsBar(
             nowMs = System.currentTimeMillis()
         }
     }
-    LaunchedEffect(ui.quickBarToken) {
+    LaunchedEffect(ui.quickBarToken, interactive) {
+        if (!interactive) return@LaunchedEffect
         open = null
         firstFocus.requestWhenReady()
     }
     LazyRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        contentPadding = PaddingValues(horizontal = 8.dp),
     ) {
         itemsIndexed(tiles, key = { _, option -> option.name }) { index, option ->
             Box {
@@ -143,6 +151,9 @@ fun QuickOptionsBar(
                         else -> option.label()
                     },
                     value = tileValue(option, ui, nowMs),
+                    enabled = interactive,
+                    large = interactive,
+                    caption = open != option,
                     onClick = {
                         when (option) {
                             QuickOption.SEARCH -> actions.onSearch()
@@ -168,30 +179,69 @@ private fun QuickTile(
     icon: ImageVector,
     label: String,
     value: String,
+    enabled: Boolean,
+    large: Boolean,
+    caption: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    Column(
-        modifier = modifier
-            .width(122.dp)
-            .background(if (focused) EnigmaColors.Focus else EnigmaColors.Raised, TileShape)
-            .border(1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, TileShape)
+    val density = LocalDensity.current
+    val captionAnchor = remember(density) {
+        with(density) { AboveAnchor(gapPx = 6.dp.roundToPx(), marginPx = 12.dp.roundToPx()) }
+    }
+    val tileWidth by animateDpAsState(if (large) 48.dp else 36.dp, label = "tileWidth")
+    val tileHeight by animateDpAsState(if (large) 40.dp else 28.dp, label = "tileHeight")
+    val iconSize by animateDpAsState(if (large) 28.dp else 20.dp, label = "iconSize")
+    Box(
+        modifier
+            .size(width = tileWidth, height = tileHeight)
             .onKeyEvent { event ->
+                if (!enabled) return@onKeyEvent false
                 val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                 if (confirm && event.type == KeyEventType.KeyUp) onClick()
                 confirm
             }
-            .focusable(interactionSource = interaction)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .focusable(enabled = enabled, interactionSource = interaction),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, modifier = Modifier.size(18.dp))
-        Text(label, color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(value.ifBlank { " " }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = Color.White,
+            modifier = Modifier.size(iconSize),
+        )
+        if (focused) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .size(width = if (large) 20.dp else 14.dp, height = 2.dp)
+                    .background(Color.White),
+            )
+        }
+    }
+    if (focused && caption) {
+        Popup(popupPositionProvider = captionAnchor, properties = PopupProperties(focusable = false)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 220.dp)) {
+                Text(
+                    label,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = CaptionStyle,
+                )
+                if (value.isNotBlank()) {
+                    Text(value, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = CaptionStyle)
+                }
+            }
+        }
     }
 }
+
+private val CaptionStyle = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 1f), 6f))
 
 private class PickerItem(val label: String, val selected: Boolean, val onSelect: () -> Unit)
 
@@ -225,6 +275,14 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
                         fontSize = 11.sp,
                     )
                     PickerList(pickerItems(option, ui, actions, iptv, onClose), onClose, wrap = option == QuickOption.SUBTITLES)
+                }
+                QuickOption.SUBTITLE_DELAY -> {
+                    Text(
+                        stringResource(R.string.quick_subtitle_delay_hint),
+                        color = EnigmaColors.Subtle,
+                        fontSize = 11.sp,
+                    )
+                    PickerList(pickerItems(option, ui, actions, iptv, onClose), onClose)
                 }
                 else -> {
                     val items = pickerItems(option, ui, actions, iptv, onClose)
@@ -267,6 +325,9 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         }
         QuickOption.AUDIO_DELAY -> AudioDelayChoices.values(AudioSync.MIN_MS, AudioSync.MAX_MS, AudioSync.STEP_MS).map { ms ->
             PickerItem(AudioSync.label(ms), ms == ui.audioDelayMs, pick { actions.onAudioDelay(ms) })
+        }
+        QuickOption.SUBTITLE_DELAY -> AudioDelayChoices.values(SubtitleSync.MIN_MS, SubtitleSync.MAX_MS, SubtitleSync.STEP_MS).map { ms ->
+            PickerItem(SubtitleSync.label(ms), ms == ui.subtitleDelayMs, pick { actions.onSubtitleDelay(ms) })
         }
         QuickOption.RECENT -> {
             val current = ui.own.channel?.reference?.let(NowEvents::key)
@@ -427,6 +488,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     QuickOption.AUDIO -> ui.playerState.audioLabel.asString().ifBlank { "–" }
     QuickOption.PICTURE -> pictureLabel(ui.pictureMode)
     QuickOption.AUDIO_DELAY -> AudioSync.label(ui.audioDelayMs)
+    QuickOption.SUBTITLE_DELAY -> SubtitleSync.label(ui.subtitleDelayMs)
     QuickOption.GUIDE -> ui.own.guide?.currentEvent?.title.orEmpty()
     QuickOption.RECENT -> ui.recent.firstOrNull { NowEvents.key(it.reference) != ui.own.channel?.reference?.let(NowEvents::key) }?.name.orEmpty()
     QuickOption.SLEEP -> {
@@ -454,6 +516,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.AUDIO -> R.string.quick_audio
         QuickOption.PICTURE -> R.string.quick_picture
         QuickOption.AUDIO_DELAY -> R.string.quick_audio_delay
+        QuickOption.SUBTITLE_DELAY -> R.string.quick_subtitle_delay
         QuickOption.GUIDE -> R.string.quick_guide
         QuickOption.RECENT -> R.string.quick_recent
         QuickOption.SLEEP -> R.string.sleep_title
@@ -471,6 +534,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.AUDIO -> EnigmaIcons.Audiotrack
     QuickOption.PICTURE -> EnigmaIcons.AspectRatio
     QuickOption.AUDIO_DELAY -> EnigmaIcons.Sync
+    QuickOption.SUBTITLE_DELAY -> EnigmaIcons.Timer
     QuickOption.GUIDE -> EnigmaIcons.Guide
     QuickOption.RECENT -> EnigmaIcons.History
     QuickOption.SLEEP -> EnigmaIcons.Bedtime
