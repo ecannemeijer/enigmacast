@@ -1,5 +1,6 @@
 package com.enigmacast.ui.torrent
 
+import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -173,28 +176,7 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
         (if (which == FilterPicker.GENRE) genreFocus else sortFocus).requestWhenReady()
         refocus = null
     }
-    picker?.let { which ->
-        val close = { picker = null; refocus = which }
-        when (which) {
-            FilterPicker.GENRE -> FilterDialog(
-                title = stringResource(R.string.torrent_genre),
-                options = listOf(stringResource(R.string.torrent_genre_all)) + model.genres.map { it.name },
-                selected = model.genre?.let { g -> model.genres.indexOfFirst { it.id == g.id } + 1 } ?: 0,
-                onChoose = { i -> model.selectGenre(model.genres.getOrNull(i - 1)); close() },
-                onDismiss = close,
-            )
-            FilterPicker.SORT -> {
-                val sorts = com.enigmacast.domain.torrent.TorrentSort.entries
-                FilterDialog(
-                    title = stringResource(R.string.torrent_sort),
-                    options = sorts.map { stringResource(sortLabel(it)) },
-                    selected = sorts.indexOf(model.sort),
-                    onChoose = { i -> model.selectSort(sorts[i]); close() },
-                    onDismiss = close,
-                )
-            }
-        }
-    }
+    val closePicker = { which: FilterPicker -> picker = null; refocus = which }
     // In the dashboard only an open search takes Back; the dashboard sends the rest to the menu.
     BackHandler(enabled = dash == null || model.searchOpen) {
         when {
@@ -262,18 +244,40 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
                 modifier = Modifier.focusProperties { up = FocusRequester.Cancel },
             )
             // Filters of the grid (a search ignores them): OK opens a list on the right.
-            ChoiceChip(
-                label = stringResource(R.string.torrent_filter_genre, model.genre?.name ?: stringResource(R.string.torrent_genre_all)),
-                selected = model.genre != null,
-                onClick = { picker = FilterPicker.GENRE },
-                modifier = Modifier.padding(start = 12.dp).focusRequester(genreFocus).focusProperties { up = FocusRequester.Cancel },
-            )
-            ChoiceChip(
-                label = stringResource(R.string.torrent_filter_sort, stringResource(sortLabel(model.sort))),
-                selected = model.sort != com.enigmacast.domain.torrent.TorrentSort.POPULAR,
-                onClick = { picker = FilterPicker.SORT },
-                modifier = Modifier.focusRequester(sortFocus).focusProperties { up = FocusRequester.Cancel },
-            )
+            // Each list opens as a dropdown under its own chip (the Box is the popup's anchor).
+            Box(Modifier.padding(start = 12.dp)) {
+                ChoiceChip(
+                    label = stringResource(R.string.torrent_filter_genre, model.genre?.name ?: stringResource(R.string.torrent_genre_all)),
+                    selected = model.genre != null,
+                    onClick = { picker = FilterPicker.GENRE },
+                    modifier = Modifier.focusRequester(genreFocus).focusProperties { up = FocusRequester.Cancel },
+                )
+                if (picker == FilterPicker.GENRE) FilterPopup(
+                    title = stringResource(R.string.torrent_genre),
+                    options = listOf(stringResource(R.string.torrent_genre_all)) + model.genres.map { it.name },
+                    selected = model.genre?.let { g -> model.genres.indexOfFirst { it.id == g.id } + 1 } ?: 0,
+                    onChoose = { i -> model.selectGenre(model.genres.getOrNull(i - 1)); closePicker(FilterPicker.GENRE) },
+                    onDismiss = { closePicker(FilterPicker.GENRE) },
+                )
+            }
+            Box {
+                ChoiceChip(
+                    label = stringResource(R.string.torrent_filter_sort, stringResource(sortLabel(model.sort))),
+                    selected = model.sort != com.enigmacast.domain.torrent.TorrentSort.POPULAR,
+                    onClick = { picker = FilterPicker.SORT },
+                    modifier = Modifier.focusRequester(sortFocus).focusProperties { up = FocusRequester.Cancel },
+                )
+                if (picker == FilterPicker.SORT) {
+                    val sorts = com.enigmacast.domain.torrent.TorrentSort.entries
+                    FilterPopup(
+                        title = stringResource(R.string.torrent_sort),
+                        options = sorts.map { stringResource(sortLabel(it)) },
+                        selected = sorts.indexOf(model.sort),
+                        onChoose = { i -> model.selectSort(sorts[i]); closePicker(FilterPicker.SORT) },
+                        onDismiss = { closePicker(FilterPicker.SORT) },
+                    )
+                }
+            }
             if (model.loading) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
             Spacer(Modifier.weight(1f))
             CompactButton(
@@ -357,33 +361,78 @@ private fun sortLabel(s: com.enigmacast.domain.torrent.TorrentSort) = when (s) {
 }
 
 /** A filter's options in the side panel; focus starts on the current one, Back closes. */
+/**
+ * A filter list as a dropdown under its chip: as tall as its options (Sort: three rows),
+ * at most [FilterMenu.MAX_HEIGHT_DP] and scrolling beyond that (Genre). Its own window, so
+ * the D-pad stays inside; Back closes it and the caller puts focus back on the chip.
+ */
 @Composable
-private fun FilterDialog(title: String, options: List<String>, selected: Int, onChoose: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun FilterPopup(title: String, options: List<String>, selected: Int, onChoose: (Int) -> Unit, onDismiss: () -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val anchor = remember(density) { with(density) { BelowAnchor(gapPx = 6.dp.roundToPx(), marginPx = 16.dp.roundToPx()) } }
+    val current = selected.coerceIn(0, (options.size - 1).coerceAtLeast(0))
     val start = remember { FocusRequester() }
-    val list = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (selected - 3).coerceAtLeast(0))
+    val list = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = FilterMenu.firstVisible(current))
     LaunchedEffect(Unit) { start.requestWhenReady() }
-    DialogFrame(onDismiss) {
-        Text(title, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong)
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            itemsIndexed(options) { i, label ->
-                CompactListRow(
-                    onClick = { onChoose(i) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                    modifier = Modifier
-                        .then(if (i == selected.coerceIn(0, options.lastIndex)) Modifier.focusRequester(start) else Modifier)
-                        .focusProperties {
-                            left = FocusRequester.Cancel; right = FocusRequester.Cancel
-                            if (i == 0) up = FocusRequester.Cancel
-                            if (i == options.lastIndex) down = FocusRequester.Cancel
-                        },
-                ) {
-                    Text(
-                        (if (i == selected) "✓  " else "    ") + label,
-                        color = if (i == selected) EnigmaColors.Accent else EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+    androidx.compose.ui.window.Popup(
+        popupPositionProvider = anchor,
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.PopupProperties(focusable = true),
+    ) {
+        NavigationSoundsForWindow()
+        Column(
+            Modifier
+                .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                .widthIn(min = FilterMenu.MIN_WIDTH_DP.dp, max = FilterMenu.MAX_WIDTH_DP.dp)
+                .background(EnigmaColors.Canvas, skinShape(12.dp))
+                .border(1.dp, EnigmaColors.Subtle.copy(alpha = 0.4f), skinShape(12.dp))
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(title, color = EnigmaColors.Subtle, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp, top = 2.dp))
+            LazyColumn(
+                Modifier.fillMaxWidth().heightIn(max = FilterMenu.MAX_HEIGHT_DP.dp),
+                state = list,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                itemsIndexed(options) { i, label ->
+                    CompactListRow(
+                        onClick = { onChoose(i) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                        modifier = Modifier
+                            .focusRequesterIf(i == current, start)
+                            .focusProperties {
+                                left = FocusRequester.Cancel; right = FocusRequester.Cancel
+                                if (i == 0) up = FocusRequester.Cancel
+                                if (i == options.lastIndex) down = FocusRequester.Cancel
+                            },
+                    ) {
+                        Text(
+                            (if (i == selected) "✓  " else "    ") + label,
+                            color = if (i == selected) EnigmaColors.Accent else EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/** Under the anchor, left-aligned with it; moved left when it would leave the screen. */
+private class BelowAnchor(private val gapPx: Int, private val marginPx: Int) : androidx.compose.ui.window.PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: androidx.compose.ui.unit.IntRect,
+        windowSize: androidx.compose.ui.unit.IntSize,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        popupContentSize: androidx.compose.ui.unit.IntSize,
+    ): androidx.compose.ui.unit.IntOffset {
+        val (x, y) = FilterMenu.position(
+            anchorLeft = anchorBounds.left, anchorBottom = anchorBounds.bottom,
+            windowWidth = windowSize.width, windowHeight = windowSize.height,
+            popupWidth = popupContentSize.width, popupHeight = popupContentSize.height,
+            gapPx = gapPx, marginPx = marginPx,
+        )
+        return androidx.compose.ui.unit.IntOffset(x, y)
     }
 }
 
