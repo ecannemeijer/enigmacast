@@ -62,6 +62,10 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.enigmacast.domain.xtream.XtreamSection
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
+import com.enigmacast.ui.components.KeepAnchored
+import com.enigmacast.ui.components.LivePanelWidths
+import com.enigmacast.ui.components.TrackRows
+import com.enigmacast.ui.components.ensureVisible
 import com.enigmacast.ui.components.EnigmaProgramProgress
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
@@ -113,6 +117,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     val vodOnScreen = model.vodFromDashboard || model.playing?.item?.section.let { it != null && it != XtreamSection.LIVE } == true
     var panelOpen by remember { mutableStateOf(!model.openLiveFullscreen && !vodOnScreen) }
     var column by remember { mutableStateOf(PanelColumn.CATEGORIES) }
+    val liveChannelList = com.enigmacast.ui.components.rememberPresetList()
+    val liveCategoryList = com.enigmacast.ui.components.rememberPresetList()
     var bannerUntil by remember { mutableStateOf(0L) }
     var bannerFromZap by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf(false) }
@@ -396,6 +402,16 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             )
         }
         val accounts = detection?.accounts.orEmpty()
+        // The live channel and category lists keep their place while hidden: on every zap they move
+        // to the playing channel / its category silently, so the panel opens there without scrolling.
+        val liveShown = panelOpen && model.account != null && model.series == null && model.section == XtreamSection.LIVE &&
+            (column == PanelColumn.CATEGORIES || column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)
+        val playingId = model.playing?.item?.id
+        val playingRow = remember(model.items, playingId) { model.items.indexOfFirst { it.id == playingId } }
+        val categoryId = model.category?.id
+        val categoryRow = remember(model.categories, categoryId) { model.categories.indexOfFirst { it.id == categoryId } }
+        liveChannelList.KeepAnchored(playingRow, model.items.size, hidden = !liveShown)
+        liveCategoryList.KeepAnchored(categoryRow, model.categories.size, hidden = !(liveShown && column == PanelColumn.CATEGORIES))
         when {
             detection == null -> Centered { EnigmaLoadingIndicator() }
             accounts.isEmpty() -> Centered { Text(stringResource(R.string.xtream_none), color = EnigmaColors.Muted, fontSize = 16.sp) }
@@ -421,6 +437,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             panelOpen -> SidePanel(
                 model = model,
                 column = column,
+                channelList = liveChannelList,
+                categoryList = liveCategoryList,
                 onColumn = { column = it },
                 onLeave = { leave() },
                 categoryFocus = categoryFocus,
@@ -531,6 +549,8 @@ private fun Modifier.columnKeys(onLeft: (() -> Unit)?, onRight: (() -> Unit)?): 
 private fun SidePanel(
     model: XtreamViewModel,
     column: PanelColumn,
+    channelList: com.enigmacast.ui.components.PresetList,
+    categoryList: com.enigmacast.ui.components.PresetList,
     onColumn: (PanelColumn) -> Unit,
     onLeave: () -> Unit,
     categoryFocus: FocusRequester,
@@ -550,20 +570,22 @@ private fun SidePanel(
         val liveList = model.section == XtreamSection.LIVE &&
             (column == PanelColumn.CATEGORIES || column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)
         if (liveList && column == PanelColumn.CATEGORIES) Column(
-            Modifier.width(240.dp).columnKeys(
+            Modifier.width(com.enigmacast.ui.components.LivePanelWidths.IPTV_CATEGORIES).columnKeys(
                 onLeft = if (model.playing?.item?.section == XtreamSection.LIVE) null else onLeave,
                 // Right only enters a list that is already there.
                 onRight = { if (hasList) onColumn(PanelColumn.CHANNELS) },
             ),
         ) {
             Header(stringResource(R.string.xtream_categories), model.loading && model.categories.isEmpty())
-            val state = rememberLazyListState()
+            val state = categoryList.state
+            categoryList.TrackRows()
             val scope = rememberCoroutineScope()
             val firstFocus = remember { FocusRequester() }
             val lastFocus = remember { FocusRequester() }
             val lastIndex = model.categories.lastIndex
             val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
-            LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
+            // Kept at the current category while hidden; only moves when it is off screen.
+            LaunchedEffect(model.categories) { categoryList.ensureVisible(selectedIndex, model.categories.size) }
             val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
             LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
                 itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
@@ -595,7 +617,11 @@ private fun SidePanel(
         val guideOpen = column == PanelColumn.GUIDE
         Column(
             Modifier
-                .width(if (model.series != null) 420.dp else if (guideOpen) 460.dp else 600.dp)
+                .width(
+                    if (model.series != null) 420.dp
+                    else if (guideOpen) com.enigmacast.ui.components.LivePanelWidths.CHANNELS_WITH_GUIDE
+                    else com.enigmacast.ui.components.LivePanelWidths.CHANNELS,
+                )
                 .then(if (model.series == null) Modifier.padding(horizontal = 12.dp, vertical = 20.dp) else Modifier)
                 .columnKeys(
                 onLeft = {
@@ -621,7 +647,9 @@ private fun SidePanel(
             if (series != null) Header(series.name, model.loading)
             else LiveListHeader(model.category?.name.orEmpty(), model.loading, guideOpen || column == PanelColumn.CATEGORIES)
             if (model.error) Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
-            val state = rememberLazyListState()
+            // Episodes: a list of their own; channels: the list kept at the playing channel while hidden.
+            val episodesState = rememberLazyListState()
+            val state = if (series != null) episodesState else channelList.state
             if (series != null) {
                 val keyedEpisodes = remember(model.episodes) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.episodes, "ep") { it.id } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
@@ -644,7 +672,8 @@ private fun SidePanel(
                 }
             } else {
                 val playingIndex = model.items.indexOfFirst { it.id == model.playing?.item?.id }.coerceAtLeast(0)
-                LaunchedEffect(model.items) { if (model.items.isNotEmpty()) state.scrollToItem(playingIndex) }
+                channelList.TrackRows()
+                LaunchedEffect(model.items) { channelList.ensureVisible(playingIndex, model.items.size) }
                 // Now/next for the rows on screen only; a scroll cancels the batch that was waiting.
                 LaunchedEffect(state, model.items) {
                     snapshotFlow { state.layoutInfo.visibleItemsInfo.map { it.index } }

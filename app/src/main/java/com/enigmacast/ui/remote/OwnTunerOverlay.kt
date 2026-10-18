@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +75,10 @@ import com.enigmacast.live.TunerStatus
 import com.enigmacast.live.text
 import com.enigmacast.ui.components.EnigmaAnimatedOsd
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
+import com.enigmacast.ui.components.KeepAnchored
+import com.enigmacast.ui.components.LivePanelWidths
+import com.enigmacast.ui.components.TrackRows
+import com.enigmacast.ui.components.ensureVisible
 import com.enigmacast.ui.components.EnigmaProgramProgress
 import com.enigmacast.ui.osd.OsdInfoPresenter
 import com.enigmacast.ui.osd.OsdSkins
@@ -117,6 +120,15 @@ fun OwnTunerOverlay(
     val own = ui.own
     val tuner = own.tuner
     val scrim = EnigmaColors.scrim(ui.panelTransparency)
+    // The channel and bouquet lists keep their place while hidden: on every zap they move to the
+    // playing channel / current bouquet silently, so they open there without scrolling.
+    val channelList = com.enigmacast.ui.components.rememberPresetList()
+    val bouquetList = com.enigmacast.ui.components.rememberPresetList()
+    val playingRef = own.channel?.reference.orEmpty()
+    val playingIndex = remember(own.channels, playingRef) { ChannelListNavigation.channelFocusIndex(own.channels, playingRef) }
+    val bouquetIndex = remember(ui.bouquets, own.bouquetReference) { ChannelListNavigation.bouquetFocusIndex(ui.bouquets, own.bouquetReference) }
+    channelList.KeepAnchored(playingIndex, own.channels.size, hidden = !ui.channelList)
+    bouquetList.KeepAnchored(bouquetIndex, ui.bouquets.size, hidden = !(ui.channelList && ui.bouquetPanel))
     Box(modifier = Modifier.fillMaxSize()) {
         val channel = own.channel
         if (own.loadingChannels) {
@@ -237,6 +249,8 @@ fun OwnTunerOverlay(
                 onChooseBouquet = onChooseBouquet,
                 guideActions = guideActions,
                 scrim = scrim,
+                channelList = channelList,
+                bouquetList = bouquetList,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
@@ -554,6 +568,8 @@ private fun ChannelListOverlay(
     onChooseBouquet: (BouquetEntry) -> Unit,
     guideActions: GuideActions,
     scrim: Color,
+    channelList: com.enigmacast.ui.components.PresetList,
+    bouquetList: com.enigmacast.ui.components.PresetList,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -566,6 +582,7 @@ private fun ChannelListOverlay(
                 bouquets = ui.bouquets,
                 activeReference = ui.own.bouquetReference,
                 onChoose = onChooseBouquet,
+                preset = bouquetList,
             )
             Box(Modifier.fillMaxHeight().width(1.dp).background(EnigmaColors.Raised))
         }
@@ -576,6 +593,7 @@ private fun ChannelListOverlay(
             cachedPicon = cachedPicon,
             onZap = onZap,
             onOpenEpg = guideActions.onOpenChannelEpg,
+            preset = channelList,
         )
         if (ui.epgChannel != null) {
             Box(Modifier.fillMaxHeight().width(1.dp).background(EnigmaColors.Raised))
@@ -590,8 +608,10 @@ internal fun BouquetPanel(
     bouquets: List<BouquetEntry>,
     activeReference: String,
     onChoose: (BouquetEntry) -> Unit,
+    preset: com.enigmacast.ui.components.PresetList = com.enigmacast.ui.components.rememberPresetList(),
 ) {
-    val listState = rememberLazyListState()
+    val listState = preset.state
+    preset.TrackRows()
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     val firstFocus = remember { FocusRequester() }
@@ -600,13 +620,14 @@ internal fun BouquetPanel(
     val anchor = ChannelListNavigation.bouquetFocusIndex(bouquets, activeReference)
     LaunchedEffect(bouquets.size) {
         if (bouquets.isEmpty()) return@LaunchedEffect
-        listState.scrollToItem((anchor - 4).coerceAtLeast(0))
+        // Already at the current bouquet (kept while hidden); only moves when it is off screen.
+        preset.ensureVisible(anchor, bouquets.size)
         focus.requestWhenReady()
     }
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(210.dp)
+            .width(LivePanelWidths.CATEGORIES)
             .padding(horizontal = 10.dp, vertical = 20.dp),
     ) {
         Text(stringResource(R.string.osd_bouquets), color = Color.White, fontSize = 17.sp, fontWeight = EnigmaType.Strong)
@@ -656,12 +677,14 @@ private fun ChannelPanel(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     onZap: (BouquetEntry) -> Unit,
     onOpenEpg: (BouquetEntry) -> Unit,
+    preset: com.enigmacast.ui.components.PresetList,
 ) {
     val own = ui.own
     val channels = own.channels
     val current = own.channel?.reference.orEmpty()
     val playingIndex = channels.indexOfFirst { it.reference.equals(current, ignoreCase = true) }
-    val listState = rememberLazyListState()
+    val listState = preset.state
+    preset.TrackRows()
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     val firstFocus = remember { FocusRequester() }
@@ -679,18 +702,17 @@ private fun ChannelPanel(
     }
     // Focus the playing channel when the list opens, after a bouquet was chosen and when
     // the bouquet column or programme panel closes (the token), and once the new bouquet's
-    // channels arrive. The list only scrolls when that channel is off screen.
+    // channels arrive. The list was kept at the playing channel while hidden, so it opens there;
+    // it only moves when that channel is off screen (another bouquet, a closed programme panel).
     LaunchedEffect(ui.listFocusToken, own.bouquetReference, channels.size) {
         if (channels.isEmpty() || ui.bouquetPanel || epgOpen) return@LaunchedEffect
-        val visible = listState.layoutInfo.visibleItemsInfo
-        val onScreen = visible.size > 2 && anchor > visible.first().index && anchor < visible.last().index
-        if (!onScreen) listState.scrollToItem((anchor - 5).coerceAtLeast(0))
+        preset.ensureVisible(anchor, channels.size)
         focus.requestWhenReady()
     }
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(if (epgOpen) 460.dp else 600.dp)
+            .width(if (epgOpen) LivePanelWidths.CHANNELS_WITH_GUIDE else LivePanelWidths.CHANNELS)
             .padding(horizontal = 12.dp, vertical = 20.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(bottom = 8.dp)) {
