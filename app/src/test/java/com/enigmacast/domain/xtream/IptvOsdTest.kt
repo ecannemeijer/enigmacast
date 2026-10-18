@@ -17,10 +17,13 @@ class IptvOsdTest {
     }
 
     @Test fun receiverOptionsAreHidden() {
+        // Record (box timer) and quality (receiver transcoding) belong to the receiver; the guide
+        // and recent channels are the IPTV list, so they only show for live.
         val live = QuickOptions.iptvTiles(vod = false)
-        listOf(QuickOption.RECORD, QuickOption.GUIDE, QuickOption.SEARCH, QuickOption.QUALITY, QuickOption.RECENT).forEach { assertFalse(it in live) }
-        assertFalse(QuickOption.RESTART in live)
-        assertTrue(QuickOption.RESTART in QuickOptions.iptvTiles(vod = true))
+        val vod = QuickOptions.iptvTiles(vod = true)
+        listOf(QuickOption.RECORD, QuickOption.QUALITY).forEach { assertFalse(it in live); assertFalse(it in vod) }
+        listOf(QuickOption.GUIDE, QuickOption.RECENT, QuickOption.PIP).forEach { assertTrue(it in live); assertFalse(it in vod) }
+        assertTrue(QuickOption.RESTART in vod)
     }
 
     @Test fun shortEpgBecomesGuide() {
