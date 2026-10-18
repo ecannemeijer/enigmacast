@@ -1395,4 +1395,15 @@ Profil: %2$s</string>
     <string name="torrent_sort_year">Jahr (neueste)</string>
     <string name="torrent_sort_score">TMDB-Bewertung</string>
     <string name="torrent_resume_other_source">Andere Quelle wählen</string>
+    <string name="osd_play">Abspielen</string>
+    <string name="osd_pause">Pause</string>
+    <string name="osd_rewind">10 s zurück</string>
+    <string name="osd_next_episode">Nächste Folge</string>
+    <string name="osd_settings">Einstellungen</string>
+    <string name="osd_sources">Quellen</string>
+    <string name="osd_speed">Wiedergabegeschwindigkeit</string>
+    <string name="osd_speed_value">Geschwindigkeit: %1$s</string>
+    <string name="osd_subtitle_delay_value">Untertitelverzögerung: %1$s</string>
+    <string name="osd_audio_delay_value">Audioverzögerung: %1$s</string>
+    <string name="osd_other_source">Andere Quelle wählen</string>
 </resources>

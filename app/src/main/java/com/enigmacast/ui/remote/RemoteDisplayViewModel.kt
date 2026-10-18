@@ -179,7 +179,8 @@ data class RemoteDisplayUiState(
     /** Service references of the channels that are being recorded. */
     val recordingReferences: Set<String> = emptySet(),
     /** The recording playback bar is open. */
-    val fileBar: Boolean = false,
+    /** Playback speed of the recording that plays (1 = normal). */
+    val fileSpeed: Float = 1f,
     val fileTitle: String = "",
     /** Programmes with AutoSwitch set ([GuideEvent.programmeKey]). */
     val autoSwitchKeys: Set<String> = emptySet(),
@@ -249,7 +250,8 @@ class RemoteDisplayViewModel @Inject constructor(
     var onLeaveToDashboard: (() -> Unit)? = null
     var onLeaveToMyItems: ((String) -> Unit)? = null
     private var bannerJob: Job? = null
-    private var fileBarJob: Job? = null
+    /** The VOD OSD of a playing recording (shared with the IPTV and torrent players). */
+    val fileOsd = com.enigmacast.ui.player.VodOsdController()
     private var osdInfoJob: Job? = null
     private var osdInfoKey: String? = null
     private var numberJob: Job? = null
@@ -266,7 +268,8 @@ class RemoteDisplayViewModel @Inject constructor(
         inputBus.handler = ::handleKey
         viewModelScope.launch {
             playback.state.collect { state ->
-                if (!state.filePlayback && _ui.value.fileBar) hideFileBar()
+                if (!state.filePlayback && fileOsd.visible) hideFileBar()
+                if (!state.filePlayback && _ui.value.fileSpeed != 1f) _ui.update { it.copy(fileSpeed = 1f) }
             }
         }
         viewModelScope.launch {
@@ -452,23 +455,15 @@ class RemoteDisplayViewModel @Inject constructor(
         showNotice(UiText.res(R.string.search_bouquet_set, name))
     }
 
-    fun showFileBar() {
-        _ui.update { it.copy(fileBar = true) }
-        armFileBarHide()
-    }
+    fun showFileBar() = fileOsd.show()
 
-    fun touchFileBar() {
-        if (_ui.value.fileBar) armFileBarHide()
-    }
+    fun touchFileBar() = fileOsd.touch()
 
-    fun hideFileBar() {
-        fileBarJob?.cancel()
-        _ui.update { it.copy(fileBar = false) }
-    }
+    fun hideFileBar() = fileOsd.hide()
 
-    fun openFileOptions() {
-        touchFileBar()
-        openQuickBar()
+    fun setFileSpeed(speed: Float) {
+        playback.setFileSpeed(speed)
+        _ui.update { it.copy(fileSpeed = speed) }
     }
 
     fun seekFile(positionMs: Long) {
@@ -481,21 +476,12 @@ class RemoteDisplayViewModel @Inject constructor(
         touchFileBar()
     }
 
-    private fun armFileBarHide() {
-        fileBarJob?.cancel()
-        fileBarJob = viewModelScope.launch {
-            delay(8_000)
-            if (!_ui.value.quickBar) _ui.update { it.copy(fileBar = false) }
-        }
-    }
-
     /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
     fun closeQuickBar() {
         if (!_ui.value.quickBar) return
         _ui.update { it.copy(quickBar = false, searchOpen = false) }
         if (_ui.value.playerState.filePlayback) {
-            _ui.update { it.copy(fileBar = true) }
-            armFileBarHide()
+            fileOsd.show()
         } else if (_ui.value.ownTuner && _ui.value.banner) {
             showBanner()
         }
@@ -1346,30 +1332,17 @@ class RemoteDisplayViewModel @Inject constructor(
             if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) closeQuickBar()
             return event.keyCode == KeyEvent.KEYCODE_BACK
         }
-        if (ui.fileBar) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_BACK -> {
-                    if (event.action == KeyEvent.ACTION_UP) hideFileBar()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) toggleFilePause()
-                    return true
-                }
-            }
-            return false
+        // Back hides the OSD, Back again leaves the recording.
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP) { if (fileOsd.visible) hideFileBar() else leaveRecording() }
+            return true
         }
-        when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (event.action == KeyEvent.ACTION_UP && event.repeatCount == 0) showFileBar()
-            }
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                if (event.action == KeyEvent.ACTION_UP) playback.toggleFilePause()
-            }
-            KeyEvent.KEYCODE_BACK -> if (event.action == KeyEvent.ACTION_UP) leaveRecording()
+        // The rest as in the IPTV and torrent players (VodOsdKeys); when the OSD is shown its
+        // focused control gets the D-pad (the key-up of a key used here is ignored by it).
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            return fileOsd.onKeyDown(event.keyCode, event.repeatCount, playback::toggleFilePause) || !fileOsd.visible
         }
-        return true
+        return !fileOsd.visible
     }
 
     /** Back from a recording: stop the file and return to that row in My Items. */

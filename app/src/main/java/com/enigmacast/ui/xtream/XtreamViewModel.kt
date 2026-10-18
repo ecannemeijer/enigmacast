@@ -585,6 +585,17 @@ class XtreamViewModel @Inject constructor(
 
     fun dismissUpcoming() { nextDismissedFor = playing?.episode?.id }
 
+    /** The episode after the one playing (for the OSD's Next button), any time. */
+    fun nextEpisode(): XtreamEpisode? = playing?.episode?.let { com.enigmacast.domain.xtream.NextEpisode.after(it, playbackEpisodes) }
+
+    var playbackSpeed by mutableStateOf(1f)
+        private set
+
+    fun choosePlaybackSpeed(value: Float) {
+        playbackSpeed = value
+        player?.setPlaybackSpeed(value)
+    }
+
     /** Starts the next episode from the beginning. */
     fun playUpcoming() {
         val current = playing?.episode ?: return
@@ -1123,6 +1134,8 @@ class XtreamViewModel @Inject constructor(
         playerError = null
         playing = what
         cues = emptyList()
+        // Speed is per film/episode: each one starts at normal speed.
+        if (playbackSpeed != 1f) { playbackSpeed = 1f; player?.setPlaybackSpeed(1f) }
         clearExternalSubtitles()
         mediaUrl = url
         mediaLive = live

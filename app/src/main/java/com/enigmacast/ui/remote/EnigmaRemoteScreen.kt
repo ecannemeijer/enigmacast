@@ -176,28 +176,35 @@ fun EnigmaRemoteScreen(
             )
         }
         if (ui.playerState.filePlayback) {
-            Column(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (ui.fileBar && !ui.quickBar) {
-                    RecordingBar(
-                        ui = ui,
-                        onSeek = viewModel::seekFile,
-                        onTogglePause = viewModel::toggleFilePause,
-                        onOptions = viewModel::openFileOptions,
-                        onTouch = viewModel::touchFileBar,
-                    )
-                }
-                if (ui.fileBar || ui.quickBar) {
-                    QuickOptionsBar(
-                        ui = ui,
-                        actions = quickBarActions,
-                        interactive = ui.quickBar,
-                        modifier = Modifier.padding(bottom = 2.dp),
-                    )
-                }
-            }
+            // Recordings: the same Stremio-style VOD OSD as IPTV films and torrents.
+            com.enigmacast.ui.player.VodPlayerOsd(
+                controller = viewModel.fileOsd,
+                model = com.enigmacast.ui.player.VodOsdModel(
+                    title = ui.fileTitle.ifBlank { stringResource(R.string.nav_my_items) },
+                    player = ui.playerState,
+                    tracks = ui.tracks,
+                    pictureMode = ui.pictureMode,
+                    audioDelayMs = ui.audioDelayMs,
+                    subtitleDelayMs = ui.subtitleDelayMs,
+                    speed = ui.fileSpeed,
+                    hdmiPassthrough = ui.hdmiPassthrough,
+                    sleepEndsAtMs = ui.sleepEndsAtMs,
+                ),
+                actions = com.enigmacast.ui.player.VodOsdActions(
+                    onTogglePause = viewModel::toggleFilePause,
+                    onSeek = viewModel::seekFile,
+                    onSubtitles = quickBarActions.onSubtitles,
+                    onAudio = quickBarActions.onAudio,
+                    onPictureMode = quickBarActions.onPictureMode,
+                    onAudioDelay = quickBarActions.onAudioDelay,
+                    onSubtitleDelay = quickBarActions.onSubtitleDelay,
+                    onRestart = viewModel::restartFromBar,
+                    onSpeed = viewModel::setFileSpeed,
+                    onPassthrough = quickBarActions.onPassthrough,
+                    onSleep = quickBarActions.onSleep,
+                ),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         } else if (ui.ownTuner) {
             OwnTunerOverlay(
                 ui = ui,

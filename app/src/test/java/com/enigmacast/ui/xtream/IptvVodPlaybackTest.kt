@@ -1,7 +1,6 @@
 package com.enigmacast.ui.xtream
 
-import android.view.KeyEvent
-import com.enigmacast.ui.remote.SeekSteps
+import com.enigmacast.domain.player.VodOsdKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,24 +15,9 @@ class IptvVodPlaybackTest {
         assertEquals(90_000L, IptvResume.offer(90_000))
     }
 
-    @Test fun keysWithoutBar() {
-        assertEquals(VodBarKeys.Action.SHOW, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_CENTER, false))
-        assertEquals(VodBarKeys.Action.SHOW, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_RIGHT, false))
-        assertEquals(VodBarKeys.Action.PLAYER, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_DOWN, false))
-        assertEquals(VodBarKeys.Action.FORWARD, VodBarKeys.action(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, false))
-        assertEquals(VodBarKeys.Action.REWIND, VodBarKeys.action(KeyEvent.KEYCODE_MEDIA_REWIND, true))
-        assertEquals(VodBarKeys.Action.PAUSE, VodBarKeys.action(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, true))
-    }
-
-    @Test fun barOwnsDpad() {
-        assertEquals(VodBarKeys.Action.PAUSE, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_CENTER, true))
-        assertEquals(VodBarKeys.Action.BAR, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_DOWN, true))
-        assertEquals(VodBarKeys.Action.BAR, VodBarKeys.action(KeyEvent.KEYCODE_DPAD_LEFT, true))
-    }
-
     @Test fun holdingGoesFaster() {
-        assertEquals(10_000L, SeekSteps.scrub(0))
-        assertEquals(30_000L, SeekSteps.scrub(10))
-        assertEquals(60_000L, SeekSteps.scrub(25))
+        assertEquals(10_000L, VodOsdKeys.scrubStep(0))
+        assertEquals(30_000L, VodOsdKeys.scrubStep(10))
+        assertEquals(60_000L, VodOsdKeys.scrubStep(25))
     }
 }

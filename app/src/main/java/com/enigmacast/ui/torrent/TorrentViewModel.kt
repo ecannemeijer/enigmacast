@@ -400,6 +400,11 @@ class TorrentViewModel @Inject constructor(
     private val lastStreams = context.getSharedPreferences("torrent_last_stream", Context.MODE_PRIVATE)
     /** Set by Resume / another source: the player seeks here when ready instead of asking. */
     private var seekOnStart: Long? = null
+    private var playingTitle: TmdbTitle? = null
+    private var playingSubtitle = ""
+    /** The OSD title: "Title (year)" or "Title · S1E2 · Episode". */
+    var osdTitle by mutableStateOf("")
+        private set
 
     // ---- Subtitles: the IPTV player's SubSource flow (XtreamViewModel) ----
     var cues by mutableStateOf<List<androidx.media3.common.text.Cue>>(emptyList())
@@ -435,6 +440,9 @@ class TorrentViewModel @Inject constructor(
      */
     private fun startStream(title: TmdbTitle, subtitle: String, stream: TorrentStream, streams: List<TorrentStream>?, legacyKey: String) {
         val o = TorrentOverlay.Streams(title, subtitle, streams, false, legacyKey)
+        playingTitle = title
+        playingSubtitle = subtitle
+        osdTitle = com.enigmacast.domain.player.VodOsdKeys.title(title.title, title.year, streamSeason, streamEpisode, streamEpisodeName)
         resumeKey = o.resumeKey
         resumeTarget = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(o.title, streamSeason, streamEpisode, streamEpisodeName, 0, 0, 0)
         val rememberKey = resumeTarget?.let { LastStream.key(it.kind, it.id) }
@@ -856,6 +864,28 @@ class TorrentViewModel @Inject constructor(
             returnOrigin = null
             if (origin != null) leaveTo = origin else restoreToken++
         }
+        releasePlayback()
+    }
+
+    /** OSD globe: the streams of what plays; the one picked continues at the current place. */
+    fun chooseOtherSource() {
+        val title = playingTitle ?: return
+        val at = player?.currentPosition ?: 0L
+        releasePlayback()
+        seekOnStart = at.takeIf { it >= ResumePolicy.MIN_RESUME_MS }
+        openStreamList(title, streamSeason, streamEpisode, playingSubtitle)
+    }
+
+    var playbackSpeed by mutableStateOf(1f)
+        private set
+
+    fun choosePlaybackSpeed(value: Float) {
+        playbackSpeed = value
+        player?.setPlaybackSpeed(value)
+    }
+
+    private fun releasePlayback() {
+        playbackSpeed = 1f
         tickJob?.cancel()
         saveResume()
         resumeAsk = null

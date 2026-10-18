@@ -1425,4 +1425,15 @@ Profiel: %2$s</string>
     <string name="torrent_sort_year">Jaar (nieuwste)</string>
     <string name="torrent_sort_score">TMDB-score</string>
     <string name="torrent_resume_other_source">Andere bron kiezen</string>
+    <string name="osd_play">Afspelen</string>
+    <string name="osd_pause">Pauze</string>
+    <string name="osd_rewind">10 s terug</string>
+    <string name="osd_next_episode">Volgende aflevering</string>
+    <string name="osd_settings">Instellingen</string>
+    <string name="osd_sources">Bronnen</string>
+    <string name="osd_speed">Afspeelsnelheid</string>
+    <string name="osd_speed_value">Snelheid: %1$s</string>
+    <string name="osd_subtitle_delay_value">Ondertitelvertraging: %1$s</string>
+    <string name="osd_audio_delay_value">Audiovertraging: %1$s</string>
+    <string name="osd_other_source">Andere bron kiezen</string>
 </resources>

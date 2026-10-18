@@ -498,6 +498,7 @@ class LivePlaybackController @Inject constructor(
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .build()
         val item = MediaItem.Builder().setUri(url).setMimeType(MimeTypes.VIDEO_MP2T).build()
+        exo.setPlaybackSpeed(1f)
         if (startMs > 0) exo.setMediaItem(item, startMs) else exo.setMediaItem(item, true)
         exo.prepare()
         exo.playWhenReady = true
@@ -531,10 +532,18 @@ class LivePlaybackController @Inject constructor(
     }
 
     private fun endFilePlayback() {
+        player?.setPlaybackSpeed(1f)
         filePlayback = false
         fileDurationMs = 0L
         fileClock?.cancel()
         fileClock = null
+    }
+
+    /** Recording speed (OSD settings); a new file starts at normal speed. */
+    fun setFileSpeed(speed: Float) {
+        val exo = player ?: return
+        if (!filePlayback) return
+        exo.setPlaybackSpeed(speed)
     }
 
     fun toggleFilePause() {

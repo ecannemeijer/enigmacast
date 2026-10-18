@@ -86,7 +86,6 @@ import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.ui.theme.skinShape
-import com.enigmacast.ui.xtream.VodBarKeys
 import kotlinx.coroutines.delay
 
 /**
@@ -615,35 +614,18 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
 
 @Composable
 private fun TorrentPlayer(model: TorrentViewModel) {
-    var bar by remember { mutableStateOf(false) }
-    var touch by remember { mutableIntStateOf(0) }
-    var options by remember { mutableStateOf(false) }
-    var optionsToken by remember { mutableIntStateOf(0) }
+    val osd = remember { com.enigmacast.ui.player.VodOsdController() }
     val root = remember { FocusRequester() }
-    LaunchedEffect(bar, touch, options) {
-        if (bar && !options) { delay(5_000); bar = false; runCatching { root.requestFocus() } }
-    }
     LaunchedEffect(Unit) { root.requestWhenReady() }
+    // Hidden again (Back or 5 s without a key): the keys come back to the player.
+    LaunchedEffect(osd.visible) { if (!osd.visible) runCatching { root.requestFocus() } }
     LaunchedEffect(model.playerState.playbackState) { if (model.playerState.playbackState == "ENDED") model.stopPlayback() }
-    BackHandler {
-        when {
-            options -> { options = false; bar = false; runCatching { root.requestFocus() } }
-            bar -> { bar = false; runCatching { root.requestFocus() } }
-            else -> model.stopPlayback()
-        }
-    }
+    BackHandler { if (osd.visible) osd.hide() else model.stopPlayback() }
     Box(
         Modifier.fillMaxSize().background(Color.Black).focusRequester(root)
             .onPreviewKeyEvent { e ->
-                if (e.type != KeyEventType.KeyDown || options) return@onPreviewKeyEvent false
-                when (VodBarKeys.action(e.nativeKeyEvent.keyCode, bar)) {
-                    VodBarKeys.Action.SHOW -> { if (e.nativeKeyEvent.repeatCount == 0) { bar = true; touch++ }; true }
-                    VodBarKeys.Action.FORWARD -> { model.seekTo(model.playerState.positionMs + VodBarKeys.FF_MS); bar = true; touch++; true }
-                    VodBarKeys.Action.REWIND -> { model.seekTo(model.playerState.positionMs - VodBarKeys.FF_MS); bar = true; touch++; true }
-                    VodBarKeys.Action.PAUSE -> { if (e.nativeKeyEvent.repeatCount == 0) { model.togglePause(); touch++ }; true }
-                    VodBarKeys.Action.BAR -> { touch++; false }
-                    VodBarKeys.Action.PLAYER -> false
-                }
+                if (e.type != KeyEventType.KeyDown || model.resumeAsk != null) return@onPreviewKeyEvent false
+                osd.onKeyDown(e.nativeKeyEvent.keyCode, e.nativeKeyEvent.repeatCount, model::togglePause)
             }
             .focusable(),
     ) {
@@ -657,50 +639,31 @@ private fun TorrentPlayer(model: TorrentViewModel) {
             modifier = Modifier.fillMaxSize(),
         )
         if (ps.playbackState == "BUFFERING") EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
-        if (bar) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                com.enigmacast.ui.remote.RecordingBar(
-                    title = model.playing.orEmpty(),
-                    positionMs = ps.positionMs,
-                    durationMs = ps.durationMs,
-                    playing = ps.playing,
-                    onSeek = { model.seekTo(it); touch++ },
-                    onTogglePause = { model.togglePause(); touch++ },
-                    onOptions = { options = true; optionsToken++ },
-                    onTouch = { touch++ },
-                )
-                if (options) {
-                    com.enigmacast.ui.remote.QuickOptionsBar(
-                        ui = com.enigmacast.ui.remote.RemoteDisplayUiState(
-                            playerState = ps,
-                            tracks = model.tracks,
-                            pictureMode = model.pictureMode,
-                            audioDelayMs = model.audioDelayMs,
-                            subtitleDelayMs = model.subtitleDelayMs,
-                            quickBarToken = optionsToken,
-                        ),
-                        actions = com.enigmacast.ui.remote.QuickBarActions(
-                            onSubtitles = model::chooseSubtitles,
-                            onAudio = model::chooseAudio,
-                            onPassthrough = {},
-                            onPictureMode = model::choosePictureMode,
-                            onAudioDelay = model::setAudioDelay,
-                            onSubtitleDelay = model::setSubtitleDelay,
-                            onGuide = {},
-                            onRecent = {},
-                            onSleep = {},
-                            onRestart = model::restart,
-                            onQuality = {},
-                            onRecord = {},
-                            onSearch = {},
-                        ),
-                        iptv = true,
-                        interactive = true,
-                        modifier = Modifier.padding(bottom = 2.dp),
-                    )
-                }
-            }
-        }
+        com.enigmacast.ui.player.VodPlayerOsd(
+            controller = osd,
+            model = com.enigmacast.ui.player.VodOsdModel(
+                title = model.osdTitle.ifBlank { model.playing.orEmpty() },
+                player = ps,
+                tracks = model.tracks,
+                pictureMode = model.pictureMode,
+                audioDelayMs = model.audioDelayMs,
+                subtitleDelayMs = model.subtitleDelayMs,
+                speed = model.playbackSpeed,
+            ),
+            actions = com.enigmacast.ui.player.VodOsdActions(
+                onTogglePause = model::togglePause,
+                onSeek = model::seekTo,
+                onSubtitles = model::chooseSubtitles,
+                onAudio = model::chooseAudio,
+                onPictureMode = model::choosePictureMode,
+                onAudioDelay = model::setAudioDelay,
+                onSubtitleDelay = model::setSubtitleDelay,
+                onRestart = model::restart,
+                onSpeed = model::choosePlaybackSpeed,
+                onSources = { osd.hide(); model.chooseOtherSource() },
+            ),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
         model.resumeAsk?.let { at ->
             TvChoiceDialog(
                 title = stringResource(R.string.resume_title),
