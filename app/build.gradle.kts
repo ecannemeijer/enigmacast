@@ -76,6 +76,12 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.okhttp)
+    // Torrent streaming: libtorrent (Java part + native .so per ABI) and a tiny local HTTP server.
+    implementation(libs.jlibtorrent)
+    implementation(libs.jlibtorrent.android.arm)
+    implementation(libs.jlibtorrent.android.arm64)
+    implementation(libs.jlibtorrent.android.x64)
+    implementation(libs.nanohttpd)
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

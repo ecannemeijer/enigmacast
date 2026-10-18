@@ -69,6 +69,20 @@ class TmdbHttp @Inject constructor(
         ),
     )
 
+    /** Torrent page: popular movies (/movie/popular) or series (/tv/popular), [page] from 1. */
+    suspend fun popular(tv: Boolean, page: Int, language: String): String? =
+        get(if (tv) "/tv/popular" else "/movie/popular", listOf("language" to language, "page" to page.toString()))
+
+    suspend fun searchPage(tv: Boolean, query: String, page: Int, language: String): String? =
+        get(if (tv) "/search/tv" else "/search/movie", listOf("query" to query, "language" to language, "page" to page.toString(), "include_adult" to "false"))
+
+    /** {"imdb_id": "tt…"} for a movie or series. */
+    suspend fun externalIds(tv: Boolean, id: Int): String? = get(if (tv) "/tv/$id/external_ids" else "/movie/$id/external_ids", emptyList())
+
+    suspend fun tvBasic(id: Int, language: String): String? = get("/tv/$id", listOf("language" to language))
+
+    suspend fun season(tvId: Int, season: Int, language: String): String? = get("/tv/$tvId/season/$season", listOf("language" to language))
+
     private suspend fun get(path: String, params: List<Pair<String, String>>): String? {
         val key = apiKey()
         if (key.isBlank()) return null

@@ -79,6 +79,10 @@
             android:name=".live.RecordingCaptureService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".torrent.TorrentStreamingService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <receiver
             android:name=".live.RecordingAlarmReceiver"
             android:exported="false">
