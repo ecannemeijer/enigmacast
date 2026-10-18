@@ -647,7 +647,7 @@ class XtreamViewModel @Inject constructor(
                 delay(500)
                 val p = player ?: continue
                 val duration = p.duration.takeIf { it > 0 } ?: catchupDurationMs
-                playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = duration)
+                playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = duration, bufferedPositionMs = p.bufferedPosition.coerceAtLeast(0))
                 sinceSave += 500
                 if (sinceSave >= com.enigmacast.domain.resume.ResumePolicy.SAVE_EVERY_MS && p.isPlaying) { sinceSave = 0; saveResume() }
             }

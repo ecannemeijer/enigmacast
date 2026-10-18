@@ -66,4 +66,11 @@ class VodOsdKeysTest {
         assertEquals("1.25×", VodOsdKeys.speedLabel(1.25f))
         assertEquals("0.5×", VodOsdKeys.speedLabel(0.5f))
     }
+
+    @Test fun bufferedBarIsAheadOfThePlayedPartOnly() {
+        org.junit.Assert.assertEquals(0.5f, VodOsdKeys.bufferedFraction(10_000, 50_000, 100_000), 0.0001f)
+        org.junit.Assert.assertEquals(0f, VodOsdKeys.bufferedFraction(60_000, 50_000, 100_000), 0.0001f)
+        org.junit.Assert.assertEquals(0f, VodOsdKeys.bufferedFraction(0, 50_000, 0), 0.0001f)
+        org.junit.Assert.assertEquals(1f, VodOsdKeys.bufferedFraction(0, 150_000, 100_000), 0.0001f)
+    }
 }

@@ -259,6 +259,7 @@ fun VodPlayerOsd(
             controller = controller,
             positionMs = model.player.positionMs,
             durationMs = model.player.durationMs,
+            bufferedMs = model.player.bufferedPositionMs,
             onSeek = actions.onSeek,
             onTogglePause = actions.onTogglePause,
             modifier = Modifier
@@ -349,6 +350,7 @@ private fun SeekBar(
     controller: VodOsdController,
     positionMs: Long,
     durationMs: Long,
+    bufferedMs: Long,
     onSeek: (Long) -> Unit,
     onTogglePause: () -> Unit,
     modifier: Modifier = Modifier,
@@ -416,7 +418,10 @@ private fun SeekBar(
         contentAlignment = Alignment.CenterStart,
     ) {
         val played = maxWidth * fraction
-        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.55f), RoundedCornerShape(2.dp)))
+        // Track, then how far the file is available ahead (lighter), then the played part.
+        val buffered = maxWidth * VodOsdKeys.bufferedFraction(positionMs, bufferedMs, durationMs)
+        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(2.dp)))
+        if (buffered > 0.dp) Box(Modifier.width(buffered).height(4.dp).background(Color.White.copy(alpha = 0.55f), RoundedCornerShape(2.dp)))
         Box(Modifier.width(played).height(4.dp).background(Color.White, RoundedCornerShape(2.dp)))
         val thumb = if (focused) 18.dp else 12.dp
         Box(

@@ -70,4 +70,13 @@ object VodOsdKeys {
 
     fun speedLabel(speed: Float): String =
         (if (speed == speed.toInt().toFloat()) speed.toInt().toString() else speed.toString().trimEnd('0')) + "×"
+
+    /**
+     * The buffered bar's share of the seek bar: [bufferedMs] of [durationMs], never behind the
+     * played [positionMs] (a seek ahead of the buffer shows none). 0 when the length is unknown.
+     */
+    fun bufferedFraction(positionMs: Long, bufferedMs: Long, durationMs: Long): Float {
+        if (durationMs <= 0 || bufferedMs <= positionMs) return 0f
+        return (bufferedMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    }
 }

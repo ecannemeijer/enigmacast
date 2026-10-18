@@ -417,6 +417,8 @@ data class PlayerState(
     val pixelRatio: Float = 1f,
     val positionMs: Long = 0,
     val durationMs: Long = 0,
+    /** How far playback can continue without waiting (VOD/recordings/torrents), for the seek bar. */
+    val bufferedPositionMs: Long = 0,
     val playing: Boolean = false,
     val filePlayback: Boolean = false,
     /** Song title from the stream (ICY / HLS), empty when the stream does not send one. */

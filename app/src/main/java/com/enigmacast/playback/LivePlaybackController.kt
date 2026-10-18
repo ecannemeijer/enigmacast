@@ -933,6 +933,7 @@ class LivePlaybackController @Inject constructor(
             pixelRatio = exo.videoSize.pixelWidthHeightRatio,
             positionMs = exo.currentPosition.coerceAtLeast(0),
             durationMs = exo.duration.takeIf { it > 0 } ?: fileDurationMs,
+            bufferedPositionMs = exo.bufferedPosition.coerceAtLeast(0),
             playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED,
             filePlayback = filePlayback,
             streamTitle = streamTitle(exo),

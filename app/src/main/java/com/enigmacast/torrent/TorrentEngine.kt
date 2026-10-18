@@ -138,20 +138,25 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
             .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.max_out_request_queue), 1500)
             .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.max_allowed_in_request_queue), 2000)
             // Connect quickly to many candidates; drop slow pieces/peers sooner.
-            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.connection_speed), 50)
+            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.connection_speed), 100)
             .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.torrent_connect_boost), 40)
-            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.peer_connect_timeout), 7)
+            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.peer_connect_timeout), 5)
             .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.request_timeout), 10)
             .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.piece_timeout), 10)
-            // Uploading normally (tit-for-tat) keeps peers unchoking us; enough slots for that.
-            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.unchoke_slots_limit), 8)
+            // Uploading normally (tit-for-tat) keeps peers unchoking us: enough upload slots for that.
+            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.unchoke_slots_limit), 20)
+            // Hash checks and disk writes must keep up with a fast swarm on a TV CPU.
+            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.aio_threads), 8)
+            .setInteger(int(com.frostwire.jlibtorrent.swig.settings_pack.int_types.hashing_threads), 2)
+            // libtorrent's default knows a single DHT router; with only a magnet that delays the first peers.
+            .setString(com.frostwire.jlibtorrent.swig.settings_pack.string_types.dht_bootstrap_nodes.swigValue(), DHT_BOOTSTRAP)
     }
 
     /**
      * Fetches the metadata, starts the download of the stream's file and waits until the first
      * ~8 MB and the last pieces are there. Returns the local http address to play.
      */
-    suspend fun open(stream: TorrentStream): String = withContext(Dispatchers.IO) {
+    suspend fun open(stream: TorrentStream, resumeMs: Long = 0, durationMs: Long = 0): String = withContext(Dispatchers.IO) {
         stopActive()
         val magnet = StremioStreams.magnet(stream) ?: throw IOException("no info hash")
         _progress.value = TorrentProgress(TorrentStage.METADATA)
@@ -164,8 +169,10 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
             val info = TorrentInfo.bdecode(bytes)
             val files = info.files()
             val index = chooseFile(stream.fileIdx, files.numFiles(), { files.fileName(it) }, { files.fileSize(it) })
-            // Only the chosen file: every other file IGNORE, the full array at once.
-            val priorities = Priority.array(Priority.IGNORE, files.numFiles()).also { it[index] = Priority.SEVEN }
+            // Only the chosen file: every other file IGNORE, the full array at once. The file itself
+            // at normal priority: the window loop raises the pieces ahead of the reader to the top.
+            // (With the whole file at SEVEN, sequential mode picks rarest-first over all of it.)
+            val priorities = Priority.array(Priority.IGNORE, files.numFiles()).also { it[index] = Priority.FOUR }
             sm.download(info, dir, null, priorities, null, TorrentFlags.SEQUENTIAL_DOWNLOAD)
             var handle: TorrentHandle? = null
             repeat(50) { if (handle == null) { handle = sm.find(info)?.takeIf { it.isValid }; if (handle == null) delay(100) } }
@@ -185,15 +192,20 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
                 lastPiece = pieces.last,
             )
             active = file
-            bitrateBytesPerSec = 0
-            // Startup: the head (≈4 % of the file, 8–64 MB, contiguous from its first piece) and the
-            // last pieces (mkv cues / mp4 moov). The tail first, then the head in order.
-            val startup = StreamWindow.startupPieces(file.offset, file.size, file.pieceLength)
+            bitrateBytesPerSec = if (durationMs > 0) size * 1000 / durationMs else 0
+            // Startup: the head (≈4 % of the file, 8–64 MB) from where playback starts (the resume
+            // point, else the file start), the last pieces (mkv cues / mp4 moov) and on a resume the
+            // container header. Top priority, deadlines paced at the bitrate (the tail at once).
+            val startByte = StreamWindow.startByteFor(resumeMs, durationMs, size)
+            val startup = StreamWindow.startupPieces(file.offset, file.size, file.pieceLength, startByte)
             val tailPieces = (file.lastPiece - StreamWindow.TAIL_PIECES + 1).coerceAtLeast(file.firstPiece)..file.lastPiece
-            val tail = startup.filter { it in tailPieces }
-            tail.forEach { h.setPieceDeadline(it, 0) }
-            startup.filter { it !in tail }.forEachIndexed { i, p -> h.setPieceDeadline(p, StreamWindow.FIRST_MS + i * StreamWindow.STEP_MS) }
-            windowJob = scope.launch { slideWindow(file) }
+            val step = StreamWindow.pieceMs(file.pieceLength, bitrateBytesPerSec)
+            startup.forEach { h.piecePriority(it, Priority.SEVEN) }
+            startup.filter { it in tailPieces }.forEach { h.setPieceDeadline(it, 0) }
+            startup.filter { it !in tailPieces }.forEachIndexed { i, p -> h.setPieceDeadline(p, (i * step / 2).toInt()) }
+            readers.clear()
+            startReader = Reader(startByte)
+            windowJob = scope.launch { slideWindow(file, startup.toSet()) }
             _progress.value = TorrentProgress(TorrentStage.BUFFERING)
             val started = System.currentTimeMillis()
             while (true) {
@@ -250,54 +262,91 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
 
     internal fun closeReader(id: Int) { readers.remove(id) }
 
-    /** The piece being played: where the most recently active reader is. */
-    private fun playhead(f: ActiveFile): Int? =
-        readers.values.maxByOrNull { it.touchedMs }?.let { PieceMath.pieceAt(f.offset, it.pos.coerceAtMost(f.size - 1), f.pieceLength) }
+    /** Before the player's first request: where playback will start (the resume point). */
+    @Volatile private var startReader: Reader? = null
+
+    /** Byte position of the stream: the most recently active reader. */
+    private fun readPosition(): Long? = (readers.values.maxByOrNull { it.touchedMs } ?: startReader)?.pos
 
     /**
-     * Every 500 ms (or at once on a seek): staggered deadlines and top priority on the missing
-     * pieces of the window after the playhead; deadlines dropped for pieces that left it.
+     * Every 500 ms (or at once on a seek / blocked read): pieces behind the reader not wanted,
+     * the read-ahead window top priority, the rest normal; deadlines only on the next few
+     * seconds, paced at the bitrate and set once per piece.
      */
-    private suspend fun slideWindow(f: ActiveFile) {
+    private suspend fun slideWindow(f: ActiveFile, startup: Set<Int>) {
         val h = f.handle
-        val withDeadline = HashSet<Int>()
+        val withDeadline = HashSet<Int>(startup)
+        // Priorities as set in libtorrent (file pieces only), to change only what moved.
+        val prio = IntArray(f.lastPiece - f.firstPiece + 1) { StreamWindow.PRIORITY_NORMAL }
+        startup.forEach { prio[it - f.firstPiece] = StreamWindow.PRIORITY_TOP }
         var lastHead: Int? = null
+        var lastEnd = -1
+        var startupLeft = true
         var lastLog = 0L
         while (!f.closed) {
             runCatching {
-                val head = playhead(f) ?: f.firstPiece
-                val count = StreamWindow.pieceCount(f.pieceLength, bitrateBytesPerSec)
-                if (StreamWindow.isSeek(lastHead, head, count)) {
-                    withDeadline.forEach { if (!h.havePiece(it)) h.resetPieceDeadline(it) }
-                    withDeadline.clear()
+                val pos = (readPosition() ?: 0L).coerceIn(0, f.size - 1)
+                val head = PieceMath.pieceAt(f.offset, pos, f.pieceLength)
+                val end = StreamWindow.windowEnd(f.offset, f.size, f.pieceLength, pos, bitrateBytesPerSec)
+                if (StreamWindow.isSeek(lastHead, head, end - head + 1)) {
+                    withDeadline.forEach { if (!h.havePiece(it) && it !in startup) h.resetPieceDeadline(it) }
+                    withDeadline.retainAll(startup)
                 }
-                val window = StreamWindow.window(head, f.lastPiece, count)
-                StreamWindow.stale(withDeadline, window).forEach { p ->
+                if (head != lastHead || end != lastEnd || startupLeft) {
+                    startupLeft = startup.any { !h.havePiece(it) }
+                    var changed = 0
+                    for (p in f.firstPiece..f.lastPiece) {
+                        // The startup pieces (resume header, tail) stay top until verified, wherever the reader is.
+                        val want = if (p in startup) StreamWindow.PRIORITY_TOP else StreamWindow.priorityOf(p, head, end, f.lastPiece)
+                        val i = p - f.firstPiece
+                        if (prio[i] == want || h.havePiece(p)) continue
+                        prio[i] = want
+                        h.piecePriority(p, Priority.fromSwig(want))
+                        changed++
+                    }
+                    if (changed > 0 && lastHead != null && head != lastHead && StreamWindow.isSeek(lastHead, head, end - head + 1)) {
+                        EnigmaLog.player("torrent seek to piece $head ($changed priorities)")
+                    }
+                }
+                StreamWindow.behind(withDeadline - startup, head).forEach { p ->
                     if (!h.havePiece(p)) h.resetPieceDeadline(p)
                     withDeadline.remove(p)
                 }
-                val due = StreamWindow.deadlines(window, h::havePiece)
-                due.forEach { (p, ms) ->
-                    h.piecePriority(p, Priority.SEVEN)
-                    h.setPieceDeadline(p, ms)
-                    withDeadline += p
+                withDeadline.removeAll { h.havePiece(it) }
+                StreamWindow.criticalDeadlines(head, f.lastPiece, f.pieceLength, bitrateBytesPerSec, h::havePiece, withDeadline).forEach { d ->
+                    h.setPieceDeadline(d.piece, d.deadlineMs)
+                    withDeadline += d.piece
                 }
-                withDeadline.retainAll(due.mapTo(HashSet()) { it.piece })
                 lastHead = head
+                lastEnd = end
                 val now = System.currentTimeMillis()
                 if (now - lastLog > LOG_EVERY_MS) {
                     lastLog = now
                     val st = h.status()
+                    val ahead = StreamWindow.contiguousEnd(f.offset, f.size, f.pieceLength, pos, h::havePiece) - pos
                     EnigmaLog.player(
-                        "torrent window ${window.first}..${window.last} missing ${due.size}/${window.count()}, " +
+                        "torrent head $head window ..$end deadlines ${withDeadline.size}, ready ahead ${ahead shr 20} MB, " +
                             "file ${(f.firstPiece..f.lastPiece).count(h::havePiece)}/${f.lastPiece - f.firstPiece + 1} pieces, " +
-                            "${st.downloadRate() / 1024} KB/s, peers ${st.numPeers()} (seeds ${st.numSeeds()})",
+                            "${st.downloadRate() / 1024} KB/s, peers ${st.numPeers()} (seeds ${st.numSeeds()}), " +
+                            "redundant ${st.totalRedundantBytes() shr 20} MB",
                     )
                 }
             }
             kotlinx.coroutines.withTimeoutOrNull(WINDOW_TICK_MS) { wake.receive() }
         }
     }
+
+    /**
+     * End of the data that can be played without waiting, from byte [pos] of the stream (for the
+     * OSD's buffered bar); null when nothing is streaming.
+     */
+    fun contiguousEnd(pos: Long): Long? {
+        val f = active ?: return null
+        return runCatching { StreamWindow.contiguousEnd(f.offset, f.size, f.pieceLength, pos, f.handle::havePiece) }.getOrNull()
+    }
+
+    /** Size of the file being streamed, 0 when none. */
+    fun fileSize(): Long = active?.size ?: 0
 
     /**
      * Blocking read for the HTTP server: waits for the piece holding [pos] (the window loop gives
@@ -309,6 +358,8 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
         readers[reader]?.let { it.pos = pos; it.touchedMs = System.currentTimeMillis() }
         val piece = PieceMath.pieceAt(f.offset, pos, f.pieceLength)
         if (!f.handle.havePiece(piece)) {
+            // The player waits on this one: due now, top priority (once; the loop keeps the rest paced).
+            f.handle.piecePriority(piece, Priority.SEVEN)
             f.handle.setPieceDeadline(piece, 0)
             wake.trySend(Unit)
             val until = System.currentTimeMillis() + READ_TIMEOUT_MS
@@ -338,6 +389,7 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
         windowJob?.cancel()
         windowJob = null
         readers.clear()
+        startReader = null
         synchronized(pieceSignal) { pieceSignal.notifyAll() }
         runCatching { session?.remove(f.handle) }
         runCatching { dir.deleteRecursively() }
@@ -351,6 +403,7 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
         const val WINDOW_TICK_MS = 500L
         const val PIECE_POLL_MS = 100L
         const val LOG_EVERY_MS = 10_000L
+        const val DHT_BOOTSTRAP = "dht.libtorrent.org:25401,router.bittorrent.com:6881,router.utorrent.com:6881,dht.transmissionbt.com:6881,router.bitcomet.com:6881"
 
         /** The stream's fileIdx when valid, else the largest video file, else the largest file. */
         fun chooseFile(fileIdx: Int?, count: Int, name: (Int) -> String, size: (Int) -> Long): Int {

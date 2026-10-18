@@ -465,7 +465,10 @@ class TorrentViewModel @Inject constructor(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             TorrentStreamingService.start(context)
-            val local = runCatching { engine.open(stream) }
+            // A resume buffers from the saved place (its share of the file), not from the start.
+            val resumeAt = seekOnStart?.takeIf { it >= ResumePolicy.MIN_RESUME_MS } ?: 0L
+            val savedDuration = resumeTarget?.let { t -> library.resume(t.kind, t.id)?.durationMs } ?: 0L
+            val local = runCatching { engine.open(stream, resumeAt, savedDuration) }
             if (overlay !is TorrentOverlay.Loading) return@launch
             local.onSuccess {
                 // Remembered for the next resume of this title/episode (torrents only, never a link).
@@ -598,10 +601,31 @@ class TorrentViewModel @Inject constructor(
             while (true) {
                 delay(500)
                 val p = player ?: break
-                playerState = playerState.copy(positionMs = p.currentPosition, durationMs = p.duration.coerceAtLeast(0))
+                val position = p.currentPosition
+                val duration = p.duration.coerceAtLeast(0)
+                val buffered = bufferedMs(position, duration, p.bufferedPosition)
+                if (player !== p) break
+                playerState = playerState.copy(positionMs = position, durationMs = duration, bufferedPositionMs = buffered)
                 if (++n % 10 == 0) { saveResume(); engine.refreshStats(); engine.setDuration(p.duration) }
             }
         }
+    }
+
+    /**
+     * How far playback can go without waiting: the verified torrent data contiguous from the
+     * playing byte (position share of the file), as time; ExoPlayer's own buffer when more or
+     * when the engine has no file (a debrid link).
+     */
+    private suspend fun bufferedMs(position: Long, duration: Long, exoBuffered: Long): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        bufferedMsBlocking(position, duration, exoBuffered)
+    }
+
+    private fun bufferedMsBlocking(position: Long, duration: Long, exoBuffered: Long): Long {
+        val size = engine.fileSize()
+        if (size <= 0 || duration <= 0) return exoBuffered
+        val pos = (size.toDouble() * position.coerceIn(0, duration) / duration).toLong()
+        val end = engine.contiguousEnd(pos) ?: return exoBuffered
+        return maxOf(exoBuffered, com.enigmacast.domain.torrent.StreamWindow.bytesToMs(end, size, duration)).coerceAtMost(duration)
     }
 
     private fun offerResume() {
