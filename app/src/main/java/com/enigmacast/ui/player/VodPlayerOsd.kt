@@ -416,8 +416,8 @@ private fun SeekBar(
         contentAlignment = Alignment.CenterStart,
     ) {
         val played = maxWidth * fraction
-        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.32f), RoundedCornerShape(2.dp)))
-        Box(Modifier.width(played).height(4.dp).background(Color.White.copy(alpha = 0.92f), RoundedCornerShape(2.dp)))
+        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.55f), RoundedCornerShape(2.dp)))
+        Box(Modifier.width(played).height(4.dp).background(Color.White, RoundedCornerShape(2.dp)))
         val thumb = if (focused) 18.dp else 12.dp
         Box(
             Modifier
