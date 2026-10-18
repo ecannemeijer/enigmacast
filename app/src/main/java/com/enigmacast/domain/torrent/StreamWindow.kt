@@ -6,43 +6,47 @@ data class PieceDeadline(val piece: Int, val deadlineMs: Int)
 /**
  * How a torrent file is downloaded while it streams (the torrent-stream / Stremio approach on
  * libtorrent):
- * - pieces behind the reader are not wanted, the read-ahead window is top priority and the
- *   rest of the file normal priority, so libtorrent's sequential mode really goes in order
- *   (with the whole file at top priority it picks rarest-first over the whole file);
- * - only a short critical stretch gets deadlines, each paced at the stream's bitrate and set
- *   once, so time-critical mode never sees a wall of overdue pieces (it would request each
- *   overdue block from several peers);
- * - the startup buffer starts where playback starts (a resume).
+ * - startup: only the first pieces from where playback starts are wanted, top priority with
+ *   tight deadlines, so every peer works on the same pieces and they complete in seconds; the
+ *   player starts as soon as the piece at the start offset is verified ([gatePieces]);
+ * - playing: for every open HTTP response (ExoPlayer reader) a read-ahead window at top
+ *   priority, deadlines on the next few seconds paced at the bitrate, the rest of the file after
+ *   the readers at low priority (sequential), behind them not wanted;
+ * - a read of a missing piece (the mkv cues / mp4 moov at the end, a seek) makes that piece and
+ *   the next ones top priority with deadline 0 at once ([demandPieces]).
  */
 object StreamWindow {
     /** Read-ahead window at top priority: at least this many bytes… */
     const val MIN_AHEAD_BYTES = 32L shl 20
-    /** …and at most this many (a 4K remux would otherwise ask for hundreds of MB). */
-    const val MAX_AHEAD_BYTES = 80L shl 20
+    /** …and at most this many. */
+    const val MAX_AHEAD_BYTES = 160L shl 20
     /** …or this many seconds of the stream's bitrate, when that is more. */
-    const val AHEAD_SECONDS = 30
+    const val AHEAD_SECONDS = 60
     /** Assumed until the player knows the duration: 10 Mbit/s. */
     const val DEFAULT_BITRATE = 1_250_000L
 
-    /** Deadlines on the next [CRITICAL_SECONDS] of the stream (at least [CRITICAL_MIN_BYTES], 3–24 pieces). */
+    /** Deadlines on the next [CRITICAL_SECONDS] of the stream (at least [CRITICAL_MIN_BYTES]). */
     const val CRITICAL_SECONDS = 8
     const val CRITICAL_MIN_BYTES = 4L shl 20
     const val CRITICAL_MIN = 3
     const val CRITICAL_MAX = 24
+    /** Pieces this big (and larger): 2–3 critical pieces, so the peers' blocks converge on them. */
+    const val BIG_PIECE = 4 shl 20
+    const val BIG_CRITICAL_MIN = 2
+    const val BIG_CRITICAL_MAX = 3
     /** One piece's playing time, bounded (the spacing between deadlines). */
     const val PIECE_MS_MIN = 50L
     const val PIECE_MS_MAX = 4_000L
 
     /** libtorrent piece priorities. */
     const val PRIORITY_SKIP = 0
-    const val PRIORITY_NORMAL = 4
+    const val PRIORITY_LOW = 1
     const val PRIORITY_TOP = 7
 
-    /** Startup: this share of the file, contiguous from where playback starts, bounded below and above. */
-    const val HEAD_FRACTION = 0.04
-    const val MIN_HEAD_BYTES = 8L shl 20
-    const val MAX_HEAD_BYTES = 64L shl 20
-    const val TAIL_PIECES = 2
+    /** Startup gate: the pieces holding this many bytes from the start offset (at least one piece). */
+    const val GATE_BYTES = 4L shl 20
+    /** A read of a missing piece also asks for the next pieces. */
+    const val DEMAND_AHEAD = 2
     /** A resume also needs the container header at the file start (mkv EBML/SeekHead, mp4 ftyp). */
     const val HEADER_BYTES = 1L shl 20
 
@@ -56,14 +60,22 @@ object StreamWindow {
         PieceMath.pieceAt(fileOffset, (pos + aheadBytes(bitrateBytesPerSec)).coerceAtMost(fileSize - 1).coerceAtLeast(0), pieceLength)
 
     /**
-     * The priority of [piece]: behind the reader not wanted, the window top, the rest normal.
-     * The last [TAIL_PIECES] (mkv cues / mp4 index) are always wanted.
+     * The priority of [piece]: in a reader's window (or read on demand) top; while starting
+     * nothing else; after that the rest after the first reader low (in order), behind it none.
      */
-    fun priorityOf(piece: Int, head: Int, windowEnd: Int, lastPiece: Int): Int = when {
-        piece >= head && piece <= windowEnd -> PRIORITY_TOP
-        piece > lastPiece - TAIL_PIECES -> PRIORITY_NORMAL
-        piece < head -> PRIORITY_SKIP
-        else -> PRIORITY_NORMAL
+    fun priorityOf(piece: Int, windows: List<IntRange>, demanded: Set<Int>, starting: Boolean): Int = when {
+        piece in demanded || windows.any { piece in it } -> PRIORITY_TOP
+        starting -> PRIORITY_SKIP
+        windows.isEmpty() || piece > windows.minOf { it.first } -> PRIORITY_LOW
+        else -> PRIORITY_SKIP
+    }
+
+    /** A read of [piece] that is not there: it and the next [DEMAND_AHEAD] (within the file), due now and paced. */
+    fun demandPieces(piece: Int, lastPiece: Int, pieceLength: Int, bitrateBytesPerSec: Long, have: (Int) -> Boolean): List<PieceDeadline> {
+        val step = pieceMs(pieceLength, bitrateBytesPerSec)
+        return (piece..minOf(lastPiece, piece + DEMAND_AHEAD)).mapIndexedNotNull { k, p ->
+            if (have(p)) null else PieceDeadline(p, (k * step).toInt())
+        }
     }
 
     /** Milliseconds of playback in one piece (deadline spacing). */
@@ -73,7 +85,8 @@ object StreamWindow {
     /** How many pieces from the head get a deadline. */
     fun criticalCount(pieceLength: Int, bitrateBytesPerSec: Long): Int {
         val bytes = maxOf(CRITICAL_MIN_BYTES, bitrate(bitrateBytesPerSec) * CRITICAL_SECONDS)
-        return ((bytes + pieceLength - 1) / pieceLength).toInt().coerceIn(CRITICAL_MIN, CRITICAL_MAX)
+        val count = ((bytes + pieceLength - 1) / pieceLength).toInt()
+        return if (pieceLength >= BIG_PIECE) count.coerceIn(BIG_CRITICAL_MIN, BIG_CRITICAL_MAX) else count.coerceIn(CRITICAL_MIN, CRITICAL_MAX)
     }
 
     /**
@@ -101,32 +114,27 @@ object StreamWindow {
     fun isSeek(previousHead: Int?, head: Int, windowPieces: Int): Boolean =
         previousHead != null && (head < previousHead || head - previousHead > maxOf(8, windowPieces / 2))
 
-    /** Bytes of the startup head: [HEAD_FRACTION] of the file, at least 8 MB and at most 64 MB (never more than the file). */
-    fun headBytes(fileSize: Long): Long =
-        (fileSize * HEAD_FRACTION).toLong().coerceIn(MIN_HEAD_BYTES, MAX_HEAD_BYTES).coerceAtMost(fileSize)
-
     /**
-     * Pieces that must be verified before playback: the head from [startByte] (0, or the resume
-     * point), the last [TAIL_PIECES], and on a resume the container header at the file start.
+     * Pieces that must be verified before the player starts: those holding [GATE_BYTES] from
+     * [startByte] (0, or the resume point) and on a resume the container header. Everything
+     * else (the tail with mkv cues / mp4 moov) is fetched when the player reads it.
      */
-    fun startupPieces(fileOffset: Long, fileSize: Long, pieceLength: Int, startByte: Long = 0): List<Int> {
+    fun gatePieces(fileOffset: Long, fileSize: Long, pieceLength: Int, startByte: Long = 0): List<Int> {
+        if (fileSize <= 0) return emptyList()
         val all = PieceMath.range(fileOffset, fileSize, pieceLength)
-        val start = startByte.coerceIn(0, (fileSize - 1).coerceAtLeast(0))
-        val head = PieceMath.pieceAt(fileOffset, start, pieceLength)..PieceMath.pieceAt(fileOffset, (start + headBytes(fileSize) - 1).coerceAtMost(fileSize - 1), pieceLength)
-        val tail = (all.last - TAIL_PIECES + 1).coerceAtLeast(all.first)..all.last
+        val start = startByte.coerceIn(0, fileSize - 1)
+        val head = PieceMath.pieceAt(fileOffset, start, pieceLength)..PieceMath.pieceAt(fileOffset, (start + GATE_BYTES - 1).coerceAtMost(fileSize - 1), pieceLength)
         val header = if (start > 0) all.first..PieceMath.pieceAt(fileOffset, (HEADER_BYTES - 1).coerceAtMost(fileSize - 1), pieceLength) else IntRange.EMPTY
-        return (head + tail + header).distinct().sorted()
+        return (head + header).distinct().sorted()
     }
 
     /** Where the startup head begins for a resume at [positionMs] of [durationMs] (0 when unknown). */
     fun startByteFor(positionMs: Long, durationMs: Long, fileSize: Long): Long =
         if (positionMs <= 0 || durationMs <= 0 || positionMs >= durationMs) 0 else (fileSize.toDouble() * positionMs / durationMs).toLong()
 
-    /** Startup progress 0..1: the share of the startup pieces already verified. */
-    fun startupProgress(pieces: List<Int>, have: (Int) -> Boolean): Float {
-        if (pieces.isEmpty()) return 1f
-        return pieces.count(have) / pieces.size.toFloat()
-    }
+    /** Startup progress 0..1 from the bytes received so far for the [gateBytes] (verified pieces count fully). */
+    fun startupProgress(receivedBytes: Long, gateBytes: Long, done: Boolean): Float =
+        if (done || gateBytes <= 0) 1f else (receivedBytes.toFloat() / gateBytes).coerceIn(0f, 0.99f)
 
     fun startupDone(pieces: List<Int>, have: (Int) -> Boolean): Boolean = pieces.all(have)
 

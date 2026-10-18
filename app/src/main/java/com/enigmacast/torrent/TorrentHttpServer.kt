@@ -12,6 +12,16 @@ import java.io.RandomAccessFile
 internal class TorrentHttpServer(private val engine: TorrentEngine) : NanoHTTPD("127.0.0.1", 0) {
     val token: String = TorrentEngine.newToken()
 
+    init {
+        // ExoPlayer closes a response when it seeks or has enough buffered: NanoHTTPD then logs
+        // "Broken pipe" / "Connection reset" as SEVERE. Expected, not an error.
+        runCatching {
+            java.util.logging.Logger.getLogger(NanoHTTPD::class.java.name).filter = java.util.logging.Filter { record ->
+                !isClientGone(record.thrown)
+            }
+        }
+    }
+
     override fun serve(session: IHTTPSession): Response {
         if (session.uri != "/stream/$token") return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "")
         val f = engine.current() ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "")
@@ -44,12 +54,9 @@ private class PieceStream(private val engine: TorrentEngine, private val f: Acti
     /** This response's read position drives the download window (a Range request is a seek). */
     private val reader = engine.openReader(start)
     private val end = start + length
-    private val raf by lazy {
-        // The file appears once libtorrent writes the first piece; wait briefly for it.
-        var tries = 0
-        while (!f.file.exists() && tries++ < 100 && !f.closed) Thread.sleep(50)
-        RandomAccessFile(f.file, "r")
-    }
+    /** Opened at the first read whose piece is verified (so the file exists by then). */
+    private var file: RandomAccessFile? = null
+    private val raf: () -> RandomAccessFile = { file ?: RandomAccessFile(f.file, "r").also { file = it } }
 
     override fun read(): Int {
         val one = ByteArray(1)
@@ -65,6 +72,18 @@ private class PieceStream(private val engine: TorrentEngine, private val f: Acti
 
     override fun close() {
         engine.closeReader(reader)
-        runCatching { raf.close() }
+        runCatching { file?.close() }
     }
+}
+
+/** The player went away mid-response (seek, buffer full, stop). */
+internal fun isClientGone(t: Throwable?): Boolean {
+    var e = t
+    while (e != null) {
+        if (e is java.net.SocketException) return true
+        val m = e.message.orEmpty()
+        if ("Broken pipe" in m || "Connection reset" in m || "Socket closed" in m) return true
+        e = e.cause
+    }
+    return false
 }

@@ -521,6 +521,13 @@ class TorrentViewModel @Inject constructor(
             .build().also { p ->
                 p.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
+                        if (state == Player.STATE_BUFFERING && playerState.playbackState == "READY") {
+                            // A stall while playing: what the player had and the last read that had to wait.
+                            EnigmaLog.player(
+                                "torrent player BUFFERING at ${p.currentPosition / 1000}s, buffered ${p.totalBufferedDuration} ms " +
+                                    "(to ${p.bufferedPosition / 1000}s), loading ${p.isLoading}, last wait ${engine.lastWait ?: "none"}",
+                            )
+                        }
                         playerState = playerState.copy(playbackState = when (state) {
                             Player.STATE_BUFFERING -> "BUFFERING"; Player.STATE_READY -> "READY"; Player.STATE_ENDED -> "ENDED"; else -> "IDLE"
                         })
@@ -537,7 +544,10 @@ class TorrentViewModel @Inject constructor(
                             holdAutoText = true
                             applyEmbeddedSubtitles(p, pending)
                             holdAutoText = false
-                        } else if (selectedExternalId == null && !holdAutoText) {
+                        } else if (selectedExternalId == null && !holdAutoText && !autoTextDone && t.groups.isNotEmpty()) {
+                            // Once per file: a new override while playing makes progressive media re-read
+                            // from the current place (a codec flush and a new Range request).
+                            autoTextDone = true
                             selectFirstTextTrack(p)
                         }
                         publishTracks(p)
@@ -556,6 +566,8 @@ class TorrentViewModel @Inject constructor(
     }
 
     private var resumeOffered = false
+    /** The first embedded subtitle was picked for this file (or there was none to pick). */
+    private var autoTextDone = false
 
     private fun play(url: String, title: String) {
         // The info page closes once playback starts; Back from the player lands on the grid card.
@@ -566,6 +578,7 @@ class TorrentViewModel @Inject constructor(
         owner.claim(PlaybackOwner.Owner.TORRENT)
         playError = null
         resumeOffered = false
+        autoTextDone = false
         playing = title
         playerState = PlayerState(filePlayback = true)
         clearExternalSubtitles()
@@ -606,7 +619,12 @@ class TorrentViewModel @Inject constructor(
                 val buffered = bufferedMs(position, duration, p.bufferedPosition)
                 if (player !== p) break
                 playerState = playerState.copy(positionMs = position, durationMs = duration, bufferedPositionMs = buffered)
-                if (++n % 10 == 0) { saveResume(); engine.refreshStats(); engine.setDuration(p.duration) }
+                if (++n % 10 == 0) {
+                    saveResume()
+                    engine.setDuration(p.duration)
+                    // A synchronous call into libtorrent: never on the main thread.
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { engine.refreshStats() }
+                }
             }
         }
     }
