@@ -56,6 +56,20 @@ data class TorrentInfo(
     val episodesLoading: Boolean = false,
 )
 
+/** What SubSource is asked for the stream being played. */
+data class TorrentSubtitleTarget(
+    val title: String,
+    val originalTitle: String,
+    val year: Int?,
+    val season: Int?,
+    val episode: Int?,
+    /** behaviorHints.filename (or the release line of the stream title), for release matching. */
+    val fileName: String?,
+) {
+    /** The TMDB title, then the original title when it differs. */
+    fun titles(): List<String> = listOf(title, originalTitle).map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+}
+
 /** What the Torrent page shows on top of the grid. */
 sealed interface TorrentOverlay {
     data object None : TorrentOverlay
@@ -71,6 +85,7 @@ class TorrentViewModel @Inject constructor(
     val engine: TorrentEngine,
     private val owner: PlaybackOwner,
     private val settingsRepository: SettingsRepository,
+    private val subtitles: com.enigmacast.data.subsource.SubSourceClient,
 ) : ViewModel() {
     private val language = Locale.getDefault().toLanguageTag()
 
@@ -227,6 +242,9 @@ class TorrentViewModel @Inject constructor(
 
     private fun searchStreams(title: TmdbTitle, season: Int?, episode: Int?, episodeName: String?) {
         stepJob?.cancel()
+        streamSeason = season
+        streamEpisode = episode
+        streamOriginalTitle = info?.takeIf { it.title.key == title.key }?.film?.movie?.originalTitle.orEmpty()
         val subtitle = if (season != null) "S$season E$episode" + (episodeName?.let { " · $it" } ?: "") else ""
         // The streams dialog opens at once (loading) while the IMDb id is looked up.
         overlay = TorrentOverlay.Streams(title, subtitle, null, false, "")
@@ -277,10 +295,37 @@ class TorrentViewModel @Inject constructor(
     private val subtitleSync = com.enigmacast.playback.SubtitleSyncOffset()
     private val resumes = context.getSharedPreferences("torrent_resume", Context.MODE_PRIVATE)
 
+    // ---- Subtitles: the IPTV player's SubSource flow (XtreamViewModel) ----
+    var cues by mutableStateOf<List<androidx.media3.common.text.Cue>>(emptyList())
+        private set
+    private var streamSeason: Int? = null
+    private var streamEpisode: Int? = null
+    private var streamOriginalTitle = ""
+    private var subtitleTarget: TorrentSubtitleTarget? = null
+    private var mediaUrl = ""
+    /** Playback setting at start: unknown-language text tracks are selected when this is on. */
+    private var playbackSubtitles = true
+    private var externalHits = emptyList<com.enigmacast.domain.subsource.SubSourceHit>()
+    private var selectedExternalId: Long? = null
+    private var externalAttached = false
+    private var pendingEmbeddedId: String? = null
+    private var holdAutoText = false
+    private var subtitleJob: Job? = null
+    private var downloadJob: Job? = null
+
     /** OK on a stream: direct (debrid/http) links play at once, torrents go through the loading page. */
     fun chooseStream(stream: TorrentStream) {
         val o = overlay as? TorrentOverlay.Streams ?: return
         resumeKey = o.resumeKey
+        // SubSource: TMDB title and year, season/episode, and the file name for the release.
+        subtitleTarget = TorrentSubtitleTarget(
+            title = o.title.title,
+            originalTitle = streamOriginalTitle,
+            year = o.title.year,
+            season = streamSeason,
+            episode = streamEpisode,
+            fileName = stream.filename ?: stream.title.lineSequence().firstOrNull()?.takeIf { it.isNotBlank() },
+        )
         val url = stream.url
         if (url != null) {
             overlay = TorrentOverlay.None
@@ -318,8 +363,14 @@ class TorrentViewModel @Inject constructor(
     fun player(): ExoPlayer = player ?: run {
         // Long read timeout: the local server waits for pieces that are still downloading.
         val http = DefaultHttpDataSource.Factory().setReadTimeoutMs(70_000).setConnectTimeoutMs(10_000).setAllowCrossProtocolRedirects(true)
+        val selector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context)
+        selector.parameters = selector.buildUponParameters()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackSubtitles)
+            .setSelectUndeterminedTextLanguage(playbackSubtitles)
+            .build()
         ExoPlayer.Builder(context)
             .setRenderersFactory(com.enigmacast.ui.xtream.IptvRenderersFactory(context, audioSync, subtitleSync))
+            .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .build().also { p ->
                 p.addListener(object : Player.Listener {
@@ -334,17 +385,20 @@ class TorrentViewModel @Inject constructor(
                         playerState = playerState.copy(videoWidth = size.width, videoHeight = size.height, pixelRatio = size.pixelWidthHeightRatio)
                     }
                     override fun onTracksChanged(t: androidx.media3.common.Tracks) {
-                        val on = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
-                        val menu = TrackMenus.build(t, on)
-                        tracks = menu
-                        playerState = playerState.copy(
-                            videoCodec = p.videoFormat?.sampleMimeType.orEmpty(),
-                            audioCodec = p.audioFormat?.sampleMimeType.orEmpty(),
-                            audioLabel = com.enigmacast.playback.TrackLabels.audio(p.audioFormat),
-                            audioTrackCount = menu.audio.size,
-                            subtitleLabel = menu.subtitles.firstOrNull { it.selected }?.label ?: com.enigmacast.util.UiText.Empty,
-                            subtitleTrackCount = menu.subtitles.size,
-                        )
+                        val pending = pendingEmbeddedId
+                        pendingEmbeddedId = null
+                        if (pending != null) {
+                            holdAutoText = true
+                            applyEmbeddedSubtitles(p, pending)
+                            holdAutoText = false
+                        } else if (selectedExternalId == null && !holdAutoText) {
+                            selectFirstTextTrack(p)
+                        }
+                        publishTracks(p)
+                    }
+                    override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                        val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+                        cues = if (textOn) cueGroup.cues else emptyList()
                     }
                     override fun onPlayerError(error: PlaybackException) {
                         EnigmaLog.networkError("torrent playback: ${error.errorCodeName}")
@@ -364,20 +418,34 @@ class TorrentViewModel @Inject constructor(
         // One player at a time: Enigma2 and IPTV stop (and free the decoder) first.
         owner.register(PlaybackOwner.Owner.TORRENT) { stopPlayback() }
         owner.claim(PlaybackOwner.Owner.TORRENT)
+        playError = null
+        resumeOffered = false
+        playing = title
+        playerState = PlayerState(filePlayback = true)
+        clearExternalSubtitles()
+        cues = emptyList()
+        mediaUrl = url
+        val target = subtitleTarget
         viewModelScope.launch {
             val pb = settingsRepository.current().playback
             audioSync.set(pb.audioDelayPcmMs, pb.audioDelayPassthroughMs)
             audioDelayMs = pb.audioDelayPcmMs
             subtitleSync.set(pb.subtitleDelayMs); subtitleDelayMs = pb.subtitleDelayMs
-        }
-        playError = null
-        resumeOffered = false
-        playing = title
-        playerState = PlayerState(filePlayback = true)
-        player().apply {
-            setMediaItem(MediaItem.fromUri(url))
-            prepare()
-            playWhenReady = true
+            // Subtitles on/off from Settings › Playback, as in the IPTV player.
+            playbackSubtitles = pb.subtitlesEnabled
+            if (playing != title || mediaUrl != url) return@launch
+            player().apply {
+                // The screen may have created the player before the setting was read.
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackSubtitles)
+                    .setPreferredTextLanguage(null)
+                    .setSelectUndeterminedTextLanguage(playbackSubtitles)
+                    .build()
+                setMediaItem(mediaItem(url, null))
+                prepare()
+                playWhenReady = true
+            }
+            if (target != null) loadExternalSubtitles(target, url)
         }
         tickJob?.cancel()
         tickJob = viewModelScope.launch {
@@ -424,14 +492,175 @@ class TorrentViewModel @Inject constructor(
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, track)).build()
     }
+    /** Off, an embedded track, or a SubSource file (downloaded, then added to the media item). */
     fun chooseSubtitles(id: String?) {
         val p = player ?: return
-        val b = p.trackSelectionParameters.buildUpon()
-        if (id == null) b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true) else {
-            val (group, track) = TrackMenus.find(p.currentTracks, id, C.TRACK_TYPE_TEXT) ?: return
-            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, track))
+        if (id == null) {
+            selectedExternalId = null
+            pendingEmbeddedId = null
+            val dropFile = externalAttached
+            externalAttached = false
+            cues = emptyList()
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .build()
+            if (dropFile) reload(p, null) else publishTracks(p)
+            return
         }
-        p.trackSelectionParameters = b.build()
+        if (id.startsWith(EXTERNAL_PREFIX)) {
+            val hitId = id.removePrefix(EXTERNAL_PREFIX).toLongOrNull() ?: return
+            val hit = externalHits.firstOrNull { it.id == hitId } ?: return
+            selectedExternalId = hitId
+            pendingEmbeddedId = null
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .build()
+            publishTracks(p)
+            downloadJob?.cancel()
+            downloadJob = viewModelScope.launch {
+                val file = subtitles.file(hitId) ?: return@launch
+                if (selectedExternalId != hitId) return@launch
+                val language = com.enigmacast.domain.subsource.SubSourceLanguages.bySlug(hit.language)
+                val config = MediaItem.SubtitleConfiguration.Builder(android.net.Uri.fromFile(file))
+                    .setId("$EXTERNAL_PREFIX$hitId")
+                    .setMimeType(subtitleMime(file.extension))
+                    .setLanguage(language?.iso?.substringBefore('-'))
+                    .setLabel(com.enigmacast.domain.subsource.SubSourceMatch.label(hit))
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+                externalAttached = true
+                reload(player ?: return@launch, config)
+            }
+            return
+        }
+        selectedExternalId = null
+        if (externalAttached) {
+            externalAttached = false
+            pendingEmbeddedId = id
+            reload(p, null)
+        } else {
+            applyEmbeddedSubtitles(p, id)
+        }
+    }
+
+    private fun mediaItem(url: String, subtitle: MediaItem.SubtitleConfiguration?): MediaItem {
+        val builder = MediaItem.Builder().setUri(url)
+        if (subtitle != null) builder.setSubtitleConfigurations(listOf(subtitle))
+        return builder.build()
+    }
+
+    /** Same position and play state with or without the SubSource file. */
+    private fun reload(p: ExoPlayer, subtitle: MediaItem.SubtitleConfiguration?) {
+        val position = p.currentPosition.coerceAtLeast(0L)
+        val playingNow = p.playWhenReady
+        p.setMediaItem(mediaItem(mediaUrl, subtitle), position)
+        p.prepare()
+        p.playWhenReady = playingNow
+    }
+
+    private fun clearExternalSubtitles() {
+        subtitleJob?.cancel()
+        downloadJob?.cancel()
+        externalHits = emptyList()
+        selectedExternalId = null
+        externalAttached = false
+        pendingEmbeddedId = null
+    }
+
+    /**
+     * SubSource files for the film or episode, in the languages turned on in Settings › IPTV ›
+     * Subtitles (else the app language). The TMDB title is tried first, then the original
+     * title; files whose release matches the torrent's file name come first.
+     */
+    private fun loadExternalSubtitles(target: TorrentSubtitleTarget, url: String) {
+        subtitleJob?.cancel()
+        subtitleJob = viewModelScope.launch {
+            val saved = settingsRepository.current().iptvSubtitleLanguages
+            val languages = saved ?: listOfNotNull(
+                com.enigmacast.domain.subsource.SubSourceLanguages.forAppTag(
+                    com.enigmacast.locale.AppLanguageStore.current(context).tag,
+                ),
+            )
+            if (languages.isEmpty()) return@launch
+            var hits = emptyList<com.enigmacast.domain.subsource.SubSourceHit>()
+            for (title in target.titles()) {
+                hits = runCatching {
+                    subtitles.find(
+                        com.enigmacast.domain.subsource.SubSourceQuery(
+                            title = title,
+                            year = target.year,
+                            season = target.season?.takeIf { it > 0 },
+                            episode = target.episode?.takeIf { it > 0 },
+                            languages = languages,
+                        ),
+                    )
+                }.getOrDefault(emptyList())
+                if (hits.isNotEmpty()) break
+            }
+            if (mediaUrl != url || playing == null) return@launch
+            externalHits = com.enigmacast.domain.subsource.SubSourceMatch.byRelease(hits, target.fileName)
+            player?.let(::publishTracks)
+        }
+    }
+
+    private fun publishTracks(p: ExoPlayer) {
+        val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        val menu = TrackMenus.build(p.currentTracks, textOn && selectedExternalId == null)
+        val embedded = menu.subtitles.filter { choice ->
+            val found = TrackMenus.find(p.currentTracks, choice.id, C.TRACK_TYPE_TEXT)
+            found?.first?.getTrackFormat(found.second)?.id?.startsWith(EXTERNAL_PREFIX) != true
+        }
+        val extra = externalHits.map { hit ->
+            com.enigmacast.playback.TrackChoice(
+                "$EXTERNAL_PREFIX${hit.id}",
+                com.enigmacast.util.UiText.Raw(com.enigmacast.domain.subsource.SubSourceMatch.label(hit)),
+                textOn && selectedExternalId == hit.id,
+            )
+        }
+        val merged = menu.copy(subtitles = embedded + extra, subtitlesOn = embedded.any { it.selected } || extra.any { it.selected })
+        tracks = merged
+        playerState = playerState.copy(
+            videoCodec = p.videoFormat?.sampleMimeType.orEmpty(),
+            audioCodec = p.audioFormat?.sampleMimeType.orEmpty(),
+            audioLabel = com.enigmacast.playback.TrackLabels.audio(p.audioFormat),
+            audioTrackCount = menu.audio.size,
+            subtitleLabel = merged.subtitles.firstOrNull { it.selected }?.label ?: com.enigmacast.util.UiText.Empty,
+            subtitleTrackCount = merged.subtitles.size,
+        )
+    }
+
+    /** Same as the IPTV player: the first supported text track, when none is selected yet. */
+    private fun selectFirstTextTrack(p: ExoPlayer) {
+        if (holdAutoText || p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)) return
+        val groups = p.currentTracks.groups
+        if (groups.any { it.type == C.TRACK_TYPE_TEXT && it.isSelected }) return
+        val group = groups.firstOrNull { candidate ->
+            candidate.type == C.TRACK_TYPE_TEXT &&
+                candidate.isTrackSupported(0) &&
+                candidate.getTrackFormat(0).id?.startsWith(EXTERNAL_PREFIX) != true
+        } ?: return
+        holdAutoText = true
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, 0))
+            .build()
+        holdAutoText = false
+    }
+
+    private fun applyEmbeddedSubtitles(p: ExoPlayer, id: String) {
+        val (group, track) = TrackMenus.find(p.currentTracks, id, C.TRACK_TYPE_TEXT) ?: return
+        if (group.getTrackFormat(track).id?.startsWith(EXTERNAL_PREFIX) == true) return
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, track))
+            .build()
+    }
+
+    private fun subtitleMime(extension: String): String = when (extension.lowercase()) {
+        "vtt" -> androidx.media3.common.MimeTypes.TEXT_VTT
+        "ass", "ssa" -> androidx.media3.common.MimeTypes.TEXT_SSA
+        else -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
     }
     fun setAudioDelay(ms: Int) {
         val v = com.enigmacast.playback.AudioSync.clamp(ms)
@@ -454,6 +683,9 @@ class TorrentViewModel @Inject constructor(
         player?.release()
         player = null
         playing = null
+        clearExternalSubtitles()
+        cues = emptyList()
+        mediaUrl = ""
         owner.release(PlaybackOwner.Owner.TORRENT)
         engine.stop()
         TorrentStreamingService.stop(context)
@@ -472,5 +704,6 @@ class TorrentViewModel @Inject constructor(
 
     companion object {
         const val SEARCH_DEBOUNCE_MS = 450L
+        private const val EXTERNAL_PREFIX = "ext:"
     }
 }

@@ -97,3 +97,27 @@ class TorrentInfoTest {
         assertNull(TorrentTmdb.playTarget(emptyList(), 1, eps))
     }
 }
+
+class TorrentSubtitlesTest {
+    private fun hit(id: Long, lang: String, vararg releases: String) = com.enigmacast.domain.subsource.SubSourceHit(id, lang, releases.toList())
+
+    @Test
+    fun releaseMatchingKeepsLanguageOrder() {
+        val hits = listOf(
+            hit(1, "dutch", "Movie.2019.720p.BluRay.x264-AAA"),
+            hit(2, "dutch", "Movie.2019.1080p.WEB-DL.DDP5.1.H.264-GRP"),
+            hit(3, "english", "Movie.2019.HDTV"),
+            hit(4, "english", "Movie 2019 1080p WEB-DL H 264-GRP"),
+        )
+        val sorted = com.enigmacast.domain.subsource.SubSourceMatch.byRelease(hits, "Movie.2019.1080p.WEB-DL.DDP5.1.H.264-GRP.mkv")
+        assertEquals(listOf(2L, 1L, 4L, 3L), sorted.map { it.id })
+        assertEquals(hits, com.enigmacast.domain.subsource.SubSourceMatch.byRelease(hits, null))
+    }
+
+    @Test
+    fun titlesToTry() {
+        val t = com.enigmacast.ui.torrent.TorrentSubtitleTarget("De Hobbit", "The Hobbit", 2012, null, null, null)
+        assertEquals(listOf("De Hobbit", "The Hobbit"), t.titles())
+        assertEquals(listOf("Dune"), t.copy(title = "Dune", originalTitle = "dune").titles())
+    }
+}

@@ -541,7 +541,7 @@ private fun TorrentPlayer(model: TorrentViewModel) {
             player = model.player(),
             frame = null,
             debugBorders = false,
-            cues = emptyList(),
+            cues = model.cues,
             picture = com.enigmacast.ui.remote.VideoShape(model.pictureMode, ps.videoWidth, ps.videoHeight, ps.pixelRatio),
             modifier = Modifier.fillMaxSize(),
         )

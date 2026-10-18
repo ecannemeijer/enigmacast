@@ -175,6 +175,27 @@ object SubSourceMatch {
         return seasonPack || !sawMarker
     }
 
+    /**
+     * Within each language (kept in [hits]' order), the subtitles whose release names share the
+     * most words with the video's file name first ("…1080p.WEB-DL.x264-GROUP" → same release,
+     * so the timing fits). Without a file name the order stays as it is.
+     */
+    fun byRelease(hits: List<SubSourceHit>, fileName: String?): List<SubSourceHit> {
+        val words = releaseWords(fileName ?: return hits)
+        if (words.isEmpty()) return hits
+        val languageOrder = hits.map { it.language }.distinct()
+        return hits.withIndex().sortedWith(
+            compareBy<IndexedValue<SubSourceHit>> { languageOrder.indexOf(it.value.language) }
+                .thenByDescending { hit -> hit.value.releaseInfo.maxOfOrNull { (releaseWords(it) intersect words).size } ?: 0 }
+                .thenBy { it.index },
+        ).map { it.value }
+    }
+
+    private val videoExtension = Regex("""(?i)\.(mkv|mp4|avi|m4v|mov|ts|webm|wmv|mpg|mpeg)$""")
+
+    private fun releaseWords(name: String): Set<String> =
+        normalize(name.replace(videoExtension, "")).split(' ').filter { it.length >= 2 }.toSet()
+
     /** "Dutch · WEB-DL" for the options list. */
     fun label(hit: SubSourceHit): String {
         val language = SubSourceLanguages.bySlug(hit.language)?.label ?: hit.language.replace('_', ' ')
