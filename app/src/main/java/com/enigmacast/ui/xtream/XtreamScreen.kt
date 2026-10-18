@@ -587,6 +587,8 @@ private fun SidePanel(
             // Kept at the current category while hidden; only moves when it is off screen.
             LaunchedEffect(model.categories) { categoryList.ensureVisible(selectedIndex, model.categories.size) }
             val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
+            // Focusing a visible row must not scroll (the TV default pulls it to ~30 % from the top).
+            com.enigmacast.ui.theme.MinimalScrolling {
             LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
                 itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
                     val c = k.value
@@ -608,6 +610,7 @@ private fun SidePanel(
                         if (model.pendingCategory?.id == c.id) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
                     }
                 }
+            }
             }
         }
         // Films / Series show only the sections here; their categories and grid are XtreamVodPage.
@@ -687,6 +690,8 @@ private fun SidePanel(
                 val lastFocus = remember { FocusRequester() }
                 val lastIndex = model.items.lastIndex
                 val keyedItems = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
+                // Focusing a visible row must not scroll (the TV default pulls it to ~30 % from the top).
+                com.enigmacast.ui.theme.MinimalScrolling {
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     itemsIndexed(keyedItems, key = { _, k -> k.key }) { index, k ->
                         val item = k.value
@@ -709,6 +714,7 @@ private fun SidePanel(
                             IptvChannelRow(model, item, now, nowSec, rowFocused)
                         }
                     }
+                }
                 }
             }
         }

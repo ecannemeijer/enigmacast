@@ -635,6 +635,8 @@ internal fun BouquetPanel(
         if (bouquets.isEmpty()) {
             Text(stringResource(R.string.osd_bouquets_loading), color = EnigmaColors.Muted, fontSize = 13.sp)
         }
+        // Focusing a visible row must not scroll (the TV default pulls it to ~30 % from the top).
+        com.enigmacast.ui.theme.MinimalScrolling {
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             itemsIndexed(bouquets, key = { index, entry -> "$index:${entry.reference}" }) { index, bouquet ->
                 CompactListRow(
@@ -661,6 +663,7 @@ internal fun BouquetPanel(
                     Text(bouquet.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
         }
     }
 }
@@ -732,6 +735,8 @@ private fun ChannelPanel(
         if (channels.isEmpty()) {
             Text(stringResource(R.string.osd_no_channels_loaded), color = EnigmaColors.Muted, fontSize = 13.sp)
         }
+        // Focusing a visible row must not scroll (the TV default pulls it to ~30 % from the top).
+        com.enigmacast.ui.theme.MinimalScrolling {
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
                 CompactListRow(
@@ -765,6 +770,7 @@ private fun ChannelPanel(
                     )
                 }
             }
+        }
         }
     }
 }

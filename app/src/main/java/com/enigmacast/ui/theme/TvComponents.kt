@@ -896,12 +896,16 @@ fun OptionListDialog(
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 val MinimalBringIntoView = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
-    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-        val trailing = offset + size
-        return when {
-            offset >= 0f && trailing <= containerSize -> 0f
-            offset < 0f || size > containerSize -> offset
-            else -> trailing - containerSize
-        }
-    }
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        com.enigmacast.domain.remote.ListAnchor.bringDistance(offset, size, containerSize)
+}
+
+/** Lists inside scroll only as far as needed to show the focused row ([MinimalBringIntoView]). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@androidx.compose.runtime.Composable
+fun MinimalScrolling(content: @androidx.compose.runtime.Composable () -> Unit) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides MinimalBringIntoView,
+        content = content,
+    )
 }
