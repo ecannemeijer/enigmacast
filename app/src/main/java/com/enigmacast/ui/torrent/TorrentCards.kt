@@ -10,6 +10,10 @@ import com.enigmacast.domain.xtream.XtreamSection
 
 /** TMDB titles as the app's film data, so the poster cards and the info page can be reused. */
 object TorrentCards {
+    /** PosterCard's width (FilmHomePanel) and a fixed card height: poster 2:3 plus title, year and rating lines. */
+    const val CARD_WIDTH_DP = 132f
+    const val CARD_HEIGHT_DP = 272f
+
     /** Card data (poster, title, year, rating), merged with the full TMDB [details] when known. */
     fun film(t: TmdbTitle, details: TmdbMovie? = null): HomeFilm {
         val base = TmdbMovie(

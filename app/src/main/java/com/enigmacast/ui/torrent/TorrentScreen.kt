@@ -45,6 +45,8 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
@@ -98,21 +100,30 @@ import kotlinx.coroutines.delay
  * VOD player with the recordings' seek bar and options row.
  */
 @Composable
-fun TorrentScreen(onBack: () -> Unit, model: TorrentViewModel = hiltViewModel()) {
+fun TorrentScreen(
+    onBack: () -> Unit,
+    model: TorrentViewModel = hiltViewModel(),
+    /** Inside the dashboard: the left menu stays; the loading page and player open full screen on top. */
+    dash: TorrentDash? = null,
+) {
     DisposableEffect(Unit) {
         model.setForeground(true)
         onDispose { model.setForeground(false) }
     }
-    Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+    Box(Modifier.fillMaxSize().then(if (dash == null) Modifier.background(EnigmaColors.Canvas) else Modifier)) {
         when {
+            dash != null -> {
+                TorrentBrowser(model, onBack, dash)
+                if (model.playing != null) FullScreenLayer(onBack = model::stopPlayback) { TorrentPlayer(model) }
+            }
             model.playing != null -> TorrentPlayer(model)
-            else -> TorrentBrowser(model, onBack)
+            else -> TorrentBrowser(model, onBack, null)
         }
         // The info page stays under the streams dialog; it closes when playback starts.
         model.info?.let { i -> if (model.playing == null && model.overlay !is TorrentOverlay.Loading) TorrentInfoPage(i, model) }
         when (val o = model.overlay) {
             is TorrentOverlay.Streams -> StreamsDialog(o, model)
-            is TorrentOverlay.Loading -> LoadingPage(o, model)
+            is TorrentOverlay.Loading -> if (dash != null) FullScreenLayer(onBack = model::cancelLoading) { LoadingPage(o, model) } else LoadingPage(o, model)
             TorrentOverlay.None -> Unit
         }
         model.message?.let { m ->
@@ -133,37 +144,36 @@ fun TorrentScreen(onBack: () -> Unit, model: TorrentViewModel = hiltViewModel())
     }
 }
 
-/** Full-screen page: only Up leaves the grid (to the tabs); edges stop focus. */
-@OptIn(ExperimentalComposeUiApi::class)
-private fun Modifier.gridEdges(): Modifier = this
-    .focusProperties {
-        onExit = { if (requestedFocusDirection != FocusDirection.Up) cancelFocusChange() }
-    }
-    .focusGroup()
-
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
+private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: TorrentDash?) {
     val moviesFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
     val fieldFocus = remember { FocusRequester() }
     val firstCard = remember { FocusRequester() }
     val grid = rememberLazyGridState()
-    BackHandler {
+    // In the dashboard only an open search takes Back; the dashboard sends the rest to the menu.
+    BackHandler(enabled = dash == null || model.searchOpen) {
         when {
             model.searchOpen -> { model.closeSearch(); runCatching { searchFocus.requestFocus() } }
             else -> onBack()
         }
     }
+    val leftOut = dash?.menuFocus ?: FocusRequester.Cancel
     val restoreFocus = remember { FocusRequester() }
     // Back from the info page or the player: focus on the card that was opened, else the tabs.
     LaunchedEffect(Unit) {
         val index = model.focusKey?.let { k -> model.items.indexOfFirst { it.key == k } } ?: -1
-        if (index >= 0) {
-            grid.scrollToItem(index)
-            restoreFocus.requestWhenReady()
-        } else {
-            moviesFocus.requestWhenReady()
+        when {
+            index >= 0 && (dash == null || dash.enter == 0) -> { grid.scrollToItem(index); restoreFocus.requestWhenReady() }
+            dash == null -> moviesFocus.requestWhenReady()
         }
+    }
+    // OK on the menu item: into the page (the opened card when there is one, else the tabs).
+    if (dash != null) LaunchedEffect(dash.enter) {
+        if (dash.enter == 0) return@LaunchedEffect
+        val index = model.focusKey?.let { k -> model.items.indexOfFirst { it.key == k } } ?: -1
+        if (index >= 0) { grid.scrollToItem(index); restoreFocus.requestWhenReady() } else moviesFocus.requestWhenReady()
     }
     LaunchedEffect(model.restoreToken) {
         if (model.restoreToken == 0) return@LaunchedEffect
@@ -174,7 +184,19 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
         if (model.listToken == 0) return@LaunchedEffect
         grid.scrollToItem(0)
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .then(
+                if (dash == null) Modifier.padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
+                else Modifier
+                    // Right from the menu comes back to the last focused tab, field or card.
+                    .focusRequester(dash.contentFocus)
+                    .onFocusChanged { if (it.hasFocus) dash.onRetreatTo(dash.menuFocus) }
+                    .focusRestorer(moviesFocus)
+                    .focusGroup(),
+            ),
+    ) {
         // Header: Movies · Series tabs, search on the right.
         Row(
             Modifier.fillMaxWidth().padding(bottom = 12.dp).focusGroup(),
@@ -186,7 +208,7 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
                 label = stringResource(R.string.torrent_movies),
                 selected = model.kind == TorrentKind.MOVIE,
                 onClick = { model.selectKind(TorrentKind.MOVIE) },
-                modifier = Modifier.focusRequester(moviesFocus).focusProperties { left = FocusRequester.Cancel; up = FocusRequester.Cancel },
+                modifier = Modifier.focusRequester(moviesFocus).focusProperties { left = leftOut; up = FocusRequester.Cancel },
             )
             ChoiceChip(
                 label = stringResource(R.string.torrent_series),
@@ -212,7 +234,7 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
                 fieldFocus = fieldFocus,
                 // The search icon opens the field already typing, with the keyboard up.
                 startEditing = true,
-                leftFocus = FocusRequester.Cancel,
+                leftFocus = leftOut,
                 rightFocus = FocusRequester.Cancel,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
             )
@@ -220,28 +242,68 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
         if (model.items.isEmpty() && !model.loading) {
             Text(stringResource(R.string.torrent_empty), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
         }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(148.dp),
-            state = grid,
-            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.weight(1f).fillMaxWidth().gridEdges(),
-        ) {
-            itemsIndexed(model.items, key = { _, t -> t.key }) { index, title ->
-                com.enigmacast.ui.home.PosterCard(
-                    film = remember(title) { TorrentCards.film(title) },
-                    modifier = Modifier
-                        .then(if (index == 0) Modifier.focusRequester(firstCard) else Modifier)
-                        .then(if (title.key == model.focusKey) Modifier.focusRequester(restoreFocus) else Modifier),
-                    onFocus = { model.onFocusedIndex(index) },
-                    onClick = { model.openTitle(title) },
-                    lines = {
-                        title.year?.let { Text(it.toString(), color = EnigmaColors.Muted, fontSize = 12.sp) }
-                    },
-                )
+        // Same as the IPTV films grid (8b9db68): fixed columns, stable keys, one content type,
+        // cards of one fixed height, and a bring-into-view that only scrolls when a poster is
+        // off screen. TV's default pulls the focused poster to the middle, so every move
+        // shifted the grid and then settled back (the bounce).
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val columns = com.enigmacast.ui.xtream.VodPanelNav.columns(maxWidth.value, TorrentCards.CARD_WIDTH_DP, GRID_GAP_DP)
+            val items = model.items
+            val lastRowStart = (items.size - 1).coerceAtLeast(0) / columns * columns
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.MinimalBringIntoView,
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    state = grid,
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
+                    horizontalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
+                    modifier = Modifier.fillMaxSize().focusGroup(),
+                ) {
+                    itemsIndexed(items, key = { _, t -> t.key }, contentType = { _, _ -> "poster" }) { index, title ->
+                        com.enigmacast.ui.home.PosterCard(
+                            film = remember(title) { TorrentCards.film(title) },
+                            modifier = Modifier
+                                .height(TorrentCards.CARD_HEIGHT_DP.dp)
+                                .then(if (index == 0) Modifier.focusRequester(firstCard) else Modifier)
+                                .then(if (title.key == model.focusKey) Modifier.focusRequester(restoreFocus) else Modifier)
+                                .focusProperties {
+                                    // Left from the first column: the menu (dashboard) or nowhere.
+                                    if (index % columns == 0) left = leftOut
+                                    if (index % columns == columns - 1 || index == items.lastIndex) right = FocusRequester.Cancel
+                                    if (index >= lastRowStart) down = FocusRequester.Cancel
+                                },
+                            onFocus = { model.onFocusedIndex(index) },
+                            onClick = { model.openTitle(title) },
+                            lines = {
+                                // Always one line, so every card has the same height.
+                                Text(title.year?.toString() ?: " ", color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1)
+                            },
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+private const val GRID_GAP_DP = 16f
+
+/** Where the Torrent page sits in the dashboard: its menu item, its focus entry and the enter count. */
+class TorrentDash(
+    val menuFocus: FocusRequester,
+    val contentFocus: FocusRequester,
+    val enter: Int,
+    val onRetreatTo: (FocusRequester) -> Unit,
+)
+
+/** The loading page and the player over the whole screen while the page is in the dashboard. */
+@Composable
+private fun FullScreenLayer(onBack: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        NavigationSoundsForWindow()
+        Box(Modifier.fillMaxSize().background(Color.Black)) { content() }
     }
 }
 

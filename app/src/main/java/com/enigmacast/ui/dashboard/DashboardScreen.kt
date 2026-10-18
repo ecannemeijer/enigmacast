@@ -139,6 +139,7 @@ internal enum class DashSection {
     Soccer,
     IptvMovies,
     IptvSeries,
+    Torrent,
     Stream,
     Guide,
     Radio,
@@ -232,6 +233,7 @@ fun DashboardScreen(
     val seriesFocus = remember { FocusRequester() }
     val seriesContentFocus = remember { FocusRequester() }
     val torrentFocus = remember { FocusRequester() }
+    val torrentContentFocus = remember { FocusRequester() }
     val scraperModel: com.enigmacast.ui.torrent.ScraperSettingsViewModel = hiltViewModel()
     val scraperStatus by scraperModel.status.collectAsStateWithLifecycle()
     val torrentAvailable = scraperStatus is com.enigmacast.data.torrent.ScraperStatus.Valid
@@ -306,6 +308,7 @@ fun DashboardScreen(
         DashSection.Movies -> com.enigmacast.domain.account.PremiumFeature.MOVIES
         DashSection.Series -> com.enigmacast.domain.account.PremiumFeature.SERIES
         DashSection.Soccer -> com.enigmacast.domain.account.PremiumFeature.SOCCER
+        DashSection.Torrent -> com.enigmacast.domain.account.PremiumFeature.TORRENT
         else -> null
     }
     // The plan ran out while a Premium section was open: back to Home.
@@ -324,6 +327,7 @@ fun DashboardScreen(
         DashSection.MyItems -> myItemsMenuFocus
         DashSection.Settings -> settingsMenuFocus
         DashSection.IptvMovies, DashSection.IptvSeries -> iptvMenuFocus
+        DashSection.Torrent -> torrentFocus
     }
     fun sectionMenu(): FocusRequester = when (DashGroups.groupOf(section)) {
         DashGroup.TV -> tvMenuFocus
@@ -588,19 +592,19 @@ fun DashboardScreen(
                         )
                     }
                 }
-                // Torrent: only with a valid scraper (Settings › Scrapers); full screen like IPTV Live.
+                // Torrent: only with a valid scraper (Settings › Scrapers); a page in the dashboard like IPTV Films.
                 if (torrentAvailable) NavItem(
                     icon = Icons.Filled.PlayArrow,
                     label = stringResource(R.string.nav_torrent),
-                    selected = false,
+                    selected = section == DashSection.Torrent,
                     showLabel = drawerExpanded,
-                    locked = !accountModel.gate.allows(com.enigmacast.domain.account.PremiumFeature.TORRENT),
+                    locked = lockedFeature(DashSection.Torrent) != null,
                     staggerIndex = 3,
                     modifier = Modifier
                         .focusRequester(torrentFocus)
                         .onFocusChanged { if (it.isFocused) flyout = null }
-                        .focusProperties { right = FocusRequester.Cancel },
-                    onClick = { if (accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.TORRENT)) onTorrent() },
+                        .focusProperties { right = if (section == DashSection.Torrent && lockedFeature(DashSection.Torrent) == null) torrentContentFocus else FocusRequester.Cancel },
+                    onClick = { enterSection(DashSection.Torrent) },
                 )
                 NavItem(
                     icon = EnigmaIcons.Soccer,
@@ -769,6 +773,17 @@ fun DashboardScreen(
                             section = if (shown == DashSection.IptvSeries) com.enigmacast.domain.xtream.XtreamSection.SERIES else com.enigmacast.domain.xtream.XtreamSection.MOVIES,
                             onRetreatTo = retreat,
                             onPlay = onXtream,
+                        )
+                        }
+                        DashSection.Torrent -> {
+                        com.enigmacast.ui.torrent.TorrentScreen(
+                            onBack = { runCatching { torrentFocus.requestFocus() } },
+                            dash = com.enigmacast.ui.torrent.TorrentDash(
+                                menuFocus = torrentFocus,
+                                contentFocus = torrentContentFocus,
+                                enter = sectionEnter,
+                                onRetreatTo = retreat,
+                            ),
                         )
                         }
                         DashSection.Soccer -> {

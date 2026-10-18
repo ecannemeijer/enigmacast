@@ -446,6 +446,8 @@ class TorrentViewModel @Inject constructor(
 
     /** Back/stop/end: the position is kept, the player released and the torrent removed with its files. */
     fun stopPlayback() {
+        // Back on the grid, focus on the card that was played.
+        if (playing != null) restoreToken++
         tickJob?.cancel()
         saveResume()
         resumeAsk = null
