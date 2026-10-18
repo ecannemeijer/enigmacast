@@ -142,13 +142,14 @@ object TmdbJson {
         )
     }
 
-    /** Raster logos only (Coil cannot draw SVG here); the viewer's language first, then English, then any. */
+    /** Raster logos only (Coil cannot draw SVG here); the viewer's language, English, no language, then any. */
     private fun logo(images: JsonObject?, language: String): String? {
         val logos = (images?.get("logos") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
             .filter { it.str("file_path")?.endsWith(".png", ignoreCase = true) == true }
         val lang = language.take(2)
         return (logos.firstOrNull { it.str("iso_639_1") == lang }
             ?: logos.firstOrNull { it.str("iso_639_1") == "en" }
+            ?: logos.firstOrNull { it.str("iso_639_1").isNullOrBlank() }
             ?: logos.firstOrNull())?.str("file_path")
     }
 

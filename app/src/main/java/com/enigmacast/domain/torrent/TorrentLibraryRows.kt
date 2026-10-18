@@ -3,6 +3,9 @@ package com.enigmacast.domain.torrent
 import com.enigmacast.data.db.IptvLibraryRow
 import com.enigmacast.data.db.IptvResumeRow
 
+/** What a periodic or final save does with the playing title's resume position. */
+enum class ResumeSave { NONE, KEEP, CLEAR }
+
 /** What Library or Home asks the Torrent page to open: the info page, at a remembered episode. */
 data class TorrentOpenRequest(
     val title: TmdbTitle,
@@ -68,6 +71,18 @@ object TorrentLibraryRows {
         }
         "m" -> row.id.toIntOrNull()?.let { TorrentOpenRequest(TmdbTitle(it, TorrentKind.MOVIE, row.title, year, row.poster, null, "")) }
         else -> null
+    }
+
+    /**
+     * Nothing is written before the saved place was offered (the new stream is still buffering at
+     * 0:00 and would wipe it) or while the question is open. Then a place past the first minute
+     * is kept; one at the end (watched) is cleared; an early stop leaves the saved place alone.
+     */
+    fun saveAction(offered: Boolean, asking: Boolean, positionMs: Long, durationMs: Long): ResumeSave = when {
+        !offered || asking -> ResumeSave.NONE
+        durationMs > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(positionMs, durationMs) -> ResumeSave.CLEAR
+        positionMs >= com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS -> ResumeSave.KEEP
+        else -> ResumeSave.NONE
     }
 
     /** The latest saved episode of a series (Play on its info page starts there). */

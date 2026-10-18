@@ -76,7 +76,8 @@ data class TorrentSubtitleTarget(
 sealed interface TorrentOverlay {
     data object None : TorrentOverlay
     data class Streams(val title: TmdbTitle, val subtitle: String, val streams: List<TorrentStream>?, val error: Boolean, val resumeKey: String) : TorrentOverlay
-    data class Loading(val title: TmdbTitle, val subtitle: String) : TorrentOverlay
+    /** [logo]: the TMDB title logo (PNG), shown instead of the title text when there is one. */
+    data class Loading(val title: TmdbTitle, val subtitle: String, val logo: String? = null) : TorrentOverlay
 }
 
 @HiltViewModel
@@ -266,6 +267,7 @@ class TorrentViewModel @Inject constructor(
         streamEpisode = episode
         streamEpisodeName = episodeName
         streamOriginalTitle = info?.takeIf { it.title.key == title.key }?.film?.movie?.originalTitle.orEmpty()
+        streamLogo = info?.takeIf { it.title.key == title.key }?.film?.movie?.logoPath?.let { TmdbJson.image(it, "w500") }
         val subtitle = if (season != null) "S$season E$episode" + (episodeName?.let { " · $it" } ?: "") else ""
         // The streams dialog opens at once (loading) while the IMDb id is looked up.
         overlay = TorrentOverlay.Streams(title, subtitle, null, false, "")
@@ -323,6 +325,7 @@ class TorrentViewModel @Inject constructor(
     private var streamEpisode: Int? = null
     private var streamOriginalTitle = ""
     private var streamEpisodeName: String? = null
+    private var streamLogo: String? = null
     /** What is playing, for Continue watching: the title and its episode. */
     private var resumeTarget: com.enigmacast.data.db.IptvResumeRow? = null
     private var subtitleTarget: TorrentSubtitleTarget? = null
@@ -357,7 +360,7 @@ class TorrentViewModel @Inject constructor(
             play(url, o.title.title)
             return
         }
-        overlay = TorrentOverlay.Loading(o.title, o.subtitle)
+        overlay = TorrentOverlay.Loading(o.title, o.subtitle, streamLogo)
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             TorrentStreamingService.start(context)
@@ -497,21 +500,22 @@ class TorrentViewModel @Inject constructor(
     fun answerResume(resume: Boolean) {
         val at = resumeAsk ?: return
         resumeAsk = null
+        // From the beginning: the old place is forgotten (as for recordings).
+        if (!resume) resumeTarget?.let { t -> library.clearResume(t.kind, t.id); resumeKey?.let { k -> resumes.edit().remove(k).apply() } }
         player?.let { if (resume) it.seekTo(at); it.playWhenReady = true }
     }
 
     private fun saveResume() {
-        // While the resume question is open the player is still at the start: keep the saved place.
-        if (resumeAsk != null) return
         val p = player ?: return
         val pos = p.currentPosition
         val dur = p.duration.coerceAtLeast(0)
-        val watched = dur > 0 && ResumePolicy.watched(pos, dur)
-        val keep = pos >= ResumePolicy.MIN_RESUME_MS && !watched
+        val action = com.enigmacast.domain.torrent.TorrentLibraryRows.saveAction(resumeOffered, resumeAsk != null, pos, dur)
+        if (action == com.enigmacast.domain.torrent.ResumeSave.NONE) return
         // A position from before Continue watching (preferences, by IMDb id) moves into the user database.
-        if (keep || watched) resumeKey?.takeIf { it.isNotBlank() && resumes.contains(it) }?.let { legacy -> resumes.edit().remove(legacy).apply() }
+        resumeKey?.takeIf { it.isNotBlank() && resumes.contains(it) }?.let { legacy -> resumes.edit().remove(legacy).apply() }
+        // The key is the title (TMDB id, season/episode), so any stream of it resumes here.
         val target = resumeTarget ?: return
-        if (keep) {
+        if (action == com.enigmacast.domain.torrent.ResumeSave.KEEP) {
             library.saveResume(target.copy(positionMs = pos, durationMs = dur, updatedMs = System.currentTimeMillis()))
         } else if (library.resume(target.kind, target.id) != null) {
             library.clearResume(target.kind, target.id)

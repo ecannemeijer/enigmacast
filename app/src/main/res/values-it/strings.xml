@@ -1388,6 +1388,6 @@ Profilo: %2$s</string>
     <string name="scraper_error_types">Questo addon non offre film o serie.</string>
     <string name="torrent_error_engine">Il motore torrent non è disponibile su questo dispositivo (ABI %1$s).</string>
     <string name="scraper_torrentio">Attiva con Torrentio</string>
-    <string name="scraper_torrentio_desc">Usa Torrentio ordinato per seeder, solo 1080p e 720p. Un URL manifest personalizzato qui sotto ha la precedenza.</string>
+    <string name="scraper_torrentio_desc">Usa Torrentio ordinato per seeder. Un URL manifest personalizzato qui sotto ha la precedenza.</string>
     <string name="scraper_custom_overrides">URL personalizzato in uso (ha la precedenza su Torrentio)</string>
 </resources>

@@ -1422,7 +1422,7 @@ Profile: %2$s</string>
     <string name="scraper_error_types">This addon offers no movies or series.</string>
     <string name="torrent_error_engine">The torrent engine is not available on this device (ABI %1$s).</string>
     <string name="scraper_torrentio">Enable with Torrentio</string>
-    <string name="scraper_torrentio_desc">Uses Torrentio sorted by seeders, 1080p and 720p only. A custom manifest URL below takes priority.</string>
+    <string name="scraper_torrentio_desc">Uses Torrentio sorted by seeders. A custom manifest URL below takes priority.</string>
     <string name="scraper_custom_overrides">Custom URL in use (overrides Torrentio)</string>
     <string name="scraper_using_torrentio" translatable="false">Torrentio</string>
 </resources>

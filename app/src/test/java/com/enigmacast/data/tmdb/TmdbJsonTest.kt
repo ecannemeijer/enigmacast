@@ -36,6 +36,17 @@ class TmdbJsonTest {
     }
 
     @Test
+    fun logoPrefersLanguageThenEnglishThenNoLanguage() {
+        fun body(vararg logos: Pair<String?, String>) = "{\"id\":1,\"title\":\"T\",\"images\":{\"logos\":[" +
+            logos.joinToString(",") { (lang, path) -> "{\"iso_639_1\":" + (lang?.let { "\"" + it + "\"" } ?: "null") + ",\"file_path\":\"" + path + "\"}" } + "]}}"
+        assertEquals("/nl.png", TmdbJson.parseMovie(body("de" to "/de.png", "en" to "/en.png", "nl" to "/nl.png", null to "/x.png"), "NL", "nl-NL")!!.logoPath)
+        assertEquals("/en.png", TmdbJson.parseMovie(body("de" to "/de.png", null to "/x.png", "en" to "/en.png"), "NL", "nl-NL")!!.logoPath)
+        assertEquals("/x.png", TmdbJson.parseMovie(body("de" to "/de.png", null to "/x.png"), "NL", "nl-NL")!!.logoPath)
+        // SVG logos are skipped (not drawable here).
+        assertEquals("/de.png", TmdbJson.parseMovie(body("nl" to "/nl.svg", "de" to "/de.png"), "NL", "nl-NL")!!.logoPath)
+    }
+
+        @Test
     fun certificationFallsBackToUs() {
         val movie = TmdbJson.parseMovie(FilmTestData.fixture("movie_603.json"), "FR", "fr-FR")!!
         assertEquals("R", movie.certification)

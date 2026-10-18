@@ -120,7 +120,7 @@ class ScraperRepository @Inject constructor(private val secrets: SecretStore) {
     companion object {
         private const val KEY = "torrent_scraper_manifest"
         private const val KEY_TORRENTIO = "torrent_scraper_torrentio"
-        /** Torrentio sorted by seeders, 1080p and 720p only (qualityfilter excludes the rest). */
-        const val TORRENTIO_MANIFEST = "https://torrentio.strem.fun/sort=seeders|qualityfilter=1080p,720p/manifest.json"
+        /** Torrentio sorted by seeders, all qualities. */
+        const val TORRENTIO_MANIFEST = "https://torrentio.strem.fun/sort=seeders/manifest.json"
     }
 }

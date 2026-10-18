@@ -2,9 +2,7 @@ package com.enigmacast.ui.torrent
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -490,20 +488,31 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
     val holder = remember { FocusRequester() }
     LaunchedEffect(Unit) { holder.requestWhenReady() }
     BackHandler { model.cancelLoading() }
-    val pulse by rememberInfiniteTransition(label = "torrentPulse").animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "alpha",
-    )
+    // Stremio-style pulse: logo and backdrop fade between 0.3 and 1. Read only in graphicsLayer
+    // (draw phase), so progress updates never recompose or restart it.
+    val pulse = rememberLoadingPulse()
     Box(Modifier.fillMaxSize().background(Color.Black).focusRequester(holder).focusable(), contentAlignment = Alignment.Center) {
         o.title.backdrop?.let {
-            AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.25f })
+            // Dimmer than the logo so it stays readable: 0.15 .. 0.5.
+            AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = pulse.value * 0.5f })
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                o.title.title,
-                color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                modifier = Modifier.graphicsLayer { alpha = pulse }.padding(horizontal = 48.dp),
-            )
+            var logoFailed by remember(o.logo) { mutableStateOf(false) }
+            if (o.logo != null && !logoFailed) {
+                AsyncImage(
+                    model = o.logo,
+                    contentDescription = o.title.title,
+                    contentScale = ContentScale.Fit,
+                    onError = { logoFailed = true },
+                    modifier = Modifier.fillMaxWidth(0.45f).height(170.dp).graphicsLayer { alpha = pulse.value },
+                )
+            } else {
+                Text(
+                    o.title.title,
+                    color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    modifier = Modifier.graphicsLayer { alpha = pulse.value }.padding(horizontal = 48.dp),
+                )
+            }
             if (o.subtitle.isNotBlank()) Text(o.subtitle, color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
         }
         Text(
@@ -512,6 +521,29 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp),
         )
     }
+}
+
+/** Animations at normal speed, whatever the system animator scale is. */
+private object FullMotion : androidx.compose.ui.MotionDurationScale {
+    override val scaleFactor: Float get() = 1f
+}
+
+/**
+ * 1 → 0.3 → 1 … every 1.3 s, ease in-out. Runs at full speed even when the device's animator
+ * scale is 0 or slowed (some TV boxes and emulators), where an infinite transition would stand still.
+ */
+@Composable
+private fun rememberLoadingPulse(): androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val alpha = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(FullMotion) {
+            alpha.animateTo(
+                0.3f,
+                infiniteRepeatable(tween(1300, easing = androidx.compose.animation.core.EaseInOut), RepeatMode.Reverse),
+            )
+        }
+    }
+    return alpha
 }
 
 @Composable
