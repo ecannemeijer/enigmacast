@@ -171,6 +171,7 @@ fun PremiumDialog(feature: PremiumFeature, onDismiss: () -> Unit) {
             PremiumFeature.EPG -> R.string.premium_feature_epg
             PremiumFeature.SETTINGS_IMPORT -> R.string.premium_feature_settings_import
             PremiumFeature.XTREAM -> R.string.premium_feature_xtream
+            PremiumFeature.TORRENT -> R.string.premium_feature_torrent
         },
     )
     TvChoiceDialog(

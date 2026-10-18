@@ -164,6 +164,7 @@ private enum class SettingPage {
     Guide,
     SyncServer,
     Iptv,
+    Scrapers,
     Lock,
     Recordings,
     Appearance,
@@ -192,6 +193,7 @@ fun DashboardScreen(
     onOscam: () -> Unit = {},
     onSettingsImport: () -> Unit = {},
     onXtream: () -> Unit = {},
+    onTorrent: () -> Unit = {},
     onRunSetup: () -> Unit = {},
     onChooseLanguage: (AppLanguage) -> Unit = {},
     pendingSearchQuery: String? = null,
@@ -229,6 +231,10 @@ fun DashboardScreen(
     val moviesContentFocus = remember { FocusRequester() }
     val seriesFocus = remember { FocusRequester() }
     val seriesContentFocus = remember { FocusRequester() }
+    val torrentFocus = remember { FocusRequester() }
+    val scraperModel: com.enigmacast.ui.torrent.ScraperSettingsViewModel = hiltViewModel()
+    val scraperStatus by scraperModel.status.collectAsStateWithLifecycle()
+    val torrentAvailable = scraperStatus is com.enigmacast.data.torrent.ScraperStatus.Valid
     val soccerFocus = remember { FocusRequester() }
     val soccerContentFocus = remember { FocusRequester() }
     val streamFocus = remember { FocusRequester() }
@@ -564,7 +570,7 @@ fun DashboardScreen(
                             active = xtreamModel.section.takeIf { xtreamModel.categories.isNotEmpty() },
                             entryFocus = iptvFlyoutFocus,
                             upTo = iptvMenuFocus,
-                            downTo = soccerFocus,
+                            downTo = if (torrentAvailable) torrentFocus else soccerFocus,
                             onClose = { flyout = null; runCatching { iptvMenuFocus.requestFocus() } },
                             onChoose = { entry ->
                                 flyout = null
@@ -582,6 +588,20 @@ fun DashboardScreen(
                         )
                     }
                 }
+                // Torrent: only with a valid scraper (Settings › Scrapers); full screen like IPTV Live.
+                if (torrentAvailable) NavItem(
+                    icon = Icons.Filled.PlayArrow,
+                    label = stringResource(R.string.nav_torrent),
+                    selected = false,
+                    showLabel = drawerExpanded,
+                    locked = !accountModel.gate.allows(com.enigmacast.domain.account.PremiumFeature.TORRENT),
+                    staggerIndex = 3,
+                    modifier = Modifier
+                        .focusRequester(torrentFocus)
+                        .onFocusChanged { if (it.isFocused) flyout = null }
+                        .focusProperties { right = FocusRequester.Cancel },
+                    onClick = { if (accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.TORRENT)) onTorrent() },
+                )
                 NavItem(
                     icon = EnigmaIcons.Soccer,
                     label = stringResource(R.string.nav_sport),
@@ -1331,6 +1351,7 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Guide, stringResource(R.string.settings_guide_home), page == SettingPage.Guide, navFocus.getValue(SettingPage.Guide), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Guide) }) { enterPage(SettingPage.Guide) }
                 SettingNav(EnigmaIcons.Sync, stringResource(R.string.settings_sync_server), page == SettingPage.SyncServer, navFocus.getValue(SettingPage.SyncServer), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.SyncServer) }) { enterPage(SettingPage.SyncServer) }
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
+                SettingNav(Icons.Filled.Search, stringResource(R.string.settings_scrapers), page == SettingPage.Scrapers, navFocus.getValue(SettingPage.Scrapers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Scrapers) }) { enterPage(SettingPage.Scrapers) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_lock), page == SettingPage.Lock, navFocus.getValue(SettingPage.Lock), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Lock) }) { enterPage(SettingPage.Lock) }
                 SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
                 SettingNav(EnigmaIcons.Palette, stringResource(R.string.settings_appearance), page == SettingPage.Appearance, navFocus.getValue(SettingPage.Appearance), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Appearance) }) { enterPage(SettingPage.Appearance) }
@@ -1433,6 +1454,7 @@ private fun SettingsHub(
                     SettingPage.SyncServer -> SyncServerSettingsPanel(pageContentFocus)
                     SettingPage.Iptv -> IptvSettingsPanel(pageContentFocus)
                     SettingPage.Lock -> LockSettingsPanel(pageContentFocus)
+                    SettingPage.Scrapers -> com.enigmacast.ui.torrent.ScraperSettingsPanel(pageContentFocus)
                     SettingPage.Recordings -> PlaybackSettingsPanel(
                         settings.streamMode,
                         settings.playback.lowLatency,

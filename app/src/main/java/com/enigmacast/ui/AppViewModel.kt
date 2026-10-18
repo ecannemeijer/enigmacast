@@ -395,6 +395,11 @@ class AppViewModel @Inject constructor(
         screen = AppScreen.Xtream
     }
 
+    /** Torrent page in full screen; Back returns to the dashboard. */
+    fun openTorrent() {
+        screen = AppScreen.Torrent
+    }
+
     fun openOscam() {
         toolReturn = if (screen == AppScreen.Dashboard) AppScreen.Dashboard else AppScreen.Settings
         screen = AppScreen.Oscam
@@ -406,7 +411,7 @@ class AppViewModel @Inject constructor(
 
     fun back() {
         screen = when (screen) {
-            AppScreen.Xtream -> AppScreen.Dashboard
+            AppScreen.Xtream, AppScreen.Torrent -> AppScreen.Dashboard
             AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport -> {
                 if (toolReturn == AppScreen.Dashboard) returnToSettingsHub = true
                 toolReturn

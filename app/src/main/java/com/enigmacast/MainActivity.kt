@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 when (appViewModel.screen) {
-                    AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport, AppScreen.Xtream -> appViewModel.back()
+                    AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport, AppScreen.Xtream, AppScreen.Torrent -> appViewModel.back()
                     AppScreen.Connection -> appViewModel.askExit()
                     AppScreen.Setup -> appViewModel.leaveSetup()
                     AppScreen.Remote -> {
@@ -340,6 +340,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onOscam = appViewModel::openOscam,
                 onSettingsImport = appViewModel::openSettingsImport,
                 onXtream = appViewModel::openXtream,
+                onTorrent = appViewModel::openTorrent,
                 onRunSetup = appViewModel::openSetup,
                 onChooseLanguage = onChooseLanguage,
                 pendingSearchQuery = appViewModel.pendingSearchQuery,
@@ -366,6 +367,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             AppScreen.SignalMeter -> com.enigmacast.ui.settings.SignalMeterScreen(onBack = appViewModel::back)
             AppScreen.Oscam -> com.enigmacast.ui.settings.OscamScreen(onBack = appViewModel::back)
             AppScreen.SettingsImport -> com.enigmacast.ui.settingsimport.SettingsImportScreen(onBack = appViewModel::back)
+            AppScreen.Torrent -> com.enigmacast.ui.torrent.TorrentScreen(onBack = appViewModel::back)
             AppScreen.Xtream -> com.enigmacast.ui.xtream.XtreamScreen(
                 onBack = appViewModel::back,
                 onSearch = appViewModel::openDashboardSearch,

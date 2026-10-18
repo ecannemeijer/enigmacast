@@ -1436,7 +1436,7 @@ class XtreamViewModel @Inject constructor(
 
 /** IPTV player with the same audio-delay clock as the Enigma2 player. */
 @OptIn(UnstableApi::class)
-private class IptvRenderersFactory(
+internal class IptvRenderersFactory(
     context: Context,
     private val offsets: com.enigmacast.playback.AudioSyncOffsets,
     private val subtitleSync: com.enigmacast.playback.SubtitleSyncOffset,

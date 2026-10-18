@@ -9,6 +9,7 @@ enum class AppScreen {
     Settings,
     SettingsImport,
     Xtream,
+    Torrent,
     Diagnostics,
     SignalMeter,
     Oscam,

@@ -19,6 +19,9 @@ enum class PremiumFeature {
 
     /** IPTV: the Xtream Codes playlists of the receiver's XStreamity plugin, played in the app. */
     XTREAM,
+
+    /** Torrent: TMDB catalogue with streams from a Stremio addon, played through the torrent engine. */
+    TORRENT,
 }
 
 /**
@@ -63,6 +66,7 @@ object Entitlements {
         PremiumFeature.EPG,
         PremiumFeature.SETTINGS_IMPORT,
         PremiumFeature.XTREAM,
+        PremiumFeature.TORRENT,
         -> isPremium(account, nowMs)
     }
 
