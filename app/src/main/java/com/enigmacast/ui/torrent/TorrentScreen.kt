@@ -204,7 +204,7 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
                 modifier = Modifier.focusRequester(searchFocus).focusProperties { right = FocusRequester.Cancel; up = FocusRequester.Cancel },
             )
         }
-        if (model.searchOpen) {
+        if (model.searchOpen) androidx.compose.runtime.key(model.searchToken) {
             TvTextField(
                 label = stringResource(if (model.kind == TorrentKind.MOVIE) R.string.torrent_search_movies else R.string.torrent_search_series),
                 value = model.query,

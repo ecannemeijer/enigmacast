@@ -100,6 +100,11 @@ fun TvTextField(
     startEditing: Boolean = false,
 ) {
     var editing by remember { mutableStateOf(startEditing) }
+    // Whether the text input really had focus during this edit: only losing it after that ends
+    // editing (a field that starts in editing is reported unfocused before it gets focus).
+    var inputFocused by remember { mutableStateOf(false) }
+    // OK pressed down inside this field; a lone OK release (from the key that opened it) is ignored.
+    var okDown by remember { mutableStateOf(false) }
     var highlighted by remember { mutableStateOf(false) }
     val shell = remember { FocusRequester() }
     val input = remember { FocusRequester() }
@@ -110,6 +115,8 @@ fun TvTextField(
     fun stopEditing(move: FocusDirection? = null) {
         if (!editing) return
         keyboard?.hide()
+        inputFocused = false
+        okDown = false
         // Focus goes back to the field's frame first, then the text input stops being focusable.
         runCatching { shell.requestFocus() }
         editing = false
@@ -122,8 +129,10 @@ fun TvTextField(
 
     LaunchedEffect(editing) {
         if (editing) {
-            // Waits for the input to be attached (it is not yet when the field starts in editing).
+            // Waits for the input to be attached (it is not yet when the field starts in editing),
+            // then one more frame so the IME connects to the focused text input before show().
             input.requestWhenReady()
+            androidx.compose.runtime.withFrameNanos { }
             keyboard?.show()
         }
     }
@@ -225,6 +234,11 @@ fun TvTextField(
                     if (event.type != KeyEventType.KeyDown && event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
                     val code = event.nativeKeyEvent.keyCode
                     val up = event.type == KeyEventType.KeyUp
+                    if (editing && TvFieldKeys.isOk(code)) {
+                        if (!up) okDown = true
+                        else if (!okDown) return@onPreviewKeyEvent true
+                        else okDown = false
+                    }
                     val action = if (editing) TvFieldKeys.whileEditing(code, up, multiline) else TvFieldKeys.whileBrowsing(code, up)
                     when (action) {
                         TvFieldKeys.Action.NONE -> false
@@ -239,7 +253,10 @@ fun TvTextField(
                 .focusable()
                 .focusRequester(input)
                 .focusProperties { canFocus = editing }
-                .onFocusChanged { state -> if (!state.isFocused && editing && !state.hasFocus) editing = false },
+                .onFocusChanged { state ->
+                    if (state.isFocused) inputFocused = true
+                    else if (editing && inputFocused && !state.hasFocus) { editing = false; inputFocused = false; okDown = false }
+                },
         )
     }
 }

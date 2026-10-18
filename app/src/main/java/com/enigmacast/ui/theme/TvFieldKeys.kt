@@ -48,6 +48,6 @@ object TvFieldKeys {
     /** In a multi-line field Enter types a new line; the remote's OK finishes. */
     private fun okInMultiline(up: Boolean): Action = if (up) Action.STOP_EDIT else Action.CONSUME
 
-    private fun isOk(keyCode: Int): Boolean =
+    fun isOk(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 }

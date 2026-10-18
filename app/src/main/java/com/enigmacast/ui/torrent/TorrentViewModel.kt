@@ -108,7 +108,11 @@ class TorrentViewModel @Inject constructor(
         reload()
     }
 
-    fun openSearch() { searchOpen = true }
+    /** Bumped on every press of the search icon: the field (re)starts typing with the keyboard up. */
+    var searchToken by mutableIntStateOf(0)
+        private set
+
+    fun openSearch() { searchOpen = true; searchToken++ }
     fun closeSearch() {
         searchOpen = false
         if (query.isNotEmpty()) { query = ""; reload() }
