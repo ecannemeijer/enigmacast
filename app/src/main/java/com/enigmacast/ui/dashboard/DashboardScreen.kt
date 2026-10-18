@@ -478,7 +478,8 @@ fun DashboardScreen(
                 // Who is watching (avatar + name); OK opens switch / manage / receiver standby.
                 com.enigmacast.ui.profile.ProfileChip(
                     profileModel, drawerExpanded,
-                    Modifier.focusProperties { right = FocusRequester.Cancel },
+                    // The first item of the menu: Up stops here.
+                    Modifier.focusProperties { right = FocusRequester.Cancel; up = FocusRequester.Cancel },
                 )
                 NavItem(
                     icon = Icons.Filled.Home,
@@ -674,7 +675,11 @@ fun DashboardScreen(
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .onFocusChanged { if (it.isFocused) flyout = null }
-                        .focusProperties { right = if (section == DashSection.Settings) settingsPageFocus else FocusRequester.Cancel },
+                        // The last item of the menu: Down stops here.
+                        .focusProperties {
+                            right = if (section == DashSection.Settings) settingsPageFocus else FocusRequester.Cancel
+                            down = FocusRequester.Cancel
+                        },
                     onClick = { enterSection(DashSection.Settings) },
                 )
                 if (drawerExpanded) {

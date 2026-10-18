@@ -29,6 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -103,6 +106,7 @@ fun EnigmaNavigationDrawer(
             Column(
                 Modifier
                     .fillMaxHeight()
+                    .drawerEdges()
                     .padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 content = content,
@@ -112,4 +116,23 @@ fun EnigmaNavigationDrawer(
             if (cursor.visible) cursor.seen = true
         }
     }
+}
+
+/**
+ * Up on the first menu item and Down on the last one stay in the menu. Without this, focus
+ * search runs over the whole screen: with nothing above or below inside the column it picked
+ * the nearest focusable of the page on the right. Done on the group, so it holds whichever
+ * items are shown (Torrent, IPTV, the open flyout) without knowing which one is first or last.
+ */
+internal fun Modifier.drawerEdges(): Modifier = this
+    .focusProperties {
+        onExit = {
+            if (NavEdges.blocks(requestedFocusDirection)) cancelFocusChange()
+        }
+    }
+    .focusGroup()
+
+internal object NavEdges {
+    /** Only vertical moves are kept inside; Right still enters the page, Left has nothing to reach. */
+    fun blocks(direction: FocusDirection): Boolean = direction == FocusDirection.Up || direction == FocusDirection.Down
 }
