@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 from enigmacast_sync.service import init_server, open_db, recover
@@ -22,9 +21,6 @@ def main(argv: list[str] | None = None) -> int:
     rec.add_argument("--code", required=True)
     args = parser.parse_args(argv)
     data = Path(args.data_dir) if args.data_dir else choose_data_dir()
-    if data is None:
-        print("No external storage found. Refusing to put the database on internal flash.", file=sys.stderr)
-        return 2
     db = open_db(data)
     if args.cmd == "init":
         _ensure_cert(data)

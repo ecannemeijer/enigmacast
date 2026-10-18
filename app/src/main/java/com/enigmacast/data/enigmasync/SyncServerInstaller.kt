@@ -36,11 +36,8 @@ class SyncServerInstaller @Inject constructor() {
             session.connect(20_000)
             val model = exec(session, "cat /proc/stb/info/model 2>/dev/null || echo unknown").trim()
             val python = exec(session, "python3 --version").trim()
-            val dataDir = exec(
-                session,
-                "for d in /media/hdd /media/usb /media/mmc /media/cf; do [ -d \"\$d\" ] && [ -w \"\$d\" ] && echo \"\$d/enigmacast-sync\" && exit 0; done; echo NO_EXTERNAL; exit 1",
-            ).trim()
-            if (dataDir == "NO_EXTERNAL" || dataDir.isBlank()) error("No writable external storage on the receiver")
+            val dataDir = exec(session, pickDataDir(requireCert = false)).trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
+            if (dataDir.isBlank()) error("No sync data directory on the receiver")
             exec(session, FETCH)
             val remote = "/usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync"
             val init = exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init || true")
@@ -65,10 +62,7 @@ class SyncServerInstaller @Inject constructor() {
         session.setConfig("PreferredAuthentications", "password")
         try {
             session.connect(20_000)
-            val dataDir = exec(
-                session,
-                "for d in /media/hdd /media/usb /media/mmc /media/cf; do [ -f \"\$d/enigmacast-sync/cert.pem\" ] && echo \"\$d/enigmacast-sync\" && exit 0; done; exit 1",
-            ).trim()
+            val dataDir = exec(session, pickDataDir(requireCert = true)).trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
             if (dataDir.isBlank()) error("Sync server certificate was not found")
             return pinOf(exec(session, "cat '$dataDir/cert.pem'"))
         } finally {
@@ -114,6 +108,37 @@ class SyncServerInstaller @Inject constructor() {
         val cert = CertificateFactory.getInstance("X.509").generateCertificate(pem.byteInputStream()) as X509Certificate
         val digest = MessageDigest.getInstance("SHA-256").digest(cert.publicKey.encoded)
         return Base64.encodeToString(digest, Base64.NO_WRAP)
+    }
+
+    /**
+     * A disk counts only when it is really mounted. An empty /media/hdd folder on the
+     * internal flash is ignored. Without a disk the database lives in /etc/enigmacast-sync.
+     */
+    private fun pickDataDir(requireCert: Boolean): String {
+        val cert = if (requireCert) """[ -f "${'$'}d/enigmacast-sync/cert.pem" ]""" else """[ -w "${'$'}d" ]"""
+        val fallback = if (requireCert) {
+            """if [ -f /etc/enigmacast-sync/cert.pem ]; then echo /etc/enigmacast-sync; exit 0; fi
+            exit 1"""
+        } else {
+            "echo /etc/enigmacast-sync"
+        }
+        return """
+            is_mount() {
+              d=${'$'}1
+              if command -v findmnt >/dev/null 2>&1; then
+                findmnt -n "${'$'}d" >/dev/null 2>&1
+              else
+                awk -v p="${'$'}d" '${'$'}2 == p { found=1 } END { exit found ? 0 : 1 }' /proc/mounts
+              fi
+            }
+            for d in /media/hdd /media/usb /media/mmc /media/cf; do
+              if is_mount "${'$'}d" && $cert; then
+                echo "${'$'}d/enigmacast-sync"
+                exit 0
+              fi
+            done
+            $fallback
+        """.trimIndent()
     }
 
     private companion object {

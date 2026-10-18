@@ -3,18 +3,26 @@
 DAEMON=/usr/bin/python3
 PID=/var/run/enigmacast-sync.pid
 PLUGIN=/usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync
+is_mount() {
+    d=$1
+    if command -v findmnt >/dev/null 2>&1; then
+        findmnt -n "$d" >/dev/null 2>&1
+    else
+        awk -v p="$d" '$2 == p { found=1 } END { exit found ? 0 : 1 }' /proc/mounts
+    fi
+}
 pick_dir() {
     for d in /media/hdd /media/usb /media/mmc /media/cf; do
-        if [ -d "$d" ] && [ -w "$d" ]; then
+        if is_mount "$d" && [ -w "$d" ]; then
             echo "$d/enigmacast-sync"
             return 0
         fi
     done
-    return 1
+    echo /etc/enigmacast-sync
 }
 case "$1" in
 start)
-    DIR=$(pick_dir) || { echo "No external storage"; exit 1; }
+    DIR=$(pick_dir)
     export PYTHONPATH="$PLUGIN"
     start-stop-daemon -S -b -m -p "$PID" -x "$DAEMON" -- -m enigmacast_sync.cli --data-dir "$DIR" serve
     ;;

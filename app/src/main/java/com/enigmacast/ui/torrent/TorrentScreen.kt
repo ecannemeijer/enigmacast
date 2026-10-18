@@ -382,8 +382,7 @@ private fun FilterPopup(title: String, options: List<String>, selected: Int, onC
         NavigationSoundsForWindow()
         Column(
             Modifier
-                .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
-                .widthIn(min = FilterMenu.MIN_WIDTH_DP.dp, max = FilterMenu.MAX_WIDTH_DP.dp)
+                .width(FilterMenu.MAX_WIDTH_DP.dp)
                 .background(EnigmaColors.Canvas, skinShape(12.dp))
                 .border(1.dp, EnigmaColors.Subtle.copy(alpha = 0.4f), skinShape(12.dp))
                 .padding(8.dp),
