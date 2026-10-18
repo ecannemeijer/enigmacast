@@ -52,6 +52,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.onFocusEvent
+import com.enigmacast.ui.theme.trackedFocusRequester
+import com.enigmacast.ui.theme.requestWhenAttached
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -281,6 +284,10 @@ fun DashboardScreen(
     }
     /** TV or IPTV expanded inside the drawer. Only one group is open. */
     var flyout by remember { mutableStateOf<DashGroup?>(null) }
+    // Right from any menu item enters the open page (see enterPageFromMenu).
+    val pageFocus = remember { FocusRequester() }
+    var pageVisited by remember { mutableStateOf<DashSection?>(null) }
+    var pageEntryCheck by remember { mutableIntStateOf(0) }
     val tabContext = androidx.compose.ui.platform.LocalContext.current
     val tabMemory = remember { DashTabMemory(tabContext) }
     /** The tab of [target] in its group's tab row (the old menu item's requester moved there). */
@@ -436,6 +443,30 @@ fun DashboardScreen(
         openSection(target)
         sectionEnter += 1
     }
+    /**
+     * D-pad Right anywhere in the menu (any item, the profile chip, Settings, a submenu row):
+     * into the page that is open. Back to the element that had focus there when possible,
+     * else the page's own entry (the same as OK on its menu item). Pages without either
+     * (a PIN pad, a page still loading) get their first focusable after a few frames.
+     */
+    fun enterPageFromMenu() {
+        flyout = null
+        val restored = MenuRight.mayRestore(section, pageVisited) &&
+            runCatching { pageFocus.restoreFocusedChild() }.getOrDefault(false)
+        if (restored) return
+        sectionEnter += 1
+        pageEntryCheck += 1
+    }
+    // Another page opened from the menu: what was focused on the old one is not restored.
+    LaunchedEffect(section) { pageVisited = if (contentFocused) section else null }
+    LaunchedEffect(pageEntryCheck) {
+        if (pageEntryCheck == 0) return@LaunchedEffect
+        repeat(MenuRight.FALLBACK_FRAMES) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (contentFocused) return@LaunchedEffect
+        }
+        if (navFocused) pageFocus.requestWhenAttached()
+    }
     LaunchedEffect(Unit) {
         while (true) {
             powerModel.poll()
@@ -472,7 +503,14 @@ fun DashboardScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             EnigmaNavigationDrawer(
                 expanded = drawerExpanded,
-                modifier = Modifier.onFocusChanged { navFocused = it.hasFocus },
+                modifier = Modifier
+                    .onFocusChanged { navFocused = it.hasFocus }
+                    // Before any item's own handler: Right always means "into the open page".
+                    .onPreviewKeyEvent { event ->
+                        if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                        if (event.type == KeyEventType.KeyDown) enterPageFromMenu()
+                        true
+                    },
             ) {
                 EnigmaCastLogo(expanded = drawerExpanded)
                 // Who is watching (avatar + name); OK opens switch / manage / receiver standby.
@@ -703,7 +741,15 @@ fun DashboardScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .onFocusChanged { contentFocused = it.hasFocus },
+                        .onFocusChanged {
+                            contentFocused = it.hasFocus
+                            if (it.hasFocus) pageVisited = section
+                        }
+                        // One entry point for the whole page: Right from the menu restores the
+                        // element focused here last (Compose keeps it per focus group).
+                        .trackedFocusRequester(pageFocus)
+                        .onFocusEvent { if (it.hasFocus) runCatching { pageFocus.saveFocusedChild() } }
+                        .focusGroup(),
                 ) {
                     Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
