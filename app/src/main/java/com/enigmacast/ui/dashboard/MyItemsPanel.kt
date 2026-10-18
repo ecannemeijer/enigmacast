@@ -10,6 +10,9 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
+import com.enigmacast.ui.theme.requestWhenAttached
+import com.enigmacast.ui.theme.trackedFocusRequester
+import com.enigmacast.ui.theme.trackedFocusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -57,7 +60,6 @@ import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.TvConfirmDialog
-import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.util.asString
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -98,7 +100,33 @@ fun MyItemsPanel(
         }
     }
     val iptvReturnFocus = remember { FocusRequester() }
-    val iptvRowCount = if (viewModel.iptvAllowed()) listOf(viewModel.iptvContinue.value, viewModel.iptvFavorites.value, viewModel.torrentFavorites.value).count { it.isNotEmpty() } else 0
+    // IPTV and Torrent: Continue watching and favorites, above the recordings.
+    val iptvContinue by viewModel.iptvContinue.collectAsStateWithLifecycle()
+    val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
+    val torrentFavorites by viewModel.torrentFavorites.collectAsStateWithLifecycle()
+    val iptvArt by viewModel.iptvPosters.collectAsStateWithLifecycle()
+    val iptvBlocks = if (viewModel.iptvAllowed()) {
+        listOf(
+            R.string.library_continue to iptvContinue,
+            R.string.library_iptv_favorites to iptvFavorites,
+            R.string.library_torrent_favorites to torrentFavorites,
+        ).filter { it.second.isNotEmpty() }
+    } else emptyList()
+    val iptvRowCount = iptvBlocks.size
+    val iptvRowStates = remember { mutableMapOf<Int, androidx.compose.foundation.lazy.LazyListState>() }
+    val iptvReturnKey by viewModel.returnKeys.collectAsStateWithLifecycle()
+    // Where Right from the menu lands: a recording that had the focus, else the first card on the
+    // page (the IPTV/Torrent rows come first; the recordings may be scrolled out of the list then).
+    val allRecordings = items + sections.onReceiver + sections.scheduledOnReceiver
+    val recordingEntry = viewModel.focusId?.takeIf { id -> allRecordings.any { it.id == id } }
+    val entryOnIptv = iptvBlocks.isNotEmpty() && recordingEntry == null
+    // Entering the list: bring the entry on screen first, so its requester is attached.
+    LaunchedEffect(rowsFocusable, entryOnIptv, recordingEntry) {
+        if (!rowsFocusable || allRecordings.isEmpty() || iptvReturnKey?.startsWith("home/") == false) return@LaunchedEffect
+        val index = if (entryOnIptv) 0 else listIndexOf(recordingEntry ?: allRecordings.first().id, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
+            .let { if (it < 0) -1 else it + iptvRowCount }
+        if (index >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+    }
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
     Column(
         modifier
@@ -114,23 +142,12 @@ fun MyItemsPanel(
         if (notice.isNotBlank()) {
             Text(notice, color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
-        // IPTV: Continue watching and favorites, above the recordings (Premium IPTV only).
-        val iptvContinue by viewModel.iptvContinue.collectAsStateWithLifecycle()
-        val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
-        val torrentFavorites by viewModel.torrentFavorites.collectAsStateWithLifecycle()
-        val iptvArt by viewModel.iptvPosters.collectAsStateWithLifecycle()
-        val iptvBlocks = if (viewModel.iptvAllowed()) {
-            listOf(
-                R.string.library_continue to iptvContinue,
-                R.string.library_iptv_favorites to iptvFavorites,
-                R.string.library_torrent_favorites to torrentFavorites,
-            ).filter { it.second.isNotEmpty() }
-        } else emptyList()
         // One IPTV row (header + sideways cards); inside the LazyColumn when recordings exist so everything scrolls.
         val iptvRow: @Composable (Int, List<com.enigmacast.domain.xtream.IptvLibraryCard>) -> Unit = { header, cards ->
             Column {
                 Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 4.dp))
                 androidx.compose.foundation.lazy.LazyRow(
+                    state = iptvRowStates.getOrPut(header) { androidx.compose.foundation.lazy.LazyListState() },
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                 ) {
@@ -139,7 +156,9 @@ fun MyItemsPanel(
                             card = card,
                             poster = viewModel.iptvPoster(card, iptvArt),
                             modifier = Modifier
-                                .then(if (viewModel.returnKey == "$header/${card.key}") Modifier.focusRequester(iptvReturnFocus) else Modifier)
+                                // The page's entry is the first card of the first row (see entryOnIptv).
+                                .trackedFocusRequesterIf(entryOnIptv && i == 0 && header == iptvBlocks.first().first, listFocus)
+                                .then(if (iptvReturnKey == "$header/${card.key}") Modifier.trackedFocusRequester(iptvReturnFocus) else Modifier)
                                 .focusProperties {
                                     canFocus = rowsFocusable
                                     if (i == 0) left = menuFocus
@@ -162,7 +181,7 @@ fun MyItemsPanel(
                 color = EnigmaColors.Muted,
                 fontSize = 14.sp,
                 modifier = Modifier
-                    .focusRequester(listFocus)
+                    .trackedFocusRequesterIf(!entryOnIptv, listFocus)
                     .focusProperties {
                         canFocus = rowsFocusable
                         left = menuFocus
@@ -171,7 +190,7 @@ fun MyItemsPanel(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             )
         } else {
-            val focusOn = viewModel.focusId?.takeIf { id -> all.any { it.id == id } } ?: all.first().id
+            val focusOn = recordingEntry ?: all.first().id
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -204,7 +223,7 @@ fun MyItemsPanel(
                                     movie = posterMap[item.id],
                                     progress = com.enigmacast.domain.resume.ResumePolicy.fraction(resumeMap[item.id], (item.endEpochSec - item.beginEpochSec) * 1000),
                                     modifier = Modifier
-                                        .focusRequesterIf(item.id == focusOn, listFocus)
+                                        .trackedFocusRequesterIf(!entryOnIptv && item.id == focusOn, listFocus)
                                         .focusProperties {
                                             canFocus = rowsFocusable
                                             if (i == 0) left = menuFocus
@@ -218,7 +237,7 @@ fun MyItemsPanel(
                         RecordingRow(
                             item = item,
                             modifier = Modifier
-                                .focusRequesterIf(item.id == focusOn, listFocus)
+                                .trackedFocusRequesterIf(!entryOnIptv && item.id == focusOn, listFocus)
                                 .focusProperties {
                                     canFocus = rowsFocusable
                                     left = menuFocus
@@ -232,12 +251,21 @@ fun MyItemsPanel(
     }
     }
     // Back from an IPTV film started here: focus returns to its card.
-    LaunchedEffect(viewModel.returnKey) {
-        if (viewModel.returnKey == null) return@LaunchedEffect
-        // IPTV favorites sit after Continue watching (when it has cards); Torrent favorites never start IPTV.
-        val row = if (viewModel.returnKey!!.startsWith("${R.string.library_continue}/")) 0 else if (viewModel.iptvContinue.value.isNotEmpty()) 1 else 0
-        if (row >= 0 && (items + sections.onReceiver + sections.scheduledOnReceiver).isNotEmpty()) listState.scrollToItem(row)
-        iptvReturnFocus.requestWhenReady()
+    // Back from an IPTV film or a Torrent info page started here: its row and card on screen, then the focus.
+    LaunchedEffect(iptvReturnKey, iptvBlocks.isNotEmpty()) {
+        val key = iptvReturnKey ?: return@LaunchedEffect
+        if (key.startsWith("home/")) return@LaunchedEffect
+        val row = iptvBlocks.indexOfFirst { (h, _) -> key.startsWith("$h/") }
+        if (row < 0) {
+            // The row is still loading (or the card is gone): keep the key a moment, then give up.
+            if (iptvBlocks.isEmpty()) { kotlinx.coroutines.delay(1_500); if (iptvBlocks.isEmpty()) viewModel.consumeReturn() } else viewModel.consumeReturn()
+            return@LaunchedEffect
+        }
+        if (allRecordings.isNotEmpty()) listState.scrollToItem(row)
+        val (header, cards) = iptvBlocks[row]
+        val card = cards.indexOfFirst { "$header/${it.key}" == key }
+        if (card >= 0) iptvRowStates[header]?.scrollToItem(card)
+        iptvReturnFocus.requestWhenAttached()
         viewModel.consumeReturn()
     }
     val focusTokenOnEnter = remember { viewModel.focusToken }
@@ -251,7 +279,7 @@ fun MyItemsPanel(
             val i = list.filter(viewModel::isPoster).indexOfFirst { it.id == viewModel.focusId }
             if (i >= 0) rowStates[key]?.scrollToItem(i)
         }
-        listFocus.requestWhenReady()
+        listFocus.requestWhenAttached()
         if (viewModel.holdList) {
             repeat(2) { withFrameNanos { } }
             viewModel.releaseList()

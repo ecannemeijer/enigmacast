@@ -191,6 +191,7 @@ class TorrentViewModel @Inject constructor(
 
     /** OK on a card: the info page, filled in with TMDB details (runtime, genres, cast, seasons). */
     fun openTitle(title: TmdbTitle, resumeAt: Pair<Int, Int>? = null) {
+        returnOrigin = null
         focusKey = title.key
         stepJob?.cancel()
         infoJob?.cancel()
@@ -217,8 +218,18 @@ class TorrentViewModel @Inject constructor(
         stepJob?.cancel()
         info = null
         if (overlay is TorrentOverlay.Streams) overlay = TorrentOverlay.None
-        restoreToken++
+        // Opened from Library or Home: back there, on the same card.
+        val origin = returnOrigin
+        returnOrigin = null
+        if (origin != null) leaveTo = origin else restoreToken++
     }
+
+    /** Library/Home card that opened the info page; Back (from the page or its player) goes there. */
+    private var returnOrigin: String? = null
+    /** Set when the page should hand back to Library or Home ([TorrentDash.onLeave]). */
+    var leaveTo by mutableStateOf<String?>(null)
+        private set
+    fun consumeLeave() { leaveTo = null }
 
     fun chooseSeason(number: Int) {
         val i = info ?: return
@@ -523,10 +534,12 @@ class TorrentViewModel @Inject constructor(
     private fun handleOpenRequest() {
         val request = library.openRequest.value ?: return
         library.openRequest.value = null
+        returnOrigin = null
         if (playing != null) stopPlayback()
         overlay = TorrentOverlay.None
         val resume = request.season?.let { s -> s to (request.episode ?: 1) }
         openTitle(request.title, resume)
+        returnOrigin = request.origin
     }
 
     fun seekTo(ms: Long) { player?.seekTo(ms.coerceAtLeast(0)) }
@@ -722,8 +735,12 @@ class TorrentViewModel @Inject constructor(
 
     /** Back/stop/end: the position is kept, the player released and the torrent removed with its files. */
     fun stopPlayback() {
-        // Back on the grid, focus on the card that was played.
-        if (playing != null) restoreToken++
+        // Back on the grid, focus on the card that was played (or Library/Home, where it was started).
+        if (playing != null) {
+            val origin = returnOrigin
+            returnOrigin = null
+            if (origin != null) leaveTo = origin else restoreToken++
+        }
         tickJob?.cancel()
         saveResume()
         resumeAsk = null

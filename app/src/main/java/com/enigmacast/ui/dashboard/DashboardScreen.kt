@@ -126,6 +126,7 @@ import com.enigmacast.ui.theme.TvConfirmDialog
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.requestWhenAttached
 import com.enigmacast.util.UiText
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
@@ -382,7 +383,7 @@ fun DashboardScreen(
         val id = returnToMyItemsId ?: return@LaunchedEffect
         myItemsListActive = true
         myItemsModel.focusRow(id)
-        myItemsListFocus.requestWhenReady()
+        myItemsListFocus.requestWhenAttached()
         onMyItemsFocused()
     }
     LaunchedEffect(searchEnterToken) {
@@ -410,14 +411,14 @@ fun DashboardScreen(
     LaunchedEffect(myItemsEnterToken) {
         if (myItemsEnterToken == 0) return@LaunchedEffect
         myItemsListActive = true
-        myItemsListFocus.requestWhenReady()
+        myItemsListFocus.requestWhenAttached()
     }
     LaunchedEffect(myItemsModel.focusToken, myItemsModel.pendingDelete, myItemsModel.selected) {
         if (!myItemsModel.holdList) return@LaunchedEffect
         if (myItemsModel.selected != null || myItemsModel.pendingDelete != null) return@LaunchedEffect
         myItemsListActive = true
         section = DashSection.MyItems
-        myItemsListFocus.requestWhenReady()
+        myItemsListFocus.requestWhenAttached()
     }
     LaunchedEffect(section) { DashGroups.groupOf(section)?.let { tabMemory.remember(it, section) } }
     fun openSection(target: DashSection) {
@@ -784,6 +785,16 @@ fun DashboardScreen(
                                 contentFocus = torrentContentFocus,
                                 enter = sectionEnter,
                                 onRetreatTo = retreat,
+                                // Info page opened from Library or Home: back there, focus on that card.
+                                onLeave = { origin ->
+                                    myItemsModel.returnTo(origin)
+                                    if (origin.startsWith("home/")) {
+                                        openSection(DashSection.Home)
+                                    } else {
+                                        myItemsListActive = true
+                                        openSection(DashSection.MyItems)
+                                    }
+                                },
                             ),
                         )
                         }

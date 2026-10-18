@@ -19,3 +19,57 @@ private val Unused = FocusRequester()
  */
 fun Modifier.focusRequesterIf(enabled: Boolean, requester: FocusRequester?): Modifier =
     this.focusRequester(if (enabled && requester != null) requester else Unused)
+
+/**
+ * Which requesters are attached to a node right now. Compose has no public "attached" check,
+ * and asking an unattached requester for focus logs "FocusRequester is not initialized" on
+ * every try. [requestWhenAttached] waits for the attachment instead of asking each frame.
+ */
+object FocusAttach {
+    private val counts = java.util.WeakHashMap<FocusRequester, Int>()
+    fun isAttached(requester: FocusRequester): Boolean = (counts[requester] ?: 0) > 0
+    internal fun attach(requester: FocusRequester) { counts[requester] = (counts[requester] ?: 0) + 1 }
+    internal fun detach(requester: FocusRequester) {
+        val n = (counts[requester] ?: 0) - 1
+        if (n > 0) counts[requester] = n else counts.remove(requester)
+    }
+}
+
+private class AttachNode(var requester: FocusRequester) : Modifier.Node() {
+    override fun onAttach() = FocusAttach.attach(requester)
+    override fun onDetach() = FocusAttach.detach(requester)
+}
+
+private data class AttachElement(val requester: FocusRequester) : androidx.compose.ui.node.ModifierNodeElement<AttachNode>() {
+    override fun create() = AttachNode(requester)
+    override fun update(node: AttachNode) {
+        if (node.requester === requester) return
+        if (node.isAttached) { FocusAttach.detach(node.requester); FocusAttach.attach(requester) }
+        node.requester = requester
+    }
+}
+
+/** [focusRequester] that [requestWhenAttached] can see. */
+fun Modifier.trackedFocusRequester(requester: FocusRequester): Modifier =
+    this.focusRequester(requester).then(AttachElement(requester))
+
+/** [focusRequesterIf] that [requestWhenAttached] can see. */
+fun Modifier.trackedFocusRequesterIf(enabled: Boolean, requester: FocusRequester?): Modifier {
+    val target = if (enabled && requester != null) requester else Unused
+    return this.focusRequester(target).then(AttachElement(target))
+}
+
+/**
+ * Focus for a requester attached with [trackedFocusRequester]: waits (at most [maxFrames]
+ * frames) until it is attached, and only then asks for focus. Gives up quietly when the
+ * target never appears (an empty row, a card that is not composed).
+ */
+suspend fun FocusRequester.requestWhenAttached(maxFrames: Int = 30): Boolean {
+    repeat(maxFrames) {
+        androidx.compose.runtime.withFrameNanos { }
+        if (FocusAttach.isAttached(this) &&
+            runCatching { requestFocus(androidx.compose.ui.focus.FocusDirection.Enter) }.getOrDefault(false)
+        ) return true
+    }
+    return false
+}

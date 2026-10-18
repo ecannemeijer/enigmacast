@@ -110,6 +110,11 @@ fun TorrentScreen(
         model.setForeground(true)
         onDispose { model.setForeground(false) }
     }
+    LaunchedEffect(model.leaveTo) {
+        val origin = model.leaveTo ?: return@LaunchedEffect
+        model.consumeLeave()
+        dash?.onLeave?.invoke(origin)
+    }
     Box(Modifier.fillMaxSize().then(if (dash == null) Modifier.background(EnigmaColors.Canvas) else Modifier)) {
         when {
             dash != null -> {
@@ -298,6 +303,8 @@ class TorrentDash(
     val contentFocus: FocusRequester,
     val enter: Int,
     val onRetreatTo: (FocusRequester) -> Unit,
+    /** Back from an info page opened from Library or Home: return to that card ("home/…" or "<row>/…"). */
+    val onLeave: (String) -> Unit = {},
 )
 
 /** The loading page and the player over the whole screen while the page is in the dashboard. */

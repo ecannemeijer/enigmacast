@@ -8,6 +8,8 @@ data class TorrentOpenRequest(
     val title: TmdbTitle,
     val season: Int? = null,
     val episode: Int? = null,
+    /** "home/<card key>" or "<row>/<card key>": Back from the info page returns there. */
+    val origin: String? = null,
     val token: Long = System.nanoTime(),
 )
 

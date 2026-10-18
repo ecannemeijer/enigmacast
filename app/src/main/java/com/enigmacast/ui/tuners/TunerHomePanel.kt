@@ -73,6 +73,8 @@ import com.enigmacast.ui.soccer.tvClick
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.TvChoiceDialog
+import com.enigmacast.ui.theme.requestWhenAttached
+import com.enigmacast.ui.theme.trackedFocusRequester
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -104,9 +106,19 @@ fun TunerHomePanel(
     // Back from an IPTV film started on Home: focus that card again.
     val iptvReturnFocus = remember { FocusRequester() }
     val iptvReturn = remember { library.returnKey?.takeIf { it.startsWith("home/") } }
+    val iptvRowState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(iptvReturn, iptvContinue.isNotEmpty()) {
-        if (iptvReturn == null || iptvContinue.none { "home/${it.key}" == iptvReturn }) return@LaunchedEffect
-        iptvReturnFocus.requestWhenReady()
+        if (iptvReturn == null) return@LaunchedEffect
+        val index = iptvContinue.indexOfFirst { "home/${it.key}" == iptvReturn }
+        if (index < 0) {
+            // Still loading, or the card is gone (watched to the end): give up after a moment.
+            kotlinx.coroutines.delay(1_500)
+            library.consumeReturn()
+            return@LaunchedEffect
+        }
+        // The card on screen first, so its requester is attached; then the focus.
+        iptvRowState.scrollToItem(index)
+        iptvReturnFocus.requestWhenAttached()
         library.consumeReturn()
     }
     LaunchedEffect(Unit) { model.whileVisible() }
@@ -150,13 +162,13 @@ fun TunerHomePanel(
                 if (iptvContinue.isNotEmpty() && library.iptvAllowed()) add(PageSection("iptv") {
                     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(stringResource(R.string.library_continue), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
-                        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
+                        androidx.compose.foundation.lazy.LazyRow(state = iptvRowState, horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp, horizontal = 2.dp)) {
                             items(iptvContinue.size, key = { iptvContinue[it].key }) { i ->
                                 val card = iptvContinue[i]
                                 com.enigmacast.ui.dashboard.IptvCard(
                                     card = card,
                                     modifier = (if (i == 0) left else Modifier).then(rowNav("iptv"))
-                                        .then(if (iptvReturn == "home/${card.key}") Modifier.focusRequester(iptvReturnFocus) else Modifier)
+                                        .then(if (iptvReturn == "home/${card.key}") Modifier.trackedFocusRequester(iptvReturnFocus) else Modifier)
                                         .focusProperties { if (i == iptvContinue.lastIndex) right = FocusRequester.Cancel },
                                     onClick = { library.openIptv(card, onXtream, "home/${card.key}", onTorrent) },
                                     onOptions = {},

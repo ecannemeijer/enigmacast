@@ -100,10 +100,14 @@ class MyItemsViewModel @Inject constructor(
     /** OK on an IPTV card: the IPTV page plays the film (resume dialog) or shows the series. */
     /** The card to focus after coming back from the IPTV player (see [IptvLibrary.returnTo]). */
     val returnKey: String? get() = iptv.returnTo.value
+    /** [returnKey] as a flow, so the page reacts when the Torrent page sends the focus back. */
+    val returnKeys: StateFlow<String?> = iptv.returnTo
+    /** Back from a Torrent info page opened from Library or Home: focus that card again. */
+    fun returnTo(origin: String) { iptv.returnTo.value = origin }
     fun consumeReturn() { iptv.returnTo.value = null }
 
     fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String? = null, onTorrent: () -> Unit = {}) {
-        if (card.source == torrentSource) { openTorrent(card, onTorrent); return }
+        if (card.source == torrentSource) { openTorrent(card, onTorrent, origin); return }
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
         val episode = rememberedEpisode(card)
         if (card.open.section == com.enigmacast.domain.xtream.XtreamSection.SERIES && episode == null) {
@@ -132,12 +136,12 @@ class MyItemsViewModel @Inject constructor(
         val card = iptvOptions ?: return
         val origin = iptvOrigin
         iptvOptions = null
-        if (card.source == torrentSource) { openTorrent(card, onTorrent); return }
+        if (card.source == torrentSource) { openTorrent(card, onTorrent, origin); return }
         infoIptv(card, onXtream, origin)
     }
 
     /** A Torrent card: its info page on the Torrent page (Play there offers the saved position). */
-    private fun openTorrent(card: com.enigmacast.domain.xtream.IptvLibraryCard, onTorrent: () -> Unit) {
+    private fun openTorrent(card: com.enigmacast.domain.xtream.IptvLibraryCard, onTorrent: () -> Unit, origin: String?) {
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.TORRENT)) return
         val rows = com.enigmacast.domain.torrent.TorrentLibraryRows
         val request = when (card.kind) {
@@ -145,7 +149,8 @@ class MyItemsViewModel @Inject constructor(
             else -> torrents.favorite(card.kind, card.id)?.let(rows::titleOf)?.let { com.enigmacast.domain.torrent.TorrentOpenRequest(it) }
                 ?: torrents.resume(card.kind, card.id)?.let { rows.requestOf(it) }
         } ?: return
-        torrents.openRequest.value = request
+        // Back from the info page returns to this card (Library row or Home).
+        torrents.openRequest.value = request.copy(origin = origin)
         onTorrent()
     }
 
