@@ -47,7 +47,14 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import com.enigmacast.domain.torrent.TmdbEpisode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
@@ -101,8 +108,9 @@ fun TorrentScreen(onBack: () -> Unit, model: TorrentViewModel = hiltViewModel())
             model.playing != null -> TorrentPlayer(model)
             else -> TorrentBrowser(model, onBack)
         }
+        // The info page stays under the streams dialog; it closes when playback starts.
+        model.info?.let { i -> if (model.playing == null && model.overlay !is TorrentOverlay.Loading) TorrentInfoPage(i, model) }
         when (val o = model.overlay) {
-            is TorrentOverlay.Seasons -> SeasonPicker(o, model)
             is TorrentOverlay.Streams -> StreamsDialog(o, model)
             is TorrentOverlay.Loading -> LoadingPage(o, model)
             TorrentOverlay.None -> Unit
@@ -146,7 +154,22 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
             else -> onBack()
         }
     }
-    LaunchedEffect(Unit) { moviesFocus.requestWhenReady() }
+    val restoreFocus = remember { FocusRequester() }
+    // Back from the info page or the player: focus on the card that was opened, else the tabs.
+    LaunchedEffect(Unit) {
+        val index = model.focusKey?.let { k -> model.items.indexOfFirst { it.key == k } } ?: -1
+        if (index >= 0) {
+            grid.scrollToItem(index)
+            restoreFocus.requestWhenReady()
+        } else {
+            moviesFocus.requestWhenReady()
+        }
+    }
+    LaunchedEffect(model.restoreToken) {
+        if (model.restoreToken == 0) return@LaunchedEffect
+        val index = model.focusKey?.let { k -> model.items.indexOfFirst { it.key == k } } ?: -1
+        if (index >= 0) { grid.scrollToItem(index); restoreFocus.requestWhenReady() }
+    }
     LaunchedEffect(model.listToken) {
         if (model.listToken == 0) return@LaunchedEffect
         grid.scrollToItem(0)
@@ -182,12 +205,13 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
             )
         }
         if (model.searchOpen) {
-            LaunchedEffect(Unit) { fieldFocus.requestWhenReady() }
             TvTextField(
                 label = stringResource(if (model.kind == TorrentKind.MOVIE) R.string.torrent_search_movies else R.string.torrent_search_series),
                 value = model.query,
                 onValueChange = model::onQuery,
                 fieldFocus = fieldFocus,
+                // The search icon opens the field already typing, with the keyboard up.
+                startEditing = true,
                 leftFocus = FocusRequester.Cancel,
                 rightFocus = FocusRequester.Cancel,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
@@ -206,8 +230,10 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
         ) {
             itemsIndexed(model.items, key = { _, t -> t.key }) { index, title ->
                 com.enigmacast.ui.home.PosterCard(
-                    film = remember(title) { filmOf(title) },
-                    modifier = if (index == 0) Modifier.focusRequester(firstCard) else Modifier,
+                    film = remember(title) { TorrentCards.film(title) },
+                    modifier = Modifier
+                        .then(if (index == 0) Modifier.focusRequester(firstCard) else Modifier)
+                        .then(if (title.key == model.focusKey) Modifier.focusRequester(restoreFocus) else Modifier),
                     onFocus = { model.onFocusedIndex(index) },
                     onClick = { model.openTitle(title) },
                     lines = {
@@ -218,12 +244,6 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit) {
         }
     }
 }
-
-/** TMDB title as the app's poster card data (poster URL, title, year). */
-private fun filmOf(t: TmdbTitle) = com.enigmacast.data.xtream.IptvVod.film(
-    XtreamItem("tmdb${t.id}", t.title, if (t.kind == TorrentKind.TV) XtreamSection.SERIES else XtreamSection.MOVIES, "", t.poster.orEmpty()),
-    com.enigmacast.domain.films.TmdbMovie(id = t.id, title = t.title, year = t.year, posterPath = t.poster, isSeries = t.kind == TorrentKind.TV),
-)
 
 @Composable
 private fun DialogFrame(onDismiss: () -> Unit, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
@@ -238,51 +258,104 @@ private fun DialogFrame(onDismiss: () -> Unit, content: @Composable androidx.com
     }
 }
 
+/**
+ * The info page of a card: the app's film/series page (backdrop, poster, rating, runtime,
+ * genres, overview, cast). Focus starts on Play; only Play (or an episode) asks the scraper
+ * for streams. Series show their seasons and episodes below, as on the IPTV series page.
+ */
 @Composable
-private fun SeasonPicker(o: TorrentOverlay.Seasons, model: TorrentViewModel) {
-    val seasonFocus = remember { FocusRequester() }
-    val episodeFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { seasonFocus.requestWhenReady() }
-    DialogFrame(model::dismissOverlay) {
-        Text(o.title.title, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
-            itemsIndexed(o.seasons, key = { _, s -> s.number }) { i, s ->
-                ChoiceChip(
-                    label = s.name,
-                    selected = s.number == o.season,
+private fun TorrentInfoPage(i: TorrentInfo, model: TorrentViewModel) {
+    val isSeries = i.title.kind == TorrentKind.TV
+    com.enigmacast.ui.home.FilmInfoDialog(
+        film = i.film,
+        nowSec = System.currentTimeMillis() / 1000,
+        autoSwitchSet = false,
+        recordingSet = false,
+        onWatch = {},
+        onSchedule = {},
+        onRecord = {},
+        onClose = model::closeInfo,
+        picon = { null },
+        cachedPicon = { null },
+        channel = com.enigmacast.domain.model.BouquetEntry(i.title.title, "tmdb:${i.title.key}"),
+        vod = com.enigmacast.ui.home.VodDetail(
+            onPlay = model::playInfo,
+            below = if (isSeries) ({ TorrentEpisodes(i, model) }) else null,
+        ),
+    )
+}
+
+/** Seasons as chips, then the season's episodes as a row; OK on an episode searches its streams. */
+@Composable
+private fun TorrentEpisodes(i: TorrentInfo, model: TorrentViewModel) {
+    if (i.seasons.isEmpty()) {
+        if (i.loading) EnigmaLoadingIndicator() else Text(stringResource(R.string.iptv_no_episodes), color = EnigmaColors.Muted, fontSize = 13.sp)
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(i.seasons, key = { _, s -> s.number }) { index, s ->
+                CompactListRow(
                     onClick = { model.chooseSeason(s.number) },
-                    modifier = Modifier
-                        .then(if (s.number == o.season) Modifier.focusRequester(seasonFocus) else Modifier)
-                        .focusProperties {
-                            up = FocusRequester.Cancel
-                            if (i == 0) left = FocusRequester.Cancel
-                            if (i == o.seasons.lastIndex) right = FocusRequester.Cancel
-                            down = episodeFocus
-                        },
-                )
+                    selected = s.number == i.season,
+                    modifier = Modifier.focusProperties {
+                        if (index == 0) left = FocusRequester.Cancel
+                        if (index == i.seasons.lastIndex) right = FocusRequester.Cancel
+                    },
+                ) { Text(stringResource(R.string.iptv_season, s.number), fontSize = 13.sp) }
             }
         }
-        if (o.episodes.isEmpty()) EnigmaLoadingIndicator(Modifier.padding(8.dp))
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            itemsIndexed(o.episodes, key = { _, e -> e.number }) { i, e ->
-                CompactListRow(
-                    onClick = { model.chooseEpisode(e) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                    modifier = Modifier
-                        .then(if (i == 0) Modifier.focusRequester(episodeFocus) else Modifier)
-                        .focusProperties {
-                            left = FocusRequester.Cancel; right = FocusRequester.Cancel
-                            if (i == 0) up = seasonFocus
-                            if (i == o.episodes.lastIndex) down = FocusRequester.Cancel
+        when {
+            i.episodes.isEmpty() && i.episodesLoading -> EnigmaLoadingIndicator()
+            i.episodes.isEmpty() -> Text(stringResource(R.string.iptv_no_episodes), color = EnigmaColors.Muted, fontSize = 13.sp)
+            else -> LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                itemsIndexed(i.episodes, key = { _, e -> "${i.season}:${e.number}" }) { index, e ->
+                    TorrentEpisodeCard(
+                        e,
+                        Modifier.focusProperties {
+                            if (index == 0) left = FocusRequester.Cancel
+                            if (index == i.episodes.lastIndex) right = FocusRequester.Cancel
+                            down = FocusRequester.Cancel
                         },
-                ) {
-                    Column {
-                        Text("${e.number}. ${e.name}", color = EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (e.overview.isNotBlank()) Text(e.overview, color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
+                    ) { model.chooseEpisode(e) }
                 }
             }
         }
+    }
+}
+
+private val EPISODE_WIDTH = 150.dp
+
+@Composable
+private fun TorrentEpisodeCard(e: TmdbEpisode, modifier: Modifier, onClick: () -> Unit) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+    Column(
+        modifier
+            .width(EPISODE_WIDTH)
+            .onKeyEvent { event ->
+                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (confirm && event.type == KeyEventType.KeyUp) onClick()
+                confirm
+            }
+            .focusable(interactionSource = interaction),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(EPISODE_WIDTH * 9 / 16)
+                .clip(shape)
+                .background(EnigmaColors.Card)
+                .border(if (focused) 2.dp else 1.dp, if (focused) EnigmaColors.Accent else EnigmaColors.CardBorder, shape),
+        ) {
+            if (e.still != null) {
+                coil3.compose.AsyncImage(model = e.still, contentDescription = e.name, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+        }
+        Text("E${e.number}", fontSize = 11.sp, color = EnigmaColors.Accent, maxLines = 1)
+        Text(e.name, fontSize = 12.sp, color = if (focused) EnigmaColors.Text else EnigmaColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

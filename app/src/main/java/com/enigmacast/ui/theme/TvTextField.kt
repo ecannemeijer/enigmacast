@@ -93,8 +93,13 @@ fun TvTextField(
     leftFocus: FocusRequester? = null,
     rightFocus: FocusRequester? = null,
     followEdge: Boolean = false,
+    /**
+     * Start typing at once: focus in the text and the keyboard shown when the field appears.
+     * Only for an explicit search action (Torrent › Search); fields otherwise open on OK.
+     */
+    startEditing: Boolean = false,
 ) {
-    var editing by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(startEditing) }
     var highlighted by remember { mutableStateOf(false) }
     val shell = remember { FocusRequester() }
     val input = remember { FocusRequester() }
@@ -117,7 +122,8 @@ fun TvTextField(
 
     LaunchedEffect(editing) {
         if (editing) {
-            runCatching { input.requestFocus() }
+            // Waits for the input to be attached (it is not yet when the field starts in editing).
+            input.requestWhenReady()
             keyboard?.show()
         }
     }

@@ -38,16 +38,27 @@ import com.enigmacast.torrent.TorrentStreamingService
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.enigmacast.data.tmdb.TmdbJson
 import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** The info page of one TMDB title; [film] grows from the card data to the full TMDB details. */
+data class TorrentInfo(
+    val title: TmdbTitle,
+    val film: com.enigmacast.domain.films.HomeFilm,
+    val loading: Boolean = false,
+    val seasons: List<TmdbSeason> = emptyList(),
+    val season: Int? = null,
+    val episodes: List<TmdbEpisode> = emptyList(),
+    val episodesLoading: Boolean = false,
+)
+
 /** What the Torrent page shows on top of the grid. */
 sealed interface TorrentOverlay {
     data object None : TorrentOverlay
-    data class Seasons(val title: TmdbTitle, val imdb: String, val seasons: List<TmdbSeason>, val season: Int, val episodes: List<TmdbEpisode>) : TorrentOverlay
     data class Streams(val title: TmdbTitle, val subtitle: String, val streams: List<TorrentStream>?, val error: Boolean, val resumeKey: String) : TorrentOverlay
     data class Loading(val title: TmdbTitle, val subtitle: String) : TorrentOverlay
 }
@@ -144,37 +155,81 @@ class TorrentViewModel @Inject constructor(
         }
     }
 
-    /** OK on a card: the IMDb id, then the streams (films) or the season/episode picker (series). */
+    /** The TMDB info page of a card (film or series); streams are only fetched from its Play. */
+    var info by mutableStateOf<TorrentInfo?>(null)
+        private set
+    /** Key of the card whose info page was opened last: focus goes back to it on the grid. */
+    var focusKey by mutableStateOf<String?>(null)
+        private set
+    /** Bumped when the info page closes, so the grid puts focus back on [focusKey]. */
+    var restoreToken by mutableIntStateOf(0)
+        private set
+    private var infoJob: Job? = null
+    private val country = Locale.getDefault().country.ifBlank { "US" }
+
+    /** OK on a card: the info page, filled in with TMDB details (runtime, genres, cast, seasons). */
     fun openTitle(title: TmdbTitle) {
+        focusKey = title.key
         stepJob?.cancel()
-        stepJob = viewModelScope.launch {
+        infoJob?.cancel()
+        info = TorrentInfo(title, TorrentCards.film(title), loading = true)
+        infoJob = viewModelScope.launch {
             val tv = title.kind == TorrentKind.TV
-            val imdb = TorrentTmdb.parseImdb(tmdb.externalIds(tv, title.id))
-            if (imdb == null) { message = "imdb"; return@launch }
-            if (!tv) {
-                loadStreams(title, imdb, null, null, "")
-            } else {
-                val seasons = TorrentTmdb.parseSeasons(tmdb.tvBasic(title.id, language))
-                if (seasons.isEmpty()) { message = "imdb"; return@launch }
-                overlay = TorrentOverlay.Seasons(title, imdb, seasons, seasons.first().number, emptyList())
-                chooseSeason(seasons.first().number)
-            }
+            val body = runCatching { if (tv) tmdb.tv(title.id, language) else tmdb.movie(title.id, language) }.getOrNull()
+            val parsed = body?.let { if (tv) TmdbJson.parseTv(it, country, language) else TmdbJson.parseMovie(it, country, language) }
+            val seasons = if (tv) TorrentTmdb.parseSeasons(body) else emptyList()
+            val current = info?.takeIf { it.title.key == title.key } ?: return@launch
+            info = current.copy(film = TorrentCards.film(title, parsed), seasons = seasons, loading = false)
+            seasons.firstOrNull()?.let { chooseSeason(it.number) }
         }
     }
 
+    /** Back on the info page: to the grid, on the same card. */
+    fun closeInfo() {
+        infoJob?.cancel()
+        stepJob?.cancel()
+        info = null
+        if (overlay is TorrentOverlay.Streams) overlay = TorrentOverlay.None
+        restoreToken++
+    }
+
     fun chooseSeason(number: Int) {
-        val o = overlay as? TorrentOverlay.Seasons ?: return
-        overlay = o.copy(season = number, episodes = emptyList())
-        stepJob = viewModelScope.launch {
-            val episodes = TorrentTmdb.parseEpisodes(tmdb.season(o.title.id, number, language))
-            (overlay as? TorrentOverlay.Seasons)?.takeIf { it.season == number }?.let { overlay = it.copy(episodes = episodes) }
+        val i = info ?: return
+        if (i.season == number && i.episodes.isNotEmpty()) return
+        info = i.copy(season = number, episodes = emptyList(), episodesLoading = true)
+        infoJob = viewModelScope.launch {
+            val episodes = TorrentTmdb.parseEpisodes(tmdb.season(i.title.id, number, language))
+            info?.takeIf { it.title.key == i.title.key && it.season == number }?.let { info = it.copy(episodes = episodes, episodesLoading = false) }
+        }
+    }
+
+    /** Play on the info page: a film's streams, or a series' chosen season from its first episode. */
+    fun playInfo() {
+        val i = info ?: return
+        if (i.title.kind == TorrentKind.TV) {
+            if (i.loading) return // seasons not known yet
+            val (s, e) = TorrentTmdb.playTarget(i.seasons, i.season, i.episodes) ?: run { message = "imdb"; return }
+            searchStreams(i.title, s, e, i.episodes.firstOrNull { it.number == e }?.name)
+        } else {
+            searchStreams(i.title, null, null, null)
         }
     }
 
     fun chooseEpisode(episode: TmdbEpisode) {
-        val o = overlay as? TorrentOverlay.Seasons ?: return
+        val i = info ?: return
+        val season = i.season ?: return
+        searchStreams(i.title, season, episode.number, episode.name)
+    }
+
+    private fun searchStreams(title: TmdbTitle, season: Int?, episode: Int?, episodeName: String?) {
+        stepJob?.cancel()
+        val subtitle = if (season != null) "S$season E$episode" + (episodeName?.let { " · $it" } ?: "") else ""
+        // The streams dialog opens at once (loading) while the IMDb id is looked up.
+        overlay = TorrentOverlay.Streams(title, subtitle, null, false, "")
         stepJob = viewModelScope.launch {
-            loadStreams(o.title, o.imdb, o.season, episode.number, "S${o.season} E${episode.number} · ${episode.name}")
+            val imdb = TorrentTmdb.parseImdb(tmdb.externalIds(title.kind == TorrentKind.TV, title.id))
+            if (imdb == null) { overlay = TorrentOverlay.None; message = "imdb"; return@launch }
+            loadStreams(title, imdb, season, episode, subtitle)
         }
     }
 
@@ -187,11 +242,8 @@ class TorrentViewModel @Inject constructor(
 
     fun dismissOverlay() {
         stepJob?.cancel()
-        overlay = when (val o = overlay) {
-            // Back from the streams of an episode returns to the picker.
-            is TorrentOverlay.Streams -> TorrentOverlay.None
-            else -> TorrentOverlay.None
-        }
+        // Back from the streams returns to the info page (still open underneath).
+        overlay = TorrentOverlay.None
     }
 
     fun dismissMessage() { message = null }
@@ -302,6 +354,9 @@ class TorrentViewModel @Inject constructor(
     private var resumeOffered = false
 
     private fun play(url: String, title: String) {
+        // The info page closes once playback starts; Back from the player lands on the grid card.
+        infoJob?.cancel()
+        info = null
         // One player at a time: Enigma2 and IPTV stop (and free the decoder) first.
         owner.register(PlaybackOwner.Owner.TORRENT) { stopPlayback() }
         owner.claim(PlaybackOwner.Owner.TORRENT)
