@@ -716,6 +716,7 @@ fun DashboardScreen(
                             onXtream = onXtream,
                             library = myItemsModel,
                             showStream = showStream,
+                            onTorrent = { enterSection(DashSection.Torrent) },
                         )
                         }
                         DashSection.Movies -> {
@@ -889,6 +890,7 @@ fun DashboardScreen(
                             onRetreatTo = retreat,
                             modifier = Modifier.fillMaxSize(),
                             onXtream = onXtream,
+                            onTorrent = { enterSection(DashSection.Torrent) },
                         )
                         }
                         DashSection.Settings -> {

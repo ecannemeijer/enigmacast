@@ -97,6 +97,8 @@ fun TunerHomePanel(
     onXtream: () -> Unit = {},
     library: com.enigmacast.ui.dashboard.MyItemsViewModel = hiltViewModel(),
     showStream: Boolean = false,
+    /** A Torrent card in Continue watching: the dashboard opens the Torrent page on its info page. */
+    onTorrent: () -> Unit = {},
 ) {
     val iptvContinue by library.iptvContinue.collectAsStateWithLifecycle()
     // Back from an IPTV film started on Home: focus that card again.
@@ -156,7 +158,7 @@ fun TunerHomePanel(
                                     modifier = (if (i == 0) left else Modifier).then(rowNav("iptv"))
                                         .then(if (iptvReturn == "home/${card.key}") Modifier.focusRequester(iptvReturnFocus) else Modifier)
                                         .focusProperties { if (i == iptvContinue.lastIndex) right = FocusRequester.Cancel },
-                                    onClick = { library.openIptv(card, onXtream, "home/${card.key}") },
+                                    onClick = { library.openIptv(card, onXtream, "home/${card.key}", onTorrent) },
                                     onOptions = {},
                                 )
                             }

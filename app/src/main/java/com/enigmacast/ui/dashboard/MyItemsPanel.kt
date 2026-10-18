@@ -76,6 +76,8 @@ fun MyItemsPanel(
     onRetreatTo: (FocusRequester) -> Unit,
     modifier: Modifier = Modifier,
     onXtream: () -> Unit = {},
+    /** A Torrent card: the dashboard opens the Torrent page (its info page is already requested). */
+    onTorrent: () -> Unit = {},
     viewModel: MyItemsViewModel = hiltViewModel(),
 ) {
     val book by viewModel.items.collectAsStateWithLifecycle()
@@ -96,7 +98,7 @@ fun MyItemsPanel(
         }
     }
     val iptvReturnFocus = remember { FocusRequester() }
-    val iptvRowCount = if (viewModel.iptvAllowed()) listOf(viewModel.iptvContinue.value, viewModel.iptvFavorites.value).count { it.isNotEmpty() } else 0
+    val iptvRowCount = if (viewModel.iptvAllowed()) listOf(viewModel.iptvContinue.value, viewModel.iptvFavorites.value, viewModel.torrentFavorites.value).count { it.isNotEmpty() } else 0
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
     Column(
         modifier
@@ -115,9 +117,14 @@ fun MyItemsPanel(
         // IPTV: Continue watching and favorites, above the recordings (Premium IPTV only).
         val iptvContinue by viewModel.iptvContinue.collectAsStateWithLifecycle()
         val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
+        val torrentFavorites by viewModel.torrentFavorites.collectAsStateWithLifecycle()
         val iptvArt by viewModel.iptvPosters.collectAsStateWithLifecycle()
         val iptvBlocks = if (viewModel.iptvAllowed()) {
-            listOf(R.string.library_continue to iptvContinue, R.string.library_iptv_favorites to iptvFavorites).filter { it.second.isNotEmpty() }
+            listOf(
+                R.string.library_continue to iptvContinue,
+                R.string.library_iptv_favorites to iptvFavorites,
+                R.string.library_torrent_favorites to torrentFavorites,
+            ).filter { it.second.isNotEmpty() }
         } else emptyList()
         // One IPTV row (header + sideways cards); inside the LazyColumn when recordings exist so everything scrolls.
         val iptvRow: @Composable (Int, List<com.enigmacast.domain.xtream.IptvLibraryCard>) -> Unit = { header, cards ->
@@ -227,7 +234,8 @@ fun MyItemsPanel(
     // Back from an IPTV film started here: focus returns to its card.
     LaunchedEffect(viewModel.returnKey) {
         if (viewModel.returnKey == null) return@LaunchedEffect
-        val row = if (viewModel.returnKey!!.startsWith("${R.string.library_continue}/")) 0 else iptvRowCount - 1
+        // IPTV favorites sit after Continue watching (when it has cards); Torrent favorites never start IPTV.
+        val row = if (viewModel.returnKey!!.startsWith("${R.string.library_continue}/")) 0 else if (viewModel.iptvContinue.value.isNotEmpty()) 1 else 0
         if (row >= 0 && (items + sections.onReceiver + sections.scheduledOnReceiver).isNotEmpty()) listState.scrollToItem(row)
         iptvReturnFocus.requestWhenReady()
         viewModel.consumeReturn()
@@ -303,8 +311,8 @@ fun MyItemsPanel(
             choices = listOf(play, info, remove),
             onChoose = { i ->
                 when (i) {
-                    0 -> viewModel.playChosenIptv(onXtream)
-                    1 -> viewModel.infoChosenIptv(onXtream)
+                    0 -> viewModel.playChosenIptv(onXtream, onTorrent)
+                    1 -> viewModel.infoChosenIptv(onXtream, onTorrent)
                     else -> viewModel.askRemoveIptv()
                 }
             },

@@ -2,8 +2,6 @@ package com.enigmacast.data.enigmasync
 
 import android.content.Context
 import com.enigmacast.data.db.IptvLibraryDao
-import com.enigmacast.data.db.IptvLibraryRow
-import com.enigmacast.data.db.IptvResumeRow
 import com.enigmacast.data.db.SyncCursorRow
 import com.enigmacast.data.db.SyncOutboxDao
 import com.enigmacast.data.profile.ProfileStore
@@ -20,6 +18,9 @@ import com.enigmacast.domain.profile.HomeBouquetCloud
 import com.enigmacast.domain.profile.ProfileCloud
 import com.enigmacast.domain.sync.SyncApply
 import com.enigmacast.domain.sync.SyncConflict
+import com.enigmacast.domain.sync.LibrarySync
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
 import com.enigmacast.sync.SyncScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -65,8 +66,16 @@ class EnigmaSyncEngine @Inject constructor(
         }
     }
 
+    /** One sync at a time: saves nudge it every few seconds during playback, and cursors must not race. */
+    private val running = kotlinx.coroutines.sync.Mutex()
+    private val marks by lazy { context.getSharedPreferences("enigma_sync_library", Context.MODE_PRIVATE) }
+
     suspend fun sync() = withContext(Dispatchers.IO) {
-        val config = client.config() ?: return@withContext
+        running.withLock { syncOnce() }
+    }
+
+    private suspend fun syncOnce() {
+        val config = client.config() ?: return
         runCatching {
             publishProfiles(config)
             val current = settings.current()
@@ -82,8 +91,28 @@ class EnigmaSyncEngine @Inject constructor(
             pushSettings(config)
         }
         runCatching { syncPlaylist(config) }
+        runCatching { backfill(config) }
         runCatching { push(config) }
     }
+
+    /**
+     * Favorites and positions saved before this device synced them (older versions, or before
+     * pairing) go to the server once per profile and server. Their own times are kept, so a
+     * newer change on the server is not overwritten.
+     */
+    private suspend fun backfill(config: SyncServerConfig) {
+        val uuids = profiles.state.value.profiles.map { it.uuid }.filter { it.isNotBlank() }
+        val todo = uuids.filter { !marks.getBoolean(backfillMark(config, it), false) }
+        if (todo.isEmpty()) return
+        val favorites = library.favorites().first()
+        val resumes = library.resumes().first()
+        todo.forEach { uuid ->
+            LibrarySync.backfill(uuid, favorites, resumes) { "backfill:${java.util.UUID.randomUUID()}" }.forEach { outbox.put(it) }
+            marks.edit().putBoolean(backfillMark(config, uuid), true).apply()
+        }
+    }
+
+    private fun backfillMark(config: SyncServerConfig, uuid: String) = "library-v1:${config.deviceId}:$uuid"
 
     /**
      * Sends local profile names to the receiver.
@@ -128,16 +157,15 @@ class EnigmaSyncEngine @Inject constructor(
         client.request(config, "POST", "/api/v1/profiles", body.toString().toByteArray())
     }
 
+    /** The newest change per record, in chunks; the outbox is cleared only after the server took them. */
     private suspend fun push(config: SyncServerConfig) {
         val pending = outbox.pending()
         if (pending.isEmpty()) return
-        val changes = pending.joinToString(",") { row ->
-            val payload = runCatching { JSONObject(row.payload) }.getOrElse { JSONObject() }
-            val key = listOf(payload.optString("source"), payload.optString("kind"), payload.optString("id")).filter { it.isNotBlank() }.joinToString("/")
-            """{"profileId":${json(row.profileId)},"entity":${json(row.entity)},"key":${json(key.ifBlank { row.changeId })},"op":${json(row.op)},"payload":${row.payload},"updatedMs":${row.updatedMs},"changeId":${json(row.changeId)}}"""
+        val batch = LibrarySync.batch(pending)
+        batch.send.chunked(LibrarySync.PUSH_CHUNK).forEach { chunk ->
+            client.request(config, "POST", "/api/v1/sync/push", LibrarySync.pushBody(chunk).toByteArray())
         }
-        client.request(config, "POST", "/api/v1/sync/push", """{"changes":[$changes]}""".toByteArray())
-        pending.forEach { outbox.delete(it.changeId) }
+        batch.settled.forEach { outbox.delete(it) }
     }
 
     /** @return true when this pull carried a settings document for the profile. */
@@ -330,41 +358,26 @@ class EnigmaSyncEngine @Inject constructor(
             applySettings(profileId, change)
             return
         }
+        if (entity != LibrarySync.FAVORITE && entity != LibrarySync.PROGRESS) return
         val op = change.optString("op")
         val updated = change.optLong("updated_ms")
         val changeId = change.optString("change_id")
-        val payload = runCatching { JSONObject(change.optString("payload")) }.getOrElse { JSONObject() }
-        val source = payload.optString("source")
-        val kind = payload.optString("kind")
-        val id = payload.optString("id")
-        if (entity == "favorite") {
+        val payload = change.optString("payload")
+        // Deletes are stored with an empty payload: the record key names what to remove.
+        val key = LibrarySync.keyOfChange(change.optString("record_key"), payload) ?: return
+        val (source, kind, id) = key
+        if (entity == LibrarySync.FAVORITE) {
             val current = library.favorite(profileId, source, kind, id)
             val decision = SyncConflict.decide(current?.addedMs, null, updated, changeId)
             if (decision == SyncApply.REJECT) return
             if (op == "delete") library.deleteFavorite(profileId, source, kind, id)
-            else library.putFavorite(
-                IptvLibraryRow(source, kind, id, payload.optString("title"), null, null, null, "", "", "", payload.optLong("addedMs", updated), profileId),
-            )
-        } else if (entity == "progress") {
+            else library.putFavorite(LibrarySync.favoriteFrom(profileId, key, payload, updated, current))
+        } else {
             val current = library.resume(profileId, source, kind, id)
             val decision = SyncConflict.decide(current?.updatedMs, null, updated, changeId)
             if (decision == SyncApply.REJECT) return
             if (op == "delete") library.deleteResume(profileId, source, kind, id)
-            else library.putResume(
-                IptvResumeRow(
-                    source, kind, id, payload.optLong("positionMs"), payload.optLong("durationMs"), updated,
-                    payload.optString("title").ifBlank { current?.title.orEmpty() },
-                    payload.optString("poster").ifBlank { null } ?: current?.poster,
-                    payload.optString("extension").ifBlank { current?.extension.orEmpty() },
-                    payload.optString("url").ifBlank { current?.url.orEmpty() },
-                    payload.optString("categoryId").ifBlank { current?.categoryId.orEmpty() },
-                    payload.optString("seriesId").ifBlank { null } ?: current?.seriesId,
-                    payload.optString("seriesTitle").ifBlank { null } ?: current?.seriesTitle,
-                    if (payload.has("season")) payload.optInt("season") else current?.season ?: 0,
-                    if (payload.has("episode")) payload.optInt("episode") else current?.episode ?: 0,
-                    profileId,
-                ),
-            )
+            else library.putResume(LibrarySync.progressFrom(profileId, key, payload, updated, current))
         }
     }
 

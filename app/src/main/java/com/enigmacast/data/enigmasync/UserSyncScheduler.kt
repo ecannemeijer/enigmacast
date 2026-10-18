@@ -53,6 +53,13 @@ class UserSyncScheduler @Inject constructor(
             runCatching { engine.importProfiles() }
             engine.sync()
         }
+        // Favorites and Continue watching changed on another TV arrive without a restart.
+        scope.launch {
+            while (true) {
+                delay(PULL_EVERY_MS)
+                runCatching { engine.sync() }
+            }
+        }
     }
 
     /** A profile login and later edits upload that profile's settings. A switch does not reload IPTV. */
@@ -126,5 +133,9 @@ class UserSyncScheduler @Inject constructor(
                     }
                 }
         }
+    }
+
+    private companion object {
+        const val PULL_EVERY_MS = 5 * 60_000L
     }
 }

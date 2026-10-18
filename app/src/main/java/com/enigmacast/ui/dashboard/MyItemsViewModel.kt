@@ -36,6 +36,8 @@ class MyItemsViewModel @Inject constructor(
     private val xtream: com.enigmacast.data.xtream.XtreamRepository,
     private val settingsSource: SettingsRepository,
     private val profiles: com.enigmacast.data.profile.ProfileStore,
+    private val torrents: com.enigmacast.data.torrent.TorrentLibrary,
+    private val scraper: com.enigmacast.data.torrent.ScraperRepository,
 ) : ViewModel() {
     /** Playlist accounts that are configured now; Library hides (keeps) entries of others. */
     private val activeSources = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
@@ -58,19 +60,38 @@ class MyItemsViewModel @Inject constructor(
         }.getOrDefault(emptySet())
     }
 
-    /** Library › Continue watching and IPTV favorites (Premium IPTV only). */
+    private val torrentSource = com.enigmacast.domain.torrent.TorrentLibraryRows.SOURCE
+
+    /** Torrent films and series join Library while the Torrent page is available (valid scraper, Premium). */
+    private fun torrentAllowed(): Boolean = scraper.status.value is com.enigmacast.data.torrent.ScraperStatus.Valid &&
+        gate.allows(com.enigmacast.domain.account.PremiumFeature.TORRENT)
+
+    /** Sources Library shows: the playlist accounts (Premium IPTV) and "torrent". */
+    private val shownSources = combine(activeSources, scraper.status) { sources, _ ->
+        val iptvSources = if (gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM)) sources else emptySet()
+        if (torrentAllowed()) iptvSources + torrentSource else iptvSources
+    }
+
+    /** Library › Continue watching (IPTV and Torrent, newest first), IPTV favorites and Torrent favorites. */
     val iptvContinue: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
-        combine(iptv.resumes, activeSources) { rows, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.continueWatching(rows, sources) }
+        combine(iptv.resumes, shownSources) { rows, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.continueWatching(rows, sources) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val allFavorites =
+        combine(iptv.favorites, iptv.resumeMap, shownSources) { rows, resumes, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.favorites(rows, resumes, sources) }
     val iptvFavorites: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
-        combine(iptv.favorites, iptv.resumeMap, activeSources) { rows, resumes, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.favorites(rows, resumes, sources) }
+        allFavorites.map { cards -> cards.filter { it.source != torrentSource } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-    fun iptvAllowed(): Boolean = gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM)
+    val torrentFavorites: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
+        allFavorites.map { cards -> cards.filter { it.source == torrentSource } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** The rows are already limited to what may be shown; this only hides them for free accounts. */
+    fun iptvAllowed(): Boolean = gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM) || torrentAllowed()
 
     /** TMDB matches for the IPTV cards, the same artwork the film and series lists use. */
     val iptvPosters: StateFlow<Map<String, com.enigmacast.domain.films.TmdbMovie?>> = iptvArt.movies
 
     fun iptvPoster(card: com.enigmacast.domain.xtream.IptvLibraryCard, art: Map<String, com.enigmacast.domain.films.TmdbMovie?>): String? {
+        if (card.source == torrentSource) return card.poster
         val movie = art[com.enigmacast.data.xtream.IptvVod.key(card.open)]
         val tmdb = movie?.posterPath?.let { com.enigmacast.data.tmdb.TmdbJson.image(it, "w342") }
         return tmdb ?: card.poster?.takeIf { it.isNotBlank() } ?: card.open.icon.ifBlank { null }
@@ -81,7 +102,8 @@ class MyItemsViewModel @Inject constructor(
     val returnKey: String? get() = iptv.returnTo.value
     fun consumeReturn() { iptv.returnTo.value = null }
 
-    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String? = null) {
+    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String? = null, onTorrent: () -> Unit = {}) {
+        if (card.source == torrentSource) { openTorrent(card, onTorrent); return }
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
         val episode = rememberedEpisode(card)
         if (card.open.section == com.enigmacast.domain.xtream.XtreamSection.SERIES && episode == null) {
@@ -99,18 +121,32 @@ class MyItemsViewModel @Inject constructor(
         iptvOptions = card
     }
 
-    fun playChosenIptv(onXtream: () -> Unit) {
+    fun playChosenIptv(onXtream: () -> Unit, onTorrent: () -> Unit = {}) {
         val card = iptvOptions ?: return
         val origin = iptvOrigin
         iptvOptions = null
-        openIptv(card, onXtream, origin)
+        openIptv(card, onXtream, origin, onTorrent)
     }
 
-    fun infoChosenIptv(onXtream: () -> Unit) {
+    fun infoChosenIptv(onXtream: () -> Unit, onTorrent: () -> Unit = {}) {
         val card = iptvOptions ?: return
         val origin = iptvOrigin
         iptvOptions = null
+        if (card.source == torrentSource) { openTorrent(card, onTorrent); return }
         infoIptv(card, onXtream, origin)
+    }
+
+    /** A Torrent card: its info page on the Torrent page (Play there offers the saved position). */
+    private fun openTorrent(card: com.enigmacast.domain.xtream.IptvLibraryCard, onTorrent: () -> Unit) {
+        if (!gate.require(com.enigmacast.domain.account.PremiumFeature.TORRENT)) return
+        val rows = com.enigmacast.domain.torrent.TorrentLibraryRows
+        val request = when (card.kind) {
+            "e" -> torrents.resume("e", card.id)?.let { rows.requestOf(it) }
+            else -> torrents.favorite(card.kind, card.id)?.let(rows::titleOf)?.let { com.enigmacast.domain.torrent.TorrentOpenRequest(it) }
+                ?: torrents.resume(card.kind, card.id)?.let { rows.requestOf(it) }
+        } ?: return
+        torrents.openRequest.value = request
+        onTorrent()
     }
 
     private fun infoIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String?) {
@@ -150,7 +186,7 @@ class MyItemsViewModel @Inject constructor(
         viewModelScope.launch { profiles.state.collect { loadSources() } }
         viewModelScope.launch {
             combine(iptvFavorites, iptvContinue) { favorites, watching -> favorites + watching }
-                .collect { cards -> iptvArt.resolve(cards.map { it.open }) }
+                .collect { cards -> iptvArt.resolve(cards.filter { it.source != torrentSource }.map { it.open }) }
         }
     }
 

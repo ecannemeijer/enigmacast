@@ -179,6 +179,8 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
         if (model.restoreToken == 0) return@LaunchedEffect
         val index = model.focusKey?.let { k -> model.items.indexOfFirst { it.key == k } } ?: -1
         if (index >= 0) { grid.scrollToItem(index); restoreFocus.requestWhenReady() }
+        // Opened from Library or Home (not a card of this list): the tabs.
+        else if (dash != null) moviesFocus.requestWhenReady()
     }
     LaunchedEffect(model.listToken) {
         if (model.listToken == 0) return@LaunchedEffect
@@ -343,6 +345,9 @@ private fun TorrentInfoPage(i: TorrentInfo, model: TorrentViewModel) {
         vod = com.enigmacast.ui.home.VodDetail(
             onPlay = model::playInfo,
             below = if (isSeries) ({ TorrentEpisodes(i, model) }) else null,
+            // Library › favorites, as on the IPTV film and series pages.
+            favorite = androidx.compose.runtime.remember(i.title.key, model.favoriteVersion) { model.isFavorite(i.title) },
+            onFavorite = { model.toggleFavorite(i.title) },
         ),
     )
 }

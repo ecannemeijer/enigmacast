@@ -1316,6 +1316,7 @@ Profilo: %2$s</string>
     <string name="iptv_library_remove">Rimuovi dalla Libreria</string>
     <string name="library_continue">Continua a guardare</string>
     <string name="library_iptv_favorites">Preferiti IPTV</string>
+    <string name="library_torrent_favorites">Preferiti Torrent</string>
     <string name="library_remove_continue">Rimuovi da Continua a guardare</string>
     <string name="library_remove_title">Rimuovere dalla Libreria?</string>
     <string name="library_remove_message">Rimuovere “%1$s”? Il film o la serie resta nella playlist.</string>

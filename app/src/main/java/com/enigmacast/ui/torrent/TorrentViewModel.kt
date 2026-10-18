@@ -54,6 +54,8 @@ data class TorrentInfo(
     val season: Int? = null,
     val episodes: List<TmdbEpisode> = emptyList(),
     val episodesLoading: Boolean = false,
+    /** Continue watching: the episode Play starts at (season, episode). */
+    val resumeEpisode: Pair<Int, Int>? = null,
 )
 
 /** What SubSource is asked for the stream being played. */
@@ -86,6 +88,7 @@ class TorrentViewModel @Inject constructor(
     private val owner: PlaybackOwner,
     private val settingsRepository: SettingsRepository,
     private val subtitles: com.enigmacast.data.subsource.SubSourceClient,
+    private val library: com.enigmacast.data.torrent.TorrentLibrary,
 ) : ViewModel() {
     private val language = Locale.getDefault().toLanguageTag()
 
@@ -187,19 +190,24 @@ class TorrentViewModel @Inject constructor(
     private val country = Locale.getDefault().country.ifBlank { "US" }
 
     /** OK on a card: the info page, filled in with TMDB details (runtime, genres, cast, seasons). */
-    fun openTitle(title: TmdbTitle) {
+    fun openTitle(title: TmdbTitle, resumeAt: Pair<Int, Int>? = null) {
         focusKey = title.key
         stepJob?.cancel()
         infoJob?.cancel()
-        info = TorrentInfo(title, TorrentCards.film(title), loading = true)
+        // A series continues at its latest saved episode (Continue watching or an earlier visit).
+        val resume = resumeAt ?: if (title.kind == TorrentKind.TV) library.latestEpisode(title.id)?.let { it.season to it.episode }?.takeIf { it.first > 0 } else null
+        info = TorrentInfo(title, TorrentCards.film(title), loading = true, resumeEpisode = resume)
         infoJob = viewModelScope.launch {
             val tv = title.kind == TorrentKind.TV
             val body = runCatching { if (tv) tmdb.tv(title.id, language) else tmdb.movie(title.id, language) }.getOrNull()
             val parsed = body?.let { if (tv) TmdbJson.parseTv(it, country, language) else TmdbJson.parseMovie(it, country, language) }
             val seasons = if (tv) TorrentTmdb.parseSeasons(body) else emptyList()
             val current = info?.takeIf { it.title.key == title.key } ?: return@launch
-            info = current.copy(film = TorrentCards.film(title, parsed), seasons = seasons, loading = false)
-            seasons.firstOrNull()?.let { chooseSeason(it.number) }
+            // Opened from Library: the row has no year; TMDB fills it in (SubSource and favorites use it).
+            val known = current.title.copy(year = current.title.year ?: parsed?.year)
+            info = current.copy(title = known, film = TorrentCards.film(known, parsed), seasons = seasons, loading = false)
+            val start = current.resumeEpisode?.first?.takeIf { n -> seasons.any { it.number == n } } ?: seasons.firstOrNull()?.number
+            start?.let { chooseSeason(it) }
         }
     }
 
@@ -227,7 +235,8 @@ class TorrentViewModel @Inject constructor(
         val i = info ?: return
         if (i.title.kind == TorrentKind.TV) {
             if (i.loading) return // seasons not known yet
-            val (s, e) = TorrentTmdb.playTarget(i.seasons, i.season, i.episodes) ?: run { message = "imdb"; return }
+            val resume = i.resumeEpisode?.takeIf { it.first == i.season }
+            val (s, e) = resume ?: TorrentTmdb.playTarget(i.seasons, i.season, i.episodes) ?: run { message = "imdb"; return }
             searchStreams(i.title, s, e, i.episodes.firstOrNull { it.number == e }?.name)
         } else {
             searchStreams(i.title, null, null, null)
@@ -244,6 +253,7 @@ class TorrentViewModel @Inject constructor(
         stepJob?.cancel()
         streamSeason = season
         streamEpisode = episode
+        streamEpisodeName = episodeName
         streamOriginalTitle = info?.takeIf { it.title.key == title.key }?.film?.movie?.originalTitle.orEmpty()
         val subtitle = if (season != null) "S$season E$episode" + (episodeName?.let { " · $it" } ?: "") else ""
         // The streams dialog opens at once (loading) while the IMDb id is looked up.
@@ -301,6 +311,9 @@ class TorrentViewModel @Inject constructor(
     private var streamSeason: Int? = null
     private var streamEpisode: Int? = null
     private var streamOriginalTitle = ""
+    private var streamEpisodeName: String? = null
+    /** What is playing, for Continue watching: the title and its episode. */
+    private var resumeTarget: com.enigmacast.data.db.IptvResumeRow? = null
     private var subtitleTarget: TorrentSubtitleTarget? = null
     private var mediaUrl = ""
     /** Playback setting at start: unknown-language text tracks are selected when this is on. */
@@ -317,6 +330,7 @@ class TorrentViewModel @Inject constructor(
     fun chooseStream(stream: TorrentStream) {
         val o = overlay as? TorrentOverlay.Streams ?: return
         resumeKey = o.resumeKey
+        resumeTarget = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(o.title, streamSeason, streamEpisode, streamEpisodeName, 0, 0, 0)
         // SubSource: TMDB title and year, season/episode, and the file name for the release.
         subtitleTarget = TorrentSubtitleTarget(
             title = o.title.title,
@@ -462,8 +476,10 @@ class TorrentViewModel @Inject constructor(
     private fun offerResume() {
         if (resumeOffered) return
         resumeOffered = true
-        val key = resumeKey ?: return
-        val saved = resumes.getLong(key, 0L)
+        val target = resumeTarget
+        // The user database first; positions saved before Continue watching existed are keyed by IMDb id.
+        val saved = target?.let { library.resume(it.kind, it.id)?.positionMs }
+            ?: resumeKey?.let { resumes.getLong(it, 0L) } ?: return
         if (saved >= ResumePolicy.MIN_RESUME_MS) { player?.playWhenReady = false; resumeAsk = saved }
     }
 
@@ -474,12 +490,43 @@ class TorrentViewModel @Inject constructor(
     }
 
     private fun saveResume() {
-        val key = resumeKey ?: return
+        // While the resume question is open the player is still at the start: keep the saved place.
+        if (resumeAsk != null) return
         val p = player ?: return
         val pos = p.currentPosition
         val dur = p.duration.coerceAtLeast(0)
-        val keep = pos >= ResumePolicy.MIN_RESUME_MS && !(dur > 0 && ResumePolicy.watched(pos, dur))
-        resumes.edit().apply { if (keep) putLong(key, pos) else remove(key) }.apply()
+        val watched = dur > 0 && ResumePolicy.watched(pos, dur)
+        val keep = pos >= ResumePolicy.MIN_RESUME_MS && !watched
+        // A position from before Continue watching (preferences, by IMDb id) moves into the user database.
+        if (keep || watched) resumeKey?.takeIf { it.isNotBlank() && resumes.contains(it) }?.let { legacy -> resumes.edit().remove(legacy).apply() }
+        val target = resumeTarget ?: return
+        if (keep) {
+            library.saveResume(target.copy(positionMs = pos, durationMs = dur, updatedMs = System.currentTimeMillis()))
+        } else if (library.resume(target.kind, target.id) != null) {
+            library.clearResume(target.kind, target.id)
+        }
+    }
+
+    // ---- Favorites (info page) ----
+
+    fun isFavorite(title: TmdbTitle): Boolean = library.isFavorite(title)
+
+    fun toggleFavorite(title: TmdbTitle) {
+        library.setFavorite(title, !library.isFavorite(title))
+        favoriteVersion++
+    }
+
+    var favoriteVersion by mutableIntStateOf(0)
+        private set
+
+    /** Library or Home opened a title: its info page (series at the remembered episode). */
+    private fun handleOpenRequest() {
+        val request = library.openRequest.value ?: return
+        library.openRequest.value = null
+        if (playing != null) stopPlayback()
+        overlay = TorrentOverlay.None
+        val resume = request.season?.let { s -> s to (request.episode ?: 1) }
+        openTitle(request.title, resume)
     }
 
     fun seekTo(ms: Long) { player?.seekTo(ms.coerceAtLeast(0)) }
@@ -700,6 +747,12 @@ class TorrentViewModel @Inject constructor(
         loadJob?.cancel()
         if (playing != null || overlay is TorrentOverlay.Loading) stopPlayback()
         owner.unregister(PlaybackOwner.Owner.TORRENT)
+    }
+
+    // Last in the class: these collectors run at once and use the state declared above.
+    init {
+        viewModelScope.launch { library.openRequest.collect { if (it != null) handleOpenRequest() } }
+        viewModelScope.launch { library.favorites.collect { favoriteVersion++ } }
     }
 
     companion object {

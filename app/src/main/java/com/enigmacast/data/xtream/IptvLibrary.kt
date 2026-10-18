@@ -8,6 +8,7 @@ import com.enigmacast.data.db.SyncOutboxDao
 import com.enigmacast.data.db.SyncOutboxRow
 import com.enigmacast.data.profile.ProfileStore
 import com.enigmacast.domain.profile.ProfileState
+import com.enigmacast.domain.sync.LibrarySync
 import com.enigmacast.domain.xtream.XtreamItem
 import com.enigmacast.domain.xtream.XtreamSection
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -79,7 +80,7 @@ class IptvLibrary @Inject constructor(
         val stamped = row.copy(profileId = profileId)
         scope.launch {
             dao.putResume(stamped)
-            enqueue(profileId, "progress", "upsert", stamped.updatedMs, progressPayload(stamped))
+            enqueue(profileId, LibrarySync.PROGRESS, "upsert", stamped.updatedMs, LibrarySync.progressPayload(stamped))
             trigger.nudge()
         }
     }
@@ -94,7 +95,7 @@ class IptvLibrary @Inject constructor(
         val now = System.currentTimeMillis()
         scope.launch {
             dao.deleteResume(profileId, source, kind, id)
-            enqueue(profileId, "progress", "delete", now, """{"source":${json(source)},"kind":${json(kind)},"id":${json(id)}}""")
+            enqueue(profileId, LibrarySync.PROGRESS, "delete", now, LibrarySync.deletePayload(source, kind, id))
             trigger.nudge()
         }
     }
@@ -106,10 +107,10 @@ class IptvLibrary @Inject constructor(
         scope.launch {
             if (on) {
                 dao.putFavorite(stamped)
-                enqueue(profileId, "favorite", "upsert", now, favoritePayload(stamped))
+                enqueue(profileId, LibrarySync.FAVORITE, "upsert", now, LibrarySync.favoritePayload(stamped))
             } else {
                 dao.deleteFavorite(profileId, stamped.source, stamped.kind, stamped.id)
-                enqueue(profileId, "favorite", "delete", now, """{"source":${json(stamped.source)},"kind":${json(stamped.kind)},"id":${json(stamped.id)}}""")
+                enqueue(profileId, LibrarySync.FAVORITE, "delete", now, LibrarySync.deletePayload(stamped.source, stamped.kind, stamped.id))
             }
             trigger.nudge()
         }
@@ -130,24 +131,6 @@ class IptvLibrary @Inject constructor(
         }
         prefs.edit().clear().apply()
     }
-
-    private fun json(value: String) = buildString {
-        append('"')
-        value.forEach { ch ->
-            when (ch) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                else -> append(ch)
-            }
-        }
-        append('"')
-    }
-
-    private fun favoritePayload(row: IptvLibraryRow) =
-        """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"title":${json(row.title)},"addedMs":${row.addedMs}}"""
-
-    private fun progressPayload(row: IptvResumeRow) =
-        """{"source":${json(row.source)},"kind":${json(row.kind)},"id":${json(row.id)},"positionMs":${row.positionMs},"durationMs":${row.durationMs},"updatedMs":${row.updatedMs},"title":${json(row.title)},"poster":${json(row.poster.orEmpty())},"extension":${json(row.extension)},"url":${json(row.url)},"categoryId":${json(row.categoryId)},"seriesId":${json(row.seriesId.orEmpty())},"seriesTitle":${json(row.seriesTitle.orEmpty())},"season":${row.season},"episode":${row.episode}}"""
 
     companion object {
         fun key(source: String, kind: String, id: String) = "$source/$kind/$id"

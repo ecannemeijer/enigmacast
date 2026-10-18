@@ -1342,6 +1342,7 @@ Profiel: %2$s</string>
     <string name="iptv_library_remove">Verwijderen uit Bibliotheek</string>
     <string name="library_continue">Verder kijken</string>
     <string name="library_iptv_favorites">IPTV-favorieten</string>
+    <string name="library_torrent_favorites">Torrent-favorieten</string>
     <string name="library_remove_continue">Verwijderen uit Verder kijken</string>
     <string name="library_remove_title">Verwijderen uit Bibliotheek?</string>
     <string name="library_remove_message">“%1$s” verwijderen? De film of serie blijft in de playlist.</string>
