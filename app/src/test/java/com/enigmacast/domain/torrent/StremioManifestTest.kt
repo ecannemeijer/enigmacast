@@ -31,6 +31,22 @@ class StremioManifestTest {
     }
 
     @Test
+    fun torrentioPresetKeepsItsConfig() {
+        val u = StremioManifest.normalize(com.enigmacast.data.torrent.ScraperRepository.TORRENTIO_MANIFEST)!!
+        assertEquals("https://torrentio.strem.fun/sort=seeders|qualityfilter=1080p,720p", u.base)
+        val movie = StremioStreams.url(u.base, "tt0111161")!!
+        assertEquals("https://torrentio.strem.fun/sort=seeders|qualityfilter=1080p,720p/stream/movie/tt0111161.json", movie)
+        // On the wire '|' is %7C; the config segment, ',' and the series ':' stay as they are.
+        assertEquals("https://torrentio.strem.fun/sort=seeders%7Cqualityfilter=1080p,720p/stream/movie/tt0111161.json", StremioManifest.httpUrl(movie).toString())
+        assertEquals(
+            "https://torrentio.strem.fun/sort=seeders%7Cqualityfilter=1080p,720p/stream/series/tt0903747:1:1.json",
+            StremioManifest.httpUrl(StremioStreams.url(u.base, "tt0903747", 1, 1)!!).toString(),
+        )
+        assertEquals("https://torrentio.strem.fun/sort=seeders%7Cqualityfilter=1080p,720p/manifest.json", StremioManifest.httpUrl(u.manifest).toString())
+        assertEquals(listOf("sort=seeders|qualityfilter=1080p,720p", "manifest.json"), StremioManifest.httpUrl(u.manifest).pathSegments)
+    }
+
+    @Test
     fun acceptsTorrentio() {
         val u = StremioManifest.normalize("stremio://torrentio.strem.fun/manifest.json")!!
         assertEquals("https://torrentio.strem.fun/manifest.json", u.manifest)

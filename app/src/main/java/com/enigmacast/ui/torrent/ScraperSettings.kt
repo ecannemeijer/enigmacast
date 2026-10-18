@@ -24,7 +24,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.tv.material3.Text
 import com.enigmacast.R
 import com.enigmacast.data.torrent.ScraperRepository
+import com.enigmacast.data.torrent.ScraperSource
 import com.enigmacast.data.torrent.ScraperStatus
+import androidx.compose.runtime.remember
 import com.enigmacast.domain.torrent.ManifestError
 import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.EnigmaColors
@@ -37,6 +39,10 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class ScraperSettingsViewModel @Inject constructor(private val repository: ScraperRepository) : ViewModel() {
     val status = repository.status
+    val torrentio = repository.torrentio
+    fun source() = repository.source()
+
+    fun setTorrentio(enabled: Boolean) { viewModelScope.launch { repository.setTorrentio(enabled) } }
     /** What is being typed or pasted; the saved URL is never put back in the field (it can hold a key). */
     var input by mutableStateOf("")
         private set
@@ -69,8 +75,17 @@ class ScraperSettingsViewModel @Inject constructor(private val repository: Scrap
 @Composable
 fun ScraperSettingsPanel(contentFocus: FocusRequester, model: ScraperSettingsViewModel = hiltViewModel()) {
     val status by model.status.collectAsStateWithLifecycle()
+    val torrentio by model.torrentio.collectAsStateWithLifecycle()
+    // Re-read when the status changes (save, remove, toggle).
+    val source = remember(status, torrentio, model.masked) { model.source() }
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingsCard(stringResource(R.string.settings_scrapers)) {
+            com.enigmacast.ui.theme.ToggleRow(
+                title = stringResource(R.string.scraper_torrentio),
+                description = stringResource(R.string.scraper_torrentio_desc),
+                checked = torrentio,
+                onCheckedChange = model::setTorrentio,
+            )
             Text(stringResource(R.string.scraper_help), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
             Text(
                 stringResource(R.string.scraper_current, model.masked ?: stringResource(R.string.scraper_none)),
@@ -90,13 +105,24 @@ fun ScraperSettingsPanel(contentFocus: FocusRequester, model: ScraperSettingsVie
                     CompactButton(stringResource(R.string.scraper_remove), onClick = model::remove, modifier = Modifier.focusProperties { right = FocusRequester.Cancel })
                 }
             }
-            Text(statusText(status), color = if (status is ScraperStatus.Invalid) EnigmaColors.Danger else EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+            Text(statusText(status, source, torrentio), color = if (status is ScraperStatus.Invalid) EnigmaColors.Danger else EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
         }
     }
 }
 
 @Composable
-private fun statusText(status: ScraperStatus): String = when (status) {
+private fun statusText(status: ScraperStatus, source: ScraperSource, torrentio: Boolean): String {
+    val base = baseStatus(status)
+    return when {
+        // A custom URL wins over the toggle; say so.
+        source == ScraperSource.CUSTOM && torrentio -> stringResource(R.string.scraper_custom_overrides) + " · " + base
+        source == ScraperSource.TORRENTIO -> stringResource(R.string.scraper_using_torrentio) + " · " + base
+        else -> base
+    }
+}
+
+@Composable
+private fun baseStatus(status: ScraperStatus): String = when (status) {
     ScraperStatus.None -> stringResource(R.string.scraper_status_none)
     ScraperStatus.Checking -> stringResource(R.string.scraper_status_checking)
     is ScraperStatus.Valid -> stringResource(R.string.scraper_status_valid, status.manifest.name, status.manifest.version)

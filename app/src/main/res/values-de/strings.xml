@@ -1382,4 +1382,7 @@ Profil: %2$s</string>
     <string name="scraper_error_stream">Dieses Addon bietet keine Streams.</string>
     <string name="scraper_error_types">Dieses Addon bietet keine Filme oder Serien.</string>
     <string name="torrent_error_engine">Die Torrent-Engine ist auf diesem Gerät nicht verfügbar (ABI %1$s).</string>
+    <string name="scraper_torrentio">Mit Torrentio aktivieren</string>
+    <string name="scraper_torrentio_desc">Nutzt Torrentio nach Seedern sortiert, nur 1080p und 720p. Eine eigene Manifest-URL unten hat Vorrang.</string>
+    <string name="scraper_custom_overrides">Eigene URL aktiv (hat Vorrang vor Torrentio)</string>
 </resources>

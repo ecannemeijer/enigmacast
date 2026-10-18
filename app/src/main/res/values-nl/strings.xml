@@ -1412,4 +1412,7 @@ Profiel: %2$s</string>
     <string name="scraper_error_stream">Deze addon biedt geen streams.</string>
     <string name="scraper_error_types">Deze addon biedt geen films of series.</string>
     <string name="torrent_error_engine">De torrent-engine is niet beschikbaar op dit apparaat (ABI %1$s).</string>
+    <string name="scraper_torrentio">Inschakelen met Torrentio</string>
+    <string name="scraper_torrentio_desc">Gebruikt Torrentio gesorteerd op seeders, alleen 1080p en 720p. Een eigen manifest-URL hieronder gaat voor.</string>
+    <string name="scraper_custom_overrides">Eigen URL in gebruik (gaat voor Torrentio)</string>
 </resources>

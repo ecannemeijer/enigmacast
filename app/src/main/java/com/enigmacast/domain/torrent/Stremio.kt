@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /** A Stremio addon (scraper) as configured: the manifest URL and the base its resources hang off. */
 data class ScraperUrl(val manifest: String, val base: String)
@@ -50,6 +51,12 @@ object StremioManifest {
             append("/manifest.json")
         }
     }
+
+    /**
+     * The address as OkHttp sends it: characters not allowed in a path ('|' in Torrentio's
+     * "sort=seeders|qualityfilter=…" config, spaces, …) percent-encoded; ',' '=' ':' stay.
+     */
+    fun httpUrl(address: String): okhttp3.HttpUrl = address.toHttpUrl()
 
     fun parse(body: String): Result<ScraperManifest> {
         val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
