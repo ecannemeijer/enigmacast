@@ -71,6 +71,7 @@ class OpenWebifApi @Inject constructor(
     private val clientFactory: OkHttpClientFactory,
     private val endpoints: OpenWebifEndpoints,
     private val router: ReceiverRouter,
+    private val dispatchers: com.enigmacast.util.AppDispatchers,
 ) : OsdSource, RemoteControlSource, ServiceStateSource, ReceiverInfoSource {
 
     override suspend fun grab(config: ReceiverConfig, format: GrabFormat, mode: GrabMode): GrabbedImage {
@@ -100,10 +101,10 @@ class OpenWebifApi @Inject constructor(
 
     override suspend fun channelGuide(config: ReceiverConfig): ChannelGuide {
         val currentBody = get(config, endpoints.current(config))
-        val reference = OpenWebifJson.parseService(currentBody).reference
-        if (reference.isBlank()) return OpenWebifJson.parseGuide(currentBody, """{"events":[]}""")
+        val reference = parsed { OpenWebifJson.parseService(currentBody) }.reference
+        if (reference.isBlank()) return parsed { OpenWebifJson.parseGuide(currentBody, """{"events":[]}""") }
         val epgBody = programmeBody(config, endpoints.epgService(config, reference))
-        return OpenWebifJson.parseGuide(currentBody, epgBody)
+        return parsed { OpenWebifJson.parseGuide(currentBody, epgBody) }
     }
 
     override suspend fun channelGuide(
@@ -118,7 +119,7 @@ class OpenWebifApi @Inject constructor(
                 put("ref", serviceReference)
             })
         }.toString()
-        return OpenWebifJson.parseGuide(currentBody, epgBody)
+        return parsed { OpenWebifJson.parseGuide(currentBody, epgBody) }
     }
 
     override suspend fun zap(config: ReceiverConfig, serviceReference: String) {
@@ -131,7 +132,7 @@ class OpenWebifApi @Inject constructor(
 
     override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList {
         val currentBody = get(config, endpoints.current(config))
-        val service = OpenWebifJson.parseService(currentBody)
+        val service = parsed { OpenWebifJson.parseService(currentBody) }
         val hinted = OpenWebifJson.bouquetReference(currentBody)
         val television = televisionBouquets(config)
         val radio = radioBouquets(config)
@@ -176,7 +177,7 @@ class OpenWebifApi @Inject constructor(
 
     override suspend fun radioBouquets(config: ReceiverConfig): List<BouquetEntry> {
         return runCatching {
-            OpenWebifJson.parseBouquets(get(config, endpoints.radioBouquets(config)))
+            parsed { OpenWebifJson.parseBouquets(get(config, endpoints.radioBouquets(config))) }
         }.getOrDefault(emptyList()).filter { BouquetChannels.isRadioBouquet(it.reference) }
     }
 
@@ -221,10 +222,10 @@ class OpenWebifApi @Inject constructor(
 
     override suspend fun currentService(config: ReceiverConfig): EnigmaService {
         val current = runCatching { get(config, endpoints.current(config)) }.getOrNull()
-        val fromCurrent = current?.let { OpenWebifJson.parseService(it) }
+        val fromCurrent = current?.let { parsed { OpenWebifJson.parseService(it) } }
         if (fromCurrent != null && fromCurrent.reference.isNotBlank()) return fromCurrent
         val status = get(config, endpoints.statusInfo(config))
-        return OpenWebifJson.parseService(status)
+        return parsed { OpenWebifJson.parseService(status) }
     }
 
     override suspend fun capabilities(config: ReceiverConfig): ReceiverCapabilities {
@@ -232,7 +233,7 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun powerState(config: ReceiverConfig): PowerStatus {
-        return OpenWebifJson.parsePower(get(config, endpoints.powerState(config)))
+        return parsed { OpenWebifJson.parsePower(get(config, endpoints.powerState(config))) }
     }
 
     override suspend fun wake(config: ReceiverConfig) {
@@ -248,11 +249,11 @@ class OpenWebifApi @Inject constructor(
     }
 
     override suspend fun details(config: ReceiverConfig): ReceiverDetails {
-        return OpenWebifJson.parseReceiverDetails(get(config, endpoints.about(config)))
+        return parsed { OpenWebifJson.parseReceiverDetails(get(config, endpoints.about(config))) }
     }
 
     override suspend fun sleepTimer(config: ReceiverConfig): SleepTimerStatus {
-        return OpenWebifJson.parseSleepTimer(get(config, endpoints.sleepTimer(config)))
+        return parsed { OpenWebifJson.parseSleepTimer(get(config, endpoints.sleepTimer(config))) }
     }
 
     override suspend fun setSleepTimer(
@@ -262,11 +263,11 @@ class OpenWebifApi @Inject constructor(
         enabled: Boolean,
     ): SleepTimerStatus {
         val body = get(config, endpoints.setSleepTimer(config, minutes, action, enabled))
-        return OpenWebifJson.parseSleepTimer(body)
+        return parsed { OpenWebifJson.parseSleepTimer(body) }
     }
 
     override suspend fun volume(config: ReceiverConfig): VolumeStatus {
-        return OpenWebifJson.parseVolume(get(config, endpoints.volume(config)))
+        return parsed { OpenWebifJson.parseVolume(get(config, endpoints.volume(config))) }
     }
 
     override suspend fun bouquets(config: ReceiverConfig): List<BouquetEntry> {
@@ -274,18 +275,18 @@ class OpenWebifApi @Inject constructor(
         // always that order (stream bouquets first on some images).
         val root = """1:7:1:0:0:0:0:0:0:0:FROM BOUQUET "bouquets.tv" ORDER BY bouquet"""
         val fromBox = runCatching {
-            OpenWebifJson.parseServices(get(config, endpoints.services(config, root, picons = false)))
+            parsed { OpenWebifJson.parseServices(get(config, endpoints.services(config, root, picons = false))) }
         }.getOrNull().orEmpty().filter { BouquetChannels.isTelevisionBouquet(it.reference) }
-        val parsed = fromBox.ifEmpty {
-            runCatching { OpenWebifJson.parseBouquets(get(config, endpoints.bouquets(config))) }.getOrDefault(emptyList())
+        val listed = fromBox.ifEmpty {
+            runCatching { parsed { OpenWebifJson.parseBouquets(get(config, endpoints.bouquets(config))) } }.getOrDefault(emptyList())
         }
         val file = readBouquetsTv(config)
-        val matched = if (file.isNullOrBlank()) 0 else BouquetOrder.matched(parsed, file)
+        val matched = if (file.isNullOrBlank()) 0 else BouquetOrder.matched(listed, file)
         if (file.isNullOrBlank() || matched == 0) {
-            EnigmaLog.service("bouquet order unchanged: file=${!file.isNullOrBlank()} matched=$matched of ${parsed.size}, first=${parsed.firstOrNull()?.name}")
-            return parsed
+            EnigmaLog.service("bouquet order unchanged: file=${!file.isNullOrBlank()} matched=$matched of ${listed.size}, first=${listed.firstOrNull()?.name}")
+            return listed
         }
-        val ordered = BouquetOrder.apply(parsed, file)
+        val ordered = BouquetOrder.apply(listed, file)
         EnigmaLog.service("bouquet order from bouquets.tv ($matched): ${ordered.take(4).joinToString { it.name }}")
         return ordered
     }
@@ -324,11 +325,11 @@ class OpenWebifApi @Inject constructor(
 
     override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
         return try {
-            OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference)))
+            parsed { OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference))) }
         } catch (error: OpenWebifException) {
             if (error.statusCode != 500) throw error
             EnigmaLog.service("channel list HTTP 500 with picons, retrying without")
-            OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference, picons = false)))
+            parsed { OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference, picons = false))) }
         }
     }
 
@@ -340,14 +341,14 @@ class OpenWebifApi @Inject constructor(
     suspend fun tunerSnapshot(config: ReceiverConfig): TunerSnapshot {
         val about = get(config, endpoints.about(config))
         val status = runCatching { get(config, endpoints.statusInfo(config)) }.getOrNull()
-        val first = OpenWebifJson.parseTunerSnapshot(about, status, null)
+        val first = parsed { OpenWebifJson.parseTunerSnapshot(about, status, null) }
         if (first.tuners.none { it.recording.isNotBlank() }) return first
         val timers = runCatching { get(config, endpoints.timerList(config)) }.getOrNull()
-        return OpenWebifJson.parseTunerSnapshot(about, status, timers)
+        return parsed { OpenWebifJson.parseTunerSnapshot(about, status, timers) }
     }
 
     suspend fun bouquetStartPositions(config: ReceiverConfig): Map<String, Int> {
-        return OpenWebifJson.parseBouquetStartPositions(get(config, endpoints.bouquetStartPositions(config)))
+        return parsed { OpenWebifJson.parseBouquetStartPositions(get(config, endpoints.bouquetStartPositions(config))) }
     }
 
     suspend fun picon(config: ReceiverConfig, path: String): ByteArray? {
@@ -357,16 +358,16 @@ class OpenWebifApi @Inject constructor(
     }
 
     suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent> {
-        return OpenWebifJson.parseNowEvents(programmeBody(config, endpoints.epgNow(config, bouquetReference)))
+        return parsed { OpenWebifJson.parseNowEvents(programmeBody(config, endpoints.epgNow(config, bouquetReference))) }
     }
 
     /** `/api/about` alone (model, image, transcoding), without the grab and stream port probes. */
-    suspend fun about(config: ReceiverConfig): ReceiverCapabilities = OpenWebifJson.parseAbout(
+    suspend fun about(config: ReceiverConfig): ReceiverCapabilities = parsed { OpenWebifJson.parseAbout(
         get(config, endpoints.about(config)),
         https = config.useHttps,
         streamingAvailable = false,
         grabs = GrabSupport(png = false, jpg = false, osd = false, all = false, authenticationRequired = false),
-    )
+    ) }
 
     /**
      * Asks OpenWebif where this receiver transcodes ([TranscodeUrls.detect]); null when the
@@ -380,27 +381,27 @@ class OpenWebifApi @Inject constructor(
     }
 
     suspend fun epgSearch(config: ReceiverConfig, query: String): List<EpgSearchEvent> {
-        return OpenWebifJson.parseEpgSearch(get(config, endpoints.epgSearch(config, query)))
+        return parsed { OpenWebifJson.parseEpgSearch(get(config, endpoints.epgSearch(config, query))) }
     }
 
     suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> {
-        return OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgService(config, serviceReference)), serviceReference)
+        return parsed { OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgService(config, serviceReference)), serviceReference) }
     }
 
     suspend fun bouquetEvents(config: ReceiverConfig, bouquetReference: String, startSec: Long, minutes: Int): List<GuideEvent> {
-        return OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgMulti(config, bouquetReference, startSec, minutes)))
+        return parsed { OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgMulti(config, bouquetReference, startSec, minutes))) }
     }
 
     suspend fun addTimer(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult {
-        return OpenWebifJson.parseTimerResult(get(config, endpoints.timerAddByEventId(config, serviceReference, eventId)))
+        return parsed { OpenWebifJson.parseTimerResult(get(config, endpoints.timerAddByEventId(config, serviceReference, eventId))) }
     }
 
     suspend fun addTimer(config: ReceiverConfig, serviceReference: String, begin: Long, end: Long, name: String, description: String): TimerResult {
-        return OpenWebifJson.parseTimerResult(get(config, endpoints.timerAdd(config, serviceReference, begin, end, name, description)))
+        return parsed { OpenWebifJson.parseTimerResult(get(config, endpoints.timerAdd(config, serviceReference, begin, end, name, description))) }
     }
 
     internal suspend fun timers(config: ReceiverConfig): List<OpenWebifJson.ReceiverTimer> {
-        return OpenWebifJson.parseTimers(get(config, endpoints.timerList(config)))
+        return parsed { OpenWebifJson.parseTimers(get(config, endpoints.timerList(config))) }
     }
 
     /** Null when the AutoTimer plugin is not installed (or answers no list). */
@@ -409,7 +410,7 @@ class OpenWebifApi @Inject constructor(
         if (response.code !in 200..299) return null
         val body = response.bytes.toString(Charsets.UTF_8)
         if (!body.contains("<autotimer", ignoreCase = true)) return null
-        return AutoTimerXml.parse(body)
+        return parsed { AutoTimerXml.parse(body) }
     }
 
     /** Adds an AutoTimer and returns its id (looked up by name afterwards), or null when it failed. */
@@ -429,7 +430,7 @@ class OpenWebifApi @Inject constructor(
     }
 
     internal suspend fun movies(config: ReceiverConfig): List<OpenWebifJson.ReceiverMovie> {
-        return OpenWebifJson.parseMovies(get(config, endpoints.movieList(config)))
+        return parsed { OpenWebifJson.parseMovies(get(config, endpoints.movieList(config))) }
     }
 
     suspend fun deleteMovie(config: ReceiverConfig, serviceReference: String) {
@@ -481,7 +482,7 @@ class OpenWebifApi @Inject constructor(
         val pngAll = probeGrab(config, GrabFormat.PNG, GrabMode.ALL)
         val jpgAll = probeGrab(config, GrabFormat.JPG, GrabMode.ALL)
         val streaming = probeStreamPort(config)
-        val capabilities = OpenWebifJson.parseAbout(
+        val capabilities = parsed { OpenWebifJson.parseAbout(
             body = aboutBody,
             https = config.useHttps,
             streamingAvailable = streaming,
@@ -492,7 +493,7 @@ class OpenWebifApi @Inject constructor(
                 all = pngAll || jpgAll,
                 authenticationRequired = authRequired || config.username.isNotEmpty(),
             ),
-        )
+        ) }
         return Probe(capabilities, null)
     }
 
@@ -576,6 +577,13 @@ class OpenWebifApi @Inject constructor(
         if (response.code !in 200..299) return null
         return response.bytes.toString(Charsets.UTF_8)
     }
+
+    /**
+     * Parsing (EPG, bouquets, services, timers, movies) runs on the default dispatcher: the
+     * callers include Main-bound view models and sessions, and an epgmulti/epgservice answer can
+     * be megabytes. The request inside the block still suspends on OkHttp, not on a thread.
+     */
+    private suspend fun <T> parsed(block: suspend () -> T): T = withContext(dispatchers.default) { block() }
 
     private suspend fun get(config: ReceiverConfig, url: String): String {
         val response = execute(config, url, accept = "application/json")

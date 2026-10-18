@@ -16,6 +16,7 @@ import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.ZoneId
 import javax.inject.Inject
+import kotlinx.coroutines.withContext
 import javax.inject.Singleton
 
 /**
@@ -29,6 +30,7 @@ class RoomGuideCache @Inject constructor(
     private val dao: CacheDao,
     private val settings: SyncSettings,
     private val aliases: IptvEpgAliases,
+    private val dispatchers: com.enigmacast.util.AppDispatchers,
 ) : GuideCacheReader {
     @Volatile private var lastSyncAskMs = 0L
 
@@ -40,7 +42,8 @@ class RoomGuideCache @Inject constructor(
         val today = DayWindow.of(now, ZoneId.systemDefault())
         val horizon = today.startSec + settings.values.value.epgDays * 24 * 3600L
         return when (GuideCachePolicy.decide(rows.size, fromSec, toSec, today.startSec, horizon)) {
-            GuideCachePolicy.Decision.CACHE -> rows.map(CacheMappers::event) + aliasEvents(receiver, bouquetReference, fromSec, toSec)
+            // A bouquet block is thousands of rows: mapped off the caller (often Main).
+            GuideCachePolicy.Decision.CACHE -> withContext(dispatchers.default) { rows.map(CacheMappers::event) } + aliasEvents(receiver, bouquetReference, fromSec, toSec)
             GuideCachePolicy.Decision.NETWORK_AND_SYNC -> { askSync(now); null }
             GuideCachePolicy.Decision.NETWORK -> null
         }
@@ -53,7 +56,7 @@ class RoomGuideCache @Inject constructor(
         val rows = runCatching { dao.serviceEvents(key(receiver), NowEvents.key(source), now / 1000) }.getOrNull()
         if (rows.isNullOrEmpty()) return null
         // Programmes that started earlier today are kept by the query (it filters on end time).
-        return rows.map(CacheMappers::event).map { it.copy(reference = serviceReference) }
+        return withContext(dispatchers.default) { rows.map { CacheMappers.event(it).copy(reference = serviceReference) } }
     }
 
     override suspend fun aliasEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent> {
@@ -61,10 +64,12 @@ class RoomGuideCache @Inject constructor(
         val map = aliases.map(rk)
         if (map.isEmpty()) return emptyList()
         val channels = runCatching { dao.channelsIn(rk, bouquetReference) }.getOrDefault(emptyList())
-        return channels.mapNotNull { c -> map[c.reference]?.let { c.reference to it } }.flatMap { (iptv, sat) ->
-            runCatching { dao.serviceEvents(rk, NowEvents.key(sat), fromSec) }.getOrDefault(emptyList())
-                .filter { it.beginSec < toSec }
-                .map { CacheMappers.event(it).copy(reference = iptv) }
+        return withContext(dispatchers.default) {
+            channels.mapNotNull { c -> map[c.reference]?.let { c.reference to it } }.flatMap { (iptv, sat) ->
+                runCatching { dao.serviceEvents(rk, NowEvents.key(sat), fromSec) }.getOrDefault(emptyList())
+                    .filter { it.beginSec < toSec }
+                    .map { CacheMappers.event(it).copy(reference = iptv) }
+            }
         }
     }
 
@@ -80,9 +85,7 @@ class RoomGuideCache @Inject constructor(
         val want = NowEvents.key(serviceReference)
         val direct = dao.bouquetHolding(rk, want)
         val row = direct ?: dao.channelsWithoutServiceKey(rk)
-            .filter { NowEvents.key(it.reference) == want }
-            .map { it.bouquetReference }
-            .toSet()
+            .let { rows -> withContext(dispatchers.default) { rows.filter { NowEvents.key(it.reference) == want }.map { it.bouquetReference }.toSet() } }
             .let { holding -> dao.bouquets(rk).firstOrNull { it.reference in holding } }
             ?.let { BouquetNameRow(it.name, it.reference) }
         row?.let { BouquetEntry(it.name, it.reference) }

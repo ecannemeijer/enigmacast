@@ -164,6 +164,8 @@ class LivePlaybackController @Inject constructor(
     /** True while live playback is paused for an app update download (see [holdForUpdate]). */
     val held: StateFlow<Boolean> = _held.asStateFlow()
     private val ownScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** Deleting an old pause buffer (up to its full size on disk) never runs on Main. */
+    private val diskScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Sent as `Authorization` on stream requests; read on the loader thread. */
     @Volatile
@@ -754,7 +756,11 @@ class LivePlaybackController @Inject constructor(
         pump = null
         store = null
         ending?.stop()
-        endingStore?.delete()
+        if (endingStore != null) {
+            // Closed now (wakes a waiting reader); the chunk files go in the background.
+            endingStore.close()
+            diskScope.launch { endingStore.delete() }
+        }
     }
 
     /** Receiver MPEG-TS: one pump owns the tuner socket and ExoPlayer reads the buffer. */
@@ -764,8 +770,10 @@ class LivePlaybackController @Inject constructor(
         val root = File(context.cacheDir, "timeshift")
         val created = TimeshiftStore(File(root, generation.toString()))
         store = created
-        root.listFiles()?.forEach { child ->
-            if (child.name != generation.toString()) child.deleteRecursively()
+        diskScope.launch {
+            root.listFiles()?.forEach { child ->
+                if (child.name != generation.toString()) child.deleteRecursively()
+            }
         }
         val started = TimeshiftPump(
             calls = clientFactory.streamCalls(),

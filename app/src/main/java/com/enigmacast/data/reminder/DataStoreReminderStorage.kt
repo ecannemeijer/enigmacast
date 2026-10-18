@@ -1,6 +1,8 @@
 package com.enigmacast.data.reminder
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -19,10 +21,12 @@ class DataStoreReminderStorage(context: Context) : ReminderStorage {
 
     override suspend fun load(): List<Reminder> {
         val raw = dataStore.data.first()[key] ?: return emptyList()
-        return runCatching { openWebifJson.decodeFromString<List<Reminder>>(raw) }.getOrDefault(emptyList())
+        // Parsed off the caller: the stores live in Main-bound singletons.
+        return withContext(Dispatchers.Default) { runCatching { openWebifJson.decodeFromString<List<Reminder>>(raw) }.getOrDefault(emptyList()) }
     }
 
     override suspend fun save(reminders: List<Reminder>) {
-        dataStore.edit { it[key] = openWebifJson.encodeToString(reminders) }
+        val text = withContext(Dispatchers.Default) { openWebifJson.encodeToString(reminders) }
+        dataStore.edit { it[key] = text }
     }
 }

@@ -32,7 +32,7 @@ class TvFallbackFinder @Inject constructor(
         val current = settings.current()
         if (current.iptvSource == IptvSourceMode.PLAYLIST || playlistSync.count() > 0) {
             val hits = playlistSync.search(query, IptvSearch.LIMIT).filter { it.section == XtreamSection.LIVE }
-            val best = ChannelMatch.best(name, hits) { it.name } ?: return null
+            val best = matchOffMain { ChannelMatch.best(name, hits) { it.name } } ?: return null
             val account = playlistStore.login.value.xtreamAccount()
             val url = best.url.ifBlank { account?.let { XtreamUrls.live(it, best.id) }.orEmpty() }
             if (url.isBlank()) return null
@@ -40,15 +40,20 @@ class TvFallbackFinder @Inject constructor(
         }
         val receiver = current.activeReceiver() ?: return null
         val account = (repository.cachedDetection(receiver.id) ?: repository.detect(receiver)).accounts.firstOrNull() ?: return null
-        val best = ChannelMatch.best(name, repository.liveStreams(account)) { it.name } ?: return null
+        val streams = repository.liveStreams(account)
+        val best = matchOffMain { ChannelMatch.best(name, streams) { it.name } } ?: return null
         return FallbackStream(best.name, best.url.ifBlank { XtreamUrls.live(account, best.id) }, null)
     }
 
     suspend fun satellite(name: String): FallbackStream? {
         val receiver = settings.current().activeReceiver() ?: return null
         val key = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
-        val best = ChannelMatch.best(name, cache.channels(key)) { it.name } ?: return null
+        val channels = cache.channels(key)
+        val best = matchOffMain { ChannelMatch.best(name, channels) { it.name } } ?: return null
         val target = targets.target(receiver, best.reference)
         return FallbackStream(best.name, target.url, target.authorization)
     }
+
+    /** Fuzzy name matching over every channel or stream: CPU work, not for the caller's (Main) thread. */
+    private suspend fun <T> matchOffMain(block: () -> T): T = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { block() }
 }

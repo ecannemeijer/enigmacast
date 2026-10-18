@@ -21,6 +21,9 @@ interface SecretStore {
 
     /** Stores [value]; null or empty removes the secret. */
     fun write(name: String, value: String?)
+
+    /** Decrypts every stored secret into memory ahead of use; call off the main thread. */
+    fun preload() {}
 }
 
 /**
@@ -36,18 +39,37 @@ class KeystoreSecretStore @Inject constructor(
     private val preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     private val lock = Any()
 
+    /**
+     * Decrypted values by name (null = nothing readable stored). Every settings emission used to
+     * open the Keystore once per receiver field, on whatever thread collected it (often Main).
+     * Memory only; [write] keeps it in step with the file.
+     */
+    private val plain = HashMap<String, String?>()
+    private var cachedKey: SecretKey? = null
+
     override fun read(name: String): String? = synchronized(lock) {
-        val stored = preferences.getString(name, null) ?: return null
-        runCatching { decrypt(stored) }.getOrElse { error ->
-            EnigmaLog.service("secret unreadable: ${error.javaClass.simpleName}")
-            null
+        if (plain.containsKey(name)) return plain[name]
+        val stored = preferences.getString(name, null)
+        val value = stored?.let {
+            runCatching { decrypt(it) }.getOrElse { error ->
+                EnigmaLog.service("secret unreadable: ${error.javaClass.simpleName}")
+                null
+            }
         }
+        plain[name] = value
+        value
     }
 
     override fun write(name: String, value: String?): Unit = synchronized(lock) {
         val editor = preferences.edit()
         if (value.isNullOrEmpty()) editor.remove(name) else editor.putString(name, encrypt(value))
         editor.apply()
+        plain[name] = value?.takeIf { it.isNotEmpty() }
+    }
+
+    override fun preload() {
+        val names = synchronized(lock) { preferences.all.keys.toList() }
+        names.forEach { read(it) }
     }
 
     private fun encrypt(value: String): String {
@@ -66,6 +88,11 @@ class KeystoreSecretStore @Inject constructor(
     }
 
     private fun key(): SecretKey {
+        cachedKey?.let { return it }
+        return loadKey().also { cachedKey = it }
+    }
+
+    private fun loadKey(): SecretKey {
         val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
         (keyStore.getKey(ALIAS, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)

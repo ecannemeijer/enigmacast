@@ -1,6 +1,8 @@
 package com.enigmacast.data.recording
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -24,10 +26,12 @@ class DataStoreRecordingStorage @Inject constructor(
 
     suspend fun load(): List<Recording> {
         val raw = dataStore.data.first()[key] ?: return emptyList()
-        return runCatching { openWebifJson.decodeFromString<List<Recording>>(raw) }.getOrDefault(emptyList())
+        // Parsed off the caller: the stores live in Main-bound singletons.
+        return withContext(Dispatchers.Default) { runCatching { openWebifJson.decodeFromString<List<Recording>>(raw) }.getOrDefault(emptyList()) }
     }
 
     suspend fun save(recordings: List<Recording>) {
-        dataStore.edit { it[key] = openWebifJson.encodeToString(recordings) }
+        val text = withContext(Dispatchers.Default) { openWebifJson.encodeToString(recordings) }
+        dataStore.edit { it[key] = text }
     }
 }

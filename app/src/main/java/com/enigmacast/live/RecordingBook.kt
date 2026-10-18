@@ -162,7 +162,8 @@ class RecordingBook @Inject constructor(
         val item = _items.value.firstOrNull { it.id == id } ?: return
         if (item.place == RecordingPlace.TV) {
             context.startService(RecordingCaptureService.stopIntent(context, id))
-            fileFor(item).delete()
+            // A finished capture can be gigabytes: never deleted on Main.
+            withContext(Dispatchers.IO) { fileFor(item).delete() }
         } else {
             val receiver = receiverFor(item)
             if (receiver != null) {
@@ -190,8 +191,7 @@ class RecordingBook @Inject constructor(
             item = _items.value.firstOrNull { it.id == id } ?: return false
         }
         if (item.place == RecordingPlace.TV) {
-            val file = fileFor(item)
-            if (!file.exists() || file.length() < MIN_PLAY_BYTES) return false
+            val file = withContext(Dispatchers.IO) { fileFor(item).takeIf { it.exists() && it.length() >= MIN_PLAY_BYTES } } ?: return false
             _nowPlaying.value = item
             playback.playRecording(android.net.Uri.fromFile(file).toString(), null, durationMs(item), startMs)
             return true
@@ -309,7 +309,7 @@ class RecordingBook @Inject constructor(
 
     suspend fun markFailed(id: String, reason: String) {
         update(id) { it.copy(status = RecordingStatus.FAILED, error = reason) }
-        _items.value.firstOrNull { it.id == id }?.let { fileFor(it).delete() }
+        _items.value.firstOrNull { it.id == id }?.let { withContext(Dispatchers.IO) { fileFor(it).delete() } }
     }
 
     /** The capture stopped on purpose. The row and the file stay in My Items. */
@@ -319,7 +319,7 @@ class RecordingBook @Inject constructor(
             EnigmaLog.service("recording missing id=$id bytes=$bytes")
             return
         }
-        val onDisk = if (item.place == RecordingPlace.TV) fileFor(item).takeIf { it.exists() }?.length() ?: 0L else 0L
+        val onDisk = if (item.place == RecordingPlace.TV) withContext(Dispatchers.IO) { fileFor(item).takeIf { it.exists() }?.length() ?: 0L } else 0L
         val size = maxOf(bytes, onDisk)
         if (item.status != RecordingStatus.RECORDING && item.status != RecordingStatus.SCHEDULED) {
             EnigmaLog.service("recording kept ${item.title} already ${item.status} bytes=$size")

@@ -1,5 +1,7 @@
 package com.enigmacast.live
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.recording.Recording
@@ -37,7 +39,11 @@ class ProgrammeSearch @Inject constructor(
     private val gate = Mutex()
     private var catalog: Catalog? = null
 
-    suspend fun search(query: String, recordings: List<Recording>, nowSec: Long): SearchResults {
+    /** Scans every cached programme and channel name: on the default dispatcher, not the caller's (Main). */
+    suspend fun search(query: String, recordings: List<Recording>, nowSec: Long): SearchResults =
+        withContext(Dispatchers.Default) { searchOffMain(query, recordings, nowSec) }
+
+    private suspend fun searchOffMain(query: String, recordings: List<Recording>, nowSec: Long): SearchResults {
         val parsed = SearchQuery.parse(query, nowSec)
         if (!parsed.isSearchable) return SearchResults()
         val receiver = settings.current().activeReceiver() ?: return SearchResults()
@@ -64,7 +70,9 @@ class ProgrammeSearch @Inject constructor(
     }
 
     /** The bouquet and its channels that contain [serviceReference], or null when none does. */
-    suspend fun placeOf(serviceReference: String): ChannelPlace? {
+    suspend fun placeOf(serviceReference: String): ChannelPlace? = withContext(Dispatchers.Default) { placeOfOffMain(serviceReference) }
+
+    private suspend fun placeOfOffMain(serviceReference: String): ChannelPlace? {
         if (serviceReference.isBlank()) return null
         val receiver = settings.current().activeReceiver()
         val index = receiver?.let { runCatching { cache.index(it, System.currentTimeMillis()) }.getOrNull() }

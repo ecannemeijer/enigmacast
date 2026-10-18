@@ -50,7 +50,9 @@ class OsdDiagnosticsViewModel @Inject constructor(
             _result.value = try {
                 val image = api.grab(config, format, mode)
                 val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size, bounds)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    android.graphics.BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size, bounds)
+                }
                 GrabDiagnostic(
                     label = label,
                     status = image.httpStatus.toString(),
