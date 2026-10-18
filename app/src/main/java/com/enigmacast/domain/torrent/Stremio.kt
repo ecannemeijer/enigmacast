@@ -163,12 +163,30 @@ object StremioStreams {
     fun sorted(streams: List<TorrentStream>): List<TorrentStream> =
         streams.sortedWith(compareByDescending<TorrentStream> { it.resolution }.thenByDescending { it.seeders ?: if (it.url != null) Int.MAX_VALUE else -1 })
 
-    /** magnet:?xt=urn:btih:<hash>&tr=… with the addon's trackers. */
+    /** Well-known public trackers, added after the addon's own (more peers sooner). */
+    val PUBLIC_TRACKERS = listOf(
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://open.demonii.com:1337/announce",
+        "udp://open.stealth.si:80/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://exodus.desync.com:6969/announce",
+        "udp://tracker.openbittorrent.com:6969/announce",
+        "udp://tracker.dler.org:6969/announce",
+        "udp://explodie.org:6969/announce",
+        "udp://tracker.moeking.me:6969/announce",
+        "udp://opentracker.i2p.rocks:6969/announce",
+        "udp://tracker.tiny-vps.com:6969/announce",
+        "udp://tracker.theoks.net:6969/announce",
+        "https://tracker.tamersunion.org:443/announce",
+        "udp://tracker1.bt.moack.co.kr:80/announce",
+    )
+
+    /** magnet:?xt=urn:btih:<hash>&tr=… with the addon's trackers, then the public ones. */
     fun magnet(stream: TorrentStream): String? {
         val hash = stream.infoHash ?: return null
         return buildString {
             append("magnet:?xt=urn:btih:").append(hash)
-            stream.trackers.distinct().take(20).forEach { append("&tr=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+            (stream.trackers + PUBLIC_TRACKERS).distinct().take(40).forEach { append("&tr=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
         }
     }
 

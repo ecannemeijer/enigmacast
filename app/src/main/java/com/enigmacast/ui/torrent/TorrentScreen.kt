@@ -1,9 +1,6 @@
 package com.enigmacast.ui.torrent
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -126,6 +123,18 @@ fun TorrentScreen(
         model.info?.let { i -> if (model.playing == null && model.overlay !is TorrentOverlay.Loading) TorrentInfoPage(i, model) }
         when (val o = model.overlay) {
             is TorrentOverlay.Streams -> StreamsDialog(o, model)
+            is TorrentOverlay.ResumeSource -> TvChoiceDialog(
+                title = stringResource(R.string.resume_title),
+                message = listOf(o.title.title, o.subtitle, StremioStreams.release(o.stream)).filter { it.isNotBlank() }.joinToString("\n"),
+                choices = listOf(
+                    stringResource(R.string.resume_from, com.enigmacast.domain.resume.ResumePolicy.clock(o.atMs)),
+                    stringResource(R.string.resume_start_over),
+                    stringResource(R.string.torrent_resume_other_source),
+                ),
+                onChoose = model::answerResumeSource,
+                onDismiss = model::dismissOverlay,
+                stacked = true,
+            )
             is TorrentOverlay.Loading -> if (dash != null) FullScreenLayer(onBack = model::cancelLoading) { LoadingPage(o, model) } else LoadingPage(o, model)
             TorrentOverlay.None -> Unit
         }
@@ -154,7 +163,39 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
     val searchFocus = remember { FocusRequester() }
     val fieldFocus = remember { FocusRequester() }
     val firstCard = remember { FocusRequester() }
+    val genreFocus = remember { FocusRequester() }
+    val sortFocus = remember { FocusRequester() }
+    var picker by remember { mutableStateOf<FilterPicker?>(null) }
     val grid = rememberLazyGridState()
+    // Closing a filter list: focus back on its chip.
+    var refocus by remember { mutableStateOf<FilterPicker?>(null) }
+    LaunchedEffect(refocus) {
+        val which = refocus ?: return@LaunchedEffect
+        (if (which == FilterPicker.GENRE) genreFocus else sortFocus).requestWhenReady()
+        refocus = null
+    }
+    picker?.let { which ->
+        val close = { picker = null; refocus = which }
+        when (which) {
+            FilterPicker.GENRE -> FilterDialog(
+                title = stringResource(R.string.torrent_genre),
+                options = listOf(stringResource(R.string.torrent_genre_all)) + model.genres.map { it.name },
+                selected = model.genre?.let { g -> model.genres.indexOfFirst { it.id == g.id } + 1 } ?: 0,
+                onChoose = { i -> model.selectGenre(model.genres.getOrNull(i - 1)); close() },
+                onDismiss = close,
+            )
+            FilterPicker.SORT -> {
+                val sorts = com.enigmacast.domain.torrent.TorrentSort.entries
+                FilterDialog(
+                    title = stringResource(R.string.torrent_sort),
+                    options = sorts.map { stringResource(sortLabel(it)) },
+                    selected = sorts.indexOf(model.sort),
+                    onChoose = { i -> model.selectSort(sorts[i]); close() },
+                    onDismiss = close,
+                )
+            }
+        }
+    }
     // In the dashboard only an open search takes Back; the dashboard sends the rest to the menu.
     BackHandler(enabled = dash == null || model.searchOpen) {
         when {
@@ -220,6 +261,19 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
                 selected = model.kind == TorrentKind.TV,
                 onClick = { model.selectKind(TorrentKind.TV) },
                 modifier = Modifier.focusProperties { up = FocusRequester.Cancel },
+            )
+            // Filters of the grid (a search ignores them): OK opens a list on the right.
+            ChoiceChip(
+                label = stringResource(R.string.torrent_filter_genre, model.genre?.name ?: stringResource(R.string.torrent_genre_all)),
+                selected = model.genre != null,
+                onClick = { picker = FilterPicker.GENRE },
+                modifier = Modifier.padding(start = 12.dp).focusRequester(genreFocus).focusProperties { up = FocusRequester.Cancel },
+            )
+            ChoiceChip(
+                label = stringResource(R.string.torrent_filter_sort, stringResource(sortLabel(model.sort))),
+                selected = model.sort != com.enigmacast.domain.torrent.TorrentSort.POPULAR,
+                onClick = { picker = FilterPicker.SORT },
+                modifier = Modifier.focusRequester(sortFocus).focusProperties { up = FocusRequester.Cancel },
             )
             if (model.loading) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
             Spacer(Modifier.weight(1f))
@@ -294,6 +348,45 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
 }
 
 private const val GRID_GAP_DP = 16f
+
+private enum class FilterPicker { GENRE, SORT }
+
+private fun sortLabel(s: com.enigmacast.domain.torrent.TorrentSort) = when (s) {
+    com.enigmacast.domain.torrent.TorrentSort.POPULAR -> R.string.torrent_sort_popular
+    com.enigmacast.domain.torrent.TorrentSort.YEAR -> R.string.torrent_sort_year
+    com.enigmacast.domain.torrent.TorrentSort.SCORE -> R.string.torrent_sort_score
+}
+
+/** A filter's options in the side panel; focus starts on the current one, Back closes. */
+@Composable
+private fun FilterDialog(title: String, options: List<String>, selected: Int, onChoose: (Int) -> Unit, onDismiss: () -> Unit) {
+    val start = remember { FocusRequester() }
+    val list = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (selected - 3).coerceAtLeast(0))
+    LaunchedEffect(Unit) { start.requestWhenReady() }
+    DialogFrame(onDismiss) {
+        Text(title, color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong)
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            itemsIndexed(options) { i, label ->
+                CompactListRow(
+                    onClick = { onChoose(i) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .then(if (i == selected.coerceIn(0, options.lastIndex)) Modifier.focusRequester(start) else Modifier)
+                        .focusProperties {
+                            left = FocusRequester.Cancel; right = FocusRequester.Cancel
+                            if (i == 0) up = FocusRequester.Cancel
+                            if (i == options.lastIndex) down = FocusRequester.Cancel
+                        },
+                ) {
+                    Text(
+                        (if (i == selected) "✓  " else "    ") + label,
+                        color = if (i == selected) EnigmaColors.Accent else EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
 
 /** Where the Torrent page sits in the dashboard: its menu item, its focus entry and the enter count. */
 class TorrentDash(
@@ -488,13 +581,10 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
     val holder = remember { FocusRequester() }
     LaunchedEffect(Unit) { holder.requestWhenReady() }
     BackHandler { model.cancelLoading() }
-    // Stremio-style pulse: logo and backdrop fade between 0.3 and 1. Read only in graphicsLayer
-    // (draw phase), so progress updates never recompose or restart it.
-    val pulse = rememberLoadingPulse()
     Box(Modifier.fillMaxSize().background(Color.Black).focusRequester(holder).focusable(), contentAlignment = Alignment.Center) {
         o.title.backdrop?.let {
-            // Dimmer than the logo so it stays readable: 0.15 .. 0.5.
-            AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = pulse.value * 0.5f })
+            // Static and dim, so the logo and the buffer line stay readable.
+            AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.3f })
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             var logoFailed by remember(o.logo) { mutableStateOf(false) }
@@ -504,13 +594,13 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
                     contentDescription = o.title.title,
                     contentScale = ContentScale.Fit,
                     onError = { logoFailed = true },
-                    modifier = Modifier.fillMaxWidth(0.45f).height(170.dp).graphicsLayer { alpha = pulse.value },
+                    modifier = Modifier.fillMaxWidth(0.45f).height(170.dp),
                 )
             } else {
                 Text(
                     o.title.title,
                     color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                    modifier = Modifier.graphicsLayer { alpha = pulse.value }.padding(horizontal = 48.dp),
+                    modifier = Modifier.padding(horizontal = 48.dp),
                 )
             }
             if (o.subtitle.isNotBlank()) Text(o.subtitle, color = Color.White.copy(alpha = 0.7f), fontSize = 16.sp)
@@ -521,29 +611,6 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp),
         )
     }
-}
-
-/** Animations at normal speed, whatever the system animator scale is. */
-private object FullMotion : androidx.compose.ui.MotionDurationScale {
-    override val scaleFactor: Float get() = 1f
-}
-
-/**
- * 1 → 0.3 → 1 … every 1.3 s, ease in-out. Runs at full speed even when the device's animator
- * scale is 0 or slowed (some TV boxes and emulators), where an infinite transition would stand still.
- */
-@Composable
-private fun rememberLoadingPulse(): androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
-    val alpha = remember { androidx.compose.animation.core.Animatable(1f) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.withContext(FullMotion) {
-            alpha.animateTo(
-                0.3f,
-                infiniteRepeatable(tween(1300, easing = androidx.compose.animation.core.EaseInOut), RepeatMode.Reverse),
-            )
-        }
-    }
-    return alpha
 }
 
 @Composable

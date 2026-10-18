@@ -1425,4 +1425,13 @@ Profile: %2$s</string>
     <string name="scraper_torrentio_desc">Uses Torrentio sorted by seeders. A custom manifest URL below takes priority.</string>
     <string name="scraper_custom_overrides">Custom URL in use (overrides Torrentio)</string>
     <string name="scraper_using_torrentio" translatable="false">Torrentio</string>
+    <string name="torrent_filter_genre">Genre: %1$s</string>
+    <string name="torrent_genre_all">All</string>
+    <string name="torrent_genre">Genre</string>
+    <string name="torrent_filter_sort">Sort: %1$s</string>
+    <string name="torrent_sort">Sort by</string>
+    <string name="torrent_sort_popular">Popular</string>
+    <string name="torrent_sort_year">Year (newest)</string>
+    <string name="torrent_sort_score">TMDB score</string>
+    <string name="torrent_resume_other_source">Choose another source</string>
 </resources>

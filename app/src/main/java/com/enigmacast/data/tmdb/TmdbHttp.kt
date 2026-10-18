@@ -73,6 +73,14 @@ class TmdbHttp @Inject constructor(
     suspend fun popular(tv: Boolean, page: Int, language: String): String? =
         get(if (tv) "/tv/popular" else "/movie/popular", listOf("language" to language, "page" to page.toString()))
 
+    /** Torrent grid filter: /discover/movie or /discover/tv with [params] (genre, sort_by…). */
+    suspend fun discover(tv: Boolean, params: List<Pair<String, String>>): String? =
+        get(if (tv) "/discover/tv" else "/discover/movie", params)
+
+    /** The genre names in [language]. */
+    suspend fun genres(tv: Boolean, language: String): String? =
+        get(if (tv) "/genre/tv/list" else "/genre/movie/list", listOf("language" to language))
+
     suspend fun searchPage(tv: Boolean, query: String, page: Int, language: String): String? =
         get(if (tv) "/search/tv" else "/search/movie", listOf("query" to query, "language" to language, "page" to page.toString(), "include_adult" to "false"))
 

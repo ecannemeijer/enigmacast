@@ -1390,4 +1390,13 @@ Profil : %2$s</string>
     <string name="scraper_torrentio">Activer avec Torrentio</string>
     <string name="scraper_torrentio_desc">Utilise Torrentio trié par seeders. Une URL de manifeste personnalisée ci-dessous est prioritaire.</string>
     <string name="scraper_custom_overrides">URL personnalisée utilisée (prioritaire sur Torrentio)</string>
+    <string name="torrent_filter_genre">Genre : %1$s</string>
+    <string name="torrent_genre_all">Tous</string>
+    <string name="torrent_genre">Genre</string>
+    <string name="torrent_filter_sort">Tri : %1$s</string>
+    <string name="torrent_sort">Trier par</string>
+    <string name="torrent_sort_popular">Populaires</string>
+    <string name="torrent_sort_year">Année (plus récents)</string>
+    <string name="torrent_sort_score">Note TMDB</string>
+    <string name="torrent_resume_other_source">Choisir une autre source</string>
 </resources>

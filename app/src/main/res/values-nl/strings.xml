@@ -1416,4 +1416,13 @@ Profiel: %2$s</string>
     <string name="scraper_torrentio">Inschakelen met Torrentio</string>
     <string name="scraper_torrentio_desc">Gebruikt Torrentio gesorteerd op seeders. Een eigen manifest-URL hieronder gaat voor.</string>
     <string name="scraper_custom_overrides">Eigen URL in gebruik (gaat voor Torrentio)</string>
+    <string name="torrent_filter_genre">Genre: %1$s</string>
+    <string name="torrent_genre_all">Alle</string>
+    <string name="torrent_genre">Genre</string>
+    <string name="torrent_filter_sort">Sorteren: %1$s</string>
+    <string name="torrent_sort">Sorteren op</string>
+    <string name="torrent_sort_popular">Populair</string>
+    <string name="torrent_sort_year">Jaar (nieuwste)</string>
+    <string name="torrent_sort_score">TMDB-score</string>
+    <string name="torrent_resume_other_source">Andere bron kiezen</string>
 </resources>

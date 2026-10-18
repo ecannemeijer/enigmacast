@@ -1390,4 +1390,13 @@ Profilo: %2$s</string>
     <string name="scraper_torrentio">Attiva con Torrentio</string>
     <string name="scraper_torrentio_desc">Usa Torrentio ordinato per seeder. Un URL manifest personalizzato qui sotto ha la precedenza.</string>
     <string name="scraper_custom_overrides">URL personalizzato in uso (ha la precedenza su Torrentio)</string>
+    <string name="torrent_filter_genre">Genere: %1$s</string>
+    <string name="torrent_genre_all">Tutti</string>
+    <string name="torrent_genre">Genere</string>
+    <string name="torrent_filter_sort">Ordina: %1$s</string>
+    <string name="torrent_sort">Ordina per</string>
+    <string name="torrent_sort_popular">Popolari</string>
+    <string name="torrent_sort_year">Anno (più recenti)</string>
+    <string name="torrent_sort_score">Voto TMDB</string>
+    <string name="torrent_resume_other_source">Scegli un\'altra fonte</string>
 </resources>

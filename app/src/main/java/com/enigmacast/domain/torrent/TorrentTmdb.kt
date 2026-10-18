@@ -28,7 +28,50 @@ data class TmdbSeason(val number: Int, val name: String, val episodes: Int)
 data class TmdbEpisode(val number: Int, val name: String, val still: String?, val overview: String)
 
 /** TMDB lists for the Torrent page: popular / search pages, IMDb id, seasons and episodes. */
+/** Order of the Torrent grid. POPULAR without a genre is TMDB's /popular list; the rest is /discover. */
+enum class TorrentSort { POPULAR, YEAR, SCORE }
+
+data class TmdbGenre(val id: Int, val name: String)
+
 object TorrentTmdb {
+    /** Fewer votes than this and a 10/10 from three people would top the "score" order. */
+    const val SCORE_MIN_VOTES = 200
+
+    /** /discover is needed for a genre or any order other than popular. */
+    fun needsDiscover(genre: Int?, sort: TorrentSort) = genre != null || sort != TorrentSort.POPULAR
+
+    /** Query of /discover/movie or /discover/tv for [genre] (null = all) in [sort] order. */
+    fun discoverParams(kind: TorrentKind, genre: Int?, sort: TorrentSort, page: Int, language: String): List<Pair<String, String>> = buildList {
+        add("language" to language)
+        add("page" to page.toString())
+        add("include_adult" to "false")
+        add(
+            "sort_by" to when (sort) {
+                TorrentSort.POPULAR -> "popularity.desc"
+                TorrentSort.YEAR -> if (kind == TorrentKind.MOVIE) "primary_release_date.desc" else "first_air_date.desc"
+                TorrentSort.SCORE -> "vote_average.desc"
+            },
+        )
+        genre?.let { add("with_genres" to it.toString()) }
+        when (sort) {
+            TorrentSort.SCORE -> add("vote_count.gte" to SCORE_MIN_VOTES.toString())
+            // Newest first, but not announced titles years ahead (nothing to stream yet) or empty entries.
+            TorrentSort.YEAR -> {
+                add((if (kind == TorrentKind.MOVIE) "primary_release_date.lte" else "first_air_date.lte") to java.time.LocalDate.now().toString())
+                add("vote_count.gte" to "10")
+            }
+            TorrentSort.POPULAR -> Unit
+        }
+    }
+
+    /** {"genres":[{"id":28,"name":"Action"}…]} of /genre/movie|tv/list, in TMDB's language. */
+    fun parseGenres(body: String?): List<TmdbGenre> =
+        (obj(body)?.get("genres") as? JsonArray).orEmpty().mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            val id = o.i("id") ?: return@mapNotNull null
+            TmdbGenre(id, o.s("name") ?: return@mapNotNull null)
+        }.sortedBy { it.name.lowercase() }
+
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private fun obj(body: String?) = body?.let { runCatching { json.parseToJsonElement(it) as? JsonObject }.getOrNull() }
     private fun JsonObject.s(k: String) = (this[k] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() && it != "null" }

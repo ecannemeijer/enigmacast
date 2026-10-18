@@ -24,7 +24,10 @@ import com.enigmacast.data.torrent.ScraperStatus
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.domain.resume.ResumePolicy
+import com.enigmacast.domain.torrent.LastStream
 import com.enigmacast.domain.torrent.TmdbEpisode
+import com.enigmacast.domain.torrent.TmdbGenre
+import com.enigmacast.domain.torrent.TorrentSort
 import com.enigmacast.domain.torrent.TmdbSeason
 import com.enigmacast.domain.torrent.TmdbTitle
 import com.enigmacast.domain.torrent.TorrentKind
@@ -78,6 +81,8 @@ sealed interface TorrentOverlay {
     data class Streams(val title: TmdbTitle, val subtitle: String, val streams: List<TorrentStream>?, val error: Boolean, val resumeKey: String) : TorrentOverlay
     /** [logo]: the TMDB title logo (PNG), shown instead of the title text when there is one. */
     data class Loading(val title: TmdbTitle, val subtitle: String, val logo: String? = null) : TorrentOverlay
+    /** Play on a title with a saved place and a remembered stream: resume it, start over, or pick another source. */
+    data class ResumeSource(val title: TmdbTitle, val subtitle: String, val atMs: Long, val stream: TorrentStream) : TorrentOverlay
 }
 
 @HiltViewModel
@@ -103,6 +108,16 @@ class TorrentViewModel @Inject constructor(
         private set
     var searchOpen by mutableStateOf(false)
         private set
+    /** Grid filters (not applied to a search): genre id or null for all, and the order. */
+    var genre by mutableStateOf<TmdbGenre?>(null)
+        private set
+    var sort by mutableStateOf(TorrentSort.POPULAR)
+        private set
+    /** The current kind's genres, or empty while loading / without TMDB. */
+    var genres by mutableStateOf<List<TmdbGenre>>(emptyList())
+        private set
+    private val genreCache = HashMap<TorrentKind, List<TmdbGenre>>()
+    private var genreJob: Job? = null
     /** Bumped when a new list replaces the grid (focus goes to its first card). */
     var listToken by mutableIntStateOf(0)
         private set
@@ -119,12 +134,39 @@ class TorrentViewModel @Inject constructor(
 
     val scraperReady get() = scraper.status.value is ScraperStatus.Valid
 
-    init { reload() }
+    init { reload(); loadGenres() }
 
     fun selectKind(k: TorrentKind) {
         if (k == kind) return
         kind = k
+        // Movie and series genres are different lists (ids too).
+        genre = null
+        loadGenres()
         reload()
+    }
+
+    fun selectGenre(g: TmdbGenre?) {
+        if (g == genre) return
+        genre = g
+        reload()
+    }
+
+    fun selectSort(s: TorrentSort) {
+        if (s == sort) return
+        sort = s
+        reload()
+    }
+
+    private fun loadGenres() {
+        val k = kind
+        genreCache[k]?.let { genres = it; return }
+        genres = emptyList()
+        genreJob?.cancel()
+        genreJob = viewModelScope.launch {
+            val list = TorrentTmdb.parseGenres(tmdb.genres(k == TorrentKind.TV, language))
+            if (list.isNotEmpty()) genreCache[k] = list
+            if (kind == k) genres = list
+        }
     }
 
     /** Bumped on every press of the search icon: the field (re)starts typing with the keyboard up. */
@@ -166,7 +208,13 @@ class TorrentViewModel @Inject constructor(
         val q = query.trim()
         loading = true
         listJob = viewModelScope.launch {
-            val body = if (q.length >= 2) tmdb.searchPage(k == TorrentKind.TV, q, next, language) else tmdb.popular(k == TorrentKind.TV, next, language)
+            val g = genre?.id
+            val s = sort
+            val body = when {
+                q.length >= 2 -> tmdb.searchPage(k == TorrentKind.TV, q, next, language)
+                TorrentTmdb.needsDiscover(g, s) -> tmdb.discover(k == TorrentKind.TV, TorrentTmdb.discoverParams(k, g, s, next, language))
+                else -> tmdb.popular(k == TorrentKind.TV, next, language)
+            }
             val result = TorrentTmdb.parsePage(body, k)
             page = next
             totalPages = result.totalPages
@@ -269,7 +317,38 @@ class TorrentViewModel @Inject constructor(
         streamOriginalTitle = info?.takeIf { it.title.key == title.key }?.film?.movie?.originalTitle.orEmpty()
         streamLogo = info?.takeIf { it.title.key == title.key }?.film?.movie?.logoPath?.let { TmdbJson.image(it, "w500") }
         val subtitle = if (season != null) "S$season E$episode" + (episodeName?.let { " · $it" } ?: "") else ""
-        // The streams dialog opens at once (loading) while the IMDb id is looked up.
+        seekOnStart = null
+        // A saved place and the stream it was played with: offer that stream first.
+        val row = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(title, season, episode, episodeName, 0, 0, 0)
+        val saved = library.resume(row.kind, row.id)?.positionMs ?: 0L
+        val remembered = lastStreams.getString(LastStream.key(row.kind, row.id), null)?.let(LastStream::decode)
+        if (remembered != null && saved >= ResumePolicy.MIN_RESUME_MS) {
+            overlay = TorrentOverlay.ResumeSource(title, subtitle, saved, remembered)
+            return
+        }
+        openStreamList(title, season, episode, subtitle)
+    }
+
+    /** The answer on the resume-source dialog: 0 resume, 1 start over, 2 another source. */
+    fun answerResumeSource(choice: Int) {
+        val o = overlay as? TorrentOverlay.ResumeSource ?: return
+        when (choice) {
+            0 -> { seekOnStart = o.atMs; startStream(o.title, o.subtitle, o.stream, null, "") }
+            1 -> {
+                resumeRowFor(o.title)?.let { library.clearResume(it.kind, it.id) }
+                seekOnStart = null
+                startStream(o.title, o.subtitle, o.stream, null, "")
+            }
+            else -> { seekOnStart = o.atMs; openStreamList(o.title, streamSeason, streamEpisode, o.subtitle) }
+        }
+    }
+
+    private fun resumeRowFor(title: TmdbTitle) =
+        com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(title, streamSeason, streamEpisode, streamEpisodeName, 0, 0, 0)
+
+    /** The streams of a title (the dialog opens at once, loading, while the IMDb id is looked up). */
+    private fun openStreamList(title: TmdbTitle, season: Int?, episode: Int?, subtitle: String) {
+        stepJob?.cancel()
         overlay = TorrentOverlay.Streams(title, subtitle, null, false, "")
         stepJob = viewModelScope.launch {
             val imdb = TorrentTmdb.parseImdb(tmdb.externalIds(title.kind == TorrentKind.TV, title.id))
@@ -317,6 +396,10 @@ class TorrentViewModel @Inject constructor(
     private val audioSync = com.enigmacast.playback.AudioSyncOffsets()
     private val subtitleSync = com.enigmacast.playback.SubtitleSyncOffset()
     private val resumes = context.getSharedPreferences("torrent_resume", Context.MODE_PRIVATE)
+    /** Last stream per title/episode (info hash, file index, trackers; no links, no keys). Private to the app. */
+    private val lastStreams = context.getSharedPreferences("torrent_last_stream", Context.MODE_PRIVATE)
+    /** Set by Resume / another source: the player seeks here when ready instead of asking. */
+    private var seekOnStart: Long? = null
 
     // ---- Subtitles: the IPTV player's SubSource flow (XtreamViewModel) ----
     var cues by mutableStateOf<List<androidx.media3.common.text.Cue>>(emptyList())
@@ -343,8 +426,18 @@ class TorrentViewModel @Inject constructor(
     /** OK on a stream: direct (debrid/http) links play at once, torrents go through the loading page. */
     fun chooseStream(stream: TorrentStream) {
         val o = overlay as? TorrentOverlay.Streams ?: return
+        startStream(o.title, o.subtitle, stream, o.streams, o.resumeKey)
+    }
+
+    /**
+     * Plays [stream]. [streams] is the list it was picked from (null for the remembered stream:
+     * when that fails, the scraper's list opens instead).
+     */
+    private fun startStream(title: TmdbTitle, subtitle: String, stream: TorrentStream, streams: List<TorrentStream>?, legacyKey: String) {
+        val o = TorrentOverlay.Streams(title, subtitle, streams, false, legacyKey)
         resumeKey = o.resumeKey
         resumeTarget = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(o.title, streamSeason, streamEpisode, streamEpisodeName, 0, 0, 0)
+        val rememberKey = resumeTarget?.let { LastStream.key(it.kind, it.id) }
         // SubSource: TMDB title and year, season/episode, and the file name for the release.
         subtitleTarget = TorrentSubtitleTarget(
             title = o.title.title,
@@ -366,12 +459,26 @@ class TorrentViewModel @Inject constructor(
             TorrentStreamingService.start(context)
             val local = runCatching { engine.open(stream) }
             if (overlay !is TorrentOverlay.Loading) return@launch
-            local.onSuccess { overlay = TorrentOverlay.None; play(it, o.title.title) }
+            local.onSuccess {
+                // Remembered for the next resume of this title/episode (torrents only, never a link).
+                rememberKey?.let { k -> LastStream.encode(stream)?.let { v -> lastStreams.edit().putString(k, v).apply() } }
+                overlay = TorrentOverlay.None
+                play(it, o.title.title)
+            }
                 .onFailure {
                     if (it is kotlinx.coroutines.CancellationException) return@onFailure
                     TorrentStreamingService.stop(context)
-                    overlay = TorrentOverlay.Streams(o.title, o.subtitle, o.streams, false, o.resumeKey)
-                    message = if (it is com.enigmacast.torrent.TorrentUnavailableException) "engine:${it.abi}" else "torrent"
+                    if (it is com.enigmacast.torrent.TorrentUnavailableException) {
+                        overlay = TorrentOverlay.Streams(o.title, o.subtitle, o.streams, false, o.resumeKey)
+                        message = "engine:${it.abi}"
+                    } else if (o.streams == null) {
+                        // The remembered stream is gone: the scraper's list, still resuming at the saved place.
+                        rememberKey?.let { k -> lastStreams.edit().remove(k).apply() }
+                        openStreamList(o.title, streamSeason, streamEpisode, o.subtitle)
+                    } else {
+                        overlay = o
+                        message = "torrent"
+                    }
                 }
         }
         viewModelScope.launch {
@@ -469,7 +576,9 @@ class TorrentViewModel @Inject constructor(
                     .setPreferredTextLanguage(null)
                     .setSelectUndeterminedTextLanguage(playbackSubtitles)
                     .build()
-                setMediaItem(mediaItem(url, null))
+                // Resume / another source: straight to the saved place, no question.
+                val start = seekOnStart?.takeIf { it >= ResumePolicy.MIN_RESUME_MS }
+                if (start != null) setMediaItem(mediaItem(url, null), start) else setMediaItem(mediaItem(url, null))
                 prepare()
                 playWhenReady = true
             }
@@ -482,7 +591,7 @@ class TorrentViewModel @Inject constructor(
                 delay(500)
                 val p = player ?: break
                 playerState = playerState.copy(positionMs = p.currentPosition, durationMs = p.duration.coerceAtLeast(0))
-                if (++n % 10 == 0) { saveResume(); engine.refreshStats() }
+                if (++n % 10 == 0) { saveResume(); engine.refreshStats(); engine.setDuration(p.duration) }
             }
         }
     }
@@ -490,6 +599,8 @@ class TorrentViewModel @Inject constructor(
     private fun offerResume() {
         if (resumeOffered) return
         resumeOffered = true
+        // Already started at the saved place (Resume / another source).
+        if (seekOnStart != null) { seekOnStart = null; return }
         val target = resumeTarget
         // The user database first; positions saved before Continue watching existed are keyed by IMDb id.
         val saved = target?.let { library.resume(it.kind, it.id)?.positionMs }
