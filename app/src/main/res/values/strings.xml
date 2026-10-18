@@ -1419,4 +1419,5 @@ Profile: %2$s</string>
     <string name="scraper_error_manifest">This is not a valid Stremio manifest.</string>
     <string name="scraper_error_stream">This addon does not offer streams.</string>
     <string name="scraper_error_types">This addon offers no movies or series.</string>
+    <string name="torrent_error_engine">The torrent engine is not available on this device (ABI %1$s).</string>
 </resources>

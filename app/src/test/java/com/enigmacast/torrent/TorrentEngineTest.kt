@@ -53,3 +53,18 @@ class TorrentEngineTest {
         assertNull(TorrentTmdb.nextPage(loaded = 5, total = 5, focusedIndex = 99, itemCount = 100, loading = false))
     }
 }
+
+class TorrentNativeTest {
+    @Test
+    fun namesTheAbi() {
+        assertEquals("arm64-v8a", TorrentNative.abiOfLibDir("arm64"))
+        assertEquals("armeabi-v7a", TorrentNative.abiOfLibDir("arm"))
+        assertEquals("x86", TorrentNative.abiOfLibDir("x86"))
+        assertNull(TorrentNative.abiOfLibDir("mips"))
+        assertEquals("armeabi-v7a", TorrentNative.abiOfEntry("lib/armeabi-v7a/libjlibtorrent-2.0.12.9.so"))
+        assertNull(TorrentNative.abiOfEntry("lib/x86/libavcodec.so"))
+        assertNull(TorrentNative.abiOfEntry("assets/lib/x86/libjlibtorrent.so"))
+        // The packaged file is lib<name>.so for the first name tried.
+        assertEquals("jlibtorrent-${TorrentNative.VERSION}", TorrentNative.LIBRARY_NAMES.first())
+    }
+}

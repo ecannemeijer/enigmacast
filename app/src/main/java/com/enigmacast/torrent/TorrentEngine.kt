@@ -68,7 +68,25 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
     val progress: StateFlow<TorrentProgress> = _progress.asStateFlow()
     private val dir get() = File(context.cacheDir, "torrents")
 
-    @Synchronized private fun session(): SessionManager = session ?: SessionManager(false).also { sm ->
+    /**
+     * The libtorrent session, started on first use. The native library is loaded by
+     * [TorrentNative] first, so a device without a usable binary gets [TorrentUnavailableException]
+     * and jlibtorrent's classes are never initialised in a failed state.
+     */
+    @Synchronized private fun session(): SessionManager = session ?: createSession()
+
+    private fun createSession(): SessionManager {
+        TorrentNative.ensureLoaded(context)
+        return try {
+            newSession()
+        } catch (e: LinkageError) {
+            // UnsatisfiedLinkError / NoClassDefFoundError / ExceptionInInitializerError from jlibtorrent.
+            EnigmaLog.player("torrent session failed: ${e.javaClass.simpleName}: ${e.message?.take(200)}")
+            throw TorrentUnavailableException(TorrentNative.processAbi(context), e.javaClass.simpleName)
+        }
+    }
+
+    private fun newSession(): SessionManager = SessionManager(false).also { sm ->
         val settings = SettingsPack().connectionsLimit(200).activeDownloads(2)
         val params = SessionParams(settings)
         params.setPosixDiskIO()
@@ -129,6 +147,9 @@ class TorrentEngine @Inject constructor(@ApplicationContext private val context:
             "http://127.0.0.1:${srv.listeningPort}/stream/${srv.token}"
         } catch (e: CancellationException) {
             stopActive()
+            throw e
+        } catch (e: TorrentUnavailableException) {
+            _progress.value = TorrentProgress(TorrentStage.ERROR, error = e.abi)
             throw e
         } catch (e: Throwable) {
             EnigmaLog.player("torrent failed: ${e.javaClass.simpleName}")

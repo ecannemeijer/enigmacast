@@ -110,13 +110,12 @@ fun TorrentScreen(onBack: () -> Unit, model: TorrentViewModel = hiltViewModel())
         model.message?.let { m ->
             TvChoiceDialog(
                 title = stringResource(R.string.nav_torrent),
-                message = stringResource(
-                    when (m) {
-                        "imdb" -> R.string.torrent_error_imdb
-                        "torrent" -> R.string.torrent_error_torrent
-                        else -> R.string.torrent_error_tmdb
-                    },
-                ),
+                message = when {
+                    m.startsWith("engine:") -> stringResource(R.string.torrent_error_engine, m.removePrefix("engine:"))
+                    m == "imdb" -> stringResource(R.string.torrent_error_imdb)
+                    m == "torrent" -> stringResource(R.string.torrent_error_torrent)
+                    else -> stringResource(R.string.torrent_error_tmdb)
+                },
                 choices = listOf(stringResource(R.string.ok)),
                 onChoose = { model.dismissMessage() },
                 onDismiss = model::dismissMessage,

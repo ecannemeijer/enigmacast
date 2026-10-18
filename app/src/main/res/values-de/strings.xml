@@ -1381,4 +1381,5 @@ Profil: %2$s</string>
     <string name="scraper_error_manifest">Das ist kein gültiges Stremio-Manifest.</string>
     <string name="scraper_error_stream">Dieses Addon bietet keine Streams.</string>
     <string name="scraper_error_types">Dieses Addon bietet keine Filme oder Serien.</string>
+    <string name="torrent_error_engine">Die Torrent-Engine ist auf diesem Gerät nicht verfügbar (ABI %1$s).</string>
 </resources>

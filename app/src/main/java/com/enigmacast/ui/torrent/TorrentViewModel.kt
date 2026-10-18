@@ -242,7 +242,7 @@ class TorrentViewModel @Inject constructor(
                     if (it is kotlinx.coroutines.CancellationException) return@onFailure
                     TorrentStreamingService.stop(context)
                     overlay = TorrentOverlay.Streams(o.title, o.subtitle, o.streams, false, o.resumeKey)
-                    message = "torrent"
+                    message = if (it is com.enigmacast.torrent.TorrentUnavailableException) "engine:${it.abi}" else "torrent"
                 }
         }
         viewModelScope.launch {

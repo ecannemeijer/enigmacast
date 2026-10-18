@@ -1411,4 +1411,5 @@ Profiel: %2$s</string>
     <string name="scraper_error_manifest">Dit is geen geldig Stremio-manifest.</string>
     <string name="scraper_error_stream">Deze addon biedt geen streams.</string>
     <string name="scraper_error_types">Deze addon biedt geen films of series.</string>
+    <string name="torrent_error_engine">De torrent-engine is niet beschikbaar op dit apparaat (ABI %1$s).</string>
 </resources>

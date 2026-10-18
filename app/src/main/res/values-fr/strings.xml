@@ -1385,4 +1385,5 @@ Profil : %2$s</string>
     <string name="scraper_error_manifest">Ce n\'est pas un manifeste Stremio valide.</string>
     <string name="scraper_error_stream">Cet addon ne propose pas de flux.</string>
     <string name="scraper_error_types">Cet addon ne propose ni films ni séries.</string>
+    <string name="torrent_error_engine">Le moteur torrent n\'est pas disponible sur cet appareil (ABI %1$s).</string>
 </resources>

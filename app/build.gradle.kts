@@ -81,6 +81,9 @@ dependencies {
     implementation(libs.jlibtorrent.android.arm)
     implementation(libs.jlibtorrent.android.arm64)
     implementation(libs.jlibtorrent.android.x64)
+    // 32-bit x86: the APK already has lib/x86 from other libraries, so x86 devices and Android TV
+    // emulators (API 30 TV images are x86) pick that folder and need jlibtorrent there too.
+    implementation(libs.jlibtorrent.android.x86)
     implementation(libs.nanohttpd)
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
