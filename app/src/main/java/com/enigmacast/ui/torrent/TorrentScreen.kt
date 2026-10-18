@@ -305,7 +305,7 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
             Text(stringResource(R.string.torrent_empty), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
         }
         // Same as the IPTV films grid (8b9db68): fixed columns, stable keys, one content type,
-        // cards of one fixed height, and a bring-into-view that only scrolls when a poster is
+        // cards of one height (PosterCard's fixed line slots), and a bring-into-view that only scrolls when a poster is
         // off screen. TV's default pulls the focused poster to the middle, so every move
         // shifted the grid and then settled back (the bounce).
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -327,7 +327,6 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
                         com.enigmacast.ui.home.PosterCard(
                             film = remember(title) { TorrentCards.film(title) },
                             modifier = Modifier
-                                .height(TorrentCards.CARD_HEIGHT_DP.dp)
                                 .then(if (index == 0) Modifier.focusRequester(firstCard) else Modifier)
                                 .then(if (title.key == model.focusKey) Modifier.focusRequester(restoreFocus) else Modifier)
                                 .focusProperties {
@@ -382,8 +381,7 @@ private fun FilterPopup(title: String, options: List<String>, selected: Int, onC
         NavigationSoundsForWindow()
         Column(
             Modifier
-                .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
-                .widthIn(min = FilterMenu.MIN_WIDTH_DP.dp, max = FilterMenu.MAX_WIDTH_DP.dp)
+                .width(FilterMenu.MAX_WIDTH_DP.dp)
                 .background(EnigmaColors.Canvas, skinShape(12.dp))
                 .border(1.dp, EnigmaColors.Subtle.copy(alpha = 0.4f), skinShape(12.dp))
                 .padding(8.dp),

@@ -236,8 +236,12 @@ internal fun XtreamVodPage(
                                 }
                             },
                             lines = {
-                                film.movie.year?.let { Text(it.toString(), color = EnigmaColors.Subtle, fontSize = 11.sp) }
-                                if (model.resumeOf(item) > 0) Text(stringResource(R.string.iptv_resume_badge), color = EnigmaColors.Accent, fontSize = 11.sp)
+                                // Always exactly one line (year and resume badge side by side), so every
+                                // card has the same height before and after its TMDB data arrives.
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(film.movie.year?.toString() ?: " ", color = EnigmaColors.Subtle, fontSize = 11.sp, maxLines = 1)
+                                    if (model.resumeOf(item) > 0) Text(stringResource(R.string.iptv_resume_badge), color = EnigmaColors.Accent, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             },
                         )
                     }

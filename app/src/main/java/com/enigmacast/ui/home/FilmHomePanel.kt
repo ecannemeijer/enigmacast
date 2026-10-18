@@ -51,6 +51,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -578,7 +580,15 @@ internal fun PosterCard(
             overflow = TextOverflow.Ellipsis,
         )
         lines()
-        RatingStars(film.movie.voteAverage, size = 10.sp)
+        // The rating line is always laid out (invisible without a rating), so the card's bounds,
+        // which focus brings into view, always include it: a rating that arrives with the artwork
+        // after the card was focused and scrolled to no longer grows the card past the grid edge.
+        val rating = film.movie.voteAverage
+        if (rating > 0.0) {
+            RatingStars(rating, size = 10.sp)
+        } else {
+            RatingStars(10.0, size = 10.sp, modifier = Modifier.alpha(0f).clearAndSetSemantics {})
+        }
     }
 }
 
