@@ -196,12 +196,6 @@ fun FilmHomePanel(
                         }
                     }
                 }
-                Text(
-                    stringResource(R.string.home_tmdb_attribution),
-                    color = EnigmaColors.Subtle,
-                    fontSize = EnigmaType.Caption,
-                    modifier = Modifier.padding(start = 24.dp, bottom = 12.dp),
-                )
             }
             val running = sync
             if (running != null && model.state is HomeFilmsViewModel.State.Ready) {

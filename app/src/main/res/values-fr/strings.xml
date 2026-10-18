@@ -694,7 +694,7 @@
     <string name="home_missing_key">Aucune clé API TMDB</string>
     <string name="home_missing_key_hint">Ajoutez TMDB_API_KEY à local.properties, ou saisissez une clé dans Paramètres › Général › Page d\'accueil.</string>
     <string name="home_try_again">Réessayer</string>
-    <string name="home_tmdb_attribution">Données et images des films fournies par TMDB. Ce produit utilise l\'API TMDB mais n\'est ni approuvé ni certifié par TMDB.</string>
+    <string name="about_tmdb_attribution">Ce produit utilise l\'API TMDB mais n\'est ni approuvé ni certifié par TMDB.</string>
     <string name="home_director">Réalisation</string>
     <string name="home_cast">Distribution</string>
     <string name="home_runtime">%d min</string>

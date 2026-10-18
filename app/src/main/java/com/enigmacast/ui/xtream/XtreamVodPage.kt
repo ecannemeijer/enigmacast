@@ -200,12 +200,12 @@ internal fun XtreamVodPage(
                 // TV's default scroll pulls the focused poster toward the middle, so every move
                 // shifts the grid and then settles. Only scroll when a poster is actually off screen.
                 androidx.compose.runtime.CompositionLocalProvider(
-                    androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.MinimalBringIntoView,
+                    androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.CardBringIntoView,
                 ) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize().onFocusChanged { if (it.hasFocus) onGridFocused() }.focusGroup(),

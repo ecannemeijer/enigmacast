@@ -48,4 +48,16 @@ class ListAnchorTest {
         assertEquals(40f, ListAnchor.bringDistance(880f, 60f, 900f))      // cut off at the bottom
         assertFalse(ListAnchor.fullyVisible(880, 940, 0, 900))
     }
+
+    @Test fun cardsKeepRoomForTheirFocusScale() {
+        // A 272 dp card (as px) in a 900 px grid, 7 % margin = 19 px each side.
+        val m = 272f * 0.07f
+        assertEquals(0f, ListAnchor.bringDistance(100f, 272f, 900f, m))
+        // Its bottom at the very edge: scrolled on by the margin, so the scaled lines stay on screen.
+        assertEquals(m, ListAnchor.bringDistance(628f, 272f, 900f, m), 0.01f)
+        assertEquals(-m, ListAnchor.bringDistance(0f, 272f, 900f, m), 0.01f)
+        // No room for the margin: the plain rule.
+        assertEquals(10f, ListAnchor.bringDistance(20f, 890f, 900f, 50f))
+        assertEquals(0f, ListAnchor.bringDistance(10f, 890f, 900f, 50f))
+    }
 }

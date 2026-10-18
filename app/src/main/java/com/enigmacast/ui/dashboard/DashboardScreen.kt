@@ -1937,6 +1937,13 @@ private fun InfoSettingsPanel(
     SettingsCard(stringResource(R.string.app)) {
         InfoRow(stringResource(R.string.version), BuildConfig.VERSION_NAME)
         InfoRow(stringResource(R.string.build), BuildConfig.VERSION_CODE.toString())
+        // The one TMDB attribution in the app (film data, posters, ratings).
+        Text(
+            stringResource(R.string.about_tmdb_attribution),
+            color = EnigmaColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+        )
     }
     SettingsCard(stringResource(R.string.diagnostics)) {
         ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay)

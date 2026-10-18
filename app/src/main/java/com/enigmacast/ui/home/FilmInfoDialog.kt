@@ -226,7 +226,6 @@ fun FilmInfoDialog(
                         }
                     }
                 }
-                Text(stringResource(R.string.home_tmdb_attribution), color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1)
             }
             if (showPlot) {
                 PlotDialog(film.displayTitle, plot, onClose = { showPlot = false })
@@ -384,7 +383,6 @@ fun RecordingInfoDialog(
                         }
                     }
                 }
-                if (movie.id > 0) Text(stringResource(R.string.home_tmdb_attribution), color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1)
             }
             if (showPlot) PlotDialog(film.displayTitle, plot, onClose = { showPlot = false })
         }

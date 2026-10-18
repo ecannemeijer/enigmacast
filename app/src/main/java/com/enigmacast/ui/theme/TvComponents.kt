@@ -900,6 +900,21 @@ val MinimalBringIntoView = object : androidx.compose.foundation.gestures.BringIn
         com.enigmacast.domain.remote.ListAnchor.bringDistance(offset, size, containerSize)
 }
 
+/**
+ * [MinimalBringIntoView] for poster grids: the whole card (poster, title, year, stars) plus
+ * room for its focus scale stays on screen. The focused card is drawn 8 % larger around its
+ * centre, beyond the bounds the grid brings into view, so a card stopped exactly at the
+ * grid's edge had its last lines (year, stars) cut off below the screen.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+val CardBringIntoView = object : androidx.compose.foundation.gestures.BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        com.enigmacast.domain.remote.ListAnchor.bringDistance(offset, size, containerSize, size * CARD_FOCUS_MARGIN)
+}
+
+/** Free room on each side of a focused card, as a share of its size: half the 8 % scale plus a few dp for the border/shadow. */
+const val CARD_FOCUS_MARGIN = 0.07f
+
 /** Lists inside scroll only as far as needed to show the focused row ([MinimalBringIntoView]). */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @androidx.compose.runtime.Composable

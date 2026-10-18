@@ -692,7 +692,7 @@
     <string name="home_missing_key">Geen TMDB API-sleutel</string>
     <string name="home_missing_key_hint">Zet TMDB_API_KEY in local.properties, of vul een sleutel in bij Instellingen › Algemeen › Startpagina.</string>
     <string name="home_try_again">Opnieuw proberen</string>
-    <string name="home_tmdb_attribution">Filmgegevens en afbeeldingen van TMDB. Dit product gebruikt de TMDB API maar is niet goedgekeurd of gecertificeerd door TMDB.</string>
+    <string name="about_tmdb_attribution">Dit product gebruikt de TMDB API, maar is niet goedgekeurd of gecertificeerd door TMDB.</string>
     <string name="home_director">Regie</string>
     <string name="home_cast">Cast</string>
     <string name="home_runtime">%d min</string>

@@ -31,6 +31,15 @@ object ListAnchor {
      * [size] in a viewport of [container]: nothing when it is fully visible, else just enough.
      */
     fun bringDistance(offset: Float, size: Float, container: Float): Float {
+        return bringDistance(offset, size, container, 0f)
+    }
+
+    /**
+     * As [bringDistance], with [margin] kept free on both sides of the row (a focused card is
+     * drawn scaled beyond its bounds). Without the room for it, the plain rule.
+     */
+    fun bringDistance(offset: Float, size: Float, container: Float, margin: Float): Float {
+        if (margin > 0f && size + 2 * margin <= container) return bringDistance(offset - margin, size + 2 * margin, container, 0f)
         val trailing = offset + size
         return when {
             offset >= 0f && trailing <= container -> 0f

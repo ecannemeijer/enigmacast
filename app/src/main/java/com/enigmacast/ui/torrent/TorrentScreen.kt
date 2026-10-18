@@ -313,12 +313,12 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
             val items = model.items
             val lastRowStart = (items.size - 1).coerceAtLeast(0) / columns * columns
             androidx.compose.runtime.CompositionLocalProvider(
-                androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.MinimalBringIntoView,
+                androidx.compose.foundation.gestures.LocalBringIntoViewSpec provides com.enigmacast.ui.theme.CardBringIntoView,
             ) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp, start = 8.dp, end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
                     horizontalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
                     modifier = Modifier.fillMaxSize().focusGroup(),

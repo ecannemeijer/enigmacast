@@ -695,7 +695,7 @@
     <string name="home_missing_key">No TMDB API key</string>
     <string name="home_missing_key_hint">Add TMDB_API_KEY to local.properties, or enter a key under Settings › General › Home page.</string>
     <string name="home_try_again">Try again</string>
-    <string name="home_tmdb_attribution">Film data and images from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="about_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="home_director">Director</string>
     <string name="home_cast">Cast</string>
     <string name="home_runtime">%d min</string>
