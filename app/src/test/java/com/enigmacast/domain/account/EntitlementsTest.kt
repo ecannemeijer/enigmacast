@@ -9,7 +9,7 @@ class EntitlementsTest {
     private val now = 1_800_000_000_000L
     private val day = 24L * 60 * 60 * 1000
 
-    private fun premium(untilMs: Long? = now + 730 * day, verifiedAtMs: Long = now) = AccountSnapshot(
+    private fun premium(untilMs: Long? = now + 365 * day, verifiedAtMs: Long = now) = AccountSnapshot(
         email = "a@b.nl", plan = Plan.PREMIUM, serverPremium = true, premiumUntilMs = untilMs,
         isTrial = true, verifiedAtMs = verifiedAtMs,
     )

@@ -1096,7 +1096,7 @@
     <string name="ok">OK</string>
     <string name="settings_account">Account</string>
     <string name="setup_account_title">Your EnigmaCast account</string>
-    <string name="setup_account_body">Create a free account for Movies, Series and Football. You get 14 days of Premium for free (2 years during the beta). Rather start watching first? Choose Skip; you can log in later in Settings › Account.</string>
+    <string name="setup_account_body">Create a free account for Movies, Series and Football. You get 14 days of Premium for free (1 year during the beta). Rather start watching first? Choose Skip; you can log in later in Settings › Account.</string>
     <string name="setup_account_signed_in">Signed in as %1$s</string>
     <string name="account_mode_create">Create account</string>
     <string name="account_mode_login">Log in</string>
