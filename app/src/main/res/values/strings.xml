@@ -697,6 +697,7 @@
     <string name="home_missing_key_hint">Add TMDB_API_KEY to local.properties, or enter a key under Settings › General › Home page.</string>
     <string name="home_try_again">Try again</string>
     <string name="about_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="about_sport_attribution">Sport: flags from flag-icons (MIT, © Panayiotis Lipiridis); stadium photos from Wikimedia Commons (CC0) by Markus Spiske, Liane Metzler, Abigail Keenan and Christian Widell; competition data and emblems from football-data.org. Competition names and logos belong to their owners.</string>
     <string name="home_director">Director</string>
     <string name="home_cast">Cast</string>
     <string name="home_runtime">%d min</string>

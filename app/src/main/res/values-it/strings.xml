@@ -696,6 +696,7 @@
     <string name="home_missing_key_hint">Aggiungi TMDB_API_KEY a local.properties, oppure inserisci una chiave in Impostazioni › Generale › Pagina iniziale.</string>
     <string name="home_try_again">Riprova</string>
     <string name="about_tmdb_attribution">Questo prodotto usa l\'API TMDB ma non è approvato né certificato da TMDB.</string>
+    <string name="about_sport_attribution">Sport: bandiere da flag-icons (MIT, © Panayiotis Lipiridis); foto degli stadi da Wikimedia Commons (CC0) di Markus Spiske, Liane Metzler, Abigail Keenan e Christian Widell; dati ed emblemi delle competizioni da football-data.org. Nomi e loghi delle competizioni appartengono ai rispettivi proprietari.</string>
     <string name="home_director">Regia</string>
     <string name="home_cast">Cast</string>
     <string name="home_runtime">%d min</string>
