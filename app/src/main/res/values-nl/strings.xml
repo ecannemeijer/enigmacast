@@ -188,6 +188,8 @@
     <string name="osd_banner_hint">OK: pauze · Links: zenderlijst · Info: details</string>
     <string name="osd_banner_hint_paused">OK: verder · Links: zenderlijst · Info: details</string>
     <string name="osd_unknown_programme">Onbekend programma</string>
+    <string name="osd_now">Nu</string>
+    <string name="osd_next_up">Straks</string>
     <string name="osd_no_tuner_free">Geen tuner vrij</string>
     <string name="osd_no_picture">Geen beeld</string>
     <string name="osd_stream_not_started">Stream niet gestart</string>

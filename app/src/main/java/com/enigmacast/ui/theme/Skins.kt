@@ -64,6 +64,10 @@ enum class OsdLayout {
     MINIMAL,
     /** Translucent card with a coloured edge (Aurora). */
     GLASS,
+    /** Floating glass capsule with a horizon line and a glowing picon ring (Glass Earth). */
+    ORBIT,
+    /** Edge-to-edge glass sheet with now/next columns and a glow progress bar (Glass Wave). */
+    WAVE,
 }
 
 data class Skin(
@@ -197,7 +201,7 @@ object Skins {
             danger = Color(0xFFFF8A80), dangerFocus = Color(0xFFB3261E),
             osdFill = Color(0xFF0B1A33), osdFillEnd = Color(0xFF0A2846), osdEdge = Color(0x59FFFFFF),
         ),
-        cornerScale = 1.3f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.GLASS,
+        cornerScale = 1.3f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.ORBIT,
         glass = GlassLook(
             backdrop = com.enigmacast.R.drawable.skin_glass_earth,
             dim = Color(0x59020611),
@@ -218,7 +222,7 @@ object Skins {
             danger = Color(0xFFFF8A80), dangerFocus = Color(0xFFB3261E),
             osdFill = Color(0xFF0A1440), osdFillEnd = Color(0xFF0B2A5A), osdEdge = Color(0x59FFFFFF),
         ),
-        cornerScale = 1.3f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.GLASS,
+        cornerScale = 1.3f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.WAVE,
         glass = GlassLook(
             backdrop = com.enigmacast.R.drawable.skin_glass_wave,
             dim = Color(0x4D010516),

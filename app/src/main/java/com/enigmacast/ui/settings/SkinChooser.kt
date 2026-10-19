@@ -130,6 +130,20 @@ internal fun SkinThumbnail(skin: Skin, modifier: Modifier = Modifier) {
                 Box(Modifier.padding(start = 22.dp, top = 15.dp).width(80.dp).height(2.dp).background(androidx.compose.ui.graphics.Color(0xFF4C3811)))
                 Box(Modifier.padding(start = 22.dp, top = 19.dp).width(60.dp).height(2.dp).background(p.muted))
             }
+            OsdLayout.ORBIT -> Box(
+                bar.padding(bottom = 5.dp).fillMaxWidth(0.78f).height(20.dp)
+                    .background(Brush.linearGradient(listOf(p.osdFill.copy(alpha = 0.8f), p.osdFillEnd.copy(alpha = 0.8f))), CircleShape)
+                    .border(1.dp, p.osdEdge, CircleShape),
+            ) {
+                Box(Modifier.padding(start = 3.dp, top = 3.dp).size(14.dp).border(1.dp, p.highlight, CircleShape))
+                Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.5f).height(1.dp).background(p.highlight))
+            }
+            OsdLayout.WAVE -> Box(
+                bar.fillMaxWidth().height(24.dp)
+                    .background(Brush.verticalGradient(listOf(p.osdFill.copy(alpha = 0f), p.osdFill.copy(alpha = 0.85f), p.osdFillEnd.copy(alpha = 0.9f)))),
+            ) {
+                Box(Modifier.padding(start = 26.dp, top = 15.dp).width(70.dp).height(2.dp).background(Brush.horizontalGradient(listOf(p.accent, p.highlight))))
+            }
             OsdLayout.FLAT -> Row(bar.padding(4.dp).fillMaxWidth().height(20.dp).background(p.osdFill)) {
                 Box(Modifier.width(18.dp).height(20.dp).background(p.accent))
                 Box(Modifier.padding(start = 5.dp, top = 12.dp).width(70.dp).height(2.dp).background(p.accent))

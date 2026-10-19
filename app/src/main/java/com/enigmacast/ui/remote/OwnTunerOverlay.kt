@@ -304,6 +304,14 @@ internal fun ChannelBanner(
             FlatBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, docked, modifier)
             return
         }
+        OsdLayout.ORBIT -> {
+            OrbitBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, docked, modifier)
+            return
+        }
+        OsdLayout.WAVE -> {
+            WaveBanner(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, scrim, info, docked, modifier)
+            return
+        }
         else -> Unit
     }
     val cardShape = skinShape(16.dp)
