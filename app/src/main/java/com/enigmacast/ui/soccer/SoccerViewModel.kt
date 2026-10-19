@@ -32,11 +32,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
+import com.enigmacast.util.EnigmaLog
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 
-/** The Soccer page: cached fixtures and tables of the followed country, refreshed while visible. */
+/** The Soccer page: cached fixtures and tables of the region chosen on the Sport landing page, refreshed while visible. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SoccerViewModel @Inject constructor(
@@ -44,11 +47,11 @@ class SoccerViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val reminders: ReminderScheduler,
 ) : ViewModel() {
-    enum class Problem { NONE, NO_KEY, INVALID_KEY, RATE_LIMITED, NOT_IN_PLAN, OFFLINE }
+    enum class Problem { NONE, NO_KEY, INVALID_KEY, RATE_LIMITED, NOT_IN_PLAN, OFFLINE, SERVER }
 
     val settings: SoccerSettings get() = repository.settings
 
-    var country by mutableStateOf(SoccerCountries.byId(settings.values.value.country))
+    var country by mutableStateOf(SoccerCountries.byId(settings.values.value.region))
         private set
     var loading by mutableStateOf(true)
         private set
@@ -74,6 +77,16 @@ class SoccerViewModel @Inject constructor(
     var notice by mutableStateOf(UiText.Empty)
         private set
 
+    /** Seconds a request waits for football-data.org's 10 per minute; 0 when not waiting. */
+    var rateWaitSec by mutableStateOf(0)
+        private set
+
+    /** A failure of the last refresh that is not in the per-competition fetch rows (standings, exceptions). */
+    private var refreshProblem by mutableStateOf(Problem.NONE)
+
+    /** The first error in the chosen region's fetch rows. */
+    private var fetchProblem = Problem.NONE
+
     val autoSwitchKeys: StateFlow<Set<String>> = reminders.scheduledKeys
 
     /** Cards of the Sport landing page: the regions the key can read, with emblems once known. */
@@ -83,6 +96,11 @@ class SoccerViewModel @Inject constructor(
         private set
 
     private val clock = MutableStateFlow(System.currentTimeMillis())
+
+    /** The region of the landing page, narrowed to the competitions the key can read. */
+    private val selectedCountry = settings.values.map { it.region }.distinctUntilChanged()
+        .combine(repository.available()) { id, available -> SoccerCountries.resolve(id, available) }
+        .distinctUntilChanged()
     private var noticeJob: Job? = null
     private var h2hJob: Job? = null
 
@@ -93,13 +111,8 @@ class SoccerViewModel @Inject constructor(
             }.distinctUntilChanged().collect { regionCards = it }
         }
         viewModelScope.launch { runCatching { repository.refreshCompetitions() } }
-        val countryFlow = settings.values.map { it.country }.distinctUntilChanged()
-            .combine(repository.available()) { id, available ->
-                val offered = SoccerCountries.offered(available)
-                offered.firstOrNull { it.id == id } ?: SoccerCountries.byId(id)
-            }.distinctUntilChanged()
         viewModelScope.launch {
-            countryFlow.flatMapLatest { c ->
+            selectedCountry.flatMapLatest { c ->
                 country = c
                 if (tableCode !in c.competitions) tableCode = c.competitions.firstOrNull()
                 val nowSec = System.currentTimeMillis() / 1000
@@ -121,14 +134,20 @@ class SoccerViewModel @Inject constructor(
                     today.plusDays(1).atStartOfDay(zone).toEpochSecond(),
                 )
                 val fetched = states.any { it.fetchedAtMs > 0 }
-                loading = list.isEmpty() && !fetched && states.none { it.error.isNotBlank() }
-                problem = when {
-                    repository.apiKeyMissing() -> Problem.NO_KEY
-                    else -> states.map { it.error }.firstOrNull { it.isNotBlank() }?.let(::problemOf) ?: Problem.NONE
-                }
+                loading = list.isEmpty() && !fetched && states.none { it.error.isNotBlank() } && refreshProblem == Problem.NONE
+                fetchProblem = states.map { it.error }.firstOrNull { it.isNotBlank() }?.let(::problemOf) ?: Problem.NONE
+                recomputeProblem()
                 if (problem == Problem.NO_KEY) loading = false
                 linkChannels(list)
             }
+        }
+    }
+
+    private fun recomputeProblem() {
+        problem = when {
+            repository.apiKeyMissing() -> Problem.NO_KEY
+            fetchProblem != Problem.NONE -> fetchProblem
+            else -> refreshProblem
         }
     }
 
@@ -155,9 +174,16 @@ class SoccerViewModel @Inject constructor(
         }
     }
 
-    /** Runs while the page is on screen: refresh when due, then live scores every 60 s. */
-    suspend fun whileVisible() {
-        refresh(force = false)
+    /**
+     * Runs while the Sport page is on screen. The chosen region's competitions are fetched as soon
+     * as it is chosen (only what is due; the cache answers the rest), and a quick switch to another
+     * region cancels the old region's queue, so the 10 requests/minute go to what is on screen.
+     * Then live scores every 60 s and the periodic refresh.
+     */
+    suspend fun whileVisible(): Unit = coroutineScope {
+        launch {
+            com.enigmacast.domain.soccer.RegionLoads.follow(selectedCountry) { codes -> load(codes, force = false) }
+        }
         var minutes = 0
         while (true) {
             delay(LIVE_MS)
@@ -165,9 +191,11 @@ class SoccerViewModel @Inject constructor(
             minutes++
             val s = settings.values.value
             if (s.liveUpdates && sections.live.isNotEmpty() || s.liveUpdates && soonLive()) {
-                repository.refreshLive(country.competitions)?.let { problem = problemOf(SoccerRepository.errorCode(it)) }
+                val live = runCatching { repository.refreshLive(country.competitions) }
+                refreshProblem = live.fold({ problemOfResult(it) }, { e -> if (e is CancellationException) throw e else Problem.SERVER })
+                recomputeProblem()
             }
-            if (s.refreshMinutes > 0 && minutes % s.refreshMinutes == 0) refresh(force = false)
+            if (s.refreshMinutes > 0 && minutes % s.refreshMinutes == 0) load(country.competitions, force = false)
         }
     }
 
@@ -176,28 +204,71 @@ class SoccerViewModel @Inject constructor(
         return matches.any { it.status == com.enigmacast.domain.soccer.MatchStatus.SCHEDULED && it.kickoffSec in (now - 3 * 3600)..(now + 600) }
     }
 
+    /** Retry / refresh buttons on the page. */
     fun refresh(force: Boolean) {
-        viewModelScope.launch {
-            refreshing = true
-            val result = runCatching { repository.refresh(country.competitions, force) }.getOrNull()
-            if (result is FdResult.NoKey) problem = Problem.NO_KEY
-            refreshing = false
-            loading = false
+        viewModelScope.launch { load(country.competitions, force) }
+    }
+
+    /**
+     * Fetches [codes] (the repository sequences all requests through one window and skips what is
+     * fresh). Errors are not swallowed: they end up in [problem] with a plain message.
+     */
+    private suspend fun load(codes: List<String>, force: Boolean) {
+        refreshing = true
+        val ticker = viewModelScope.launch {
+            while (true) {
+                rateWaitSec = ((repository.rateWaitMs() + 999) / 1000).toInt()
+                delay(1_000)
+            }
         }
+        try {
+            val result = repository.refresh(codes, force)
+            refreshProblem = problemOfResult(result)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            EnigmaLog.connection("soccer refresh ${codes.joinToString(",")} failed: ${e.javaClass.simpleName}")
+            refreshProblem = Problem.SERVER
+        } finally {
+            ticker.cancel()
+            rateWaitSec = 0
+            refreshing = false
+        }
+        recomputeProblem()
+        if (refreshProblem != Problem.NONE || problem != Problem.NONE) loading = false
     }
 
-    /** A card on the landing page was chosen: follow that region; the page reloads its competitions. */
+    private fun problemOfResult(result: FdResult?): Problem = when (result) {
+        null, is FdResult.Ok, FdResult.NotInPlan -> Problem.NONE
+        else -> problemOf(SoccerRepository.errorCode(result))
+    }
+
+    /**
+     * A card on the landing page was chosen. The region is remembered (initial focus next time,
+     * and the PitchAPI page follows it); [whileVisible] fetches its competitions right away.
+     */
     fun chooseRegion(id: String) {
-        if (settings.values.value.country != id) settings.setCountry(id)
+        if (settings.values.value.region == id) return
+        // No frame of the old region's data on the page that opens now.
+        country = SoccerCountries.byId(id)
+        tableCode = country.competitions.firstOrNull()
+        matches = emptyList()
+        standings = emptyMap()
+        sections = SoccerSections(null, emptyList(), emptyList(), emptyList(), emptyList())
+        refreshProblem = Problem.NONE
+        fetchProblem = Problem.NONE
+        recomputeProblem()
+        loading = true
+        settings.setRegion(id)
     }
 
-    /** "Refresh" on the landing page: competitions (names, emblems) and the followed region's matches. */
+    /** "Refresh" on the landing page: competitions (names, emblems) and the chosen region's matches. */
     fun refreshLanding() {
         if (landingRefreshing) return
         viewModelScope.launch {
             landingRefreshing = true
-            runCatching { repository.refreshCompetitions(force = true) }
-            runCatching { repository.refresh(country.competitions, force = true) }
+            runCatching { repository.refreshCompetitions(force = true) }.onFailure { if (it is CancellationException) throw it }
+            load(country.competitions, force = true)
             landingRefreshing = false
         }
     }
@@ -249,6 +320,7 @@ class SoccerViewModel @Inject constructor(
         "invalid_key" -> Problem.INVALID_KEY
         "rate_limited" -> Problem.RATE_LIMITED
         "not_in_plan" -> Problem.NOT_IN_PLAN
+        "server_error" -> Problem.SERVER
         else -> Problem.OFFLINE
     }
 

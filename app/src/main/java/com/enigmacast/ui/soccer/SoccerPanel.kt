@@ -117,7 +117,7 @@ fun SoccerPanel(
     var pageFocused by remember { androidx.compose.runtime.mutableStateOf(false) }
     var switches by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val cards = model.regionCards
-    val shownIndex = if (regionIndex in cards.indices) regionIndex else com.enigmacast.domain.soccer.SportRegions.initialIndex(cards, model.settings.values.value.country)
+    val shownIndex = if (regionIndex in cards.indices) regionIndex else com.enigmacast.domain.soccer.SportRegions.initialIndex(cards, model.settings.values.value.region)
     LaunchedEffect(switches) {
         // After landing ⇄ page the focus moves with it: to the page's top, or back to the chosen card.
         if (switches > 0) contentFocus.requestWhenReady()
@@ -175,7 +175,7 @@ fun SoccerPanel(
             // so Down/Up always reach the row directly below/above on screen.
             val list = buildList<PageSection> {
                 when {
-                    model.loading && s.isEmpty -> add(PageSection("top") { Skeleton(left) })
+                    model.loading && s.isEmpty -> add(PageSection("top") { Skeleton(left, model.rateWaitSec) })
                     s.isEmpty && model.problem != SoccerViewModel.Problem.NONE ->
                         add(PageSection("top") { ProblemState(model.problem, left) { model.refresh(true) } })
                     s.isEmpty -> add(PageSection("top") { EmptyState(left) { model.refresh(true) } })
@@ -557,7 +557,7 @@ private fun FormCells(form: String?, modifier: Modifier) {
 }
 
 @Composable
-private fun Skeleton(left: Modifier) {
+private fun Skeleton(left: Modifier, rateWaitSec: Int = 0) {
     val pulse by rememberInfiniteTransition(label = "soccerSkeleton").animateFloat(
         initialValue = 0.35f,
         targetValue = 0.7f,
@@ -568,7 +568,9 @@ private fun Skeleton(left: Modifier) {
     Column(Modifier.padding(start = 28.dp, top = 30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             EnigmaLoadingIndicator(Modifier.size(22.dp))
-            Text(stringResource(R.string.soccer_loading), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = left.focusable())
+            // Waiting for the 10 requests/minute says so, instead of a spinner that seems stuck.
+            val text = if (rateWaitSec > 0) stringResource(R.string.soccer_rate_wait, rateWaitSec) else stringResource(R.string.soccer_loading)
+            Text(text, color = EnigmaColors.Muted, fontSize = 14.sp, modifier = left.focusable())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(88.dp).background(block, skinShape(44.dp)))
@@ -591,6 +593,7 @@ private fun ProblemState(problem: SoccerViewModel.Problem, left: Modifier, onRet
         SoccerViewModel.Problem.NO_KEY, SoccerViewModel.Problem.INVALID_KEY -> stringResource(R.string.soccer_key_hint)
         SoccerViewModel.Problem.RATE_LIMITED -> stringResource(R.string.soccer_rate_limited_hint)
         SoccerViewModel.Problem.NOT_IN_PLAN -> stringResource(R.string.soccer_not_in_plan_hint)
+        SoccerViewModel.Problem.SERVER -> stringResource(R.string.soccer_server_hint)
         else -> stringResource(R.string.soccer_offline_hint)
     }
     Message(problemTitle(problem), body, left, onRetry)

@@ -21,9 +21,6 @@ import com.enigmacast.ui.theme.ValueSetting
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -32,16 +29,6 @@ class SoccerSettingsViewModel @Inject constructor(
     private val repository: SoccerRepository,
 ) : ViewModel() {
     val settings: SoccerSettings get() = repository.settings
-    val available: StateFlow<Set<String>?> = repository.available().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    init {
-        viewModelScope.launch { runCatching { repository.refreshCompetitions() } }
-    }
-
-    fun setCountry(id: String) {
-        settings.setCountry(id)
-        viewModelScope.launch { runCatching { repository.refresh(SoccerCountries.byId(id).competitions, force = false) } }
-    }
 
     private var keyJob: Job? = null
 
@@ -51,18 +38,15 @@ class SoccerSettingsViewModel @Inject constructor(
         keyJob?.cancel()
         keyJob = viewModelScope.launch {
             delay(1_500)
-            runCatching { repository.refresh(SoccerCountries.byId(settings.values.value.country).competitions, force = true) }
+            runCatching { repository.refresh(SoccerCountries.byId(settings.values.value.region).competitions, force = true) }
         }
     }
 }
 
-/** Settings › General › Soccer: country to follow (exactly one), refresh, live scores and an own API key. */
+/** Settings › General › Sport: refresh, live scores and an own API key. The region is chosen on the Sport page itself. */
 @Composable
 fun SoccerSettingsCard(model: SoccerSettingsViewModel = hiltViewModel()) {
     val values by model.settings.values.collectAsStateWithLifecycle()
-    val available by model.available.collectAsStateWithLifecycle()
-    val countries = SoccerCountries.offered(available)
-    val labels = countries.map { c -> countryName(c.id) + "  (" + c.competitions.joinToString(", ") + ")" }
     val refresh = SoccerSettings.REFRESH_CHOICES
     val refreshLabels = refresh.map {
         when {
@@ -72,13 +56,6 @@ fun SoccerSettingsCard(model: SoccerSettingsViewModel = hiltViewModel()) {
         }
     }
     SettingsCard(stringResource(R.string.settings_soccer)) {
-        ValueSetting(
-            title = stringResource(R.string.soccer_country),
-            description = stringResource(R.string.soccer_country_desc),
-            options = labels,
-            selectedIndex = countries.indexOfFirst { it.id == values.country }.coerceAtLeast(0),
-            onSelect = { model.setCountry(countries[it].id) },
-        )
         ValueSetting(
             title = stringResource(R.string.soccer_refresh),
             description = stringResource(R.string.soccer_refresh_desc),

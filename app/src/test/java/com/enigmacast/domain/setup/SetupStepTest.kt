@@ -51,9 +51,9 @@ class SetupStepTest {
     }
 
     @Test fun extrasComeFromAndReturnToDone() {
-        assertEquals(listOf(SetupStep.PROFILE, SetupStep.BOUQUETS, SetupStep.SOCCER), SetupFlow.extras(SetupConditions(hasReceiver = true)))
-        assertEquals(listOf(SetupStep.BOUQUETS, SetupStep.SOCCER), SetupFlow.extras(SetupConditions(paired = true, hasReceiver = true)))
-        assertEquals(listOf(SetupStep.PROFILE, SetupStep.SOCCER), SetupFlow.extras(plain))
+        assertEquals(listOf(SetupStep.PROFILE, SetupStep.BOUQUETS), SetupFlow.extras(SetupConditions(hasReceiver = true)))
+        assertEquals(listOf(SetupStep.BOUQUETS), SetupFlow.extras(SetupConditions(paired = true, hasReceiver = true)))
+        assertEquals(listOf(SetupStep.PROFILE), SetupFlow.extras(plain))
         SetupStep.entries.filter { it.extra }.forEach {
             assertEquals(SetupStep.DONE, SetupFlow.next(it, plain))
             assertEquals(SetupStep.DONE, SetupFlow.previous(it, plain))
@@ -75,7 +75,7 @@ class SetupStepTest {
 
     @Test fun skippableSteps() {
         assertEquals(
-            setOf(SetupStep.SYNC_LINK, SetupStep.IPTV_OFFER, SetupStep.ACCOUNT, SetupStep.PROFILE, SetupStep.BOUQUETS, SetupStep.SOCCER),
+            setOf(SetupStep.SYNC_LINK, SetupStep.IPTV_OFFER, SetupStep.ACCOUNT, SetupStep.PROFILE, SetupStep.BOUQUETS),
             SetupStep.entries.filter { it.optional }.toSet(),
         )
         assertFalse(SetupStep.RECEIVER.optional)

@@ -23,7 +23,6 @@ enum class SetupStep(val optional: Boolean = false, val extra: Boolean = false) 
     DONE,
     PROFILE(optional = true, extra = true),
     BOUQUETS(optional = true, extra = true),
-    SOCCER(optional = true, extra = true),
     ;
 
     companion object {
@@ -71,7 +70,6 @@ object SetupFlow {
     fun extras(conditions: SetupConditions): List<SetupStep> = buildList {
         if (!conditions.paired) add(SetupStep.PROFILE)
         if (conditions.hasReceiver) add(SetupStep.BOUQUETS)
-        add(SetupStep.SOCCER)
     }
 
     /** The step after [step]. An extra returns to Done; Done stays Done. */

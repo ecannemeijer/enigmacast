@@ -94,7 +94,7 @@ class PitchViewModel @Inject constructor(
     init {
         if (hasKey) {
             viewModelScope.launch {
-                settings.values.map { it.country }.distinctUntilChanged().collect { load(it, force = false) }
+                settings.values.map { it.region }.distinctUntilChanged().collect { load(it, force = false) }
             }
         }
     }
@@ -114,14 +114,14 @@ class PitchViewModel @Inject constructor(
         }
     }
 
-    fun refresh() = load(settings.values.value.country, force = true)
+    fun refresh() = load(settings.values.value.region, force = true)
 
     /** While the page is visible: re-read seasons every minute (the repository only fetches when stale). */
     suspend fun whileVisible() {
         if (!hasKey) return
         while (true) {
             delay(60_000)
-            if (loadJob?.isActive != true) load(settings.values.value.country, force = false)
+            if (loadJob?.isActive != true) load(settings.values.value.region, force = false)
             (stack.lastOrNull() as? Screen.Match)?.takeIf { it.match.status == PitchStatus.LIVE }?.let { openMatchData(it.match, force = true) }
         }
     }

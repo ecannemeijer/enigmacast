@@ -52,9 +52,6 @@ import com.enigmacast.ui.profile.ProfileTile
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
-import com.enigmacast.domain.soccer.SoccerCountries
-import com.enigmacast.ui.soccer.SoccerSettingsViewModel
-import com.enigmacast.ui.soccer.countryName
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,7 +62,7 @@ import com.enigmacast.ui.theme.requestWhenReady
 /**
  * First-run setup: one plain question per screen, the step and its name on top, Back on the left
  * and Skip / Next on the right at the bottom. Shown when no receiver is set up yet, or from
- * Settings › About. Extras (name, channel lists, football) are offered on Done.
+ * Settings › About. Extras (name, channel lists) are offered on Done.
  */
 @Composable
 fun SetupWizard(
@@ -133,7 +130,6 @@ fun SetupWizard(
                     SetupStep.DONE -> DoneStep(model)
                     SetupStep.PROFILE -> ProfileStep(model, stepFocus)
                     SetupStep.BOUQUETS -> BouquetStep(model, stepFocus)
-                    SetupStep.SOCCER -> SoccerStep(stepFocus, onNo = { model.skip() })
                 }
             }
         }
@@ -365,33 +361,6 @@ private fun BouquetStep(model: SetupViewModel, focus: FocusRequester) {
     }
 }
 
-/** Football: yes or no, then the country to follow. The own API key lives in Settings › Soccer › Advanced. */
-@Composable
-private fun SoccerStep(focus: FocusRequester, onNo: () -> Unit, soccer: SoccerSettingsViewModel = hiltViewModel()) {
-    val values by soccer.settings.values.collectAsStateWithLifecycle()
-    val available by soccer.available.collectAsStateWithLifecycle()
-    var yes by rememberSaveable { mutableStateOf(false) }
-    Text(stringResource(R.string.setup_soccer_question), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        TvButton(
-            (if (yes) "✓ " else "") + stringResource(R.string.setup_soccer_yes),
-            { yes = true },
-            Modifier.focusRequester(focus),
-        )
-        TvButton(stringResource(R.string.setup_soccer_no), onNo)
-    }
-    if (yes) {
-        Text(stringResource(R.string.soccer_country), color = EnigmaColors.Text, fontSize = 17.sp)
-        SoccerCountries.offered(available).forEach { country ->
-            BigChoice(
-                title = countryName(country.id),
-                description = country.competitions.joinToString(", "),
-                selected = country.id == values.country,
-            ) { soccer.setCountry(country.id) }
-        }
-    }
-}
-
 @Composable
 private fun DoneStep(model: SetupViewModel) {
     val account by model.accountState.collectAsStateWithLifecycle()
@@ -429,7 +398,6 @@ private fun SetupStep.title(): Int = when (this) {
     SetupStep.PROFILE -> R.string.setup_profile_title
     SetupStep.VIEWING -> R.string.setup_viewing_title
     SetupStep.BOUQUETS -> R.string.setup_bouquets_title
-    SetupStep.SOCCER -> R.string.setup_soccer_title
     SetupStep.DONE -> R.string.setup_done_title
 }
 
@@ -442,7 +410,6 @@ private fun SetupStep.body(): Int = when (this) {
     SetupStep.PROFILE -> R.string.setup_profile_body
     SetupStep.VIEWING -> R.string.setup_viewing_body
     SetupStep.BOUQUETS -> R.string.setup_bouquets_body
-    SetupStep.SOCCER -> R.string.setup_soccer_body
     SetupStep.DONE -> R.string.setup_done_body
 }
 
@@ -457,7 +424,6 @@ private fun SetupStep.shortName(): Int = when (this) {
     SetupStep.DONE -> R.string.setup_name_done
     SetupStep.PROFILE -> R.string.setup_name_profile
     SetupStep.BOUQUETS -> R.string.setup_name_bouquets
-    SetupStep.SOCCER -> R.string.setup_name_soccer
 }
 
 private fun SetupStep.skipLabel(): Int = when (this) {
@@ -469,8 +435,7 @@ private fun SetupStep.skipLabel(): Int = when (this) {
 
 private fun SetupStep.extraLabel(): Int = when (this) {
     SetupStep.PROFILE -> R.string.setup_extra_profile
-    SetupStep.BOUQUETS -> R.string.setup_extra_bouquets
-    else -> R.string.setup_extra_soccer
+    else -> R.string.setup_extra_bouquets
 }
 
 /** Account: the form, or who is signed in with the plan once that is done (Next goes on). */

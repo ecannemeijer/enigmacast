@@ -44,6 +44,9 @@ class SoccerRepository @Inject constructor(
 
     fun apiKeyMissing(): Boolean = http.apiKey().isBlank()
 
+    /** How long the next request waits for the 10 per minute (0 = goes at once). */
+    fun rateWaitMs(): Long = http.window.waitMs()
+
     /** Competition codes the key can read (from /v4/competitions), or null before the first answer. */
     fun available(): Flow<Set<String>?> = dao.observeFetches(listOf(KEY_COMPETITIONS)).map { rows ->
         rows.firstOrNull()?.body?.takeIf { it.isNotBlank() }?.let { body -> SoccerJson.competitions(body).map { it.code }.toSet().takeIf { it.isNotEmpty() } }
@@ -185,7 +188,7 @@ class SoccerRepository @Inject constructor(
             FdResult.InvalidKey -> "invalid_key"
             FdResult.NotInPlan -> "not_in_plan"
             is FdResult.RateLimited -> "rate_limited"
-            is FdResult.Failed -> "failed"
+            is FdResult.Failed -> if (result.message.startsWith("HTTP")) "server_error" else "failed"
         }
     }
 }
