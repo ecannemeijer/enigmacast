@@ -191,6 +191,8 @@
     <string name="osd_banner_hint">OK: pause · Left: channel list · Info: details</string>
     <string name="osd_banner_hint_paused">OK: resume · Left: channel list · Info: details</string>
     <string name="osd_unknown_programme">Unknown programme</string>
+    <string name="osd_now">Now</string>
+    <string name="osd_next_up">Next</string>
     <string name="osd_no_tuner_free">No tuner free</string>
     <string name="osd_no_picture">No picture</string>
     <string name="osd_stream_not_started">Stream not started</string>

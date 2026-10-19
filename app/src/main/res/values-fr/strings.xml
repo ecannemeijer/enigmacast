@@ -188,6 +188,8 @@
     <string name="osd_banner_hint">OK : pause · Gauche : liste des chaînes · Info : détails</string>
     <string name="osd_banner_hint_paused">OK : reprendre · Gauche : liste des chaînes · Info : détails</string>
     <string name="osd_unknown_programme">Programme inconnu</string>
+    <string name="osd_now">Maintenant</string>
+    <string name="osd_next_up">Ensuite</string>
     <string name="osd_no_tuner_free">Aucun tuner libre</string>
     <string name="osd_no_picture">Pas d\'image</string>
     <string name="osd_stream_not_started">Flux non démarré</string>

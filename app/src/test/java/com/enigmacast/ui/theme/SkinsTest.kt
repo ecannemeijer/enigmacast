@@ -45,10 +45,14 @@ class SkinsTest {
     }
 
     @Test
-    fun glassSkinsShareTheGlassOsdAndCarryTheirOwnBackdrop() {
+    fun glassSkinsHaveTheirOwnBannersAndBackdrops() {
         val glass = Skins.all.filter { it.glass != null }
         assertEquals(2, glass.size)
-        assertEquals(setOf(OsdLayout.GLASS), glass.map { it.osd }.toSet())
+        assertEquals(OsdLayout.ORBIT, Skins.GlassEarth.osd)
+        assertEquals(OsdLayout.WAVE, Skins.GlassWave.osd)
+        // Every banner layout is used by exactly one skin now.
+        assertEquals(Skins.all.size, Skins.all.map { it.osd }.toSet().size)
+        assertEquals(OsdLayout.entries.toSet(), Skins.all.map { it.osd }.toSet())
         assertEquals(2, glass.map { it.glass!!.backdrop }.toSet().size)
         assertEquals(setOf(Skins.Inter), glass.map { it.fontFamily }.toSet())
         assertEquals(null, Skins.EnigmaCast.glass)

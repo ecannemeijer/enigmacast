@@ -188,6 +188,8 @@
     <string name="osd_banner_hint">OK: pausa · Sinistra: elenco canali · Info: dettagli</string>
     <string name="osd_banner_hint_paused">OK: riprendi · Sinistra: elenco canali · Info: dettagli</string>
     <string name="osd_unknown_programme">Programma sconosciuto</string>
+    <string name="osd_now">Ora</string>
+    <string name="osd_next_up">Dopo</string>
     <string name="osd_no_tuner_free">Nessun tuner libero</string>
     <string name="osd_no_picture">Nessuna immagine</string>
     <string name="osd_stream_not_started">Stream non avviato</string>
