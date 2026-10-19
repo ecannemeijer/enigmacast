@@ -177,7 +177,7 @@ suspend fun FocusRequester.focusListRow(listState: LazyListState, index: Int) {
 
 /**
  * Page boundary: Up/Down that would leave this group (top or bottom edge) stay put, so focus
- * never jumps to the drawer or a header. Left/Right still leave normally (Left → menu).
+ * never jumps to the drawer or a header. Left/Right still leave normally (the menu refuses Left; Back returns there).
  */
 fun Modifier.trapVertical(): Modifier = this
     .focusProperties {

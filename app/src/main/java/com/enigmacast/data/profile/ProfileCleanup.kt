@@ -20,6 +20,7 @@ class ProfileCleanup @Inject constructor(
     private val hidden: IptvHiddenCategories,
     private val bouquets: HomeBouquetStore,
     private val pins: ProfilePinLock,
+    private val tombstones: com.enigmacast.data.xtream.LibraryTombstones,
 ) {
     suspend fun purge(profile: Profile) {
         val uuid = profile.uuid.ifBlank { ProfileState.LEGACY_UUID }
@@ -30,5 +31,6 @@ class ProfileCleanup @Inject constructor(
         hidden.purge(profile.id)
         bouquets.purge(profile.id)
         pins.clear(uuid)
+        tombstones.clearProfile(uuid)
     }
 }

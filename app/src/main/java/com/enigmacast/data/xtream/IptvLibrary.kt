@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -53,6 +54,8 @@ class IptvLibrary @Inject constructor(
     private val outbox: SyncOutboxDao,
     private val profiles: ProfileStore,
     private val trigger: com.enigmacast.data.enigmasync.SyncTrigger,
+    private val tombstones: LibraryTombstones,
+    private val watchNext: WatchNextPublisher,
     @ApplicationContext private val context: Context,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -80,6 +83,7 @@ class IptvLibrary @Inject constructor(
         val stamped = row.copy(profileId = profileId)
         scope.launch {
             dao.putResume(stamped)
+            tombstones.clear(profileId, LibrarySync.PROGRESS, key(stamped.source, stamped.kind, stamped.id))
             enqueue(profileId, LibrarySync.PROGRESS, "upsert", stamped.updatedMs, LibrarySync.progressPayload(stamped))
             trigger.nudge()
         }
@@ -94,10 +98,32 @@ class IptvLibrary @Inject constructor(
         val profileId = profiles.state.value.activeUuid
         val now = System.currentTimeMillis()
         scope.launch {
-            dao.deleteResume(profileId, source, kind, id)
-            enqueue(profileId, LibrarySync.PROGRESS, "delete", now, LibrarySync.deletePayload(source, kind, id))
+            deleteResume(profileId, source, kind, id, now)
             trigger.nudge()
         }
+    }
+
+    /**
+     * Removes a Continue watching card. A series card stands for every saved episode of that
+     * series (the newest one is shown), so all of them go: otherwise an older episode, often one
+     * watched on another device, took the card's place and the series seemed to come back.
+     */
+    fun removeContinue(source: String, kind: String, id: String) {
+        val profileId = profiles.state.value.activeUuid
+        val now = System.currentTimeMillis()
+        scope.launch {
+            val rows = dao.resumes().first().filter { it.profileId == profileId }
+            val targets = com.enigmacast.domain.xtream.IptvLibraryRows.continueGroup(rows, source, kind, id)
+            targets.forEach { (k, i) -> deleteResume(profileId, source, k, i, now) }
+            trigger.nudge()
+        }
+    }
+
+    private suspend fun deleteResume(profileId: String, source: String, kind: String, id: String, now: Long) {
+        dao.deleteResume(profileId, source, kind, id)
+        tombstones.put(profileId, LibrarySync.PROGRESS, key(source, kind, id), now)
+        enqueue(profileId, LibrarySync.PROGRESS, "delete", now, LibrarySync.deletePayload(source, kind, id))
+        watchNext.remove(source, kind, id)
     }
 
     fun setFavorite(row: IptvLibraryRow, on: Boolean) {
@@ -107,9 +133,11 @@ class IptvLibrary @Inject constructor(
         scope.launch {
             if (on) {
                 dao.putFavorite(stamped)
+                tombstones.clear(profileId, LibrarySync.FAVORITE, key(stamped.source, stamped.kind, stamped.id))
                 enqueue(profileId, LibrarySync.FAVORITE, "upsert", now, LibrarySync.favoritePayload(stamped))
             } else {
                 dao.deleteFavorite(profileId, stamped.source, stamped.kind, stamped.id)
+                tombstones.put(profileId, LibrarySync.FAVORITE, key(stamped.source, stamped.kind, stamped.id), now)
                 enqueue(profileId, LibrarySync.FAVORITE, "delete", now, LibrarySync.deletePayload(stamped.source, stamped.kind, stamped.id))
             }
             trigger.nudge()

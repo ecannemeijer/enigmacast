@@ -49,6 +49,18 @@ object IptvLibraryRows {
         }
         .toList()
 
+    /**
+     * The (kind, id) rows behind one Continue watching card: the film itself, or every saved
+     * episode of the card's series (the card shows only the newest of them).
+     */
+    fun continueGroup(rows: List<IptvResumeRow>, source: String, kind: String, id: String): List<Pair<String, String>> {
+        val self = listOf(kind to id)
+        if (kind != "e") return self
+        val series = rows.firstOrNull { it.source == source && it.kind == "e" && it.id == id }?.seriesId
+        if (series.isNullOrBlank()) return self
+        return (self + rows.filter { it.source == source && it.kind == "e" && it.seriesId == series }.map { "e" to it.id }).distinct()
+    }
+
     /** IPTV favorites, newest first, with the film's progress when it has a saved place. */
     fun favorites(rows: List<IptvLibraryRow>, resumes: Map<String, IptvResumeRow>, activeSources: Set<String>): List<IptvLibraryCard> = rows
         .filter { it.source in activeSources }

@@ -68,7 +68,7 @@ Stremio addon (Torrentio / custom) -------> jlibtorrent engine -> 127.0.0.1 rang
 
 **Players and subtitles**
 - One shared Stremio-style VOD OSD for IPTV films/series, recordings and torrents: title, Play/Pause, rewind, next, seek bar with a buffered bar, and icons for subtitles, audio, video, settings and sources.
-- SubSource subtitles for IPTV films/series and torrents (release matching on the file name), with subtitle delay.
+- SubSource subtitles for IPTV films/series and torrents (release matching on the file name), with subtitle delay. The file is drawn by the app next to the playing media, so picking one keeps the position, progress and seeking.
 - Audio: MediaCodec, HDMI passthrough (AC3, E-AC3, DTS) or the bundled FFmpeg decoder (nextlib); per-output audio sync.
 
 **Profiles, sync and security**
@@ -180,7 +180,7 @@ Direct (HTTP) links from an addon, for example debrid links, are played directly
 
 ### Menu and navigation
 
-The left menu is **Home**, **TV** (flyout: Live TV, TV Guide, Movies, TV Series, Radio), **IPTV** (flyout: Live TV, Films, Series), **Torrent**, **Sport** (Soccer), **Search**, **My Items** and **Settings**, with Exit at the bottom; the last tab per group is remembered. The active profile's avatar and name sit at the top (OK: switch profile, Manage profiles, receiver standby / on).
+The left menu is **Home**, **TV** (flyout: Live TV, TV Guide, Movies, TV Series, Radio), **IPTV** (flyout: Live TV, Films, Series), **Torrent**, **Sport** (Soccer), **Search**, **My Items** and **Settings**, with Exit at the bottom; the last tab per group is remembered. The active profile's avatar and name sit at the top (OK: switch profile, Manage profiles, receiver standby / on). Right enters the open page. D-pad Left inside a page only moves within the page and never opens the menu; Back returns to it.
 
 - Up and Down only move the highlight; Up on the first and Down on the last item stay in the menu. Right from any item enters the open page and restores its last focus (else the page's first item). Opening a page or loading data never sends focus back to the menu.
 - Back from a page returns to the menu; Back again asks whether to stop EnigmaCast (Cancel stays, Stop closes and stops playback). A long press on Back toggles full screen.
@@ -343,7 +343,7 @@ The **Torrent** page browses TMDB: Movies and Series tabs, TMDB's popular list o
 
 - OK on a card opens the TMDB info page (backdrop, rating, plot, seasons and episodes for series, favourite toggle); Play asks the addon for streams and lists them in the **Streams** dialog (torrents with their release name, and direct links). A Stremio-style loading page shows the progress until the first frame.
 - **Addon:** Settings › Scrapers has *Enable with Torrentio* (Torrentio sorted by seeders) and a field for a custom Stremio addon manifest URL. A custom URL overrides Torrentio. Saving checks the manifest (valid JSON, offers `stream` for movies or series). Manifest URLs can contain a debrid key: they are kept in the encrypted store and only shown and logged masked.
-- **Library:** favourites and Continue watching per profile, shown on Home and in My Items and synced through the sync server. The last torrent stream of a title or episode (info hash, file index, public trackers) is remembered, so **Resume** starts it again without asking the addon; the resume prompt offers *Resume from …*, *Start from the beginning* and *Choose another source*. Direct links are never stored.
+- **Library:** favourites and Continue watching per profile, shown on Home and in My Items and synced through the sync server. Removals sync too: each device keeps the removal time, so an older copy from another device cannot bring the item back; removing a series from Continue watching removes all of its saved episodes. The last torrent stream of a title or episode (info hash, file index, public trackers) is remembered, so **Resume** starts it again without asking the addon; the resume prompt offers *Resume from …*, *Start from the beginning* and *Choose another source*. Direct links are never stored.
 - **Player:** the shared VOD OSD (below) with the buffered range in the seek bar, SubSource subtitles, audio and video track choice. See [Torrent engine](#torrent-engine) for how streaming works.
 
 You are responsible for what you stream; see [Attribution and legal](#attribution-and-legal).

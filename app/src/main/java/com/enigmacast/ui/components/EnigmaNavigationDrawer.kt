@@ -133,10 +133,18 @@ internal fun Modifier.drawerEdges(): Modifier = this
         onExit = {
             if (NavEdges.blocks(requestedFocusDirection)) cancelFocusChange()
         }
+        // Left at a page's left edge (geometric search or an explicit `left = menu`) no longer
+        // opens the menu: only Back returns there (requestFocus, which is not a Left move).
+        onEnter = {
+            if (NavEdges.blocksEnter(requestedFocusDirection)) cancelFocusChange()
+        }
     }
     .focusGroup()
 
 internal object NavEdges {
     /** Only vertical moves are kept inside; Right still enters the page, Left has nothing to reach. */
     fun blocks(direction: FocusDirection): Boolean = direction == FocusDirection.Up || direction == FocusDirection.Down
+
+    /** D-pad Left from the page never enters the menu; Back (and Right from it) decide. */
+    fun blocksEnter(direction: FocusDirection): Boolean = direction == FocusDirection.Left
 }

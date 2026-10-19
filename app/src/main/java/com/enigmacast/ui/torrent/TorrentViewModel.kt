@@ -422,7 +422,6 @@ class TorrentViewModel @Inject constructor(
     private var playbackSubtitles = true
     private var externalHits = emptyList<com.enigmacast.domain.subsource.SubSourceHit>()
     private var selectedExternalId: Long? = null
-    private var externalAttached = false
     private var pendingEmbeddedId: String? = null
     private var holdAutoText = false
     private var subtitleJob: Job? = null
@@ -556,7 +555,7 @@ class TorrentViewModel @Inject constructor(
                     }
                     override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                         val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
-                        cues = if (textOn) cueGroup.cues else emptyList()
+                        if (externalCues == null) cues = if (textOn) cueGroup.cues else emptyList()
                     }
                     override fun onPlayerError(error: PlaybackException) {
                         EnigmaLog.networkError("torrent playback: ${error.errorCodeName}")
@@ -733,23 +732,26 @@ class TorrentViewModel @Inject constructor(
         if (id == null) {
             selectedExternalId = null
             pendingEmbeddedId = null
-            val dropFile = externalAttached
-            externalAttached = false
+            dropExternalCues()
             cues = emptyList()
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .build()
-            if (dropFile) reload(p, null) else publishTracks(p)
+            publishTracks(p)
             return
         }
         if (id.startsWith(EXTERNAL_PREFIX)) {
             val hitId = id.removePrefix(EXTERNAL_PREFIX).toLongOrNull() ?: return
-            val hit = externalHits.firstOrNull { it.id == hitId } ?: return
+            if (externalHits.none { it.id == hitId }) return
             selectedExternalId = hitId
             pendingEmbeddedId = null
+            // The file is drawn by the app, next to the media: the media item is never rebuilt,
+            // so position, progress and seeking stay as they are ([com.enigmacast.playback.ExternalSubtitles]).
+            dropExternalCues()
+            cues = emptyList()
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .build()
             publishTracks(p)
@@ -757,27 +759,45 @@ class TorrentViewModel @Inject constructor(
             downloadJob = viewModelScope.launch {
                 val file = subtitles.file(hitId) ?: return@launch
                 if (selectedExternalId != hitId) return@launch
-                val language = com.enigmacast.domain.subsource.SubSourceLanguages.bySlug(hit.language)
-                val config = MediaItem.SubtitleConfiguration.Builder(android.net.Uri.fromFile(file))
-                    .setId("$EXTERNAL_PREFIX$hitId")
-                    .setMimeType(subtitleMime(file.extension))
-                    .setLanguage(language?.iso?.substringBefore('-'))
-                    .setLabel(com.enigmacast.domain.subsource.SubSourceMatch.label(hit))
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-                externalAttached = true
-                reload(player ?: return@launch, config)
+                val timeline = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.enigmacast.playback.ExternalSubtitles.parse(file, subtitleMime(file.extension))
+                } ?: return@launch
+                if (selectedExternalId != hitId) return@launch
+                showExternalCues(timeline)
             }
             return
         }
         selectedExternalId = null
-        if (externalAttached) {
-            externalAttached = false
-            pendingEmbeddedId = id
-            reload(p, null)
-        } else {
-            applyEmbeddedSubtitles(p, id)
+        dropExternalCues()
+        applyEmbeddedSubtitles(p, id)
+        publishTracks(p)
+    }
+
+    /** The SubSource file being shown, and the job that follows the player position with it. */
+    private var externalCues: com.enigmacast.playback.CueTimeline<androidx.media3.common.text.Cue>? = null
+    private var externalCueJob: Job? = null
+
+    private fun showExternalCues(timeline: com.enigmacast.playback.CueTimeline<androidx.media3.common.text.Cue>) {
+        externalCues = timeline
+        externalCueJob?.cancel()
+        externalCueJob = viewModelScope.launch {
+            var last: List<androidx.media3.common.text.Cue> = emptyList()
+            while (true) {
+                // Always the current player: a lookup per frame-ish tick is a binary search.
+                val p = player
+                val now = if (p == null) emptyList()
+                else com.enigmacast.playback.ExternalSubtitles.cuesAt(timeline, p.currentPosition, subtitleDelayMs)
+                if (now != last) { last = now; cues = now }
+                delay(100)
+            }
         }
+    }
+
+    private fun dropExternalCues() {
+        externalCueJob?.cancel()
+        externalCueJob = null
+        if (externalCues != null) cues = emptyList()
+        externalCues = null
     }
 
     private fun mediaItem(url: String, subtitle: MediaItem.SubtitleConfiguration?): MediaItem {
@@ -786,22 +806,13 @@ class TorrentViewModel @Inject constructor(
         return builder.build()
     }
 
-    /** Same position and play state with or without the SubSource file. */
-    private fun reload(p: ExoPlayer, subtitle: MediaItem.SubtitleConfiguration?) {
-        val position = p.currentPosition.coerceAtLeast(0L)
-        val playingNow = p.playWhenReady
-        p.setMediaItem(mediaItem(mediaUrl, subtitle), position)
-        p.prepare()
-        p.playWhenReady = playingNow
-    }
-
     private fun clearExternalSubtitles() {
         subtitleJob?.cancel()
         downloadJob?.cancel()
         externalHits = emptyList()
         selectedExternalId = null
-        externalAttached = false
         pendingEmbeddedId = null
+        dropExternalCues()
     }
 
     /**
@@ -851,7 +862,7 @@ class TorrentViewModel @Inject constructor(
             com.enigmacast.playback.TrackChoice(
                 "$EXTERNAL_PREFIX${hit.id}",
                 com.enigmacast.util.UiText.Raw(com.enigmacast.domain.subsource.SubSourceMatch.label(hit)),
-                textOn && selectedExternalId == hit.id,
+                selectedExternalId == hit.id,
             )
         }
         val merged = menu.copy(subtitles = embedded + extra, subtitlesOn = embedded.any { it.selected } || extra.any { it.selected })
