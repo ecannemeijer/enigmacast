@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -213,25 +214,27 @@ private fun RegionCard(card: SportRegions.Card, modifier: Modifier, onClick: () 
             .width(180.dp)
             .height(150.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(if (focus.focused) 14.dp else 4.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .clip(shape)
-            .background(EnigmaColors.Text.copy(alpha = if (focus.focused) 0.18f else 0.08f))
-            .border(if (focus.focused) 2.5.dp else 1.dp, if (focus.focused) EnigmaColors.Focus else EnigmaColors.Text.copy(alpha = 0.16f), shape)
+            // A light, slightly see-through surface over the photo: dark emblems stand out on it.
+            .background(CardSurface.copy(alpha = if (focus.focused) 0.96f else 0.88f))
+            .border(if (focus.focused) 2.5.dp else 1.dp, if (focus.focused) EnigmaColors.Focus else Color.White.copy(alpha = 0.55f), shape)
             .tvClick(focus, onClick)
             .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            RegionLogo(card, 70.dp)
+            RegionLogo(card, 70.dp, onLight = true)
             // With an emblem in the middle, the flag sits small in the corner.
             val flag = SportArt.flag(card.id)
             if (card.emblem.isNotBlank() && flag != null) {
-                Box(Modifier.align(Alignment.TopStart)) { FlagImage(flag, 22.dp, onError = {}) }
+                Box(Modifier.align(Alignment.TopStart)) { FlagImage(flag, 22.dp, onError = {}, edge = CardEdge) }
             }
         }
         Text(
             countryName(card.id),
-            color = EnigmaColors.Text,
+            color = CardText,
             fontSize = 14.sp,
             fontWeight = if (focus.focused) EnigmaType.Strong else FontWeight.Normal,
             maxLines = 2,
@@ -246,13 +249,13 @@ private fun RegionCard(card: SportRegions.Card, modifier: Modifier, onClick: () 
  * one: the region's flag (flag-icons, MIT), a drawn globe for World, and the colour badge last.
  */
 @Composable
-private fun RegionLogo(card: SportRegions.Card, size: Dp) {
+private fun RegionLogo(card: SportRegions.Card, size: Dp, onLight: Boolean = false) {
     val context = LocalContext.current
     var failed by remember(card.emblem) { mutableStateOf(false) }
     var flagFailed by remember(card.id) { mutableStateOf(false) }
     val flag = SportArt.flag(card.id)
     if ((card.emblem.isBlank() || failed) && flag != null && !flagFailed) {
-        FlagImage(flag, size, onError = { flagFailed = true })
+        FlagImage(flag, size, onError = { flagFailed = true }, edge = if (onLight) CardEdge else Color.White.copy(alpha = 0.25f))
         return
     }
     if ((card.emblem.isBlank() || failed) && card.id == "WORLD") {
@@ -347,7 +350,7 @@ internal object SportArt {
 
 /** A 4:3 flag with rounded corners and a hairline edge; [height] sets the size. */
 @Composable
-private fun FlagImage(res: Int, height: Dp, onError: () -> Unit) {
+private fun FlagImage(res: Int, height: Dp, onError: () -> Unit, edge: Color = Color.White.copy(alpha = 0.25f)) {
     val shape = skinShape(4.dp)
     AsyncImage(
         model = res,
@@ -358,7 +361,7 @@ private fun FlagImage(res: Int, height: Dp, onError: () -> Unit) {
             .width(height * 4 / 3)
             .height(height)
             .clip(shape)
-            .border(1.dp, Color.White.copy(alpha = 0.25f), shape),
+            .border(1.dp, edge, shape),
     )
 }
 
@@ -379,3 +382,8 @@ private fun Globe(size: Dp) {
         drawLine(accent, Offset(c.x - r * 0.84f, c.y + r * 0.5f), Offset(c.x + r * 0.84f, c.y + r * 0.5f), strokeWidth = stroke.width)
     }
 }
+
+/** Region cards: a light frosted surface with dark text, the same in every skin (the photo behind is dark). */
+private val CardSurface = Color(0xFFF3F5F9)
+private val CardText = Color(0xFF162032)
+private val CardEdge = Color.Black.copy(alpha = 0.14f)
