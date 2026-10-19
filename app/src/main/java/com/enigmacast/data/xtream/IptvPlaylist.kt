@@ -168,6 +168,7 @@ class IptvPlaylistSync @Inject constructor(
     private val db: EnigmaDatabase,
     private val dao: IptvDao,
     private val store: IptvPlaylistStore,
+    private val activity: com.enigmacast.activity.BackgroundActivityTracker,
 ) {
     private val gate = Mutex()
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
@@ -197,7 +198,24 @@ class IptvPlaylistSync @Inject constructor(
         return result
     }
 
-    suspend fun load(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit = {}): IptvLoadResult = gate.withLock { loadBody(kind, onProgress) }
+    suspend fun load(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit = {}): IptvLoadResult = gate.withLock {
+        // The status window shows how many entries are read; the total is not known in advance.
+        val task = activity.start(com.enigmacast.activity.ActivityKind.IPTV)
+        var failed = true
+        try {
+            val result = loadBody(kind) { progress ->
+                activity.progress(task, progress.count, null)
+                onProgress(progress)
+            }
+            failed = result is IptvLoadResult.Failure && result != IptvLoadResult.Failure.NOT_CONFIGURED
+            result
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            failed = false
+            throw cancel
+        } finally {
+            activity.finish(task, failed)
+        }
+    }
 
     private suspend fun loadBody(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit): IptvLoadResult = withContext(Dispatchers.IO) {
         val login = store.login.value

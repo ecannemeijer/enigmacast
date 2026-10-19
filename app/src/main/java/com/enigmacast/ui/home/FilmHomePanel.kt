@@ -144,7 +144,7 @@ fun FilmHomePanel(
             }
             PivotColumn(sections, Modifier.fillMaxSize()) {
                 when (val state = model.state) {
-                    HomeFilmsViewModel.State.Loading -> Box(sections.section(0)) { LoadingSkeleton(contentFocus, left, sync?.percent, sync?.step?.asString()) }
+                    HomeFilmsViewModel.State.Loading -> Box(sections.section(0)) { LoadingSkeleton(contentFocus, left, sync?.percent, sync?.let { running -> running.step.asString() + (running.total?.let { " (${running.done ?: 0}/$it)" } ?: "") }) }
                     is HomeFilmsViewModel.State.Ready -> {
                         Box(sections.section(0).then(chain.section("hero"))) {
                             if (hero != null) {
@@ -199,21 +199,7 @@ fun FilmHomePanel(
                     }
                 }
             }
-            val running = sync
-            if (running != null && model.state is HomeFilmsViewModel.State.Ready) {
-                Row(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp)
-                        .background(EnigmaColors.Selected.copy(alpha = 0.9f), skinShape(10.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    EnigmaLoadingIndicator(Modifier.size(14.dp))
-                    Text(stringResource(R.string.sync_preparing, running.percent), color = EnigmaColors.Muted, fontSize = 12.sp)
-                }
-            }
+            // A sync running behind a filled Home shows in the app-wide status window at the top.
             if (!model.notice.isEmpty()) {
                 Text(
                     model.notice.asString(),

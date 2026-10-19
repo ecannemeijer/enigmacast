@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.view.Gravity
 import android.view.SurfaceView
+import com.enigmacast.ui.activity.reportFullscreenVideo
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -280,7 +281,7 @@ fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Mod
     val surface = VideoOutput.surfaceView
     key(surface) {
         AndroidView(
-            modifier = modifier,
+            modifier = modifier.reportFullscreenVideo(),
             factory = { context ->
                 val video = videoView(context, surface).apply { isFocusable = false }
                 val subtitles = CueOverlayView(context)
@@ -325,7 +326,7 @@ internal fun EnigmaVideoPlayer(
     val surface = VideoOutput.surfaceView
     key(surface) {
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.reportFullscreenVideo(),
         factory = { context ->
             val video = videoView(context, surface)
             val subtitles = CueOverlayView(context)

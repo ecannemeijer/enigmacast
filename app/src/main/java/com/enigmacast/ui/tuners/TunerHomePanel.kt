@@ -44,6 +44,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -338,7 +340,7 @@ private fun TunersRow(
                         .then(left)
                         .fillMaxSize()
                         .focusRequester(foci[0])
-                        .then(focusLook(focus.focused, CardShape))
+                        .then(tunerCardLook(focus.focused, CardShape))
                         .tvClick(focus) { model.message = null },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -429,11 +431,50 @@ private fun TunersRow(
     }
 }
 
+/**
+ * The surface of a tuner card: a step lighter than the page (raised tone, soft top-to-bottom
+ * gradient), a hairline edge and a soft shadow, all derived from the active skin. Focus keeps the
+ * app's card focus (selected tone, 2 dp highlight border) and adds a faint glow in that colour.
+ * [dim] is for a tuner slot the receiver does not have.
+ */
+@Composable
+private fun tunerCardLook(focused: Boolean, shape: androidx.compose.ui.graphics.Shape, dim: Boolean = false): Modifier {
+    val elevation by androidx.compose.animation.core.animateDpAsState(
+        when {
+            dim -> 0.dp
+            focused -> 10.dp
+            else -> 4.dp
+        },
+        label = "tunerElevation",
+    )
+    val c = EnigmaColors
+    val top: Color
+    val bottom: Color
+    if (focused) {
+        top = androidx.compose.ui.graphics.lerp(c.Selected, c.Text, 0.07f)
+        bottom = c.Selected
+    } else {
+        top = androidx.compose.ui.graphics.lerp(c.Raised, c.Text, 0.07f)
+        bottom = androidx.compose.ui.graphics.lerp(c.Card, c.Raised, 0.5f)
+    }
+    val glow = if (focused) c.Cyan.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.55f)
+    return Modifier
+        .then(if (dim) Modifier.alpha(0.6f) else Modifier)
+        .shadow(elevation, shape, clip = false, ambientColor = glow, spotColor = glow)
+        .background(Brush.verticalGradient(listOf(top, bottom)), shape)
+        .border(
+            if (focused) 2.dp else 1.dp,
+            if (focused) c.Cyan else c.Text.copy(alpha = 0.10f),
+            shape,
+        )
+        .clip(shape)
+}
+
 /** A tuner this receiver does not have. Shown, but not focusable, until a box with that slot connects. */
 @Composable
 private fun AbsentTuner(letter: String, modifier: Modifier) {
     Column(
-        modifier.then(focusLook(false, CardShape)).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier.then(tunerCardLook(false, CardShape, dim = true)).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -466,7 +507,7 @@ private fun TunerCardView(
     Column(
         modifier
             .then(if (stretch) Modifier.fillMaxWidth().fillMaxHeight() else Modifier.width(232.dp).heightIn(min = 96.dp))
-            .then(focusLook(focus.focused, CardShape))
+            .then(tunerCardLook(focus.focused, CardShape))
             .tvClick(focus, onClick)
             .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),

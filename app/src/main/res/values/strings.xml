@@ -1478,4 +1478,18 @@
     <string name="soccer_advanced">Advanced</string>
     <string name="soccer_advanced_desc">Your own football-data.org API key, only if you have one.</string>
     <string name="sync_server_install_hint">Install the sync server on your receiver. You need your receiver\'s password (username usually root). Afterwards the web dashboard address and its one-time password appear here.</string>
+    <string name="activity_channels">Fetching channel lists</string>
+    <string name="activity_guide">Loading TV guide</string>
+    <string name="activity_home">Finding films and series for Home</string>
+    <string name="activity_iptv">Updating IPTV channels</string>
+    <string name="activity_sync_server">Syncing with the sync server</string>
+    <string name="activity_busy">%1$s…</string>
+    <string name="activity_progress">%1$s (%2$d/%3$d)</string>
+    <string name="activity_items">%1$s… (%2$d)</string>
+    <string name="activity_done">Done ✓</string>
+    <string name="activity_failed">%1$s didn\'t work. It will be tried again later.</string>
+    <plurals name="activity_waiting">
+        <item quantity="one">1 more task waiting</item>
+        <item quantity="other">%d more tasks waiting</item>
+    </plurals>
 </resources>

@@ -52,6 +52,7 @@ class EnigmaSyncEngine @Inject constructor(
     private val hidden: IptvHiddenCategories,
     private val playlist: IptvPlaylistStore,
     private val iptv: IptvPlaylistSync,
+    private val activity: com.enigmacast.activity.BackgroundActivityTracker,
 ) {
     /** Copies server profiles onto this device so the picker can show them. */
     suspend fun importProfiles() = withContext(Dispatchers.IO) {
@@ -71,7 +72,11 @@ class EnigmaSyncEngine @Inject constructor(
     private val marks by lazy { context.getSharedPreferences("enigma_sync_library", Context.MODE_PRIVATE) }
 
     suspend fun sync() = withContext(Dispatchers.IO) {
-        running.withLock { syncOnce() }
+        running.withLock {
+            // Unpaired devices have nothing to do; a paired one reports to the status window (only slow syncs show).
+            if (client.config() == null) return@withLock
+            activity.track(com.enigmacast.activity.ActivityKind.SYNC_SERVER) { syncOnce() }
+        }
     }
 
     private suspend fun syncOnce() {
