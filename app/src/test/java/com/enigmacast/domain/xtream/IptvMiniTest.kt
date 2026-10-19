@@ -17,6 +17,17 @@ class IptvMiniTest {
     }
 
     @Test
+    fun theMiniPlayerOpensWhatItShows() {
+        assertEquals(IptvMini.Target.IPTV, IptvMini.target(iptvLive = true, enigma2Shown = true, enigma2State = "READY"))
+        assertEquals(IptvMini.Target.ENIGMA2, IptvMini.target(iptvLive = false, enigma2Shown = true, enigma2State = "READY"))
+        assertEquals(IptvMini.Target.ENIGMA2, IptvMini.target(iptvLive = false, enigma2Shown = true, enigma2State = "BUFFERING"))
+        // Nothing open (stopped, ended) or no Enigma2 picture on Home: not focusable.
+        assertEquals(IptvMini.Target.NONE, IptvMini.target(iptvLive = false, enigma2Shown = true, enigma2State = "IDLE"))
+        assertEquals(IptvMini.Target.NONE, IptvMini.target(iptvLive = false, enigma2Shown = true, enigma2State = "ENDED"))
+        assertEquals(IptvMini.Target.NONE, IptvMini.target(iptvLive = false, enigma2Shown = false, enigma2State = "READY"))
+    }
+
+    @Test
     fun theTitleOnAir() {
         val list = listOf(XtreamEpg("News", 100, 200), XtreamEpg("  ", 200, 300), XtreamEpg("Film", 300, 400))
         assertEquals("News", IptvMini.nowTitle(list, 150))

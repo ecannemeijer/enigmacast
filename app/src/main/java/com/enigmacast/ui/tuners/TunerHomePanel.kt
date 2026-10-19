@@ -101,9 +101,12 @@ fun TunerHomePanel(
     showStream: Boolean = false,
     /** A Torrent card in Continue watching: the dashboard opens the Torrent page on its info page. */
     onTorrent: () -> Unit = {},
-    /** IPTV live plays on in the mini player: it takes focus, OK goes back to it full screen. */
-    iptvLive: Boolean = false,
-    onIptvFullscreen: () -> Unit = {},
+    /**
+     * Something plays in the mini player (IPTV live, Enigma2 live/timeshift/recording): it takes
+     * focus, OK opens it full screen.
+     */
+    miniFocusable: Boolean = false,
+    onMiniFullscreen: () -> Unit = {},
 ) {
     val streamFocus = remember { FocusRequester() }
     val iptvContinue by library.iptvContinue.collectAsStateWithLifecycle()
@@ -144,7 +147,7 @@ fun TunerHomePanel(
                 .background(Brush.verticalGradient(0f to Color(0xFF0E1C2E), 0.6f to EnigmaColors.Canvas))
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
                 // A Continue watching card removed (long press › Remove) also keeps the focus on the page.
-                .holdPageFocus(contentFocus, Triple(model.cards.map { it.index }, iptvContinue.map { it.key }, iptvLive)),
+                .holdPageFocus(contentFocus, Triple(model.cards.map { it.index }, iptvContinue.map { it.key }, miniFocusable && showStream)),
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()
@@ -163,7 +166,7 @@ fun TunerHomePanel(
                         model.cards.isEmpty() -> EnigmaColors.Subtle
                         else -> EnigmaColors.Success
                     }
-                    TunersRow(model, left, menuFocus, nextDown, showStream, dot, streamFocus.takeIf { iptvLive && showStream }, onIptvFullscreen) { chosen = it }
+                    TunersRow(model, left, menuFocus, nextDown, showStream, dot, streamFocus.takeIf { miniFocusable && showStream }, onMiniFullscreen) { chosen = it }
                 })
                 // IPTV/Torrent Continue watching (Home has no recordings resume row): OK opens the info page, long press the options.
                 if (iptvContinue.isNotEmpty() && library.iptvAllowed()) add(PageSection("iptv") {
@@ -308,7 +311,7 @@ private fun TunersRow(
     nextDown: FocusRequester,
     showStream: Boolean,
     status: Color,
-    /** Set when the mini player can take focus (IPTV live): Right from the cards reaches it. */
+    /** Set when the mini player can take focus (something plays): Right from the cards reaches it. */
     streamFocus: FocusRequester?,
     onStreamOk: () -> Unit,
     onOpen: (TunerCard) -> Unit,

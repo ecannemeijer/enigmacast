@@ -684,6 +684,9 @@ class StreamGuideViewModel @Inject constructor(
      * Live TV in the menu: back to the running stream full screen, else play the last channel
      * of this receiver (or the first channel of the list) and go full screen.
      */
+    /** The Enigma2 player (live, timeshift, recording): Home's mini player follows it. */
+    val playerState: kotlinx.coroutines.flow.StateFlow<com.enigmacast.domain.model.PlayerState> get() = playback.state
+
     fun openLive(onFullscreen: () -> Unit) {
         val state = session.state.value
         val radio = isRadioReference(state.bouquetReference) || isRadioReference(state.channel?.reference.orEmpty())

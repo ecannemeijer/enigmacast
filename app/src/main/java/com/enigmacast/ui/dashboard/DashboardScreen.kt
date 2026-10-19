@@ -312,6 +312,8 @@ fun DashboardScreen(
     // IPTV live (not catch-up) that plays on behind the dashboard: the mini players show it.
     val iptvLive = xtreamModel.playingLive
     val showStream = showMiniPlayer || iptvLive
+    val enigma2State by guideModel.playerState.collectAsState()
+    val miniTarget = com.enigmacast.domain.xtream.IptvMini.target(iptvLive, showMiniPlayer && !guideModel.loadingChannels, enigma2State.playbackState)
     /** Free accounts: these menu items show a lock and open the Premium dialog. */
     fun lockedFeature(target: DashSection): com.enigmacast.domain.account.PremiumFeature? = if (premium) null else when (target) {
         DashSection.Guide -> com.enigmacast.domain.account.PremiumFeature.EPG
@@ -773,9 +775,17 @@ fun DashboardScreen(
                             library = myItemsModel,
                             showStream = showStream,
                             onTorrent = { enterSection(DashSection.Torrent) },
-                            iptvLive = iptvLive,
-                            // OK on the IPTV mini player: that channel full screen, without a restart.
-                            onIptvFullscreen = { if (xtreamModel.resumeLiveFullscreen()) onXtream() },
+                            miniFocusable = miniTarget != com.enigmacast.domain.xtream.IptvMini.Target.NONE,
+                            // OK on the mini player: what it shows, full screen, without a restart.
+                            // Enigma2 takes the Stream page's route for a running stream (live,
+                            // timeshift, a recording): the player screen keeps the open stream.
+                            onMiniFullscreen = {
+                                when (miniTarget) {
+                                    com.enigmacast.domain.xtream.IptvMini.Target.IPTV -> if (xtreamModel.resumeLiveFullscreen()) onXtream()
+                                    com.enigmacast.domain.xtream.IptvMini.Target.ENIGMA2 -> onStream()
+                                    com.enigmacast.domain.xtream.IptvMini.Target.NONE -> Unit
+                                }
+                            },
                         )
                         }
                         DashSection.Movies -> {
