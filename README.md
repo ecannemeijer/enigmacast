@@ -659,6 +659,7 @@ Settings can enable:
 Recent work on `feature/torrents` (newest first; the version stays `1.0.0-beta.58`):
 
 - **2026-10-19:** Background status window: a small bar at the top shows what runs in the background (channel lists, TV guide with a count, Home films and series, IPTV channels, slow sync-server syncs), a filled bar when the count is known and a moving bar when not, "N more tasks waiting", a brief "Done ✓" or plain failure; never focusable, hidden over fullscreen video. Reported through `activity/BackgroundActivityTracker`.
+- **2026-10-19:** Home tuner cards A–D: a raised surface that stands off the page (skin-derived tone with a soft vertical gradient, hairline edge, rounded corners, soft shadow); focus keeps the selected tone and highlight border with a faint glow.
 - **2026-10-19:** Setup wizard rebuilt for non-technical users (5 standard steps, optional account, plain texts; beta Premium period now 1 year). IPTV channel list: now/next on every row (bulk Room guide first, then a per-stream cache, then Xtream short EPG / data table, 4 at a time after scrolling rests), per-row updates, logo loading limited and subsampled; no stalls while scrolling fast.
 - **2026-10-18:**
   - Poster grids (Torrent, IPTV VOD): the whole focused card, including year and rating, stays on screen; cards have one height.
