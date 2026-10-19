@@ -2,6 +2,8 @@ package com.enigmacast.sync
 
 import android.content.Context
 import com.enigmacast.R
+import com.enigmacast.activity.ActivityKind
+import com.enigmacast.activity.BackgroundActivityTracker
 import com.enigmacast.data.db.BouquetRow
 import com.enigmacast.data.db.CacheDao
 import com.enigmacast.data.db.CacheMappers
@@ -44,8 +46,8 @@ import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** A running sync: [percent] 0–100 and the step in words. */
-data class SyncProgress(val receiverKey: String, val percent: Int, val step: UiText)
+/** A running sync: [percent] 0–100, the step in words, and [done] of [total] when the count is known. */
+data class SyncProgress(val receiverKey: String, val percent: Int, val step: UiText, val done: Int? = null, val total: Int? = null)
 
 /**
  * Fills the Room cache for one receiver: bouquets → channels → EPG (today plus the set number
@@ -64,6 +66,7 @@ class SyncEngine @Inject constructor(
     private val seriesRecorder: dagger.Lazy<com.enigmacast.live.SeriesRecorder>,
     private val channelMemory: dagger.Lazy<ChannelMemoryCarrier>,
     private val listEvents: ChannelListEvents,
+    private val activity: BackgroundActivityTracker,
 ) {
     private val gate = Mutex()
     private val _progress = MutableStateFlow<SyncProgress?>(null)
@@ -109,7 +112,9 @@ class SyncEngine @Inject constructor(
             if (channelsDue || startupChanged || carryFrom != null) {
                 step(rk, 2, R.string.sync_step_channels)
                 attempt(rk, SyncKind.CHANNELS, keepHash = true) {
-                    val outcome = syncChannels(receiver, rk, force = channelsDue, carryFrom = carryFrom?.takeIf { it != rk })
+                    val outcome = activity.track(ActivityKind.CHANNELS) { report ->
+                        syncChannels(receiver, rk, force = channelsDue, carryFrom = carryFrom?.takeIf { it != rk }, report = report)
+                    }
                     if (outcome.replaced) {
                         changed = true
                         channelsReplaced = true
@@ -131,14 +136,18 @@ class SyncEngine @Inject constructor(
             if (com.enigmacast.domain.sync.EpgSyncDecision.runs(epgReason)) {
                 // Marked as started first, so a download that never finishes is not redone on every start.
                 dao.putSyncState(SyncStateRow(rk, SyncKind.EPG.name, epgState?.lastSuccessMs ?: 0L, nowMs, epgState?.error.orEmpty(), epgState?.contentHash.orEmpty()))
-                attempt(rk, SyncKind.EPG) { syncEpg(receiver, rk, today.startSec - 4 * 3600, horizonSec) }
+                attempt(rk, SyncKind.EPG) {
+                    activity.track(ActivityKind.GUIDE) { report -> syncEpg(receiver, rk, today.startSec - 4 * 3600, horizonSec, report) }
+                }
                 changed = true
             }
             val filmsToday = lastDay(rk, SyncKind.FILMS, zone) == today.date.toString()
             val filmsDue = changed || force || refilm || !filmsToday ||
                 SyncPolicy.isDue(values.effectiveFilmsPerDay, last(rk, SyncKind.FILMS), nowMs, true)
             if (filmsDue && tmdb.apiKey().isNotBlank()) {
-                attempt(rk, SyncKind.FILMS) { syncFilms(rk, today, horizonSec, zone) }
+                attempt(rk, SyncKind.FILMS) {
+                    activity.track(ActivityKind.HOME) { report -> syncFilms(rk, today, horizonSec, zone, report) }
+                }
                 changed = true
             }
             // Series rules: add timers for episodes that the new guide shows.
@@ -171,7 +180,7 @@ class SyncEngine @Inject constructor(
                     var result: ChannelOutcome? = null
                     var failure: Exception? = null
                     attempt(rk, SyncKind.CHANNELS, keepHash = true, onError = { failure = it }) {
-                        result = syncChannels(receiver, rk, force = force, carryFrom = null)
+                        result = activity.track(ActivityKind.CHANNELS) { report -> syncChannels(receiver, rk, force = force, carryFrom = null, report = report) }
                     }
                     failure?.let { throw it }
                     result!!
@@ -194,7 +203,13 @@ class SyncEngine @Inject constructor(
      * stored one. When it differs (or [force]), this receiver's bouquets and channels are fully
      * replaced in one transaction, so removed, renamed and reordered entries never linger.
      */
-    private suspend fun syncChannels(receiver: ReceiverConfig, rk: String, force: Boolean, carryFrom: String?): ChannelOutcome {
+    private suspend fun syncChannels(
+        receiver: ReceiverConfig,
+        rk: String,
+        force: Boolean,
+        carryFrom: String?,
+        report: BackgroundActivityTracker.Reporter? = null,
+    ): ChannelOutcome {
         val bouquets = api.televisionBouquets(receiver)
         require(bouquets.isNotEmpty()) { "no bouquets" }
         val snapshots = ArrayList<com.enigmacast.domain.sync.BouquetSnapshot>()
@@ -202,12 +217,14 @@ class SyncEngine @Inject constructor(
         val channelRows = ArrayList<ChannelRow>()
         var position = 0
         bouquets.forEachIndexed { index, bouquet ->
-            step(rk, 2 + 13 * (index + 1) / bouquets.size, R.string.sync_step_channels)
+            step(rk, 2 + 13 * index / bouquets.size, R.string.sync_step_channels, index, bouquets.size)
+            report?.progress(index, bouquets.size)
             // A bouquet that fails to load keeps its cached channels instead of being emptied.
             val channels = runCatching { api.channelsInBouquet(receiver, bouquet.reference) }.getOrElse {
                 dao.channelsIn(rk, bouquet.reference).map { com.enigmacast.domain.model.BouquetEntry(it.name, it.reference, it.number, it.picon) }
             }
             snapshots += com.enigmacast.domain.sync.BouquetSnapshot(bouquet.reference, bouquet.name, channels.map { it.reference })
+            report?.progress(index + 1, bouquets.size)
             channels.forEach { c -> channelRows += ChannelRow(rk, bouquet.reference, c.reference, c.name, c.picon, c.number, position++, NowEvents.key(c.reference)) }
         }
         val hash = com.enigmacast.domain.sync.ChannelListHash.of(snapshots)
@@ -238,8 +255,18 @@ class SyncEngine @Inject constructor(
         return ChannelOutcome(true, bouquets.size, channelRows.size)
     }
 
-    private suspend fun syncEpg(receiver: ReceiverConfig, rk: String, fromSec: Long, toSec: Long) = coroutineScope {
+    private suspend fun syncEpg(
+        receiver: ReceiverConfig,
+        rk: String,
+        fromSec: Long,
+        toSec: Long,
+        report: BackgroundActivityTracker.Reporter? = null,
+    ) = coroutineScope {
         val bouquets = dao.bouquets(rk)
+        // The count is known from the start: "Guide (0/12)" instead of a percentage that waits
+        // for the first bouquet to come back.
+        step(rk, 15, R.string.sync_step_epg, 0, bouquets.size)
+        report?.progress(0, bouquets.size)
         val channels = dao.channels(rk).groupBy { it.bouquetReference }
         val minutes = ((toSec - fromSec) / 60).toInt()
         val gate = Semaphore(3)
@@ -257,8 +284,9 @@ class SyncEngine @Inject constructor(
                             runCatching { api.serviceEvents(receiver, channel.reference) }.getOrDefault(emptyList())
                         }
                     }
-                    synchronized(this@SyncEngine) { done++ }
-                    step(rk, 15 + 50 * done / bouquets.size.coerceAtLeast(1), R.string.sync_step_epg)
+                    val finished = synchronized(this@SyncEngine) { ++done }
+                    step(rk, 15 + 50 * finished / bouquets.size.coerceAtLeast(1), R.string.sync_step_epg, finished, bouquets.size)
+                    report?.progress(finished, bouquets.size)
                     events
                 }
             }
@@ -275,7 +303,7 @@ class SyncEngine @Inject constructor(
         EnigmaLog.service("sync epg receiver=$rk events=${rows.size}")
     }
 
-    private suspend fun syncFilms(rk: String, today: DayWindow, horizonSec: Long, zone: ZoneId) {
+    private suspend fun syncFilms(rk: String, today: DayWindow, horizonSec: Long, zone: ZoneId, report: BackgroundActivityTracker.Reporter? = null) {
         step(rk, 66, R.string.sync_step_films)
         val countryCode = country.country()
         val language = CountryResolver.tmdbLanguage(country.appLanguage(), countryCode)
@@ -293,7 +321,8 @@ class SyncEngine @Inject constructor(
             }
             .distinctBy { Triple(FilmDetector.normalize(it.searchTitle), it.event.beginEpochSec / 300, FilmDetector.normalize(it.channelName.replace(Regex("(?i)\\bhd\\b"), ""))) }
         val films = HomeFilmsBuilder(tmdb, RoomFilmCache(dao, cacheMs())).build(candidates, countryCode, language) { done, total ->
-            step(rk, 66 + 33 * done / total.coerceAtLeast(1), R.string.sync_step_films)
+            step(rk, 66 + 33 * done / total.coerceAtLeast(1), R.string.sync_step_films, done, total)
+            report?.progress(done, total)
         }
         val rows = films.map { film ->
             val day = Instant.ofEpochSecond(film.event.beginEpochSec).atZone(zone).toLocalDate().toString()
@@ -301,6 +330,8 @@ class SyncEngine @Inject constructor(
         }
         dao.replaceHomeFilms(rk, today.startSec - 24 * 3600, horizonSec + 24 * 3600, rows)
         EnigmaLog.service("sync films receiver=$rk country=$countryCode candidates=${candidates.size} matched=${rows.size}")
+        // Series: the count is not known up front, so the bar moves without a total.
+        report?.progress(null, null)
         syncSeries(rk, today, horizonSec, zone, countryCode, language, names)
     }
 
@@ -357,8 +388,8 @@ class SyncEngine @Inject constructor(
     private suspend fun lastDay(rk: String, kind: SyncKind, zone: ZoneId): String? =
         dao.syncState(rk, kind.name)?.lastSuccessMs?.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate().toString() }
 
-    private fun step(rk: String, percent: Int, label: Int) {
-        _progress.value = SyncProgress(rk, percent.coerceIn(0, 100), UiText.res(label))
+    private fun step(rk: String, percent: Int, label: Int, done: Int? = null, total: Int? = null) {
+        _progress.value = SyncProgress(rk, percent.coerceIn(0, 100), UiText.res(label), done, total?.takeIf { it > 0 })
     }
 
     private companion object {

@@ -1478,4 +1478,18 @@
     <string name="iptv_next">Avanti</string>
     <string name="iptv_next_cancel">Annulla</string>
     <string name="iptv_next_in">Inizia tra %1$d</string>
+    <string name="activity_channels">Recupero liste canali</string>
+    <string name="activity_guide">Caricamento guida TV</string>
+    <string name="activity_home">Ricerca di film e serie per la Home</string>
+    <string name="activity_iptv">Aggiornamento canali IPTV</string>
+    <string name="activity_sync_server">Sincronizzazione con il server di sincronizzazione</string>
+    <string name="activity_busy">%1$s…</string>
+    <string name="activity_progress">%1$s (%2$d/%3$d)</string>
+    <string name="activity_items">%1$s… (%2$d)</string>
+    <string name="activity_done">Fatto ✓</string>
+    <string name="activity_failed">%1$s non è riuscito. Verrà ritentato più tardi.</string>
+    <plurals name="activity_waiting">
+        <item quantity="one">Poi ancora 1 attività</item>
+        <item quantity="other">Poi ancora %d attività</item>
+    </plurals>
 </resources>

@@ -393,6 +393,13 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             reminderNotice?.let { AutoSwitchNotice(it) }
             appViewModel.reminderMessage?.let { AutoSwitchMessage(it.asString()) }
         }
+        if (appViewModel.screen != AppScreen.Loading) {
+            // Background work (bouquets, guide, IPTV...) at the top; never focusable, hidden over fullscreen video.
+            com.enigmacast.ui.activity.ActivityOverlay(
+                viewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel(),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
+            )
+        }
         if (appViewModel.exitPrompt) {
             TvConfirmDialog(
                 title = stringResource(R.string.exit_app_title),

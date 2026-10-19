@@ -1478,4 +1478,18 @@
     <string name="iptv_next">Suivant</string>
     <string name="iptv_next_cancel">Annuler</string>
     <string name="iptv_next_in">Commence dans %1$d</string>
+    <string name="activity_channels">Récupération des listes de chaînes</string>
+    <string name="activity_guide">Chargement du guide TV</string>
+    <string name="activity_home">Recherche de films et séries pour l\'accueil</string>
+    <string name="activity_iptv">Mise à jour des chaînes IPTV</string>
+    <string name="activity_sync_server">Synchronisation avec le serveur de synchro</string>
+    <string name="activity_busy">%1$s…</string>
+    <string name="activity_progress">%1$s (%2$d/%3$d)</string>
+    <string name="activity_items">%1$s… (%2$d)</string>
+    <string name="activity_done">Terminé ✓</string>
+    <string name="activity_failed">%1$s a échoué. Nouvel essai plus tard.</string>
+    <plurals name="activity_waiting">
+        <item quantity="one">Encore 1 tâche ensuite</item>
+        <item quantity="other">Encore %d tâches ensuite</item>
+    </plurals>
 </resources>
