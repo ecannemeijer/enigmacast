@@ -342,37 +342,7 @@ fun MyItemsPanel(
             compact = true,
         )
     }
-    viewModel.iptvOptions?.let { card ->
-        val play = stringResource(R.string.iptv_play)
-        val info = stringResource(R.string.iptv_info)
-        val remove = stringResource(if (card.key.startsWith("fav/")) R.string.iptv_library_remove else R.string.library_remove_continue)
-        TvChoiceDialog(
-            title = card.title,
-            message = card.subtitle,
-            choices = listOf(play, info, remove),
-            onChoose = { i ->
-                when (i) {
-                    0 -> viewModel.playChosenIptv(onXtream, onTorrent)
-                    1 -> viewModel.infoChosenIptv(onXtream, onTorrent)
-                    else -> viewModel.askRemoveIptv()
-                }
-            },
-            onDismiss = viewModel::dismissIptvOptions,
-            compact = true,
-        )
-    }
-    viewModel.iptvPendingRemove?.let { card ->
-        TvConfirmDialog(
-            title = stringResource(R.string.library_remove_title),
-            message = stringResource(R.string.library_remove_message, card.title),
-            confirmLabel = stringResource(R.string.library_remove),
-            dismissLabel = stringResource(R.string.cancel),
-            onConfirm = viewModel::confirmRemoveIptv,
-            onDismiss = viewModel::dismissRemoveIptv,
-            destructive = true,
-            compact = true,
-        )
-    }
+    IptvCardDialogs(viewModel, onXtream, onTorrent)
     viewModel.pendingDelete?.let { item ->
         TvConfirmDialog(
             title = stringResource(R.string.my_items_delete_title),
@@ -527,6 +497,45 @@ private fun actionsFor(item: Recording, box: Boolean, boxTimer: Boolean): List<I
     if (!box && item.status == RecordingStatus.RECORDING) add(ItemAction.STOP)
     add(ItemAction.DELETE)
     add(ItemAction.CANCEL)
+}
+
+/**
+ * Long press (or Menu) on a My Items or Home IPTV/Torrent card: Play / Info / Remove, then the
+ * confirmation of the removal.
+ */
+@Composable
+internal fun IptvCardDialogs(viewModel: MyItemsViewModel, onXtream: () -> Unit, onTorrent: () -> Unit) {
+    viewModel.iptvOptions?.let { card ->
+        val play = stringResource(R.string.iptv_play)
+        val info = stringResource(R.string.iptv_info)
+        val remove = stringResource(if (card.key.startsWith("fav/")) R.string.iptv_library_remove else R.string.library_remove_continue)
+        TvChoiceDialog(
+            title = card.title,
+            message = card.subtitle,
+            choices = listOf(play, info, remove),
+            onChoose = { i ->
+                when (i) {
+                    0 -> viewModel.playChosenIptv(onXtream, onTorrent)
+                    1 -> viewModel.infoChosenIptv(onXtream, onTorrent)
+                    else -> viewModel.askRemoveIptv()
+                }
+            },
+            onDismiss = viewModel::dismissIptvOptions,
+            compact = true,
+        )
+    }
+    viewModel.iptvPendingRemove?.let { card ->
+        TvConfirmDialog(
+            title = stringResource(R.string.library_remove_title),
+            message = stringResource(R.string.library_remove_message, card.title),
+            confirmLabel = stringResource(R.string.library_remove),
+            dismissLabel = stringResource(R.string.cancel),
+            onConfirm = viewModel::confirmRemoveIptv,
+            onDismiss = viewModel::dismissRemoveIptv,
+            destructive = true,
+            compact = true,
+        )
+    }
 }
 
 /**

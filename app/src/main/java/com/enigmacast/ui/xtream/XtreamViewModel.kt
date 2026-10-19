@@ -465,6 +465,7 @@ class XtreamViewModel @Inject constructor(
 
     fun openDetail(item: XtreamItem) {
         val vod = com.enigmacast.data.xtream.IptvVod
+        detailEpisodeHint = null
         detail = item
         detailEpisodes = emptyList()
         detailFilm = vod.film(item, artwork.value[vod.key(item)])
@@ -485,7 +486,32 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
+    /** The episode a Continue watching card opened the series page for (Play starts it). */
+    private var detailEpisodeHint: XtreamEpisode? = null
+
+    /**
+     * What Play on the series info page starts: the Continue watching episode, else the latest
+     * episode watched, else the first one. Null while nothing is known yet (list still loading).
+     */
+    fun seriesPlayTarget(show: XtreamItem): XtreamEpisode? {
+        val source = account?.key
+        val latest = library.resumes.value
+            .filter { it.kind == "e" && it.source == source && it.seriesId == show.id }
+            .maxByOrNull { it.updatedMs }
+            ?.let { XtreamEpisode(it.id, it.season, it.episode, it.title, it.extension) }
+        return com.enigmacast.domain.xtream.SeriesPlay.target(detailEpisodeHint?.takeIf { detail?.id == show.id }, latest, detailEpisodes)
+    }
+
+    /** Play on a series info page: that episode, with the resume question when it was started. */
+    fun playSeries(show: XtreamItem, onStarted: () -> Unit) {
+        val episode = seriesPlayTarget(show) ?: return
+        holdEpisodes(detailEpisodes)
+        closeDetail()
+        requestEpisode(episode, show, onStarted)
+    }
+
     fun closeDetail() {
+        detailEpisodeHint = null
         detailJob?.cancel()
         detail = null
         detailFilm = null
@@ -596,6 +622,12 @@ class XtreamViewModel @Inject constructor(
             selectSection(XtreamSection.LIVE)
             play(item)
             libraryPlayed++
+        } else if (request.detail && item.section == XtreamSection.SERIES) {
+            // The info page (My Items / Home OK): Play there starts the card's episode.
+            selectSection(item.section)
+            openDetail(item)
+            detailEpisodeHint = episode
+            libraryDetail++
         } else if (episode != null) {
             selectSection(XtreamSection.SERIES)
             if (request.resume) { playEpisode(episode, item, fromStart = false); libraryPlayed++ }

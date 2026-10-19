@@ -169,7 +169,8 @@ class MyItemsViewModel @Inject constructor(
 
     private fun infoIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit, origin: String?) {
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
-        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, origin, detail = true)
+        // A series page: Play there starts the Continue watching (or latest watched) episode.
+        iptv.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, origin, detail = true, episode = rememberedEpisode(card))
         onXtream()
     }
 
