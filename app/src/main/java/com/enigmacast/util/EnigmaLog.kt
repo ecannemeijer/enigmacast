@@ -24,6 +24,11 @@ object EnigmaLog {
         Timber.tag("EnigmaOsd").i(message)
     }
 
+    /** Subtitle changes and player re-prepares (always on: capture with `adb logcat -s EcSubs`). */
+    fun subs(message: String) {
+        Timber.tag("EcSubs").i(message)
+    }
+
     fun player(message: String) {
         Timber.tag("EnigmaPlayer").i(message)
     }

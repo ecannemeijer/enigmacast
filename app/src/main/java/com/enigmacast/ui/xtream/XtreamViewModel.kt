@@ -779,9 +779,12 @@ class XtreamViewModel @Inject constructor(
                 val stuck = p.playbackState == Player.STATE_BUFFERING && p.playWhenReady
                 if (starved.update(stuck, p.isLoading, p.totalBufferedDuration, android.os.SystemClock.elapsedRealtime())) {
                     EnigmaLog.player("iptv player starved (${p.totalBufferedDuration} ms buffered, not loading): reload")
-                    p.seekTo(p.currentPosition)
+                    // Only a seekable stream: on an unseekable one this seek restarts it at 0.
+                    if (p.isCurrentMediaItemSeekable || mediaLive) p.seekTo(p.currentPosition)
+                    else EnigmaLog.subs("iptv starved at ${p.currentPosition}ms but not seekable: no reload seek")
                 }
-                val duration = p.duration.takeIf { it > 0 } ?: catchupDurationMs
+                if (p.duration != C.TIME_UNSET && p.duration > 0) lastDurationMs = p.duration
+                val duration = com.enigmacast.playback.SubtitleSafety.durationFor(p.duration, lastDurationMs, catchupDurationMs)
                 playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = duration, bufferedPositionMs = p.bufferedPosition.coerceAtLeast(0))
                 sinceSave += 500
                 if (sinceSave >= com.enigmacast.domain.resume.ResumePolicy.SAVE_EVERY_MS && p.isPlaying) { sinceSave = 0; saveResume() }
@@ -791,6 +794,12 @@ class XtreamViewModel @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         val p = player ?: return
+        // Media3 sends every seek on an unseekable stream to 0: leave such a stream playing instead.
+        if (!com.enigmacast.playback.SubtitleSafety.canSeek(p.isCurrentMediaItemSeekable, false) && !catchup) {
+            EnigmaLog.subs("iptv seek to ${positionMs}ms refused: ${com.enigmacast.playback.SubtitleSafety.describe(snapshot(p))}")
+            subsNotice(com.enigmacast.R.string.seek_unseekable)
+            return
+        }
         p.seekTo(positionMs.coerceAtLeast(0))
         playerState = playerState.copy(positionMs = positionMs.coerceAtLeast(0))
     }
@@ -812,6 +821,7 @@ class XtreamViewModel @Inject constructor(
         viewModelScope.launch {
             val playback = settingsRepository.current().playback
             playbackSubtitles = playback.subtitlesEnabled
+            preferredText = preferredTextLanguages(settingsRepository.current().iptvSubtitleLanguages)
             audioDelayMs = playback.audioDelayPcmMs
             audioSync.set(playback.audioDelayPcmMs, playback.audioDelayPassthroughMs)
             subtitleDelayMs = playback.subtitleDelayMs
@@ -1203,10 +1213,14 @@ class XtreamViewModel @Inject constructor(
     fun player(): ExoPlayer = player ?: run {
         val http = httpFactory
         val selector = DefaultTrackSelector(context)
+        // Text stays selected even with subtitles off (they are only hidden): turning a text
+        // track on later re-reads a progressive file, which restarts an unseekable one.
         selector.parameters = selector.buildUponParameters()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackSubtitles)
-            .setSelectUndeterminedTextLanguage(playbackSubtitles)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setSelectUndeterminedTextLanguage(true)
+            .setPreferredTextLanguages(*preferredText.toTypedArray())
             .build()
+        EnigmaLog.subs("iptv player created (text on, preferred ${preferredText.ifEmpty { listOf("-") }.joinToString()})")
         ExoPlayer.Builder(context)
             // Read-ahead capped to the heap (Media3's ~144 MB default does not fit many TV boxes,
             // and the picture-in-picture inset may play next to this player).
@@ -1250,9 +1264,19 @@ class XtreamViewModel @Inject constructor(
                         publishTracks(p)
                     }
 
+                    override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+                        if (reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                            EnigmaLog.subs("iptv position ${old.positionMs}ms -> ${new.positionMs}ms (reason $reason)")
+                        }
+                    }
+
+                    override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                        EnigmaLog.subs("iptv timeline: dur=${p.duration}ms seekable=${p.isCurrentMediaItemSeekable} (reason $reason)")
+                    }
+
                     override fun onCues(cueGroup: CueGroup) {
                         val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
-                        if (externalCues == null) cues = if (textOn) cueGroup.cues else emptyList()
+                        if (externalCues == null && selectedExternalId == null) cues = if (textOn && !subtitlesHidden) cueGroup.cues else emptyList()
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
@@ -1285,6 +1309,17 @@ class XtreamViewModel @Inject constructor(
         mediaUrl = url
         mediaLive = live
         playerState = com.enigmacast.domain.model.PlayerState(filePlayback = !live)
+        subtitlesHidden = !playbackSubtitles
+        lastDurationMs = 0L
+        guardJob?.cancel()
+        if (!live) player().let { pl ->
+            pl.trackSelectionParameters = pl.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setPreferredTextLanguages(*preferredText.toTypedArray())
+                .build()
+        }
+        EnigmaLog.subs("iptv setMediaItem+prepare (new item) at ${startMs}ms live=$live ${what.item?.section}")
         player().apply {
             setMediaItem(mediaItem(url, live), startMs.coerceAtLeast(0L))
             prepare()
@@ -1317,15 +1352,15 @@ class XtreamViewModel @Inject constructor(
 
     fun chooseSubtitles(id: String?) {
         val p = player ?: return
+        val before = snapshot(p)
+        EnigmaLog.subs("iptv choose ${id ?: "off"} at ${com.enigmacast.playback.SubtitleSafety.describe(before)} live=$mediaLive")
         if (id == null) {
+            // Off only hides the lines: no track change, so switching on again never re-reads the file.
             selectedExternalId = null
             pendingEmbeddedId = null
+            subtitlesHidden = true
             dropExternalCues()
             cues = emptyList()
-            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .build()
             publishTracks(p)
             return
         }
@@ -1334,31 +1369,78 @@ class XtreamViewModel @Inject constructor(
             if (externalHits.none { it.id == hitId }) return
             selectedExternalId = hitId
             pendingEmbeddedId = null
-            // The file is drawn by the app, next to the media: the media item is never rebuilt,
-            // so position, progress and seeking stay as they are ([com.enigmacast.playback.ExternalSubtitles]).
+            subtitlesHidden = false
+            // Drawn by the app next to the media: no media item, track or player change at all.
             dropExternalCues()
             cues = emptyList()
-            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .build()
             publishTracks(p)
             downloadJob?.cancel()
             downloadJob = viewModelScope.launch {
-                val file = subtitles.file(hitId) ?: return@launch
+                val file = subtitles.file(hitId)
+                if (file == null) { EnigmaLog.subs("iptv external $hitId: download failed"); return@launch }
                 if (selectedExternalId != hitId) return@launch
                 val timeline = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     com.enigmacast.playback.ExternalSubtitles.parse(file, subtitleMime(file.extension))
-                } ?: return@launch
+                }
+                if (timeline == null) { EnigmaLog.subs("iptv external $hitId: unreadable ${file.extension}"); return@launch }
                 if (selectedExternalId != hitId) return@launch
+                EnigmaLog.subs("iptv external $hitId: ${timeline.size} cues, player untouched")
                 showExternalCues(timeline)
             }
             return
         }
         selectedExternalId = null
         dropExternalCues()
+        subtitlesHidden = false
+        if (embeddedSelected(p, id)) {
+            EnigmaLog.subs("iptv embedded $id already read: shown, no track change")
+            publishTracks(p)
+            return
+        }
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(before.seekable, before.positionMs)) {
+            EnigmaLog.subs("iptv embedded $id refused: stream not seekable, a switch would restart it")
+            subsNotice(com.enigmacast.R.string.subs_switch_unseekable)
+            publishTracks(p)
+            return
+        }
         applyEmbeddedSubtitles(p, id)
+        guardPosition(p, before, "embedded $id")
         publishTracks(p)
+    }
+
+    /** Shown while a subtitle choice is on but [subtitlesHidden] is false. */
+    private var subtitlesHidden = false
+    /** Settings › IPTV › Subtitles as ISO codes: the first text track picked is already the wanted language. */
+    private var preferredText: List<String> = emptyList()
+    private var lastDurationMs = 0L
+    private var guardJob: Job? = null
+    private fun subsNotice(res: Int) = showNotice(context.getString(res))
+
+    private fun snapshot(p: ExoPlayer) = com.enigmacast.playback.PlayheadSnapshot(
+        p.currentPosition.coerceAtLeast(0), p.duration, p.isCurrentMediaItemSeekable,
+    )
+
+    private fun embeddedSelected(p: ExoPlayer, id: String): Boolean {
+        val (group, track) = com.enigmacast.playback.TrackMenus.find(p.currentTracks, id, C.TRACK_TYPE_TEXT) ?: return false
+        return group.isTrackSelected(track) && !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+    }
+
+    /** A track switch re-reads the file at the position; if it still lands far back, return there. */
+    private fun guardPosition(p: ExoPlayer, before: com.enigmacast.playback.PlayheadSnapshot, why: String) {
+        guardJob?.cancel()
+        guardJob = viewModelScope.launch {
+            val until = android.os.SystemClock.elapsedRealtime() + com.enigmacast.playback.SubtitleSafety.GUARD_MS
+            while (android.os.SystemClock.elapsedRealtime() < until && player === p) {
+                delay(250)
+                val target = com.enigmacast.playback.SubtitleSafety.restoreTo(before, p.currentPosition, p.isCurrentMediaItemSeekable)
+                if (target != null) {
+                    EnigmaLog.subs("iptv $why jumped to ${p.currentPosition}ms: back to ${target}ms")
+                    p.seekTo(target)
+                    break
+                }
+            }
+            EnigmaLog.subs("iptv $why settled at ${com.enigmacast.playback.SubtitleSafety.describe(snapshot(p))}")
+        }
     }
 
     /** The SubSource file being shown, and the job that follows the player position with it. */
@@ -1466,6 +1548,7 @@ class XtreamViewModel @Inject constructor(
 
     /** Enigma2 takes over: stop and release the IPTV ExoPlayer too, so its decoder is free. */
     private fun yieldToOther() {
+        EnigmaLog.subs("iptv player released: another player took over")
         stop()
         player?.release()
         player = null
@@ -1537,7 +1620,7 @@ class XtreamViewModel @Inject constructor(
     }
 
     private fun publishTracks(p: ExoPlayer) {
-        val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) && !subtitlesHidden
         val menu = com.enigmacast.playback.TrackMenus.build(p.currentTracks, textOn && selectedExternalId == null)
         val embedded = menu.subtitles.filter { choice ->
             val found = com.enigmacast.playback.TrackMenus.find(p.currentTracks, choice.id, C.TRACK_TYPE_TEXT)
@@ -1571,6 +1654,12 @@ class XtreamViewModel @Inject constructor(
         if (holdAutoText || p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)) return
         val groups = p.currentTracks.groups
         if (groups.any { it.type == C.TRACK_TYPE_TEXT && it.isSelected }) return
+        // A late pick re-reads the file; on an unseekable one that is a restart from 0.
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(p.isCurrentMediaItemSeekable, p.currentPosition)) {
+            EnigmaLog.subs("iptv auto pick skipped at ${p.currentPosition}ms: not seekable")
+            return
+        }
+        EnigmaLog.subs("iptv auto pick first text track at ${p.currentPosition}ms")
         val group = groups.firstOrNull { candidate ->
             candidate.type == C.TRACK_TYPE_TEXT &&
                 candidate.isTrackSupported(0) &&
@@ -1663,3 +1752,5 @@ object IptvResume {
     fun offer(savedMs: Long): Long? = savedMs.takeIf { it >= com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS }
 }
 
+internal fun preferredTextLanguages(slugs: List<String>?): List<String> =
+    com.enigmacast.playback.SubtitleSafety.preferredTextLanguages(slugs) { com.enigmacast.domain.subsource.SubSourceLanguages.bySlug(it)?.iso }

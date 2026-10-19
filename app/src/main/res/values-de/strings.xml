@@ -1500,4 +1500,6 @@
     <string name="sport_desc_br">Das Brasileirão und die Copa Libertadores, der größte Klubwettbewerb Südamerikas.</string>
     <string name="sport_desc_eu">Europas große Abende: die UEFA Champions League und in Turniersommern die EM.</string>
     <string name="sport_desc_world">Die FIFA-Weltmeisterschaft, das größte Turnier des Fußballs, mit Nationalteams aller Kontinente.</string>
+    <string name="subs_switch_unseekable">Untertitel können während dieser Wiedergabe nicht gewechselt werden: der Stream ist nicht durchsuchbar. Wähle sie vor dem Start.</string>
+    <string name="seek_unseekable">Dieser Stream kann nicht vor- oder zurückgespult werden.</string>
 </resources>

@@ -631,6 +631,7 @@ class LivePlaybackController @Inject constructor(
     fun chooseSubtitles(id: String?) {
         settings = settings.copy(subtitlesEnabled = id != null)
         val exo = player ?: return
+        EnigmaLog.subs("live choose ${id ?: "off"} at pos=${exo.currentPosition}ms dur=${exo.duration}ms seekable=${exo.isCurrentMediaItemSeekable}")
         if (id == null) {
             selectSubtitles(exo)
             publish()

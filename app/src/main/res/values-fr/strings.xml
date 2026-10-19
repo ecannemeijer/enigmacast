@@ -1504,4 +1504,6 @@
     <string name="sport_desc_br">Le Brasileirão et la Copa Libertadores, la plus grande coupe de clubs d\'Amérique du Sud.</string>
     <string name="sport_desc_eu">Les grandes soirées européennes : la Ligue des champions de l\'UEFA et, les étés de tournoi, l\'Euro.</string>
     <string name="sport_desc_world">La Coupe du monde de la FIFA, le plus grand tournoi du football, avec des sélections de tous les continents.</string>
+    <string name="subs_switch_unseekable">Impossible de changer les sous-titres pendant ce flux : il n\'est pas possible d\'y naviguer. Choisissez-les avant la lecture.</string>
+    <string name="seek_unseekable">Ce flux ne peut pas être avancé ni reculé.</string>
 </resources>
