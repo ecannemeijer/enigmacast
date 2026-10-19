@@ -53,6 +53,16 @@ class PlaybackOwnerTest {
         assertTrue(PlaybackRules.mayStart(ENIGMA2, ENIGMA2, IPTV))
     }
 
+    @Test fun otherPlaysNamesAnotherOwnerOnly() {
+        val owner = PlaybackOwner()
+        assertFalse(owner.otherPlays(ENIGMA2))
+        owner.claim(IPTV)
+        assertTrue(owner.otherPlays(ENIGMA2))
+        assertFalse(owner.otherPlays(IPTV))
+        owner.release(IPTV)
+        assertFalse(owner.otherPlays(ENIGMA2))
+    }
+
     @Test fun pageEdgesBlockOnlyUpDown() {
         assertTrue(FocusEdges.blocks(FocusDirection.Up))
         assertTrue(FocusEdges.blocks(FocusDirection.Down))

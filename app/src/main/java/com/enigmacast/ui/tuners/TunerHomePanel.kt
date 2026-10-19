@@ -101,7 +101,11 @@ fun TunerHomePanel(
     showStream: Boolean = false,
     /** A Torrent card in Continue watching: the dashboard opens the Torrent page on its info page. */
     onTorrent: () -> Unit = {},
+    /** IPTV live plays on in the mini player: it takes focus, OK goes back to it full screen. */
+    iptvLive: Boolean = false,
+    onIptvFullscreen: () -> Unit = {},
 ) {
+    val streamFocus = remember { FocusRequester() }
     val iptvContinue by library.iptvContinue.collectAsStateWithLifecycle()
     // Back from an IPTV film started on Home: focus that card again.
     val iptvReturnFocus = remember { FocusRequester() }
@@ -140,7 +144,7 @@ fun TunerHomePanel(
                 .background(Brush.verticalGradient(0f to Color(0xFF0E1C2E), 0.6f to EnigmaColors.Canvas))
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
                 // A Continue watching card removed (long press › Remove) also keeps the focus on the page.
-                .holdPageFocus(contentFocus, model.cards.map { it.index } to iptvContinue.map { it.key }),
+                .holdPageFocus(contentFocus, Triple(model.cards.map { it.index }, iptvContinue.map { it.key }, iptvLive)),
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()
@@ -159,7 +163,7 @@ fun TunerHomePanel(
                         model.cards.isEmpty() -> EnigmaColors.Subtle
                         else -> EnigmaColors.Success
                     }
-                    TunersRow(model, left, menuFocus, nextDown, showStream, dot) { chosen = it }
+                    TunersRow(model, left, menuFocus, nextDown, showStream, dot, streamFocus.takeIf { iptvLive && showStream }, onIptvFullscreen) { chosen = it }
                 })
                 // IPTV/Torrent Continue watching (Home has no recordings resume row): OK opens the info page, long press the options.
                 if (iptvContinue.isNotEmpty() && library.iptvAllowed()) add(PageSection("iptv") {
@@ -304,6 +308,9 @@ private fun TunersRow(
     nextDown: FocusRequester,
     showStream: Boolean,
     status: Color,
+    /** Set when the mini player can take focus (IPTV live): Right from the cards reaches it. */
+    streamFocus: FocusRequester?,
+    onStreamOk: () -> Unit,
     onOpen: (TunerCard) -> Unit,
 ) {
     val foci = remember { List(4) { FocusRequester() } }
@@ -347,7 +354,7 @@ private fun TunersRow(
                                 AbsentTuner(('A' + index).toString(), Modifier.weight(1f).fillMaxHeight())
                             } else {
                                 val leftTarget = if (col == 0 || !present(index - 1)) menuFocus else foci[index - 1]
-                                val rightTarget = if (col == 1 || !present(index + 1)) FocusRequester.Cancel else foci[index + 1]
+                                val rightTarget = if (col == 1 || !present(index + 1)) streamFocus ?: FocusRequester.Cancel else foci[index + 1]
                                 val downTarget = if (index + 2 < 4 && present(index + 2)) foci[index + 2] else nextDown
                                 val upTarget = if (index >= 2 && present(index - 2)) foci[index - 2] else FocusRequester.Cancel
                                 TunerCardView(
@@ -371,14 +378,40 @@ private fun TunersRow(
             }
         }
         if (showStream) {
+            val streamTv = rememberTvFocus()
+            val focusable = streamFocus != null
             Box(
                 Modifier
                     .fillMaxHeight()
                     .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
+                    .then(
+                        if (streamFocus == null) Modifier else Modifier
+                            .focusRequester(streamFocus)
+                            .focusProperties {
+                                this.left = if (present(1)) foci[1] else foci[0]
+                                right = FocusRequester.Cancel
+                                up = FocusRequester.Cancel
+                                down = nextDown
+                            }
+                            .tvClick(streamTv, onStreamOk),
+                    )
                     .clip(skinShape(8.dp))
-                    .background(Color.Black),
+                    .background(Color.Black)
+                    .border(if (focusable && streamTv.focused) 3.dp else 0.dp, if (focusable && streamTv.focused) EnigmaColors.Cyan else Color.Transparent, skinShape(8.dp)),
             ) {
                 com.enigmacast.ui.dashboard.MiniStreamPlayer(Modifier.fillMaxSize())
+                if (focusable && streamTv.focused) {
+                    Text(
+                        stringResource(R.string.mini_player_fullscreen),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), skinShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                    )
+                }
                 Box(
                     Modifier
                         .align(Alignment.TopStart)

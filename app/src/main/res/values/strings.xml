@@ -600,6 +600,7 @@
     <string name="motion_performance">Performance</string>
     <string name="home_continue">Continue</string>
     <string name="home_no_programme">No programme information</string>
+    <string name="mini_player_fullscreen">OK: full screen</string>
     <string name="home_recent">Recently watched</string>
     <string name="home_on_now">On now</string>
     <string name="home_next">Next</string>

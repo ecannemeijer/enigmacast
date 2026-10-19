@@ -309,7 +309,8 @@ fun DashboardScreen(
     val account by accountModel.account.collectAsState()
     val premium = accountModel.isPremium(account)
     val xtreamAvailable = xtreamModel.detection.collectAsState().value?.available == true
-    val iptvLive = xtreamModel.playing?.let { it.episode == null && it.item?.section == com.enigmacast.domain.xtream.XtreamSection.LIVE } == true
+    // IPTV live (not catch-up) that plays on behind the dashboard: the mini players show it.
+    val iptvLive = xtreamModel.playingLive
     val showStream = showMiniPlayer || iptvLive
     /** Free accounts: these menu items show a lock and open the Premium dialog. */
     fun lockedFeature(target: DashSection): com.enigmacast.domain.account.PremiumFeature? = if (premium) null else when (target) {
@@ -772,6 +773,9 @@ fun DashboardScreen(
                             library = myItemsModel,
                             showStream = showStream,
                             onTorrent = { enterSection(DashSection.Torrent) },
+                            iptvLive = iptvLive,
+                            // OK on the IPTV mini player: that channel full screen, without a restart.
+                            onIptvFullscreen = { if (xtreamModel.resumeLiveFullscreen()) onXtream() },
                         )
                         }
                         DashSection.Movies -> {
@@ -1975,13 +1979,37 @@ internal fun CompactField(
 internal fun MiniStreamPlayer(
     modifier: Modifier = Modifier,
     viewModel: RemoteDisplayViewModel = hiltViewModel(),
+    /** The source line at the bottom (badge, logo, channel, programme). */
+    labels: Boolean = true,
 ) {
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
     val xtream: com.enigmacast.ui.xtream.XtreamViewModel = hiltViewModel()
     @Suppress("UNUSED_EXPRESSION") xtream.playerVersion
-    val iptv = xtream.playing?.takeIf { it.episode == null && it.item?.section == com.enigmacast.domain.xtream.XtreamSection.LIVE }
+    val iptv = xtream.playing?.takeIf { xtream.playingLive }
     if (iptv != null) {
-        com.enigmacast.ui.remote.EnigmaVideoTexture(xtream.player(), emptyList(), modifier)
+        // IPTV live that went on behind the dashboard (Back on its picture): the same ExoPlayer,
+        // so the picture continues without a new start.
+        Box(modifier) {
+            com.enigmacast.ui.remote.EnigmaVideoTexture(xtream.player(), emptyList(), Modifier.fillMaxSize())
+            if (labels) {
+                val item = iptv.item
+                // Re-read every half minute so the line follows the programme change.
+                val minute by androidx.compose.runtime.produceState(System.currentTimeMillis() / 30_000) { while (true) { kotlinx.coroutines.delay(30_000); value = System.currentTimeMillis() / 30_000 } }
+                val title = remember(minute, item?.id, xtream.epgOf(item?.id.orEmpty())) { xtream.playingNowTitle() }
+                MiniSourceLabel(
+                    badge = com.enigmacast.domain.xtream.IptvMini.IPTV,
+                    iptv = true,
+                    name = item?.name ?: iptv.title,
+                    title = title,
+                    logo = {
+                        val url = item?.icon.orEmpty()
+                        val bitmap by androidx.compose.runtime.produceState(xtream.cachedLogo(url), url) { if (value == null && url.isNotBlank()) value = xtream.logo(url) }
+                        bitmap?.let { androidx.compose.foundation.Image(it, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+                    },
+                    modifier = Modifier.align(Alignment.BottomStart),
+                )
+            }
+        }
         return
     }
     val radio = ui.own.channel?.takeIf {
@@ -2001,6 +2029,20 @@ internal fun MiniStreamPlayer(
             )
         } else {
             EnigmaVideoTexture(viewModel.player(), ui.cues, Modifier.fillMaxSize())
+            val channel = ui.own.channel
+            val name = (channel?.name ?: ui.currentService?.name).orEmpty()
+            if (labels && name.isNotBlank() && ui.playerState.error.isNullOrBlank()) {
+                MiniSourceLabel(
+                    badge = com.enigmacast.domain.xtream.IptvMini.receiverBadge(viewModel.receiverName()),
+                    iptv = false,
+                    name = name,
+                    title = ui.own.guide?.currentEvent?.title?.takeIf { it.isNotBlank() },
+                    logo = {
+                        if (channel != null) com.enigmacast.ui.remote.Picon(channel, viewModel::picon, viewModel::cachedPicon, Modifier.fillMaxSize(), fallbackSize = 7.sp)
+                    },
+                    modifier = Modifier.align(Alignment.BottomStart),
+                )
+            }
         }
         val error = ui.playerState.error
         if (!error.isNullOrBlank()) {
@@ -2150,5 +2192,43 @@ private fun VideoDecoderCard(viewModel: SettingsViewModel) {
             selectedIndex = modes.indexOf(compat),
             onSelect = { viewModel.setVideoCompatibility(modes[it]) },
         )
+    }
+}
+
+/**
+ * The mini player's source line: a badge (IPTV, or the receiver's name for Enigma2), the
+ * channel logo, the channel and what is on air. Small, over a dark fade at the bottom.
+ */
+@Composable
+private fun MiniSourceLabel(
+    badge: String,
+    iptv: Boolean,
+    name: String,
+    title: String?,
+    logo: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+            .padding(start = 6.dp, end = 6.dp, top = 10.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            badge,
+            color = Color.Black,
+            fontSize = 9.sp,
+            fontWeight = EnigmaType.Strong,
+            maxLines = 1,
+            modifier = Modifier
+                .background(if (iptv) EnigmaColors.Accent else EnigmaColors.Cyan, androidx.compose.foundation.shape.RoundedCornerShape(3.dp))
+                .padding(horizontal = 4.dp, vertical = 1.dp),
+        )
+        Box(Modifier.padding(start = 5.dp).width(24.dp).height(15.dp), contentAlignment = Alignment.Center) { logo() }
+        Column(Modifier.padding(start = 5.dp).weight(1f)) {
+            Text(name, color = EnigmaColors.Text, fontSize = 10.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (title != null) Text(title, color = EnigmaColors.Muted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }

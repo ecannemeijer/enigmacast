@@ -64,6 +64,12 @@ class PlaybackOwner @Inject constructor() {
      */
     fun mayStart(owner: Owner): Boolean = PlaybackRules.mayStart(owner, current, foreground)
 
+    /**
+     * Another player than [owner] holds the output (IPTV live continuing in the mini player, a
+     * torrent): starts of [owner] that nobody asked for must wait.
+     */
+    fun otherPlays(owner: Owner): Boolean = current.let { it != null && it != owner }
+
     /** [owner] stopped by itself. */
     fun release(owner: Owner) {
         log("owner release $owner (was $current)")

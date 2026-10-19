@@ -586,6 +586,9 @@ class RemoteDisplayViewModel @Inject constructor(
 
     fun player() = playback.exoPlayer()
 
+    /** The active receiver's name, for the mini player's Enigma2 badge. */
+    fun receiverName(): String? = settingsSnapshot.activeReceiver()?.name
+
     /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
     val audioPassthroughActive get() = playback.audioPassthroughActive
 

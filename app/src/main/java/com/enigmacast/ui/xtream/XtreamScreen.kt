@@ -117,7 +117,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     // Live TV from the menu starts on the last channel, so the list stays closed until playback fails.
     // A film or episode that is already playing (or about to, from the dashboard) keeps the list closed.
     val vodOnScreen = model.vodFromDashboard || model.playing?.item?.section.let { it != null && it != XtreamSection.LIVE } == true
-    var panelOpen by remember { mutableStateOf(!model.openLiveFullscreen && !vodOnScreen) }
+    // OK on the dashboard's mini player: the channel that plays there, full screen, list closed.
+    var panelOpen by remember { mutableStateOf(!model.openLiveFullscreen && !vodOnScreen && !model.liveResume) }
     var column by remember { mutableStateOf(PanelColumn.CATEGORIES) }
     val liveChannelList = com.enigmacast.ui.components.rememberPresetList()
     val liveCategoryList = com.enigmacast.ui.components.rememberPresetList()
@@ -145,6 +146,12 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         bannerFromZap = fromZap
         details = withDetails
         bannerUntil = System.currentTimeMillis() + if (withDetails) 10_000 else 5_000
+    }
+    LaunchedEffect(Unit) {
+        if (!model.liveResume) return@LaunchedEffect
+        model.consumeLiveResume()
+        panelOpen = false
+        showBanner(fromZap = false)
     }
     fun openPanel() {
         val vod = model.section != XtreamSection.LIVE
@@ -193,7 +200,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         // Search and Library info open the page itself; the grid must not take that focus.
         if (model.libraryDetail > 0 && model.detail == null) { panelOpen = true; column = PanelColumn.VOD_GRID; openRequest++ }
     }
-    DisposableEffect(Unit) { onDispose { model.stop(); model.pip.stop() } }
+    // A live channel left with Back plays on in the dashboard's mini player; anything else stops.
+    DisposableEffect(Unit) { onDispose { if (!model.consumeContinueInMini()) model.stop(); model.pip.stop() } }
     // Focus follows OK only: into the categories when a section loaded, into the list when it loaded.
     LaunchedEffect(model.categoriesReady) {
         if (model.categoriesReady > 0 && panelOpen) {
@@ -235,6 +243,17 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         model.exitToOrigin()
         onBack()
     }
+    /**
+     * Back on the bare live picture: the page closes and the channel plays on in the mini player
+     * (Home, Live TV, Guide) until another stream starts. Home opens with focus on its menu item,
+     * or the Library/Home card that started the channel. Catch-up and films stop as before.
+     */
+    fun leaveLive() {
+        if (!model.playingLive) { leave(); return }
+        model.continueInMiniPlayer()
+        model.exitToOrigin()
+        onBack()
+    }
     fun playingLive() = model.playing?.item?.section == XtreamSection.LIVE
     // Preview and BackHandler can both see one press; the second call in that window is ignored.
     val liveBackAt = remember { longArrayOf(0L) }
@@ -254,7 +273,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             }
             bannerShown -> { bannerUntil = 0L; details = false; openRequest++ }
             model.pip.playing() -> model.pip.stop()
-            else -> leave()
+            else -> leaveLive()
         }
     }
     BackHandler {

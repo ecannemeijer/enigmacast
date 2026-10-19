@@ -597,6 +597,7 @@
     <string name="motion_performance">Leistung</string>
     <string name="home_continue">Weiterschauen</string>
     <string name="home_no_programme">Keine Sendungsinformationen</string>
+    <string name="mini_player_fullscreen">OK: Vollbild</string>
     <string name="home_recent">Zuletzt gesehen</string>
     <string name="home_on_now">Läuft jetzt</string>
     <string name="home_next">Danach</string>
