@@ -50,7 +50,7 @@ import com.enigmacast.ui.theme.skinShape
 fun SkinChooser(selected: OsdSkinId, onSelect: (OsdSkinId) -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        // Five equal tiles that share the content width, so all of them are always on screen.
+        // Equal tiles (seven) that share the content width, so all of them are always on screen.
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Skins.all.forEachIndexed { index, skin ->
@@ -102,6 +102,15 @@ internal fun SkinThumbnail(skin: Skin, modifier: Modifier = Modifier) {
     val p = skin.palette
     val shape = skinShape(8.dp, skin)
     Box(modifier.clip(shape).background(p.canvas)) {
+        // Glass skins: their photo, decoded small by Coil off the main thread.
+        skin.glass?.let { glass ->
+            coil3.compose.AsyncImage(
+                model = glass.backdrop,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
         // A menu card with one focused row.
         Column(Modifier.padding(6.dp).width(56.dp).background(p.card, skinShape(4.dp, skin)).padding(4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Box(Modifier.fillMaxWidth().height(6.dp).background(p.focus, skinShape(2.dp, skin)))

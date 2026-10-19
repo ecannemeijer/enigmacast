@@ -1,5 +1,6 @@
 package com.enigmacast.ui.components
 
+import com.enigmacast.ui.theme.skinSurface
 import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -88,8 +89,11 @@ fun EnigmaNavigationDrawer(
             .width(width)
             .fillMaxHeight()
             .clip(DrawerShape)
-            .background(Brush.verticalGradient(listOf(Color(0xF0141E33), Color(0xF0080D1C))))
-            .border(1.dp, Color(0x332488FF), DrawerShape)
+            // Flat skins: the gradient they always had. Glass skins: frosted glass over the photo.
+            .then(if (com.enigmacast.ui.theme.ActiveSkin.current.glass == null)
+                Modifier.background(Brush.verticalGradient(listOf(Color(0xF0141E33), Color(0xF0080D1C))))
+                    .border(1.dp, Color(0x332488FF), DrawerShape)
+            else Modifier.skinSurface(com.enigmacast.ui.theme.EnigmaColors.Card, DrawerShape))
             .onGloballyPositioned { cursor.originY = it.positionInRoot().y },
     ) {
         if (cursor.visible && pillHeight > 0f) {

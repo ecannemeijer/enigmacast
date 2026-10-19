@@ -1,5 +1,7 @@
 package com.enigmacast.ui.settings
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,7 +47,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(EnigmaColors.Canvas)
+            .skinCanvas()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 48.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),

@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.skinSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -189,8 +190,7 @@ private fun PipDialog(title: String, content: @Composable () -> Unit) {
         modifier = Modifier
             .widthIn(min = 320.dp, max = 520.dp)
             .heightIn(max = 560.dp)
-            .background(EnigmaColors.Selected, RoundedCornerShape(14.dp))
-            .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(14.dp))
+            .skinSurface(EnigmaColors.Selected, RoundedCornerShape(14.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

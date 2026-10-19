@@ -697,6 +697,9 @@
     <string name="home_try_again">Riprova</string>
     <string name="about_tmdb_attribution">Questo prodotto usa l\'API TMDB ma non è approvato né certificato da TMDB.</string>
     <string name="about_sport_attribution">Sport: bandiere da flag-icons (MIT, © Panayiotis Lipiridis); foto degli stadi da Wikimedia Commons (CC0) di Markus Spiske, Liane Metzler, Abigail Keenan e Christian Widell; dati ed emblemi delle competizioni da football-data.org. Nomi e loghi delle competizioni appartengono ai rispettivi proprietari.</string>
+    <string name="about_glass_attribution">Skin Vetro: carattere Inter (SIL Open Font License 1.1, © The Inter Project Authors); immagini di sfondo fornite dallo sviluppatore.</string>
+    <string name="skin_glass_earth">Vetro Terra</string>
+    <string name="skin_glass_wave">Vetro Onda</string>
     <string name="home_director">Regia</string>
     <string name="home_cast">Cast</string>
     <string name="home_runtime">%d min</string>

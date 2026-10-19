@@ -39,8 +39,20 @@ class SkinsTest {
     }
 
     @Test
-    fun layoutsAreDistinct() {
-        assertEquals(Skins.all.size, Skins.all.map { it.osd }.toSet().size)
+    fun layoutsOfFlatSkinsAreDistinct() {
+        val flat = Skins.all.filter { it.glass == null }
+        assertEquals(flat.size, flat.map { it.osd }.toSet().size)
+    }
+
+    @Test
+    fun glassSkinsShareTheGlassOsdAndCarryTheirOwnBackdrop() {
+        val glass = Skins.all.filter { it.glass != null }
+        assertEquals(2, glass.size)
+        assertEquals(setOf(OsdLayout.GLASS), glass.map { it.osd }.toSet())
+        assertEquals(2, glass.map { it.glass!!.backdrop }.toSet().size)
+        assertEquals(setOf(Skins.Inter), glass.map { it.fontFamily }.toSet())
+        assertEquals(null, Skins.EnigmaCast.glass)
+        assertEquals(null, Skins.EnigmaCast.fontFamily)
     }
 
     @Test

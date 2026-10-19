@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -159,7 +160,7 @@ fun OwnTunerOverlay(
                 fontSize = 28.sp,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .background(scrim, skinShape(12.dp))
+                    .background(scrim, skinShape(12.dp)).glassSheen(skinShape(12.dp))
                     .padding(horizontal = 22.dp, vertical = 12.dp),
             )
         }
@@ -172,7 +173,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(32.dp)
-                    .background(scrim, skinShape(12.dp))
+                    .background(scrim, skinShape(12.dp)).glassSheen(skinShape(12.dp))
                     .padding(horizontal = 24.dp, vertical = 8.dp),
             )
         }
@@ -184,7 +185,7 @@ fun OwnTunerOverlay(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(32.dp)
-                    .background(scrim, skinShape(10.dp))
+                    .background(scrim, skinShape(10.dp)).glassSheen(skinShape(10.dp))
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
@@ -322,6 +323,8 @@ internal fun ChannelBanner(
             .fillMaxWidth()
             .background(fill, cardShape)
             .then(if (layout == OsdLayout.MINIMAL) Modifier else Modifier.border(1.dp, EnigmaColors.GlassEdge, cardShape))
+            // Glass skins sit over video here: no photo behind it, so the sheen and hairline only.
+            .glassSheen(cardShape)
             .padding(20.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -520,7 +523,7 @@ private fun TunerNotice(tuner: TunerState, channelName: String, scrim: Color, mo
     Column(
         modifier = modifier
             .widthIn(max = 440.dp)
-            .background(scrim, skinShape(12.dp))
+            .background(scrim, skinShape(12.dp)).glassSheen(skinShape(12.dp))
             .border(1.dp, EnigmaColors.GlassEdge, skinShape(12.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -846,7 +849,7 @@ private fun OsdClock(scrim: Color, modifier: Modifier = Modifier) {
     }
     Column(
         modifier = modifier
-            .background(scrim, skinShape(6.dp))
+            .background(scrim, skinShape(6.dp)).glassSheen(skinShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp),
         horizontalAlignment = Alignment.End,
     ) {

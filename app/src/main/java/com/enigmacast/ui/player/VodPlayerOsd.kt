@@ -1,5 +1,6 @@
 package com.enigmacast.ui.player
 
+import com.enigmacast.ui.theme.glassSheen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -164,6 +165,19 @@ private val SettingsSubmenus = setOf(VodMenu.SPEED, VodMenu.SUBTITLE_DELAY, VodM
 private val Scrim = Brush.verticalGradient(listOf(Color.Transparent, Color(0x99000000), Color(0xE0000000)))
 private val MenuBackground = Color(0xF2141418)
 
+/** Glass skins tint the Stremio-style OSD in their navy; the others keep the black scrim. */
+private fun vodScrim(): Brush {
+    val skin = com.enigmacast.ui.theme.ActiveSkin.current
+    if (skin.glass == null) return Scrim
+    val fill = skin.palette.osdFill
+    return Brush.verticalGradient(listOf(Color.Transparent, fill.copy(alpha = 0.6f), fill.copy(alpha = 0.88f)))
+}
+
+private fun vodMenuBackground(): Color {
+    val skin = com.enigmacast.ui.theme.ActiveSkin.current
+    return if (skin.glass == null) MenuBackground else skin.palette.osdFill.copy(alpha = 0.86f)
+}
+
 /**
  * The VOD OSD after the Stremio Android TV player: title, Play/Pause · Rewind (· Next), a thin
  * seek bar with a round thumb, and a row of small outline icons (subtitles, audio, video,
@@ -214,7 +228,7 @@ fun VodPlayerOsd(
     Column(
         modifier
             .fillMaxWidth()
-            .background(Scrim)
+            .background(vodScrim())
             .padding(start = 56.dp, end = 56.dp, top = 64.dp, bottom = 28.dp),
     ) {
         Text(
@@ -537,7 +551,8 @@ private fun VodMenuPopup(
         Column(
             Modifier
                 .widthIn(min = 240.dp, max = if (menu == VodMenu.SUBTITLES) 560.dp else 380.dp)
-                .background(MenuBackground, RoundedCornerShape(14.dp))
+                .background(vodMenuBackground(), RoundedCornerShape(14.dp))
+                .glassSheen(RoundedCornerShape(14.dp))
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {

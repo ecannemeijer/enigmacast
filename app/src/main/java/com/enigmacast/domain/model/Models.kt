@@ -142,6 +142,10 @@ enum class OsdSkinId(@StringRes val label: Int) {
     MIDNIGHT(R.string.skin_midnight),
     METRIX(R.string.skin_metrix),
     AURORA(R.string.skin_aurora),
+
+    /** Frosted glass over a full-screen photo; added last so stored values keep their meaning. */
+    GLASS_EARTH(R.string.skin_glass_earth),
+    GLASS_WAVE(R.string.skin_glass_wave),
 }
 
 /** Which extra information the channel banner shows (Settings › OSD). */

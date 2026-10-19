@@ -1,5 +1,7 @@
 package com.enigmacast.ui.settingsimport
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.animateFloatAsState
@@ -100,7 +102,7 @@ fun SettingsImportScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(EnigmaColors.Canvas)
+            .skinCanvas()
             .padding(horizontal = 32.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

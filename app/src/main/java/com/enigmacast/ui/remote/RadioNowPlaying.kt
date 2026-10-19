@@ -1,5 +1,7 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import androidx.compose.animation.core.LinearEasing
@@ -94,7 +96,7 @@ internal fun RadioNowPlaying(
     val copy = radioCopy(onAirEvent(guide, channel, nowSec), streamTitle, streamArtist)
     val drift = burnInDrift(if (compact) 6f else 28f, if (compact) 4f else 16f)
     Box(
-        modifier = modifier.background(EnigmaColors.Canvas),
+        modifier = modifier.skinCanvas(),
         contentAlignment = Alignment.Center,
     ) {
         val card = Modifier.offset(drift.first.dp, drift.second.dp)

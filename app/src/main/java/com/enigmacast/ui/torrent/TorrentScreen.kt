@@ -1,5 +1,7 @@
 package com.enigmacast.ui.torrent
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -112,7 +114,7 @@ fun TorrentScreen(
         model.consumeLeave()
         dash?.onLeave?.invoke(origin)
     }
-    Box(Modifier.fillMaxSize().then(if (dash == null) Modifier.background(EnigmaColors.Canvas) else Modifier)) {
+    Box(Modifier.fillMaxSize().then(if (dash == null) Modifier.skinCanvas() else Modifier)) {
         when {
             dash != null -> {
                 TorrentBrowser(model, onBack, dash)

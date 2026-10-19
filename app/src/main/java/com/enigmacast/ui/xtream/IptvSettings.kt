@@ -1,5 +1,6 @@
 package com.enigmacast.ui.xtream
 
+import com.enigmacast.ui.theme.skinSurface
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.Alignment
@@ -261,8 +262,7 @@ private fun IptvLoadDialog(state: IptvLoadState, onCancel: () -> Unit, onClose: 
         Column(
             modifier = Modifier
                 .widthIn(min = 420.dp, max = 560.dp)
-                .background(EnigmaColors.Selected, skinShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
+                .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
                 .padding(16.dp)
                 .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -329,8 +329,7 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
             Modifier
                 .width(520.dp)
                 .heightIn(max = 560.dp)
-                .background(EnigmaColors.Selected, com.enigmacast.ui.theme.skinShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, com.enigmacast.ui.theme.skinShape(14.dp))
+                .skinSurface(EnigmaColors.Selected, com.enigmacast.ui.theme.skinShape(14.dp))
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -427,8 +426,7 @@ private fun IptvSubtitlesDialog(saved: List<String>?, model: IptvSettingsViewMod
             Modifier
                 .width(520.dp)
                 .heightIn(max = 560.dp)
-                .background(EnigmaColors.Selected, skinShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
+                .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
