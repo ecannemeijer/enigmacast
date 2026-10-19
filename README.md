@@ -68,7 +68,7 @@ Stremio addon (Torrentio / custom) -------> jlibtorrent engine -> 127.0.0.1 rang
 
 **Players and subtitles**
 - One shared Stremio-style VOD OSD for IPTV films/series, recordings and torrents: title, Play/Pause, rewind, next, seek bar with a buffered bar, and icons for subtitles, audio, video, settings and sources.
-- SubSource subtitles for IPTV films/series and torrents (release matching on the file name), with subtitle delay.
+- SubSource subtitles for IPTV films/series and torrents (release matching on the file name), with subtitle delay. The file is drawn by the app next to the playing media, so picking one keeps the position, progress and seeking.
 - Audio: MediaCodec, HDMI passthrough (AC3, E-AC3, DTS) or the bundled FFmpeg decoder (nextlib); per-output audio sync.
 
 **Profiles, sync and security**
