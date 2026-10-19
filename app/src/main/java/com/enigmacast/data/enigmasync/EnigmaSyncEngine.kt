@@ -53,6 +53,8 @@ class EnigmaSyncEngine @Inject constructor(
     private val playlist: IptvPlaylistStore,
     private val iptv: IptvPlaylistSync,
     private val activity: com.enigmacast.activity.BackgroundActivityTracker,
+    private val tombstones: com.enigmacast.data.xtream.LibraryTombstones,
+    private val watchNext: com.enigmacast.data.xtream.WatchNextPublisher,
 ) {
     /** Copies server profiles onto this device so the picker can show them. */
     suspend fun importProfiles() = withContext(Dispatchers.IO) {
@@ -371,18 +373,36 @@ class EnigmaSyncEngine @Inject constructor(
         // Deletes are stored with an empty payload: the record key names what to remove.
         val key = LibrarySync.keyOfChange(change.optString("record_key"), payload) ?: return
         val (source, kind, id) = key
+        val recordKey = LibrarySync.recordKey(source, kind, id)
+        val tombstone = tombstones.get(profileId, entity, recordKey)
         if (entity == LibrarySync.FAVORITE) {
             val current = library.favorite(profileId, source, kind, id)
-            val decision = SyncConflict.decide(current?.addedMs, null, updated, changeId)
-            if (decision == SyncApply.REJECT) return
-            if (op == "delete") library.deleteFavorite(profileId, source, kind, id)
-            else library.putFavorite(LibrarySync.favoriteFrom(profileId, key, payload, updated, current))
+            when (com.enigmacast.domain.sync.LibraryMerge.decide(current?.addedMs, tombstone, updated, changeId, op)) {
+                com.enigmacast.domain.sync.LibraryMergeResult.IGNORE -> return
+                com.enigmacast.domain.sync.LibraryMergeResult.DELETE -> {
+                    library.deleteFavorite(profileId, source, kind, id)
+                    tombstones.put(profileId, entity, recordKey, com.enigmacast.domain.sync.LibraryMerge.tombstoneAfterDelete(tombstone, updated))
+                }
+                com.enigmacast.domain.sync.LibraryMergeResult.UPSERT -> {
+                    library.putFavorite(LibrarySync.favoriteFrom(profileId, key, payload, updated, current))
+                    tombstones.clear(profileId, entity, recordKey)
+                }
+            }
         } else {
             val current = library.resume(profileId, source, kind, id)
-            val decision = SyncConflict.decide(current?.updatedMs, null, updated, changeId)
-            if (decision == SyncApply.REJECT) return
-            if (op == "delete") library.deleteResume(profileId, source, kind, id)
-            else library.putResume(LibrarySync.progressFrom(profileId, key, payload, updated, current))
+            when (com.enigmacast.domain.sync.LibraryMerge.decide(current?.updatedMs, tombstone, updated, changeId, op)) {
+                com.enigmacast.domain.sync.LibraryMergeResult.IGNORE -> return
+                com.enigmacast.domain.sync.LibraryMergeResult.DELETE -> {
+                    library.deleteResume(profileId, source, kind, id)
+                    tombstones.put(profileId, entity, recordKey, com.enigmacast.domain.sync.LibraryMerge.tombstoneAfterDelete(tombstone, updated))
+                    // The Android TV home row kept removed items too.
+                    watchNext.remove(source, kind, id)
+                }
+                com.enigmacast.domain.sync.LibraryMergeResult.UPSERT -> {
+                    library.putResume(LibrarySync.progressFrom(profileId, key, payload, updated, current))
+                    tombstones.clear(profileId, entity, recordKey)
+                }
+            }
         }
     }
 

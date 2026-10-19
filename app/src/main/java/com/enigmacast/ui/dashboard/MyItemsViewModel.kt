@@ -196,7 +196,7 @@ class MyItemsViewModel @Inject constructor(
         if (card.key.startsWith("fav/")) {
             iptv.setFavorite(com.enigmacast.data.db.IptvLibraryRow(card.source, card.kind, card.id, "", null, null, null, "", "", "", 0), false)
         } else {
-            iptv.clearResume(card.source, card.kind, card.id)
+            iptv.removeContinue(card.source, card.kind, card.id)
         }
     }
 
