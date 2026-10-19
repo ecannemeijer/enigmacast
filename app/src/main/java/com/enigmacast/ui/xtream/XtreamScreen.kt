@@ -85,6 +85,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val TimeFormat = DateTimeFormatter.ofPattern("HH:mm")
+private const val LOGO_SETTLE_MS = 150L
+
 private fun time(sec: Long) = TimeFormat.format(Instant.ofEpochSecond(sec).atZone(ZoneId.systemDefault()))
 
 /** Clock, or day and clock when the programme is not today, so the past stays readable. */
@@ -695,7 +697,8 @@ private fun SidePanel(
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     itemsIndexed(keyedItems, key = { _, k -> k.key }) { index, k ->
                         val item = k.value
-                        val now = model.epg[item.id]?.let { nowNext(it, nowSec) }?.first
+                        // Only this row observes its listings: an answer recomposes this row alone.
+                        val now = model.epgOf(item.id)?.let { nowNext(it, nowSec) }?.first
                         CompactListRow(
                             onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
                             selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
@@ -703,7 +706,7 @@ private fun SidePanel(
                                 .focusRequesterIf(index == playingIndex, itemFocus)
                                 .focusRequesterIf(index == 0, firstFocus)
                                 .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
-                                .onFocusChanged { if (it.isFocused) { focused = item; model.focusLive(item) } }
+                                .onFocusChanged { if (it.isFocused) focused = item }
                                 .wrapListEnds(
                                     index = index,
                                     lastIndex = lastIndex,
@@ -806,8 +809,9 @@ private fun androidx.compose.foundation.layout.RowScope.IptvChannelRow(
     Spacer(Modifier.width(8.dp))
     Column(modifier = Modifier.weight(0.62f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val start = now?.startSec
             Text(
-                now?.let { time(it.startSec) }.orEmpty(),
+                remember(start) { start?.let { time(it) }.orEmpty() },
                 color = secondary,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -834,8 +838,12 @@ private fun androidx.compose.foundation.layout.RowScope.IptvChannelRow(
 
 @Composable
 private fun ChannelLogo(model: XtreamViewModel, url: String, name: String) {
+    // Rows that only pass by while Up/Down is held never start a download (leaving cancels the wait).
     val bitmap by produceState<ImageBitmap?>(model.cachedLogo(url), url) {
-        if (value == null && url.isNotBlank()) value = model.logo(url)
+        if (value == null && url.isNotBlank()) {
+            delay(LOGO_SETTLE_MS)
+            value = model.logo(url)
+        }
     }
     Box(Modifier.width(36.dp).height(22.dp), contentAlignment = Alignment.Center) {
         val image = bitmap
@@ -1037,7 +1045,7 @@ private fun IptvOsd(
         number = item?.number?.takeIf { item.section == XtreamSection.LIVE } ?: 0,
         picon = logo,
     )
-    val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epg[it.id] }?.let { IptvOsdModel.guide(entry, it) }
+    val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epgOf(it.id) }?.let { IptvOsdModel.guide(entry, it) }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (showChannelBanner) {
             com.enigmacast.ui.remote.ChannelBanner(

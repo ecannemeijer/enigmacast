@@ -80,6 +80,7 @@ class XtreamViewModel @Inject constructor(
     private val playlistStore: IptvPlaylistStore,
     private val playlistSync: IptvPlaylistSync,
     private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
+    private val rowEpg: com.enigmacast.data.xtream.IptvRowEpg,
     private val playbackOwner: com.enigmacast.playback.PlaybackOwner,
     private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
@@ -199,9 +200,30 @@ class XtreamViewModel @Inject constructor(
         private set
     var buffering by mutableStateOf(false)
         private set
-    /** Now/next of the focused or playing live channel, by stream id. */
-    var epg by mutableStateOf<Map<String, List<XtreamEpg>>>(emptyMap())
-        private set
+    /**
+     * Listings per live channel, by stream id: one state per row, so a row's answer only
+     * recomposes that row (and the OSD of that channel), never the whole list. Main thread only.
+     */
+    private val epgRows = HashMap<String, androidx.compose.runtime.MutableState<List<XtreamEpg>?>>()
+
+    // Like remember { mutableStateOf() }: the first reader (a row, during composition) creates it.
+    private fun epgState(id: String) = epgRows.getOrPut(id) { mutableStateOf<List<XtreamEpg>?>(null) }
+
+    /** The listings of one channel, observed by its row; null until known. */
+    fun epgOf(id: String): List<XtreamEpg>? = epgState(id).value
+
+    /** Without observing (event handlers, the VM itself). */
+    private fun epgNow(id: String): List<XtreamEpg>? = epgRows[id]?.value
+
+    private fun clearEpgRows() {
+        epgRows.values.forEach { it.value = null }
+        epgRows.clear()
+    }
+
+    private fun publishEpg(id: String, events: List<XtreamEpg>) {
+        val state = epgState(id)
+        if (state.value != events) state.value = events
+    }
 
     /** Set while Settings › IPTV uses a playlist: lists come from Room instead of the API. */
     private var playlist: IptvPlaylistKind? = null
@@ -251,29 +273,50 @@ class XtreamViewModel @Inject constructor(
         .map { it.osdSkin to it.osd.transparencyPercent.coerceIn(0, 100) }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, com.enigmacast.domain.model.OsdSkinId.STANDARD to 10)
 
-    private val logos = java.util.concurrent.ConcurrentHashMap<String, androidx.compose.ui.graphics.ImageBitmap>()
+    /**
+     * Decoded channel logos, by URL. Bounded by bytes (the list could pass thousands of channels),
+     * each at most [LOGO_MAX_PX] wide: the row shows 36 dp, the OSD banner a little more.
+     */
+    private val logos = object : android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(LOGO_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: androidx.compose.ui.graphics.ImageBitmap) = value.width * value.height * 4
+    }
+    private val logoFailed = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val logoGate = kotlinx.coroutines.sync.Semaphore(4)
     private val logoClient by lazy { okhttp3.OkHttpClient.Builder().connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS).readTimeout(10, java.util.concurrent.TimeUnit.SECONDS).build() }
 
-    fun cachedLogo(url: String): androidx.compose.ui.graphics.ImageBitmap? = logos[url]
+    private fun kotlin.coroutines.CoroutineContext.isActiveCompat() = this[kotlinx.coroutines.Job]?.isActive != false
 
-    /** The channel logo of the playlist (tvg-logo / stream_icon), decoded off the main thread. */
+    fun cachedLogo(url: String): androidx.compose.ui.graphics.ImageBitmap? = logos.get(url)
+
+    /**
+     * The channel logo of the playlist (tvg-logo / stream_icon), off the main thread, 4 at a time.
+     * Decoded subsampled to at most [LOGO_MAX_PX] wide instead of at full size. A logo that failed
+     * is not asked again for 10 minutes; a cancelled caller (row scrolled away) stops early.
+     */
     suspend fun logo(url: String): androidx.compose.ui.graphics.ImageBitmap? {
         if (!url.startsWith("http", ignoreCase = true)) return null
-        logos[url]?.let { return it }
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching {
-                logoClient.newCall(okhttp3.Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()).execute().use { r ->
-                    if (!r.isSuccessful) return@use null
-                    val opts = android.graphics.BitmapFactory.Options().apply { inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888 }
-                    android.graphics.BitmapFactory.decodeStream(r.body.byteStream(), null, opts)?.let { bmp ->
-                        val scaled = if (bmp.width > 320) android.graphics.Bitmap.createScaledBitmap(bmp, 320, (bmp.height * 320f / bmp.width).toInt().coerceAtLeast(1), true) else bmp
-                        scaled.asImageBitmap()
+        logos.get(url)?.let { return it }
+        logoFailed[url]?.let { if (System.currentTimeMillis() - it < 10 * 60_000L) return null }
+        logoGate.acquire()
+        try {
+            logos.get(url)?.let { return it }
+            return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val bytes = try {
+                    logoClient.newCall(okhttp3.Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()).execute().use { r ->
+                        if (!r.isSuccessful) null else r.body.bytes().takeIf { it.size <= LOGO_MAX_BYTES }
                     }
+                } catch (e: java.io.IOException) {
+                    null
                 }
-            }.getOrNull()?.also { logos[url] = it }
+                if (!kotlinx.coroutines.currentCoroutineContext().isActiveCompat()) return@withContext null
+                val image = bytes?.let { com.enigmacast.ui.xtream.LogoDecode.decode(it, LOGO_MAX_PX) }
+                if (image == null) logoFailed[url] = System.currentTimeMillis() else logos.put(url, image)
+                image
+            }
+        } finally {
+            logoGate.release()
         }
     }
-
 
     /** Settings › Remote control keys of the own-tuner player; the IPTV player uses the same. */
     val keyBindings: StateFlow<com.enigmacast.domain.remote.Bindings> = settingsRepository.settings
@@ -291,47 +334,65 @@ class XtreamViewModel @Inject constructor(
     private var visibleJob: Job? = null
 
     /**
-     * Now/next for the rows on screen: called on every scroll, the previous batch is cancelled,
-     * so only rows that stay visible for a moment are fetched, at most 4 requests at a time.
-     * Xtream channels use the same listings as the programme column. When none of them is on
-     * now, the receiver's satellite guide is matched by name. Rows without any guide are remembered too.
+     * Now/next for the rows on screen. Called whenever the visible rows change; the previous
+     * batch is cancelled, and nothing starts before scrolling rests [RowGuide.SETTLE_MS], so
+     * holding Up/Down fetches nothing. Then, off the main thread:
+     *  1. the bulk guide in Room (the receiver's satellite guide, matched by name), one query;
+     *  2. for the rest, listings stored per stream (memory, then Room, within their TTL);
+     *  3. what is still missing from Xtream, the same listings the programme column uses,
+     *     [RowGuide.CONCURRENCY] at a time. Each answer updates its own row as it arrives.
+     * A failed or cancelled request is not remembered as "no guide", so the row is asked again.
      */
     fun requestEpg(visible: List<XtreamItem>) {
         visibleJob?.cancel()
+        val current = account ?: return
         visibleJob = viewModelScope.launch {
-            delay(250)
-            val todo = visible.filter { it.section == XtreamSection.LIVE && !epg.containsKey(it.id) }.take(EPG_BATCH)
+            delay(com.enigmacast.domain.xtream.RowGuide.SETTLE_MS)
+            val nowMs = System.currentTimeMillis()
+            val now = nowMs / 1000
+            val source = current.key
+            val todo = visible.asSequence()
+                .filter { it.section == XtreamSection.LIVE && rowEpg.needsFetch(source, it.id, nowMs) }
+                .distinctBy { it.id }
+                .take(EPG_BATCH)
+                .toList()
             if (todo.isEmpty()) return@launch
-            val now = System.currentTimeMillis() / 1000
-            val xtream = account?.takeIf { it !== M3U_ACCOUNT }
-            val found = HashMap<String, List<XtreamEpg>>()
-            if (xtream != null) {
-                val gate = kotlinx.coroutines.sync.Semaphore(4)
-                kotlinx.coroutines.coroutineScope {
-                    todo.map { item -> async { gate.withPermitCompat { item.id to repository.guide(xtream, item.id) } } }
-                        .map { it.await() }
-                }.forEach { (id, list) -> found[id] = list }
+            val xtream = current.takeIf { it !== M3U_ACCOUNT }
+            val sat = try {
+                satelliteEpg.byName(todo.map { it.name })
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyMap()
             }
-            val missing = todo.filter { found[it.id].orEmpty().airingAt(now) == null }
-            if (missing.isNotEmpty()) {
-                val sat = runCatching { satelliteEpg.byName(missing.map { it.name }) }.getOrDefault(emptyMap())
-                missing.forEach { item ->
-                    found[item.id] = chooseGuide(found[item.id].orEmpty(), sat[item.name].orEmpty(), now)
+            val stored = if (xtream != null) rowEpg.stored(xtream, todo.map { it.id }) else emptyMap()
+            val network = ArrayList<XtreamItem>()
+            todo.forEach { item ->
+                val bulk = sat[item.name].orEmpty()
+                val kept = stored[item.id]
+                when {
+                    bulk.airingAt(now) != null -> { publishEpg(item.id, bulk); rowEpg.remember(source, item.id, bulk, nowMs) }
+                    kept != null -> publishEpg(item.id, chooseGuide(kept, bulk, now))
+                    xtream == null -> { publishEpg(item.id, bulk); rowEpg.remember(source, item.id, bulk, nowMs) }
+                    else -> { if (bulk.isNotEmpty()) publishEpg(item.id, bulk); network += item }
                 }
             }
-            epg = epg + found
+            if (xtream == null || network.isEmpty()) return@launch
+            kotlinx.coroutines.coroutineScope {
+                network.forEach { item ->
+                    launch {
+                        val list = rowEpg.fetch(xtream, item.id) ?: return@launch
+                        publishEpg(item.id, chooseGuide(list, sat[item.name].orEmpty(), System.currentTimeMillis() / 1000))
+                    }
+                }
+            }
         }
-    }
-
-    private suspend fun <T> kotlinx.coroutines.sync.Semaphore.withPermitCompat(block: suspend () -> T): T {
-        acquire()
-        try { return block() } finally { release() }
     }
 
     /** Right on a channel: its programme column. */
     fun openGuide(item: XtreamItem) {
         guideItem = item
-        guideEvents = epg[item.id].orEmpty()
+        guideEvents = epgNow(item.id).orEmpty()
         guideJob?.cancel()
         guideJob = viewModelScope.launch {
             guideLoading = true
@@ -339,7 +400,8 @@ class XtreamViewModel @Inject constructor(
                 val list = loadGuide(item)
                 if (list.isNotEmpty()) {
                     guideEvents = list
-                    epg = epg + (item.id to list)
+                    publishEpg(item.id, list)
+                    account?.takeIf { it !== M3U_ACCOUNT }?.let { rowEpg.store(it, item.id, list) }
                 }
             } finally {
                 guideLoading = false
@@ -359,9 +421,13 @@ class XtreamViewModel @Inject constructor(
         val full = if (xtream != null) repository.guideFull(xtream, item.id) else emptyList()
         val listings = full.ifEmpty { if (xtream != null) repository.guide(xtream, item.id) else emptyList() }
         val chosen = if (listings.airingAt(now) != null) listings else {
-            val sat = runCatching {
-                satelliteEpg.byName(listOf(item.name), hours = 36, pastHours = pastDays * 24)[item.name]
-            }.getOrNull().orEmpty()
+            val sat = try {
+                satelliteEpg.byName(listOf(item.name), hours = 36, pastHours = pastDays * 24)[item.name].orEmpty()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
             chooseGuide(listings, sat, now)
         }
         return com.enigmacast.domain.xtream.Catchup.listed(chosen, now, pastDays)
@@ -812,6 +878,8 @@ class XtreamViewModel @Inject constructor(
         requestedSection = null
         if (!fullscreen) openLiveFullscreen = false
         val same = this.account?.key == account.key && categories.isNotEmpty()
+        // Stream ids are per account: another playlist's rows start without listings.
+        if (this.account?.key != account.key) clearEpgRows()
         this.account = account
         if (same) {
             if (start != null && start != section) selectSection(start)
@@ -981,13 +1049,14 @@ class XtreamViewModel @Inject constructor(
         episodes = emptyList()
     }
 
-    /** Loads now/next for a live channel once focus rests on it. */
-    fun focusLive(item: XtreamItem) {
-        if (item.section != XtreamSection.LIVE || epg.containsKey(item.id) || account == null) return
+    /** The playing live channel's listings for the OSD (not called per focused row). */
+    private fun loadPlayingGuide(item: XtreamItem) {
+        if (item.section != XtreamSection.LIVE || account == null) return
+        if (epgNow(item.id)?.airingAt(System.currentTimeMillis() / 1000) != null) return
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
-            delay(350)
-            epg = epg + (item.id to loadGuide(item))
+            val list = loadGuide(item)
+            if (list.isNotEmpty()) publishEpg(item.id, list)
         }
     }
 
@@ -1003,7 +1072,7 @@ class XtreamViewModel @Inject constructor(
         }
         when (item.section) {
             XtreamSection.SERIES -> openSeries(item)
-            XtreamSection.LIVE -> start(XtreamUrls.live(account, item.id), XtreamPlaying(item.name, item), live = true, account = account).also { focusLive(item) }
+            XtreamSection.LIVE -> start(XtreamUrls.live(account, item.id), XtreamPlaying(item.name, item), live = true, account = account).also { loadPlayingGuide(item) }
             XtreamSection.MOVIES -> start(XtreamUrls.movie(account, item.id, item.extension), XtreamPlaying(item.name, item), live = false, account = account)
         }
     }
@@ -1440,6 +1509,9 @@ class XtreamViewModel @Inject constructor(
     }
 
     internal companion object {
+        const val LOGO_MAX_PX = 192
+        const val LOGO_MAX_BYTES = 4 * 1024 * 1024
+        const val LOGO_CACHE_BYTES = 16 * 1024 * 1024
         const val EPG_BATCH = 24
         private const val EXTERNAL_PREFIX = "ext:"
         /** Stand-in account of an M3U playlist: every entry has its own address. */

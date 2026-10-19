@@ -151,5 +151,17 @@ data class IptvItemRow(
     @androidx.room.ColumnInfo(defaultValue = "''") val catchupSource: String = "",
 )
 
+/**
+ * Now/next of an IPTV channel row (Xtream short EPG or listings), per account and stream, so the
+ * channel list has them at once after a restart. [events] is [com.enigmacast.domain.xtream.RowGuide.encode].
+ */
+@androidx.room.Entity(tableName = "iptv_row_epg", primaryKeys = ["account", "streamId"])
+data class IptvRowEpgRow(
+    val account: String,
+    val streamId: String,
+    val fetchedAtMs: Long,
+    val events: String,
+)
+
 /** A receiver channel name and its guide key (not a table). */
 data class ChannelNameRow(val name: String, val serviceKey: String)
