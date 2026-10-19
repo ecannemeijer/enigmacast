@@ -165,7 +165,8 @@ fun MyItemsPanel(
                                     if (i == 0) left = menuFocus
                                     if (i == cards.lastIndex) right = FocusRequester.Cancel
                                 },
-                            onClick = { viewModel.optionsIptv(card, "$header/${card.key}") },
+                            // OK: the info page; long press or Menu: Play / Info / Remove.
+                            onClick = { viewModel.okIptv(card, "$header/${card.key}", onXtream, onTorrent) },
                             onOptions = { viewModel.optionsIptv(card, "$header/${card.key}") },
                         )
                     }
@@ -529,8 +530,8 @@ private fun actionsFor(item: Recording, box: Boolean, boxTimer: Boolean): List<I
 }
 
 /**
- * An IPTV card in the recordings' poster style. OK opens it; Menu or holding OK opens the
- * options (remove from favorites / from Continue watching).
+ * An IPTV card in the recordings' poster style. OK opens it (My Items: the info page); Menu or holding OK opens
+ * the options on release (Play / Info / remove from favorites or Continue watching).
  */
 @Composable
 internal fun IptvCard(
@@ -549,11 +550,12 @@ internal fun IptvCard(
                 val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
                 when {
                     e.key == Key.Menu -> { if (e.type == KeyEventType.KeyUp) onOptions(); true }
-                    ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount > 0 -> {
-                        if (!held) { held = true; focus.pressed = false; onOptions() }
-                        true
-                    }
-                    ok && e.type == KeyEventType.KeyUp && held -> { held = false; true }
+                    // A new press starts clean (a hold whose release went elsewhere is forgotten).
+                    ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { held = false; false }
+                    // Held OK: no click on release, the options instead. They open on the release, so
+                    // the key's repeats and release do not reach the dialog and pick its first answer.
+                    ok && e.type == KeyEventType.KeyDown -> { held = true; focus.pressed = false; true }
+                    ok && e.type == KeyEventType.KeyUp && held -> { held = false; focus.pressed = false; onOptions(); true }
                     else -> false
                 }
             }

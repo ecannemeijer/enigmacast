@@ -118,7 +118,20 @@ class MyItemsViewModel @Inject constructor(
         onXtream()
     }
 
-    /** OK on a My items card: play, the info page, or remove. */
+    /**
+     * OK on a My items card: its info page (IPTV or Torrent), Back there returns to the card.
+     * A card without an info page (a live channel) shows the options as before.
+     */
+    fun okIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, origin: String, onXtream: () -> Unit, onTorrent: () -> Unit = {}) {
+        val torrent = card.source == torrentSource
+        when (com.enigmacast.domain.xtream.LibraryCardAction.onOk(torrent, card.open.section)) {
+            com.enigmacast.domain.xtream.LibraryCardAction.Ok.INFO ->
+                if (torrent) openTorrent(card, onTorrent, origin) else infoIptv(card, onXtream, origin)
+            com.enigmacast.domain.xtream.LibraryCardAction.Ok.OPTIONS -> optionsIptv(card, origin)
+        }
+    }
+
+    /** Long press (or Menu) on a My items card: play, the info page, or remove. */
     private var iptvOrigin: String? = null
     fun optionsIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, origin: String) {
         iptvOrigin = origin
