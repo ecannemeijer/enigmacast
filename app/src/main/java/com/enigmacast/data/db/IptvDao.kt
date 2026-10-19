@@ -7,6 +7,15 @@ import androidx.room.Query
 
 @Dao
 interface IptvDao {
+    @Query("SELECT * FROM iptv_row_epg WHERE account = :account AND streamId IN (:streamIds)")
+    suspend fun rowEpg(account: String, streamIds: List<String>): List<IptvRowEpgRow>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putRowEpg(row: IptvRowEpgRow)
+
+    @Query("DELETE FROM iptv_row_epg WHERE fetchedAtMs < :beforeMs")
+    suspend fun pruneRowEpg(beforeMs: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCategories(rows: List<IptvCategoryRow>)
 

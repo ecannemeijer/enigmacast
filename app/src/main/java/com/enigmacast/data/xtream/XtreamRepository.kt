@@ -138,19 +138,32 @@ class XtreamRepository @Inject constructor(
      * The limit covers a morning of short programmes so the one on now is in the list.
      * Empty when the server has no guide for it.
      */
-    suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
+    suspend fun guide(account: XtreamAccount, streamId: String): List<XtreamEpg> = orEmpty { shortGuideOrThrow(account, streamId) }
+
+    /** As [guide], but a failed request throws, so the caller does not take it for "no guide". */
+    suspend fun shortGuideOrThrow(account: XtreamAccount, streamId: String): List<XtreamEpg> =
         cached(account, "get_short_epg/$streamId", false, ttl = EPG_TTL_MS) { XtreamJson.shortEpg(get(account, "get_short_epg", "stream_id" to streamId, "limit" to "24")) }
-    }.getOrDefault(emptyList())
+
+    /** As [guideFull], but a failed request throws. */
+    suspend fun fullGuideOrThrow(account: XtreamAccount, streamId: String): List<XtreamEpg> =
+        cached(account, "get_simple_data_table/$streamId", false, ttl = EPG_TTL_MS) {
+            XtreamJson.shortEpg(get(account, "get_simple_data_table", "stream_id" to streamId))
+        }
+
+    /** A failed request is an empty guide; a cancelled one stays cancelled (it is no answer). */
+    private suspend inline fun orEmpty(block: () -> List<XtreamEpg>): List<XtreamEpg> = try {
+        block()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyList()
+    }
 
     /**
      * The channel's full listings, including programmes that have already ended.
      * `get_short_epg` starts at now, so catch-up has nothing to scroll back to.
      */
-    suspend fun guideFull(account: XtreamAccount, streamId: String): List<XtreamEpg> = runCatching {
-        cached(account, "get_simple_data_table/$streamId", false, ttl = EPG_TTL_MS) {
-            XtreamJson.shortEpg(get(account, "get_simple_data_table", "stream_id" to streamId))
-        }
-    }.getOrDefault(emptyList())
+    suspend fun guideFull(account: XtreamAccount, streamId: String): List<XtreamEpg> = orEmpty { fullGuideOrThrow(account, streamId) }
 
     /** The playlist's own info for a film or series. */
     suspend fun vodInfo(account: XtreamAccount, item: com.enigmacast.domain.xtream.XtreamItem): com.enigmacast.domain.xtream.XtreamVodInfo? = runCatching {
