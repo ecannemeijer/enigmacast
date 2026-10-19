@@ -180,7 +180,7 @@ Direct (HTTP) links from an addon, for example debrid links, are played directly
 
 ### Menu and navigation
 
-The left menu is **Home**, **TV** (flyout: Live TV, TV Guide, Movies, TV Series, Radio), **IPTV** (flyout: Live TV, Films, Series), **Torrent**, **Sport** (Soccer), **Search**, **My Items** and **Settings**, with Exit at the bottom; the last tab per group is remembered. The active profile's avatar and name sit at the top (OK: switch profile, Manage profiles, receiver standby / on).
+The left menu is **Home**, **TV** (flyout: Live TV, TV Guide, Movies, TV Series, Radio), **IPTV** (flyout: Live TV, Films, Series), **Torrent**, **Sport** (Soccer), **Search**, **My Items** and **Settings**, with Exit at the bottom; the last tab per group is remembered. The active profile's avatar and name sit at the top (OK: switch profile, Manage profiles, receiver standby / on). Right enters the open page. D-pad Left inside a page only moves within the page and never opens the menu; Back returns to it.
 
 - Up and Down only move the highlight; Up on the first and Down on the last item stay in the menu. Right from any item enters the open page and restores its last focus (else the page's first item). Opening a page or loading data never sends focus back to the menu.
 - Back from a page returns to the menu; Back again asks whether to stop EnigmaCast (Cancel stays, Stop closes and stops playback). A long press on Back toggles full screen.
