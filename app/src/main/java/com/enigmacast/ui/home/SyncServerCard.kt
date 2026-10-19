@@ -21,6 +21,9 @@ import com.enigmacast.data.enigmasync.SyncServerInstaller
 import com.enigmacast.data.profile.ProfileStore
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.ui.theme.InfoRow
+import com.enigmacast.ui.theme.EnigmaColors
+import androidx.tv.material3.Text
+import androidx.compose.ui.unit.sp
 import com.enigmacast.ui.theme.SettingsCard
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.enigmacast.ui.theme.TvButton
@@ -50,6 +53,9 @@ class SyncServerViewModel @Inject constructor(
     var busy by mutableStateOf(false)
     var linkedHost by mutableStateOf("")
     var linkedRole by mutableStateOf("")
+    /** After an install: the web dashboard and its one-time password (moved here from the setup wizard). */
+    var dashboardUrl by mutableStateOf("")
+    var dashboardPassword by mutableStateOf("")
 
     init {
         viewModelScope.launch {
@@ -87,6 +93,14 @@ class SyncServerViewModel @Inject constructor(
                 onSuccess = { "Installed on ${it.model}. ${it.python}. Data ${it.dataDir}." },
                 onFailure = { it.message ?: "Install failed" },
             )
+            result.getOrNull()?.let { report ->
+                dashboardUrl = report.dashboardUrl
+                dashboardPassword = report.dashboardPassword
+                client.config()?.let {
+                    linkedHost = it.host
+                    linkedRole = it.role
+                }
+            }
         }
     }
 
@@ -160,6 +174,12 @@ fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
         Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             model.freshRecovery?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_claimed, it)) }
             if (model.status.isNotBlank()) InfoRow(stringResource(R.string.sync_server_status), model.status)
+            if (model.dashboardUrl.isNotBlank()) {
+                InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.setup_sync_dashboard_ready, model.dashboardUrl))
+            }
+            if (model.dashboardPassword.isNotBlank()) {
+                InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.setup_sync_dashboard_password, model.dashboardPassword))
+            }
             if (model.linkedHost.isNotBlank()) {
                 InfoRow(
                     stringResource(R.string.sync_server_status),
@@ -168,6 +188,7 @@ fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
                 TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() })
                 return@Column
             }
+            Text(stringResource(R.string.sync_server_install_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
             TvTextField(stringResource(R.string.sync_server_host), model.host, { model.host = it }, kind = TvFieldKind.HOST)
             TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it })
             TvTextField(stringResource(R.string.sync_server_password), model.password, { model.password = it }, visualTransformation = PasswordVisualTransformation())

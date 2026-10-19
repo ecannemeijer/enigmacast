@@ -2,6 +2,9 @@ package com.enigmacast.ui.soccer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -89,10 +92,20 @@ fun SoccerSettingsCard(model: SoccerSettingsViewModel = hiltViewModel()) {
             checked = values.liveUpdates,
             onCheckedChange = { model.settings.setLiveUpdates(it) },
         )
-        TvTextField(
-            label = stringResource(R.string.soccer_api_key),
-            value = values.apiKey,
-            onValueChange = model::setKey,
+        // The own API key is for the few who have one: behind Advanced, open when a key is set.
+        var advanced by rememberSaveable { mutableStateOf(false) }
+        ToggleRow(
+            title = stringResource(R.string.soccer_advanced),
+            description = stringResource(R.string.soccer_advanced_desc),
+            checked = advanced || values.apiKey.isNotBlank(),
+            onCheckedChange = { advanced = it },
         )
+        if (advanced || values.apiKey.isNotBlank()) {
+            TvTextField(
+                label = stringResource(R.string.soccer_api_key),
+                value = values.apiKey,
+                onValueChange = model::setKey,
+            )
+        }
     }
 }

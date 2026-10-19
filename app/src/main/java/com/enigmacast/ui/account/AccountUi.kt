@@ -80,7 +80,9 @@ fun AccountForm(
                 large = large,
             )
         }
-        model.message?.let { Text(it.asString(), color = Color(0xFFFFB4A8), fontSize = 13.sp, lineHeight = 18.sp) }
+        model.message?.let {
+            Text(it.asString(), color = Color(0xFFFFB4A8), fontSize = if (large) 17.sp else 13.sp, lineHeight = if (large) 24.sp else 18.sp)
+        }
         CompactButton(
             label = stringResource(
                 when {
