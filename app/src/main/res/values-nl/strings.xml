@@ -740,8 +740,8 @@
     <string name="home_no_bouquets">Geen bouquets gekozen voor Home</string>
     <string name="home_no_bouquets_hint">Kies bouquets bij Instellingen › Algemeen › Startpagina › Bouquets voor Home.</string>
     <string name="home_guide_none">Geen gidsgegevens</string>
-    <string name="nav_soccer">Voetbal</string>
-    <string name="settings_soccer">Voetbal</string>
+    <string name="nav_soccer">Sport</string>
+    <string name="settings_soccer">Sport</string>
     <string name="soccer_live">LIVE</string>
     <string name="soccer_ht">RUST</string>
     <string name="soccer_ft">EINDE</string>
@@ -788,7 +788,7 @@
     <string name="soccer_h2h_summary">%1$s %2$d · gelijk %3$d · %4$s %5$d</string>
     <string name="soccer_h2h_none">Geen eerdere duels beschikbaar</string>
     <string name="soccer_country">Land om te volgen</string>
-    <string name="soccer_country_desc">De competities op de Voetbal-pagina</string>
+    <string name="soccer_country_desc">De competities op de Sport-pagina</string>
     <string name="soccer_refresh">Programma en stand verversen</string>
     <string name="soccer_refresh_desc">Live-standen worden elke 60 s bijgewerkt zolang de Voetbal-pagina open is</string>
     <string name="soccer_refresh_minutes">Elke %1$d min</string>
@@ -804,7 +804,7 @@
     <string name="soccer_country_it">Italië</string>
     <string name="soccer_country_fr">Frankrijk</string>
     <string name="soccer_country_pt">Portugal</string>
-    <string name="soccer_country_br">Brazilië</string>
+    <string name="soccer_country_br">Brazilië &amp; Zuid-Amerika</string>
     <string name="soccer_country_eu">Europa</string>
     <string name="soccer_country_world">Wereld</string>
     <string name="pitch_results">%1$s · uitslagen</string>
@@ -1134,7 +1134,7 @@
     <string name="premium_feature_receivers">Meer dan één ontvanger gebruiken</string>
     <string name="premium_feature_movies">Films</string>
     <string name="premium_feature_series">Series</string>
-    <string name="premium_feature_soccer">Voetbal</string>
+    <string name="premium_feature_soccer">Sport</string>
     <string name="premium_feature_epg">De tv-gids (EPG)</string>
     <string name="update_reinstall_title">EnigmaCast opnieuw installeren</string>
     <string name="update_reinstall_message">Deze versie kan niet als update worden geïnstalleerd. Omdat de functies te veel zijn veranderd, moet je EnigmaCast verwijderen en de nieuwe versie opnieuw installeren.</string>
@@ -1483,4 +1483,17 @@
         <item quantity="one">Daarna nog 1 taak</item>
         <item quantity="other">Daarna nog %d taken</item>
     </plurals>
+    <string name="sport_refresh">Vernieuwen</string>
+    <string name="sport_section_football">Voetbal</string>
+    <string name="sport_competitions">Competities: %1$s.</string>
+    <string name="sport_desc_nl">Nederlands voetbal van Amsterdam tot Eindhoven: de Eredivisie met Ajax, PSV en Feyenoord, elk weekend van augustus tot mei.</string>
+    <string name="sport_desc_eng">Het thuisland van het spel: de Premier League en het Championship, met bijna elke dag wedstrijden.</string>
+    <string name="sport_desc_de">Volle stadions en luide tribunes: de Bundesliga met Bayern, Dortmund en Leverkusen.</string>
+    <string name="sport_desc_es">Technisch voetbal in de zon: LaLiga met Real Madrid, Barcelona en Atlético.</string>
+    <string name="sport_desc_it">Tactiek en traditie: de Serie A met Inter, Milan, Juventus en Napoli.</string>
+    <string name="sport_desc_fr">De Ligue 1, van Parijs tot Marseille en Lyon, met veel jong talent.</string>
+    <string name="sport_desc_pt">Primeira Liga: Benfica, Porto en Sporting strijden elk jaar om de titel.</string>
+    <string name="sport_desc_br">Het Brasileirão en de Copa Libertadores, de grootste clubbeker van Zuid-Amerika.</string>
+    <string name="sport_desc_eu">De grote Europese avonden: de UEFA Champions League en in toernooizomers het EK.</string>
+    <string name="sport_desc_world">Het WK voetbal, het grootste toernooi ter wereld, met landenteams van elk continent.</string>
 </resources>

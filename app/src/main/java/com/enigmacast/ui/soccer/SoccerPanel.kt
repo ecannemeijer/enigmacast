@@ -3,6 +3,7 @@ package com.enigmacast.ui.soccer
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.holdPageFocus
+import com.enigmacast.ui.theme.requestWhenReady
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -37,6 +38,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,6 +110,50 @@ fun SoccerPanel(
     val standingsFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { model.whileVisible() }
     LaunchedEffect(Unit) { pitch.whileVisible() }
+    // Sport opens on the region landing page; OK on a card opens this page for that region,
+    // Back returns to the card. The followed country is the remembered choice (initial focus).
+    var landing by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(true) }
+    var regionIndex by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(-1) }
+    var pageFocused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var switches by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val cards = model.regionCards
+    val shownIndex = if (regionIndex in cards.indices) regionIndex else com.enigmacast.domain.soccer.SportRegions.initialIndex(cards, model.settings.values.value.country)
+    LaunchedEffect(switches) {
+        // After landing ⇄ page the focus moves with it: to the page's top, or back to the chosen card.
+        if (switches > 0) contentFocus.requestWhenReady()
+    }
+    androidx.activity.compose.BackHandler(enabled = !landing && pageFocused && model.info == null && pitch.stack.isEmpty()) {
+        landing = true
+        pageFocused = false
+        switches++
+    }
+
+    if (landing) {
+        CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(skinShape(16.dp))
+                    .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) },
+            ) {
+                SportLanding(
+                    cards = cards,
+                    focusedIndex = shownIndex,
+                    onFocusIndex = { regionIndex = it },
+                    contentFocus = contentFocus,
+                    menuFocus = menuFocus,
+                    refreshing = model.landingRefreshing,
+                    onRefresh = model::refreshLanding,
+                    onOpen = { card ->
+                        model.chooseRegion(card.id)
+                        landing = false
+                        switches++
+                    },
+                )
+            }
+        }
+        return
+    }
 
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
         Box(
@@ -115,7 +161,10 @@ fun SoccerPanel(
                 .fillMaxSize()
                 .clip(skinShape(16.dp))
                 .background(Brush.verticalGradient(0f to Color(0xFF0B2A1E), 0.55f to EnigmaColors.Canvas))
-                .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
+                .onFocusChanged {
+                    pageFocused = it.hasFocus
+                    if (it.hasFocus) onRetreatTo(menuFocus)
+                }
                 .holdPageFocus(contentFocus, listOf(model.loading && model.sections.isEmpty, model.sections.isEmpty, model.sections.hero?.let { it.id })),
         ) {
             val sections = remember { PivotState() }

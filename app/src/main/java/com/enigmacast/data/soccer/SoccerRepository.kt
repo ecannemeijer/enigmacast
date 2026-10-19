@@ -58,10 +58,16 @@ class SoccerRepository @Inject constructor(
     /** Last fetch state per competition ("matches|CODE"), for the error banner and the "updated" line. */
     fun fetchState(codes: List<String>): Flow<List<SoccerFetchRow>> = dao.observeFetches(codes.map { matchesKey(it) })
 
-    /** Competitions list, refreshed once a week. */
-    suspend fun refreshCompetitions(nowMs: Long = System.currentTimeMillis()) {
+    /** The competitions the key reads, with names and emblems (Sport landing page); null before the first answer. */
+    fun competitions(): Flow<List<com.enigmacast.domain.soccer.Competition>?> = dao.observeFetches(listOf(KEY_COMPETITIONS)).map { rows ->
+        rows.firstOrNull()?.body?.takeIf { it.isNotBlank() }?.let { body -> SoccerJson.competitions(body).takeIf { it.isNotEmpty() } }
+    }
+
+    /** Competitions list, refreshed once a week, or now with [force] (Sport › Refresh). */
+    suspend fun refreshCompetitions(nowMs: Long = System.currentTimeMillis(), force: Boolean = false) {
+        if (http.apiKey().isBlank()) return
         val last = dao.fetch(KEY_COMPETITIONS)
-        if (last != null && last.body.isNotBlank() && nowMs - last.fetchedAtMs < WEEK_MS) return
+        if (!force && last != null && last.body.isNotBlank() && nowMs - last.fetchedAtMs < WEEK_MS) return
         val result = http.get("/competitions")
         if (result is FdResult.Ok) dao.putFetch(SoccerFetchRow(KEY_COMPETITIONS, nowMs, result.body))
     }

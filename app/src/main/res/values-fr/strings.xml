@@ -742,8 +742,8 @@
     <string name="home_no_bouquets">Aucun bouquet choisi pour l\'accueil</string>
     <string name="home_no_bouquets_hint">Choisissez des bouquets dans Paramètres › Général › Page d\'accueil › Bouquets pour l\'accueil.</string>
     <string name="home_guide_none">Aucune donnée de guide</string>
-    <string name="nav_soccer">Football</string>
-    <string name="settings_soccer">Football</string>
+    <string name="nav_soccer">Sport</string>
+    <string name="settings_soccer">Sport</string>
     <string name="soccer_live">DIRECT</string>
     <string name="soccer_ht">MT</string>
     <string name="soccer_ft">FIN</string>
@@ -790,7 +790,7 @@
     <string name="soccer_h2h_summary">%1$s %2$d · nuls %3$d · %4$s %5$d</string>
     <string name="soccer_h2h_none">Aucune confrontation précédente disponible</string>
     <string name="soccer_country">Pays à suivre</string>
-    <string name="soccer_country_desc">Les compétitions affichées sur la page Football</string>
+    <string name="soccer_country_desc">Les compétitions affichées sur la page Sport</string>
     <string name="soccer_refresh">Actualisation calendrier et classement</string>
     <string name="soccer_refresh_desc">Les scores en direct sont actualisés toutes les 60 s tant que la page Football est ouverte</string>
     <string name="soccer_refresh_minutes">Toutes les %1$d min</string>
@@ -806,7 +806,7 @@
     <string name="soccer_country_it">Italie</string>
     <string name="soccer_country_fr">France</string>
     <string name="soccer_country_pt">Portugal</string>
-    <string name="soccer_country_br">Brésil</string>
+    <string name="soccer_country_br">Brésil et Amérique du Sud</string>
     <string name="soccer_country_eu">Europe</string>
     <string name="soccer_country_world">Monde</string>
     <string name="pitch_results">%1$s · résultats</string>
@@ -1120,7 +1120,7 @@
     <string name="premium_feature_receivers">Utiliser plusieurs récepteurs</string>
     <string name="premium_feature_movies">Films</string>
     <string name="premium_feature_series">Séries</string>
-    <string name="premium_feature_soccer">Football</string>
+    <string name="premium_feature_soccer">Sport</string>
     <string name="premium_feature_epg">Le Guide TV (EPG)</string>
     <string name="update_reinstall_title">Réinstaller EnigmaCast</string>
     <string name="update_reinstall_message">Cette version ne peut pas être installée comme mise à jour. Les fonctions ayant trop changé, veuillez désinstaller EnigmaCast puis installer la nouvelle version.</string>
@@ -1492,4 +1492,17 @@
         <item quantity="one">Encore 1 tâche ensuite</item>
         <item quantity="other">Encore %d tâches ensuite</item>
     </plurals>
+    <string name="sport_refresh">Actualiser</string>
+    <string name="sport_section_football">Football</string>
+    <string name="sport_competitions">Compétitions : %1$s.</string>
+    <string name="sport_desc_nl">Le football néerlandais d\'Amsterdam à Eindhoven : l\'Eredivisie avec l\'Ajax, le PSV et Feyenoord, chaque week-end d\'août à mai.</string>
+    <string name="sport_desc_eng">Le berceau du football : la Premier League et le Championship, avec des matchs presque tous les jours.</string>
+    <string name="sport_desc_de">Stades pleins et tribunes bruyantes : la Bundesliga avec le Bayern, Dortmund et Leverkusen.</string>
+    <string name="sport_desc_es">Un football technique au soleil : LaLiga avec le Real Madrid, Barcelone et l\'Atlético.</string>
+    <string name="sport_desc_it">Tactique et tradition : la Serie A avec l\'Inter, Milan, la Juventus et Naples.</string>
+    <string name="sport_desc_fr">La Ligue 1, de Paris à Marseille et Lyon, avec beaucoup de jeunes talents.</string>
+    <string name="sport_desc_pt">Primeira Liga : Benfica, Porto et le Sporting se disputent le titre chaque année.</string>
+    <string name="sport_desc_br">Le Brasileirão et la Copa Libertadores, la plus grande coupe de clubs d\'Amérique du Sud.</string>
+    <string name="sport_desc_eu">Les grandes soirées européennes : la Ligue des champions de l\'UEFA et, les étés de tournoi, l\'Euro.</string>
+    <string name="sport_desc_world">La Coupe du monde de la FIFA, le plus grand tournoi du football, avec des sélections de tous les continents.</string>
 </resources>

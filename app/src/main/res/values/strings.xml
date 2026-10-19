@@ -743,8 +743,8 @@
     <string name="home_no_bouquets">No bouquets chosen for Home</string>
     <string name="home_no_bouquets_hint">Choose bouquets in Settings › General › Home page › Bouquets for Home.</string>
     <string name="home_guide_none">No guide data</string>
-    <string name="nav_soccer">Soccer</string>
-    <string name="settings_soccer">Soccer</string>
+    <string name="nav_soccer">Sport</string>
+    <string name="settings_soccer">Sport</string>
     <string name="soccer_live">LIVE</string>
     <string name="soccer_ht">HT</string>
     <string name="soccer_ft">FT</string>
@@ -791,7 +791,7 @@
     <string name="soccer_h2h_summary">%1$s %2$d · draws %3$d · %4$s %5$d</string>
     <string name="soccer_h2h_none">No earlier meetings available</string>
     <string name="soccer_country">Country to follow</string>
-    <string name="soccer_country_desc">The competitions shown on the Soccer page</string>
+    <string name="soccer_country_desc">The competitions shown on the Sport page</string>
     <string name="soccer_refresh">Fixtures &amp; standings refresh</string>
     <string name="soccer_refresh_desc">Live scores update every 60 s while the Soccer page is open</string>
     <string name="soccer_refresh_minutes">Every %1$d min</string>
@@ -807,7 +807,7 @@
     <string name="soccer_country_it">Italy</string>
     <string name="soccer_country_fr">France</string>
     <string name="soccer_country_pt">Portugal</string>
-    <string name="soccer_country_br">Brazil</string>
+    <string name="soccer_country_br">Brazil &amp; South America</string>
     <string name="soccer_country_eu">Europe</string>
     <string name="soccer_country_world">World</string>
     <string name="pitch_results">%1$s · results</string>
@@ -1137,7 +1137,7 @@
     <string name="premium_feature_receivers">Using more than one receiver</string>
     <string name="premium_feature_movies">Movies</string>
     <string name="premium_feature_series">TV Series</string>
-    <string name="premium_feature_soccer">Soccer</string>
+    <string name="premium_feature_soccer">Sport</string>
     <string name="premium_feature_epg">The TV Guide (EPG)</string>
     <string name="update_reinstall_title">Reinstall EnigmaCast</string>
     <string name="update_reinstall_message">This version cannot be installed as an update. Because the features have changed too much, please uninstall EnigmaCast and install the new version again.</string>
@@ -1492,4 +1492,17 @@
         <item quantity="one">1 more task waiting</item>
         <item quantity="other">%d more tasks waiting</item>
     </plurals>
+    <string name="sport_refresh">Refresh</string>
+    <string name="sport_section_football">Football</string>
+    <string name="sport_competitions">Competitions: %1$s.</string>
+    <string name="sport_desc_nl">Dutch football from Amsterdam to Eindhoven: the Eredivisie with Ajax, PSV and Feyenoord, every weekend from August to May.</string>
+    <string name="sport_desc_eng">The home of the game: the Premier League and the Championship, with matches almost every day of the week.</string>
+    <string name="sport_desc_de">Full stadiums and loud stands: the Bundesliga with Bayern, Dortmund and Leverkusen.</string>
+    <string name="sport_desc_es">Technical football in the sun: LaLiga with Real Madrid, Barcelona and Atlético.</string>
+    <string name="sport_desc_it">Tactics and tradition: Serie A with Inter, Milan, Juventus and Napoli.</string>
+    <string name="sport_desc_fr">Ligue 1, from Paris to Marseille and Lyon, with plenty of young talent.</string>
+    <string name="sport_desc_pt">Primeira Liga: Benfica, Porto and Sporting fight for the title every year.</string>
+    <string name="sport_desc_br">The Brasileirão and the Copa Libertadores, the biggest club cup of South America.</string>
+    <string name="sport_desc_eu">Europe\'s big nights: the UEFA Champions League and, in tournament summers, the EURO.</string>
+    <string name="sport_desc_world">The FIFA World Cup, the biggest tournament in football, with national teams from every continent.</string>
 </resources>
