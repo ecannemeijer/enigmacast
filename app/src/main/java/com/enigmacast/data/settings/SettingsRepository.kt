@@ -76,6 +76,12 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    /** Writes the one-time move to Glass Earth ([SkinDefaults]) back, so EnigmaCast picked later is kept. */
+    suspend fun migrateSkinDefault() {
+        val raw = dataStore.data.first()[key] ?: return
+        if (withContext(dispatchers.default) { SkinDefaults.pending(openWebifJson, raw) }) update { it }
+    }
+
     /** Moves passwords that older versions kept in the settings JSON into the [SecretStore]. */
     suspend fun migrateSecrets() {
         val raw = dataStore.data.first()[key] ?: return

@@ -9,9 +9,9 @@ import org.junit.Test
 
 class OsdSkinTest {
     @Test
-    fun settingsFromBeforeSkinsUseTheStandardSkin() {
+    fun settingsFromBeforeSkinsMoveToGlassEarth() {
         val saved = """{"receivers":[],"streamMode":"OWN_TUNER"}"""
-        assertEquals(OsdSkinId.STANDARD, SkinDefaults.decodeSettings(openWebifJson, AppSettings.serializer(), saved).osdSkin)
+        assertEquals(OsdSkinId.GLASS_EARTH, SkinDefaults.decodeSettings(openWebifJson, AppSettings.serializer(), saved).osdSkin)
     }
 
     @Test

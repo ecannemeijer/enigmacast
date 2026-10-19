@@ -32,7 +32,7 @@ data class ProfileScope(
     val lastLiveSource: LastLiveSource = LastLiveSource.ENIGMA2,
     val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     val pictureModes: Map<String, PictureMode> = emptyMap(),
-    /** Always written, like [AppSettings.osdSkin]; a stored scope without it predates [OsdSkinId.DEFAULT]. */
+    /** Always written, like [AppSettings.osdSkin]. */
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS)
     val osdSkin: OsdSkinId = OsdSkinId.DEFAULT,
@@ -41,6 +41,10 @@ data class ProfileScope(
     val motionQuality: MotionQuality = MotionQuality.PREMIUM,
     /** Settings › Playback: open fullscreen live TV on this source when the app starts. */
     val startupLive: StartupLive = StartupLive.OFF,
+    /** [SkinDefaults.MARKER] of this scope; also travels with synced profiles. */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS)
+    val skinDefaults: Int = com.enigmacast.domain.model.SkinDefaults.CURRENT,
 ) {
     fun applyTo(settings: AppSettings): AppSettings = settings.copy(
         lastChannels = lastChannels,

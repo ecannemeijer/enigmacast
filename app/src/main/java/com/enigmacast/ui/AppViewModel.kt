@@ -121,6 +121,8 @@ class AppViewModel @Inject constructor(
                 .onFailure { EnigmaLog.service("secret migration failed: ${it.javaClass.simpleName}") }
             runCatching { settingsRepository.migrateChannelMemory() }
                 .onFailure { EnigmaLog.service("channel memory migration failed: ${it.javaClass.simpleName}") }
+            runCatching { settingsRepository.migrateSkinDefault() }
+                .onFailure { EnigmaLog.service("skin default migration failed: ${it.javaClass.simpleName}") }
         }
         viewModelScope.launch {
             val settings = settingsRepository.current()
