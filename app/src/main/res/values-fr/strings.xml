@@ -597,6 +597,7 @@
     <string name="motion_performance">Performance</string>
     <string name="home_continue">Reprendre</string>
     <string name="home_no_programme">Aucune info sur le programme</string>
+    <string name="mini_player_fullscreen">OK : plein écran</string>
     <string name="home_recent">Regardé récemment</string>
     <string name="home_on_now">En ce moment</string>
     <string name="home_next">Ensuite</string>

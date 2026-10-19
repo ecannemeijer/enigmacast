@@ -125,6 +125,35 @@ class XtreamViewModel @Inject constructor(
         liveListNeeded = false
     }
 
+    /** A live channel plays (not a film, an episode or catch-up): it may continue in the mini player. */
+    val playingLive: Boolean
+        get() = playing.let { com.enigmacast.domain.xtream.IptvMini.continues(it?.item?.section, it?.episode != null, catchup) }
+
+    /** Set by Back on the bare live picture: the page closes, the channel plays on (mini player). */
+    private var continueInMini = false
+    fun continueInMiniPlayer() { continueInMini = playingLive }
+    /** The page closes: true when the live channel must keep playing (read once). */
+    fun consumeContinueInMini(): Boolean = continueInMini.also { continueInMini = false }
+
+    /** OK on the mini player: back to that channel full screen, without restarting it. */
+    var liveResume by mutableStateOf(false)
+        private set
+    fun resumeLiveFullscreen(): Boolean {
+        if (!playingLive) return false
+        openLiveFullscreen = false
+        liveListNeeded = false
+        requestedSection = null
+        liveResume = true
+        return true
+    }
+    fun consumeLiveResume() { liveResume = false }
+
+    /** The mini player's line: what is on air on the channel that plays. */
+    fun playingNowTitle(): String? {
+        val item = playing?.item?.takeIf { playingLive } ?: return null
+        return com.enigmacast.domain.xtream.IptvMini.nowTitle(epgOf(item.id), System.currentTimeMillis() / 1000)
+    }
+
     fun markReturnToMenu() {
         returnToMenu = true
     }
@@ -804,6 +833,10 @@ class XtreamViewModel @Inject constructor(
         }
         viewModelScope.launch {
             playbackLifecycle.resumes.collect { count -> if (count > 0) startRememberedLive(force = true) }
+        }
+        // Another profile: a channel that went on in the mini player was the previous profile's.
+        viewModelScope.launch {
+            profiles.switched.collect { if (playing != null && playbackOwner.foreground != com.enigmacast.playback.PlaybackOwner.Owner.IPTV) stop() }
         }
         // Categories changed in Settings: the open section is read again (from the cache).
         viewModelScope.launch {

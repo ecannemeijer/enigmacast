@@ -597,6 +597,7 @@
     <string name="motion_performance">Prestatie</string>
     <string name="home_continue">Verder kijken</string>
     <string name="home_no_programme">Geen programmainformatie</string>
+    <string name="mini_player_fullscreen">OK: volledig scherm</string>
     <string name="home_recent">Recent gekeken</string>
     <string name="home_on_now">Nu op tv</string>
     <string name="home_next">Hierna</string>

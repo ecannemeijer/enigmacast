@@ -104,7 +104,14 @@ class OwnTunerSession @Inject constructor(
     private val premiumGate: PremiumGate,
     private val listEvents: com.enigmacast.sync.ChannelListEvents,
     private val profiles: com.enigmacast.data.profile.ProfileStore,
+    private val owner: com.enigmacast.playback.PlaybackOwner,
 ) {
+    /**
+     * IPTV live (continuing in the mini player) or a torrent holds the output: starts nobody
+     * asked for (the last channel when a page opens, another box, an automatic retry) wait.
+     */
+    private fun otherPlays() = owner.otherPlays(com.enigmacast.playback.PlaybackOwner.Owner.ENIGMA2)
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {
@@ -253,7 +260,7 @@ class OwnTunerSession @Inject constructor(
         boundReceiverId = receiverId
         if (!switching) return
         abandonCurrent()
-        if (receiverId != null && active) loadInitial(startPlayback = !playback.isFilePlayback())
+        if (receiverId != null && active) loadInitial(startPlayback = !playback.isFilePlayback() && !otherPlays())
     }
 
     private fun abandonCurrent() {
@@ -277,7 +284,7 @@ class OwnTunerSession @Inject constructor(
             val id = settings.activeReceiver()?.id
             // IPTV startup leaves the decoder free. Satellite startup plays the saved channel
             // even when the last picture was IPTV. Off keeps the previous rule.
-            val play = settings.streamMode == StreamMode.OWN_TUNER && when (settings.startupLive) {
+            val play = settings.streamMode == StreamMode.OWN_TUNER && !otherPlays() && when (settings.startupLive) {
                 StartupLive.IPTV -> false
                 StartupLive.SATELLITE -> true
                 StartupLive.OFF -> settings.lastLiveSource != LastLiveSource.IPTV
@@ -571,7 +578,7 @@ class OwnTunerSession @Inject constructor(
      * OK (or another channel) starts again.
      */
     private fun restartAutomatically(why: String) {
-        if (playback.isFilePlayback()) return
+        if (playback.isFilePlayback() || otherPlays()) return
         val channel = _state.value.channel ?: return
         val wait = restarts.next()
         if (wait == null) {
