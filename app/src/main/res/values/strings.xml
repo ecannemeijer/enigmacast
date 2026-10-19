@@ -1504,4 +1504,6 @@
     <string name="sport_desc_br">The Brasileirão and the Copa Libertadores, the biggest club cup of South America.</string>
     <string name="sport_desc_eu">Europe\'s big nights: the UEFA Champions League and, in tournament summers, the EURO.</string>
     <string name="sport_desc_world">The FIFA World Cup, the biggest tournament in football, with national teams from every continent.</string>
+    <string name="subs_switch_unseekable">Subtitles can\'t be switched while this stream plays: it can\'t be searched. Pick them before playback starts.</string>
+    <string name="seek_unseekable">This stream can\'t be fast-forwarded or rewound.</string>
 </resources>

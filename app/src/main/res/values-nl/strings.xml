@@ -1495,4 +1495,6 @@
     <string name="sport_desc_br">Het Brasileirão en de Copa Libertadores, de grootste clubbeker van Zuid-Amerika.</string>
     <string name="sport_desc_eu">De grote Europese avonden: de UEFA Champions League en in toernooizomers het EK.</string>
     <string name="sport_desc_world">Het WK voetbal, het grootste toernooi ter wereld, met landenteams van elk continent.</string>
+    <string name="subs_switch_unseekable">Ondertitels kunnen niet worden gewisseld terwijl deze stream speelt: er kan niet in gezocht worden. Kies ze voordat het afspelen begint.</string>
+    <string name="seek_unseekable">Deze stream kan niet vooruit- of teruggespoeld worden.</string>
 </resources>

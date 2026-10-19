@@ -722,6 +722,10 @@ private fun TorrentPlayer(model: TorrentViewModel) {
                 onDismiss = { model.answerResume(false) },
             )
         }
+        model.subsNotice?.let { res ->
+            LaunchedEffect(res) { kotlinx.coroutines.delay(4_000); model.subsNotice = null }
+            Text(stringResource(res), color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp).background(Color.Black.copy(alpha = 0.6f)).padding(8.dp))
+        }
         model.playError?.let {
             Text(stringResource(R.string.torrent_error_play, it), color = Color.White, modifier = Modifier.align(Alignment.TopCenter).padding(24.dp).background(Color.Black.copy(alpha = 0.6f)).padding(8.dp))
         }

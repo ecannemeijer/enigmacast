@@ -509,10 +509,12 @@ class TorrentViewModel @Inject constructor(
         // Long read timeout: the local server waits for pieces that are still downloading.
         val http = DefaultHttpDataSource.Factory().setReadTimeoutMs(70_000).setConnectTimeoutMs(10_000).setAllowCrossProtocolRedirects(true)
         val selector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context)
+        // Text stays selected with subtitles off (only hidden): see SubtitleSafety.
         selector.parameters = selector.buildUponParameters()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackSubtitles)
-            .setSelectUndeterminedTextLanguage(playbackSubtitles)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setSelectUndeterminedTextLanguage(true)
             .build()
+        EnigmaLog.subs("torrent player created")
         ExoPlayer.Builder(context)
             // Read-ahead capped to the heap: Media3's default (~144 MB) does not fit many TV boxes.
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
@@ -553,9 +555,17 @@ class TorrentViewModel @Inject constructor(
                         }
                         publishTracks(p)
                     }
+                    override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+                        if (reason != Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                            EnigmaLog.subs("torrent position ${old.positionMs}ms -> ${new.positionMs}ms (reason $reason)")
+                        }
+                    }
+                    override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                        EnigmaLog.subs("torrent timeline: dur=${p.duration}ms seekable=${p.isCurrentMediaItemSeekable} (reason $reason)")
+                    }
                     override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
                         val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
-                        if (externalCues == null) cues = if (textOn) cueGroup.cues else emptyList()
+                        if (externalCues == null && selectedExternalId == null) cues = if (textOn && !subtitlesHidden) cueGroup.cues else emptyList()
                     }
                     override fun onPlayerError(error: PlaybackException) {
                         EnigmaLog.networkError("torrent playback: ${error.errorCodeName}")
@@ -596,11 +606,17 @@ class TorrentViewModel @Inject constructor(
             if (playing != title || mediaUrl != url) return@launch
             player().apply {
                 // The screen may have created the player before the setting was read.
+                val preferred = com.enigmacast.ui.xtream.preferredTextLanguages(settingsRepository.current().iptvSubtitleLanguages)
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !playbackSubtitles)
-                    .setPreferredTextLanguage(null)
-                    .setSelectUndeterminedTextLanguage(playbackSubtitles)
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .setPreferredTextLanguages(*preferred.toTypedArray())
+                    .setSelectUndeterminedTextLanguage(true)
                     .build()
+                subtitlesHidden = !playbackSubtitles
+                lastDurationMs = 0L
+                guardJob?.cancel()
+                EnigmaLog.subs("torrent setMediaItem+prepare (new item) at ${seekOnStart ?: 0}ms, preferred ${preferred.ifEmpty { listOf("-") }.joinToString()}")
                 // Resume / another source: straight to the saved place, no question.
                 val start = seekOnStart?.takeIf { it >= ResumePolicy.MIN_RESUME_MS }
                 if (start != null) setMediaItem(mediaItem(url, null), start) else setMediaItem(mediaItem(url, null))
@@ -616,7 +632,8 @@ class TorrentViewModel @Inject constructor(
                 delay(500)
                 val p = player ?: break
                 val position = p.currentPosition
-                val duration = p.duration.coerceAtLeast(0)
+                if (p.duration != C.TIME_UNSET && p.duration > 0) lastDurationMs = p.duration
+                val duration = com.enigmacast.playback.SubtitleSafety.durationFor(p.duration, lastDurationMs)
                 val buffered = bufferedMs(position, duration, p.bufferedPosition)
                 if (player !== p) break
                 playerState = playerState.copy(positionMs = position, durationMs = duration, bufferedPositionMs = buffered)
@@ -626,7 +643,9 @@ class TorrentViewModel @Inject constructor(
                 val buffering = p.playbackState == Player.STATE_BUFFERING && p.playWhenReady
                 if (starved.update(buffering, p.isLoading, p.totalBufferedDuration, android.os.SystemClock.elapsedRealtime())) {
                     EnigmaLog.player("torrent player starved at ${position / 1000}s (${p.totalBufferedDuration} ms buffered, not loading): reload")
-                    p.seekTo(position)
+                    // Only a seekable file: on one without an index this seek would restart it at 0.
+                    if (p.isCurrentMediaItemSeekable) p.seekTo(position)
+                    else EnigmaLog.subs("torrent starved at ${position}ms but not seekable: no reload seek")
                 }
                 if (++n % 10 == 0) {
                     saveResume()
@@ -716,7 +735,16 @@ class TorrentViewModel @Inject constructor(
         returnOrigin = request.origin
     }
 
-    fun seekTo(ms: Long) { player?.seekTo(ms.coerceAtLeast(0)) }
+    fun seekTo(ms: Long) {
+        val p = player ?: return
+        // Media3 sends a seek on an unseekable file to 0 (a torrent before its index is read).
+        if (!com.enigmacast.playback.SubtitleSafety.canSeek(p.isCurrentMediaItemSeekable, false)) {
+            EnigmaLog.subs("torrent seek to ${ms}ms refused: ${com.enigmacast.playback.SubtitleSafety.describe(snapshot(p))}")
+            subsNotice = com.enigmacast.R.string.seek_unseekable
+            return
+        }
+        p.seekTo(ms.coerceAtLeast(0))
+    }
     fun togglePause() { player?.let { it.playWhenReady = !it.playWhenReady } }
     fun restart() { player?.seekTo(0) }
     fun choosePictureMode(mode: PictureMode) { pictureMode = mode }
@@ -729,15 +757,15 @@ class TorrentViewModel @Inject constructor(
     /** Off, an embedded track, or a SubSource file (downloaded, then added to the media item). */
     fun chooseSubtitles(id: String?) {
         val p = player ?: return
+        val before = snapshot(p)
+        EnigmaLog.subs("torrent choose ${id ?: "off"} at ${com.enigmacast.playback.SubtitleSafety.describe(before)}")
         if (id == null) {
+            // Off only hides the lines: no track change, so switching on again never re-reads the file.
             selectedExternalId = null
             pendingEmbeddedId = null
+            subtitlesHidden = true
             dropExternalCues()
             cues = emptyList()
-            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .build()
             publishTracks(p)
             return
         }
@@ -746,31 +774,74 @@ class TorrentViewModel @Inject constructor(
             if (externalHits.none { it.id == hitId }) return
             selectedExternalId = hitId
             pendingEmbeddedId = null
-            // The file is drawn by the app, next to the media: the media item is never rebuilt,
-            // so position, progress and seeking stay as they are ([com.enigmacast.playback.ExternalSubtitles]).
+            subtitlesHidden = false
             dropExternalCues()
             cues = emptyList()
-            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .build()
             publishTracks(p)
             downloadJob?.cancel()
             downloadJob = viewModelScope.launch {
-                val file = subtitles.file(hitId) ?: return@launch
+                val file = subtitles.file(hitId)
+                if (file == null) { EnigmaLog.subs("torrent external $hitId: download failed"); return@launch }
                 if (selectedExternalId != hitId) return@launch
                 val timeline = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     com.enigmacast.playback.ExternalSubtitles.parse(file, subtitleMime(file.extension))
-                } ?: return@launch
+                }
+                if (timeline == null) { EnigmaLog.subs("torrent external $hitId: unreadable ${file.extension}"); return@launch }
                 if (selectedExternalId != hitId) return@launch
+                EnigmaLog.subs("torrent external $hitId: ${timeline.size} cues, player untouched")
                 showExternalCues(timeline)
             }
             return
         }
         selectedExternalId = null
         dropExternalCues()
+        subtitlesHidden = false
+        if (embeddedSelected(p, id)) {
+            EnigmaLog.subs("torrent embedded $id already read: shown, no track change")
+            publishTracks(p)
+            return
+        }
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(before.seekable, before.positionMs)) {
+            EnigmaLog.subs("torrent embedded $id refused: not seekable yet, a switch would restart it")
+            subsNotice = com.enigmacast.R.string.subs_switch_unseekable
+            publishTracks(p)
+            return
+        }
         applyEmbeddedSubtitles(p, id)
+        guardPosition(p, before, "embedded $id")
         publishTracks(p)
+    }
+
+    private var subtitlesHidden = false
+    private var lastDurationMs = 0L
+    private var guardJob: Job? = null
+    /** A short notice over the player (string resource), cleared after a few seconds. */
+    var subsNotice by mutableStateOf<Int?>(null)
+
+    private fun snapshot(p: ExoPlayer) = com.enigmacast.playback.PlayheadSnapshot(
+        p.currentPosition.coerceAtLeast(0), p.duration, p.isCurrentMediaItemSeekable,
+    )
+
+    private fun embeddedSelected(p: ExoPlayer, id: String): Boolean {
+        val (group, track) = TrackMenus.find(p.currentTracks, id, C.TRACK_TYPE_TEXT) ?: return false
+        return group.isTrackSelected(track) && !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+    }
+
+    private fun guardPosition(p: ExoPlayer, before: com.enigmacast.playback.PlayheadSnapshot, why: String) {
+        guardJob?.cancel()
+        guardJob = viewModelScope.launch {
+            val until = android.os.SystemClock.elapsedRealtime() + com.enigmacast.playback.SubtitleSafety.GUARD_MS
+            while (android.os.SystemClock.elapsedRealtime() < until && player === p) {
+                delay(250)
+                val target = com.enigmacast.playback.SubtitleSafety.restoreTo(before, p.currentPosition, p.isCurrentMediaItemSeekable)
+                if (target != null) {
+                    EnigmaLog.subs("torrent $why jumped to ${p.currentPosition}ms: back to ${target}ms")
+                    p.seekTo(target)
+                    break
+                }
+            }
+            EnigmaLog.subs("torrent $why settled at ${com.enigmacast.playback.SubtitleSafety.describe(snapshot(p))}")
+        }
     }
 
     /** The SubSource file being shown, and the job that follows the player position with it. */
@@ -852,7 +923,7 @@ class TorrentViewModel @Inject constructor(
     }
 
     private fun publishTracks(p: ExoPlayer) {
-        val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        val textOn = !p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT) && !subtitlesHidden
         val menu = TrackMenus.build(p.currentTracks, textOn && selectedExternalId == null)
         val embedded = menu.subtitles.filter { choice ->
             val found = TrackMenus.find(p.currentTracks, choice.id, C.TRACK_TYPE_TEXT)
@@ -882,6 +953,11 @@ class TorrentViewModel @Inject constructor(
         if (holdAutoText || p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)) return
         val groups = p.currentTracks.groups
         if (groups.any { it.type == C.TRACK_TYPE_TEXT && it.isSelected }) return
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(p.isCurrentMediaItemSeekable, p.currentPosition)) {
+            EnigmaLog.subs("torrent auto pick skipped at ${p.currentPosition}ms: not seekable yet")
+            return
+        }
+        EnigmaLog.subs("torrent auto pick first text track at ${p.currentPosition}ms")
         val group = groups.firstOrNull { candidate ->
             candidate.type == C.TRACK_TYPE_TEXT &&
                 candidate.isTrackSupported(0) &&
@@ -955,6 +1031,7 @@ class TorrentViewModel @Inject constructor(
         tickJob?.cancel()
         saveResume()
         resumeAsk = null
+        EnigmaLog.subs("torrent player released")
         player?.release()
         player = null
         playing = null
