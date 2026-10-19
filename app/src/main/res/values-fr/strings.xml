@@ -1079,7 +1079,7 @@
     <string name="ok">OK</string>
     <string name="settings_account">Compte</string>
     <string name="setup_account_title">Votre compte EnigmaCast</string>
-    <string name="setup_account_body">Créez un compte gratuit pour les Films, Séries et le Football. Vous recevez 14 jours de Premium gratuits (2 ans pendant la bêta). Vous préférez regarder d\'abord ? Choisissez Passer ; vous pourrez vous connecter plus tard dans Paramètres › Compte.</string>
+    <string name="setup_account_body">Créez un compte gratuit pour les Films, Séries et le Football. Vous recevez 14 jours de Premium gratuits (1 an pendant la bêta). Vous préférez regarder d\'abord ? Choisissez Passer ; vous pourrez vous connecter plus tard dans Paramètres › Compte.</string>
     <string name="setup_account_signed_in">Connecté en tant que %1$s</string>
     <string name="account_mode_create">Créer un compte</string>
     <string name="account_mode_login">Se connecter</string>
@@ -1458,4 +1458,24 @@
     <string name="sync_server_install_hint">Installez le serveur de synchro sur votre récepteur. Il vous faut le mot de passe du récepteur (utilisateur généralement root). Ensuite, l\'adresse du tableau de bord web et son mot de passe unique s\'affichent ici.</string>
     <string name="setup_sync_dashboard_ready">Serveur de synchro installé. Tableau de bord : %1$s</string>
     <string name="setup_sync_dashboard_password">Mot de passe du tableau de bord, affiché une seule fois : %1$s</string>
+    <string name="settings_sync_server">Serveur de synchro</string>
+    <string name="profile_pin_title">Code PIN pour %1$s</string>
+    <string name="profile_pin_set">Définir le code PIN</string>
+    <string name="profile_pin_clear">Supprimer le code PIN</string>
+    <string name="profile_playlist_on">Playlist : activée</string>
+    <string name="profile_playlist_off">Playlist : désactivée</string>
+    <string name="sync_server_title">Serveur de synchro</string>
+    <string name="sync_server_host">Adresse du récepteur</string>
+    <string name="sync_server_user">Utilisateur SSH</string>
+    <string name="sync_server_password">Mot de passe SSH</string>
+    <string name="sync_server_install">Installer le serveur de synchro</string>
+    <string name="sync_server_status">État</string>
+    <string name="sync_server_recovery">Code de récupération</string>
+    <string name="sync_server_claim">Reprendre l\'administration</string>
+    <string name="sync_server_claimed">Cet appareil est maintenant le seul administrateur. Conservez le nouveau code de récupération : %1$s. L\'ancien code ne fonctionne plus.</string>
+    <string name="sync_server_connected">Connecté à %1$s en tant que %2$s. Choisir un profil le synchronise aussitôt.</string>
+    <string name="sync_server_disconnect">Déconnecter</string>
+    <string name="iptv_next">Suivant</string>
+    <string name="iptv_next_cancel">Annuler</string>
+    <string name="iptv_next_in">Commence dans %1$d</string>
 </resources>

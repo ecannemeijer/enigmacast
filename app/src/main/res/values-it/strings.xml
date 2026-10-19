@@ -1079,7 +1079,7 @@
     <string name="ok">OK</string>
     <string name="settings_account">Account</string>
     <string name="setup_account_title">Il tuo account EnigmaCast</string>
-    <string name="setup_account_body">Crea un account gratuito per Film, Serie e Calcio. Ricevi 14 giorni di Premium gratis (2 anni durante la beta). Preferisci iniziare a guardare? Scegli Salta; puoi accedere più tardi in Impostazioni › Account.</string>
+    <string name="setup_account_body">Crea un account gratuito per Film, Serie e Calcio. Ricevi 14 giorni di Premium gratis (1 anno durante la beta). Preferisci iniziare a guardare? Scegli Salta; puoi accedere più tardi in Impostazioni › Account.</string>
     <string name="setup_account_signed_in">Accesso effettuato come %1$s</string>
     <string name="account_mode_create">Crea account</string>
     <string name="account_mode_login">Accedi</string>
@@ -1458,4 +1458,24 @@
     <string name="sync_server_install_hint">Installa il server di sincronizzazione sul ricevitore. Ti serve la password del ricevitore (utente di solito root). Poi qui compaiono l\'indirizzo della dashboard web e la password monouso.</string>
     <string name="setup_sync_dashboard_ready">Server di sincronizzazione installato. Dashboard: %1$s</string>
     <string name="setup_sync_dashboard_password">Password della dashboard, mostrata una sola volta: %1$s</string>
+    <string name="settings_sync_server">Server di sincronizzazione</string>
+    <string name="profile_pin_title">PIN per %1$s</string>
+    <string name="profile_pin_set">Imposta PIN</string>
+    <string name="profile_pin_clear">Rimuovi PIN</string>
+    <string name="profile_playlist_on">Playlist: attiva</string>
+    <string name="profile_playlist_off">Playlist: disattiva</string>
+    <string name="sync_server_title">Server di sincronizzazione</string>
+    <string name="sync_server_host">Indirizzo del ricevitore</string>
+    <string name="sync_server_user">Utente SSH</string>
+    <string name="sync_server_password">Password SSH</string>
+    <string name="sync_server_install">Installa server di sincronizzazione</string>
+    <string name="sync_server_status">Stato</string>
+    <string name="sync_server_recovery">Codice di ripristino</string>
+    <string name="sync_server_claim">Diventa amministratore</string>
+    <string name="sync_server_claimed">Questo dispositivo è ora l\'unico amministratore. Conserva il nuovo codice di ripristino: %1$s. Il codice precedente non funziona più.</string>
+    <string name="sync_server_connected">Collegato a %1$s come %2$s. Scegliere un profilo lo sincronizza subito.</string>
+    <string name="sync_server_disconnect">Scollega</string>
+    <string name="iptv_next">Avanti</string>
+    <string name="iptv_next_cancel">Annulla</string>
+    <string name="iptv_next_in">Inizia tra %1$d</string>
 </resources>

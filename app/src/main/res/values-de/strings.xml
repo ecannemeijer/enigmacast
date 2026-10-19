@@ -1075,7 +1075,7 @@
     <string name="ok">OK</string>
     <string name="settings_account">Konto</string>
     <string name="setup_account_title">Dein EnigmaCast-Konto</string>
-    <string name="setup_account_body">Erstelle ein kostenloses Konto für Filme, Serien und Fußball. Du bekommst 14 Tage Premium gratis (in der Beta 2 Jahre). Lieber erst schauen? Wähle Überspringen; anmelden kannst du dich später unter Einstellungen › Konto.</string>
+    <string name="setup_account_body">Erstelle ein kostenloses Konto für Filme, Serien und Fußball. Du bekommst 14 Tage Premium gratis (in der Beta 1 Jahr). Lieber erst schauen? Wähle Überspringen; anmelden kannst du dich später unter Einstellungen › Konto.</string>
     <string name="setup_account_signed_in">Angemeldet als %1$s</string>
     <string name="account_mode_create">Konto erstellen</string>
     <string name="account_mode_login">Anmelden</string>
@@ -1454,4 +1454,24 @@
     <string name="sync_server_install_hint">Installiere den Sync-Server auf deinem Receiver. Du brauchst das Passwort deines Receivers (Benutzer meist root). Danach erscheinen hier die Adresse des Web-Dashboards und das Einmal-Passwort.</string>
     <string name="setup_sync_dashboard_ready">Sync-Server installiert. Dashboard: %1$s</string>
     <string name="setup_sync_dashboard_password">Dashboard-Passwort, wird nur einmal angezeigt: %1$s</string>
+    <string name="settings_sync_server">Sync-Server</string>
+    <string name="profile_pin_title">PIN für %1$s</string>
+    <string name="profile_pin_set">PIN festlegen</string>
+    <string name="profile_pin_clear">PIN entfernen</string>
+    <string name="profile_playlist_on">Playlist: an</string>
+    <string name="profile_playlist_off">Playlist: aus</string>
+    <string name="sync_server_title">Sync-Server</string>
+    <string name="sync_server_host">Adresse des Receivers</string>
+    <string name="sync_server_user">SSH-Benutzer</string>
+    <string name="sync_server_password">SSH-Passwort</string>
+    <string name="sync_server_install">Sync-Server installieren</string>
+    <string name="sync_server_status">Status</string>
+    <string name="sync_server_recovery">Wiederherstellungscode</string>
+    <string name="sync_server_claim">Admin übernehmen</string>
+    <string name="sync_server_claimed">Dieses Gerät ist jetzt der einzige Admin. Bewahre den neuen Wiederherstellungscode auf: %1$s. Der vorherige Code funktioniert nicht mehr.</string>
+    <string name="sync_server_connected">Verbunden mit %1$s als %2$s. Ein Profil wählen synchronisiert es sofort.</string>
+    <string name="sync_server_disconnect">Trennen</string>
+    <string name="iptv_next">Weiter</string>
+    <string name="iptv_next_cancel">Abbrechen</string>
+    <string name="iptv_next_in">Beginnt in %1$d</string>
 </resources>

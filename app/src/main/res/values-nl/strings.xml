@@ -1093,7 +1093,7 @@
     <string name="ok">OK</string>
     <string name="settings_account">Account</string>
     <string name="setup_account_title">Je EnigmaCast-account</string>
-    <string name="setup_account_body">Maak een gratis account voor Films, Series en Voetbal. Je krijgt 14 dagen Premium gratis (in de bèta 2 jaar). Liever eerst kijken? Kies Overslaan; je kunt later inloggen via Instellingen › Account.</string>
+    <string name="setup_account_body">Maak een gratis account voor Films, Series en Voetbal. Je krijgt 14 dagen Premium gratis (in de bèta 1 jaar). Liever eerst kijken? Kies Overslaan; je kunt later inloggen via Instellingen › Account.</string>
     <string name="setup_account_signed_in">Ingelogd als %1$s</string>
     <string name="account_mode_create">Account aanmaken</string>
     <string name="account_mode_login">Inloggen</string>
