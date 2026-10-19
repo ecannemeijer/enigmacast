@@ -76,11 +76,23 @@ class SoccerViewModel @Inject constructor(
 
     val autoSwitchKeys: StateFlow<Set<String>> = reminders.scheduledKeys
 
+    /** Cards of the Sport landing page: the regions the key can read, with emblems once known. */
+    var regionCards by mutableStateOf(com.enigmacast.domain.soccer.SportRegions.cards(null, null))
+        private set
+    var landingRefreshing by mutableStateOf(false)
+        private set
+
     private val clock = MutableStateFlow(System.currentTimeMillis())
     private var noticeJob: Job? = null
     private var h2hJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            repository.available().combine(repository.competitions()) { available, list ->
+                com.enigmacast.domain.soccer.SportRegions.cards(available, list)
+            }.distinctUntilChanged().collect { regionCards = it }
+        }
+        viewModelScope.launch { runCatching { repository.refreshCompetitions() } }
         val countryFlow = settings.values.map { it.country }.distinctUntilChanged()
             .combine(repository.available()) { id, available ->
                 val offered = SoccerCountries.offered(available)
@@ -171,6 +183,22 @@ class SoccerViewModel @Inject constructor(
             if (result is FdResult.NoKey) problem = Problem.NO_KEY
             refreshing = false
             loading = false
+        }
+    }
+
+    /** A card on the landing page was chosen: follow that region; the page reloads its competitions. */
+    fun chooseRegion(id: String) {
+        if (settings.values.value.country != id) settings.setCountry(id)
+    }
+
+    /** "Refresh" on the landing page: competitions (names, emblems) and the followed region's matches. */
+    fun refreshLanding() {
+        if (landingRefreshing) return
+        viewModelScope.launch {
+            landingRefreshing = true
+            runCatching { repository.refreshCompetitions(force = true) }
+            runCatching { repository.refresh(country.competitions, force = true) }
+            landingRefreshing = false
         }
     }
 

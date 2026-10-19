@@ -740,8 +740,8 @@
     <string name="home_no_bouquets">Keine Bouquets für die Startseite gewählt</string>
     <string name="home_no_bouquets_hint">Wähle Bouquets unter Einstellungen › Allgemein › Startseite › Bouquets für die Startseite.</string>
     <string name="home_guide_none">Keine EPG-Daten</string>
-    <string name="nav_soccer">Fußball</string>
-    <string name="settings_soccer">Fußball</string>
+    <string name="nav_soccer">Sport</string>
+    <string name="settings_soccer">Sport</string>
     <string name="soccer_live">LIVE</string>
     <string name="soccer_ht">HZ</string>
     <string name="soccer_ft">ENDE</string>
@@ -788,7 +788,7 @@
     <string name="soccer_h2h_summary">%1$s %2$d · Unentschieden %3$d · %4$s %5$d</string>
     <string name="soccer_h2h_none">Keine früheren Begegnungen verfügbar</string>
     <string name="soccer_country">Land zum Verfolgen</string>
-    <string name="soccer_country_desc">Die Wettbewerbe auf der Fußball-Seite</string>
+    <string name="soccer_country_desc">Die Wettbewerbe auf der Sport-Seite</string>
     <string name="soccer_refresh">Spielplan &amp; Tabelle aktualisieren</string>
     <string name="soccer_refresh_desc">Live-Ergebnisse werden alle 60 s aktualisiert, solange die Fußball-Seite offen ist</string>
     <string name="soccer_refresh_minutes">Alle %1$d Min.</string>
@@ -804,7 +804,7 @@
     <string name="soccer_country_it">Italien</string>
     <string name="soccer_country_fr">Frankreich</string>
     <string name="soccer_country_pt">Portugal</string>
-    <string name="soccer_country_br">Brasilien</string>
+    <string name="soccer_country_br">Brasilien &amp; Südamerika</string>
     <string name="soccer_country_eu">Europa</string>
     <string name="soccer_country_world">Welt</string>
     <string name="pitch_results">%1$s · Ergebnisse</string>
@@ -1116,7 +1116,7 @@
     <string name="premium_feature_receivers">Mehr als einen Receiver nutzen</string>
     <string name="premium_feature_movies">Filme</string>
     <string name="premium_feature_series">Serien</string>
-    <string name="premium_feature_soccer">Fußball</string>
+    <string name="premium_feature_soccer">Sport</string>
     <string name="premium_feature_epg">Der TV-Guide (EPG)</string>
     <string name="update_reinstall_title">EnigmaCast neu installieren</string>
     <string name="update_reinstall_message">Diese Version kann nicht als Update installiert werden. Da sich die Funktionen zu stark geändert haben, deinstalliere EnigmaCast bitte und installiere die neue Version erneut.</string>
@@ -1488,4 +1488,17 @@
         <item quantity="one">Danach noch 1 Aufgabe</item>
         <item quantity="other">Danach noch %d Aufgaben</item>
     </plurals>
+    <string name="sport_refresh">Aktualisieren</string>
+    <string name="sport_section_football">Fußball</string>
+    <string name="sport_competitions">Wettbewerbe: %1$s.</string>
+    <string name="sport_desc_nl">Niederländischer Fußball von Amsterdam bis Eindhoven: die Eredivisie mit Ajax, PSV und Feyenoord, jedes Wochenende von August bis Mai.</string>
+    <string name="sport_desc_eng">Das Mutterland des Fußballs: Premier League und Championship, mit Spielen an fast jedem Tag.</string>
+    <string name="sport_desc_de">Volle Stadien und laute Kurven: die Bundesliga mit Bayern, Dortmund und Leverkusen.</string>
+    <string name="sport_desc_es">Technischer Fußball in der Sonne: LaLiga mit Real Madrid, Barcelona und Atlético.</string>
+    <string name="sport_desc_it">Taktik und Tradition: die Serie A mit Inter, Milan, Juventus und Napoli.</string>
+    <string name="sport_desc_fr">Die Ligue 1, von Paris bis Marseille und Lyon, mit vielen jungen Talenten.</string>
+    <string name="sport_desc_pt">Primeira Liga: Benfica, Porto und Sporting kämpfen jedes Jahr um den Titel.</string>
+    <string name="sport_desc_br">Das Brasileirão und die Copa Libertadores, der größte Klubwettbewerb Südamerikas.</string>
+    <string name="sport_desc_eu">Europas große Abende: die UEFA Champions League und in Turniersommern die EM.</string>
+    <string name="sport_desc_world">Die FIFA-Weltmeisterschaft, das größte Turnier des Fußballs, mit Nationalteams aller Kontinente.</string>
 </resources>

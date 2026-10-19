@@ -742,8 +742,8 @@
     <string name="home_no_bouquets">Nessun bouquet scelto per la Home</string>
     <string name="home_no_bouquets_hint">Scegli i bouquet in Impostazioni › Generale › Pagina iniziale › Bouquet per la Home.</string>
     <string name="home_guide_none">Nessun dato della guida</string>
-    <string name="nav_soccer">Calcio</string>
-    <string name="settings_soccer">Calcio</string>
+    <string name="nav_soccer">Sport</string>
+    <string name="settings_soccer">Sport</string>
     <string name="soccer_live">LIVE</string>
     <string name="soccer_ht">INT</string>
     <string name="soccer_ft">FIN</string>
@@ -790,7 +790,7 @@
     <string name="soccer_h2h_summary">%1$s %2$d · pareggi %3$d · %4$s %5$d</string>
     <string name="soccer_h2h_none">Nessun precedente disponibile</string>
     <string name="soccer_country">Paese da seguire</string>
-    <string name="soccer_country_desc">Le competizioni mostrate nella pagina Calcio</string>
+    <string name="soccer_country_desc">Le competizioni mostrate nella pagina Sport</string>
     <string name="soccer_refresh">Aggiornamento calendario e classifica</string>
     <string name="soccer_refresh_desc">I risultati live si aggiornano ogni 60 s mentre la pagina Calcio è aperta</string>
     <string name="soccer_refresh_minutes">Ogni %1$d min</string>
@@ -806,7 +806,7 @@
     <string name="soccer_country_it">Italia</string>
     <string name="soccer_country_fr">Francia</string>
     <string name="soccer_country_pt">Portogallo</string>
-    <string name="soccer_country_br">Brasile</string>
+    <string name="soccer_country_br">Brasile e Sud America</string>
     <string name="soccer_country_eu">Europa</string>
     <string name="soccer_country_world">Mondo</string>
     <string name="pitch_results">%1$s · risultati</string>
@@ -1120,7 +1120,7 @@
     <string name="premium_feature_receivers">Usare più di un ricevitore</string>
     <string name="premium_feature_movies">Film</string>
     <string name="premium_feature_series">Serie TV</string>
-    <string name="premium_feature_soccer">Calcio</string>
+    <string name="premium_feature_soccer">Sport</string>
     <string name="premium_feature_epg">La Guida TV (EPG)</string>
     <string name="update_reinstall_title">Reinstalla EnigmaCast</string>
     <string name="update_reinstall_message">Questa versione non può essere installata come aggiornamento. Poiché le funzioni sono cambiate troppo, disinstalla EnigmaCast e installa di nuovo la nuova versione.</string>
@@ -1492,4 +1492,17 @@
         <item quantity="one">Poi ancora 1 attività</item>
         <item quantity="other">Poi ancora %d attività</item>
     </plurals>
+    <string name="sport_refresh">Aggiorna</string>
+    <string name="sport_section_football">Calcio</string>
+    <string name="sport_competitions">Competizioni: %1$s.</string>
+    <string name="sport_desc_nl">Il calcio olandese da Amsterdam a Eindhoven: l\'Eredivisie con Ajax, PSV e Feyenoord, ogni fine settimana da agosto a maggio.</string>
+    <string name="sport_desc_eng">La patria del calcio: Premier League e Championship, con partite quasi ogni giorno.</string>
+    <string name="sport_desc_de">Stadi pieni e curve rumorose: la Bundesliga con Bayern, Dortmund e Leverkusen.</string>
+    <string name="sport_desc_es">Calcio tecnico sotto il sole: LaLiga con Real Madrid, Barcellona e Atlético.</string>
+    <string name="sport_desc_it">Tattica e tradizione: la Serie A con Inter, Milan, Juventus e Napoli.</string>
+    <string name="sport_desc_fr">La Ligue 1, da Parigi a Marsiglia e Lione, con tanti giovani talenti.</string>
+    <string name="sport_desc_pt">Primeira Liga: Benfica, Porto e Sporting si contendono il titolo ogni anno.</string>
+    <string name="sport_desc_br">Il Brasileirão e la Copa Libertadores, la più grande coppa per club del Sud America.</string>
+    <string name="sport_desc_eu">Le grandi notti europee: la UEFA Champions League e, nelle estati dei tornei, l\'Europeo.</string>
+    <string name="sport_desc_world">La Coppa del Mondo FIFA, il torneo più grande del calcio, con nazionali di ogni continente.</string>
 </resources>
