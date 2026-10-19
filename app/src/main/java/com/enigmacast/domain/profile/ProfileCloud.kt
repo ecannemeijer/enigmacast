@@ -1,9 +1,13 @@
 package com.enigmacast.domain.profile
 
+import com.enigmacast.domain.model.OsdSkinId
+import com.enigmacast.domain.model.SkinDefaults
 import com.enigmacast.domain.model.StartupLive
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 
 /** Home bouquet picks that belong to one profile. [all] lists receivers explicitly set back to every bouquet. */
@@ -44,11 +48,23 @@ object ProfileCloud {
 
     fun encode(snapshot: ProfileSettingsSnapshot): String = json.encodeToString(snapshot.normalized())
 
+    /** A server document from before skins were synced (no skin in its scope) keeps EnigmaCast. */
     fun decode(raw: String): ProfileSettingsSnapshot =
-        json.decodeFromString(ProfileSettingsSnapshot.serializer(), raw).normalized()
+        json.decodeFromJsonElement(ProfileSettingsSnapshot.serializer(), pinScopeSkin(json.parseToJsonElement(raw))).normalized()
+
+    private fun pinScopeSkin(element: JsonElement): JsonElement {
+        val scope = (element as? JsonObject)?.get("scope") ?: return element
+        return JsonObject(element + ("scope" to SkinDefaults.pinLegacy(scope)))
+    }
 
     /** Defaults only: do not upload them over a profile another device already filled in. */
-    fun untouched(snapshot: ProfileSettingsSnapshot): Boolean = snapshot.normalized() == ProfileSettingsSnapshot().normalized()
+    fun untouched(snapshot: ProfileSettingsSnapshot): Boolean {
+        val defaults = ProfileSettingsSnapshot().normalized()
+        val same = snapshot.normalized()
+        // An install from before Glass Earth that never changed anything still has the old default skin.
+        val legacy = defaults.copy(scope = defaults.scope.copy(osdSkin = OsdSkinId.LEGACY_DEFAULT))
+        return same == defaults || same == legacy
+    }
 
     /** Old server documents have no startup choice. Missing means "leave the value already stored". */
     fun includesStartupLive(raw: String): Boolean = runCatching {

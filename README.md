@@ -32,7 +32,7 @@ Stremio addon (Torrentio / custom) -------> jlibtorrent engine -> 127.0.0.1 rang
 
 **Enigma2 / OpenWebif live TV**
 - Two [viewing modes](#viewing-modes): *Own tuner* (default; each TV streams its own channel from the receiver's stream server, with a free-tuner check and failover to another saved receiver) and *Follow receiver* (the TV shows what the receiver shows, with the receiver's own OSD grabbed from OpenWebif).
-- App-drawn channel banner and OSD in five [GUI skins](#gui-skins), dense channel list with picons and now/next, bouquet column, number entry, timeshift pause, [quick options](#quick-options) (audio, subtitles, picture, audio delay, quality, sleep, stream info).
+- App-drawn channel banner and OSD in seven [GUI skins](#gui-skins), dense channel list with picons and now/next, bouquet column, number entry, timeshift pause, [quick options](#quick-options) (audio, subtitles, picture, audio delay, quality, sleep, stream info).
 - [Stream type](#stream-type): Normal, Transcoded (receiver hardware encoder) or Automatic (steps quality down/up on stalls when away from home).
 - Picture-in-picture (satellite or IPTV source) and a fallback that plays the same channel from the other source (satellite ↔ IPTV) when a channel drops out.
 - Several receivers, power controls (standby, wake, reboot, GUI restart, sleep timer), signal meter and an Oscam page.
@@ -521,15 +521,17 @@ Settings › Settings import loads a ready-made channel list or IPTV bouquets on
 
 ### GUI skins
 
-Settings › Appearance › GUI skins shows one tile per skin with a small preview in that skin's own colours and banner layout. Left and Right walk the tiles, and OK applies a skin at once: every screen and the OSD repaint without a restart. The choice is stored with the other settings, so settings from before skins existed open in EnigmaCast. A skin is only data in `ui/theme/Skins.kt`: colour tokens, a corner-radius scale, a text weight, a focus style (fill, outline or glow) and a banner layout. Screens only use token names, so they do not know which skin is active.
+Settings › Appearance › GUI skins shows one tile per skin with a small preview in that skin's own colours and banner layout. Left and Right walk the tiles, and OK applies a skin at once: every screen and the OSD repaint without a restart. The choice is stored with the other settings and per profile. Fresh installs and new profiles start in Glass Earth; settings and profiles saved by older versions without a skin (from before skins existed, or while EnigmaCast was the default) keep EnigmaCast, and a skin that was picked is never replaced. A skin is only data in `ui/theme/Skins.kt`: colour tokens, a corner-radius scale, a text weight, a focus style (fill, outline or glow) and a banner layout. Screens only use token names, so they do not know which skin is active.
 
 | Skin | Look | Channel banner |
 |---|---|---|
-| EnigmaCast | midnight blue, electric blue accent (the default) | rounded floating card |
+| EnigmaCast | midnight blue, electric blue accent (the default before Glass Earth) | rounded floating card |
 | OpenPLi | PLi-HD: #101214, glossy blue-grey selection bar with yellow text, square corners | PLi-HD InfoBar |
 | Midnight | OLED black, teal accent, white outline focus | minimal card without border |
 | Metrix | openATV MetrixHD: flat dark tiles, square corners, blue accent | flat bar with a coloured channel block |
 | Aurora | glassy indigo/teal, larger corners, glowing focus | translucent gradient card |
+| Glass Earth | frosted glass over a full-screen Earth-horizon photo, Inter font (the default) | orbit banner |
+| Glass Wave | frosted glass over a full-screen blue particle-wave photo, Inter font | wave banner |
 
 The OpenPLi skin follows `PLi-HD` from littlesat/skin-PLiHD: the colours from `<colors>` in `skin.xml`, and the InfoBar laid out on the skin's own 1280×720 grid, scaled to the screen.
 - **Top of the bar:** the date and clock in yellow on the left, the recording mark, then the channel number and name. The encryption line is top right, and the service icons (HD / 16:9 / 4:3, TXT, DD, crypt) are on one row.

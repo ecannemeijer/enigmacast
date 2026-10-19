@@ -1,5 +1,6 @@
 package com.enigmacast.data.profile
 
+import com.enigmacast.domain.model.SkinDefaults
 import android.content.Context
 import com.enigmacast.R
 import com.enigmacast.data.settings.SettingsRepository
@@ -51,7 +52,7 @@ class ProfileStore @Inject constructor(
 
     private fun load(): ProfileState {
         val raw = prefs.getString(KEY, null)
-        val parsed = raw?.let { runCatching { json.decodeFromString(ProfileState.serializer(), it) }.getOrNull() } ?: ProfileState()
+        val parsed = raw?.let { runCatching { SkinDefaults.decodeScopes(json, ProfileState.serializer(), it) }.getOrNull() } ?: ProfileState()
         val next = ProfileRules.ensureDefault(parsed, context.getString(R.string.profile_default_name))
         if (next != parsed) prefs.edit().putString(KEY, json.encodeToString(ProfileState.serializer(), next)).apply()
         return next
