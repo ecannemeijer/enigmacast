@@ -1,8 +1,6 @@
 package com.enigmacast.ui.setup
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -21,8 +19,10 @@ import com.enigmacast.data.enigmasync.EnigmaSyncClient
 import com.enigmacast.data.enigmasync.EnigmaSyncEngine
 import com.enigmacast.data.enigmasync.RemoteIptvOffer
 import com.enigmacast.data.enigmasync.SyncDiscovery
-import com.enigmacast.data.enigmasync.SyncServerInstaller
+import com.enigmacast.domain.setup.SetupConditions
+import com.enigmacast.domain.setup.SetupFlow
 import com.enigmacast.domain.setup.SetupStep
+import com.enigmacast.util.EnigmaLog
 import com.enigmacast.live.HomeFilmsRepository
 import com.enigmacast.live.ReceiverNames
 import com.enigmacast.sync.SyncScheduler
@@ -50,7 +50,6 @@ class SetupViewModel @Inject constructor(
     private val discovery: SyncDiscovery,
     private val syncClient: EnigmaSyncClient,
     private val syncEngine: EnigmaSyncEngine,
-    private val installer: SyncServerInstaller,
     names: ReceiverNames,
 ) : ViewModel() {
     var step by mutableStateOf(SetupStep.WELCOME)
@@ -67,20 +66,22 @@ class SetupViewModel @Inject constructor(
     val receiverName: StateFlow<String> = names.active
     val accountState = account.account
 
+    /** The sync server found on the receiver; null while searching or when there is none. */
     var syncHost by mutableStateOf<String?>(null)
         private set
     var syncSearching by mutableStateOf(false)
         private set
-    var syncMessage by mutableStateOf("")
+    /** Pairing is running (Pair was pressed). */
+    var syncLinking by mutableStateOf(false)
+        private set
+    /** The last Pair failed; the wizard shows a plain message, the reason goes to the log. */
+    var syncFailed by mutableStateOf(false)
         private set
     var syncLinked by mutableStateOf(false)
-    var dashboardUrl by mutableStateOf("")
-    var dashboardPassword by mutableStateOf("")
         private set
+    /** Paired before this wizard run: no sync step, the IPTV offer is still asked. */
+    private var prePaired = false
     private var syncSearchStarted = false
-
-    var sshUser by mutableStateOf("root")
-    var sshPassword by mutableStateOf("")
 
     var profileName by mutableStateOf("")
     var avatar by mutableIntStateOf(0)
@@ -102,43 +103,78 @@ class SetupViewModel @Inject constructor(
         private set
     private var bouquetsFor: String? = null
 
+    /** A server IPTV login waiting for a yes or no. Null hides that wizard step. */
+    var iptvOffer by mutableStateOf<RemoteIptvOffer?>(null)
+        private set
+    private var iptvAnswered by mutableStateOf(false)
+    var iptvFailed by mutableStateOf(false)
+        private set
+    var iptvBusy by mutableStateOf(false)
+        private set
+    private var iptvOfferReady = false
+
+    /** Leaving the receiver step: the receiver is being saved and the sync check starts. */
+    var leavingReceiver by mutableStateOf(false)
+        private set
+
+    /** What decides the conditional steps right now. */
+    fun conditions(): SetupConditions = SetupConditions(
+        syncOffered = !prePaired && (syncSearching || syncHost != null),
+        iptvOffered = iptvOffer != null && !iptvAnswered,
+        paired = syncPaired(),
+        hasReceiver = receiver.value != null,
+    )
+
+    fun position(): Pair<Int, Int>? = SetupFlow.position(step, conditions())
+    fun mainSteps(): List<SetupStep> = SetupFlow.steps(conditions())
+    fun extras(): List<SetupStep> = SetupFlow.extras(conditions())
+    fun hasPrevious(): Boolean = SetupFlow.previous(step, conditions()) != null
+
     fun canGoNext(): Boolean = when (step) {
         SetupStep.ACCOUNT -> accountState.value != null
-        SetupStep.RECEIVER -> receiver.value != null
-        SetupStep.SYNC_LINK -> syncLinked || syncClient.config() != null
+        SetupStep.RECEIVER -> receiver.value != null && !leavingReceiver
+        SetupStep.SYNC_LINK -> syncLinked
         SetupStep.PROFILE -> profileName.isNotBlank() && (creatingProfile || namedProfiles(profiles.state.value).isEmpty())
         SetupStep.IPTV_OFFER -> false
         else -> true
     }
 
-    /** A server IPTV login waiting for a yes or no. Null hides that wizard step. */
-    var iptvOffer by mutableStateOf<RemoteIptvOffer?>(null)
-        private set
-    var iptvMessage by mutableStateOf("")
-        private set
-    private var iptvOfferReady = false
+    /** Skip is offered on optional steps until there is nothing left to skip. */
+    fun canSkip(): Boolean = step.optional && when (step) {
+        SetupStep.ACCOUNT -> accountState.value == null
+        SetupStep.SYNC_LINK -> !syncLinked && !syncLinking
+        SetupStep.IPTV_OFFER -> !iptvBusy
+        else -> true
+    }
 
     fun next() {
-        if (step == SetupStep.DONE) return
-        if (step == SetupStep.SYNC_LINK) {
-            leaveSyncLink()
-            return
-        }
-        if (step == SetupStep.PROFILE) {
-            viewModelScope.launch {
+        when (step) {
+            SetupStep.DONE -> return
+            SetupStep.RECEIVER -> leaveReceiver()
+            SetupStep.SYNC_LINK -> leaveSyncLink()
+            SetupStep.PROFILE -> viewModelScope.launch {
                 saveProfile()
                 go(forward(SetupStep.PROFILE))
             }
-            return
+            SetupStep.BOUQUETS -> {
+                saveBouquets()
+                go(forward(step))
+            }
+            else -> go(forward(step))
         }
-        if (step == SetupStep.BOUQUETS) saveBouquets()
-        go(forward(step))
     }
 
     /** Optional steps: leave what is there and go on. */
     fun skip() {
-        if (step == SetupStep.PROFILE) profiles.confirmActive()
-        go(forward(step))
+        when (step) {
+            SetupStep.SYNC_LINK -> stayStandalone()
+            SetupStep.IPTV_OFFER -> leaveIptv()
+            SetupStep.PROFILE -> {
+                profiles.confirmActive()
+                go(forward(step))
+            }
+            else -> go(forward(step))
+        }
     }
 
     /** False on the first step: there is nothing to go back to. */
@@ -147,30 +183,38 @@ class SetupViewModel @Inject constructor(
             creatingProfile = false
             return true
         }
-        val previous = backward(step) ?: return false
+        val previous = SetupFlow.previous(step, conditions()) ?: return false
         go(previous)
         return true
+    }
+
+    /** Done › one of the optional extras (name, channel lists, football). */
+    fun openExtra(extra: SetupStep) {
+        if (extra.extra) go(extra)
     }
 
     /** Paired: the profile is chosen after the wizard, on "Who's watching?". */
     private fun syncPaired(): Boolean = syncLinked || syncClient.config() != null
 
-    private fun omitted(target: SetupStep): Boolean = when (target) {
-        SetupStep.PROFILE -> syncPaired()
-        SetupStep.IPTV_OFFER -> iptvOffer == null
-        else -> false
-    }
+    private fun forward(from: SetupStep): SetupStep = SetupFlow.next(from, conditions())
 
-    private fun forward(from: SetupStep): SetupStep {
-        var target = SetupStep.next(from)
-        while (omitted(target) && target != SetupStep.DONE) target = SetupStep.next(target)
-        return target
-    }
-
-    private fun backward(from: SetupStep): SetupStep? {
-        var target = SetupStep.previous(from)
-        while (target != null && omitted(target)) target = SetupStep.previous(target)
-        return target
+    /**
+     * Receiver connected: check the receiver for a sync server (quick, off the main thread),
+     * so the sync step only shows when there is one.
+     */
+    private fun leaveReceiver() {
+        if (leavingReceiver) return
+        leavingReceiver = true
+        viewModelScope.launch {
+            try {
+                val host = settings.current().activeReceiver()?.host
+                searchSync(host)
+                if (prePaired) ensureIptvOffer()
+                if (step == SetupStep.RECEIVER) go(forward(SetupStep.RECEIVER))
+            } finally {
+                leavingReceiver = false
+            }
+        }
     }
 
     private fun leaveSyncLink() {
@@ -187,32 +231,39 @@ class SetupViewModel @Inject constructor(
     private suspend fun ensureIptvOffer() {
         if (iptvOfferReady) return
         iptvOfferReady = true
-        iptvOffer = runCatching { syncEngine.peekPlaylist() }.getOrNull()
+        iptvOffer = runCatching { syncEngine.peekPlaylist() }
+            .onFailure { EnigmaLog.service("setup iptv offer failed: ${it.javaClass.simpleName}") }
+            .getOrNull()
     }
 
     fun takeIptv() {
         val offer = iptvOffer ?: return
-        iptvMessage = ""
+        if (iptvBusy) return
+        iptvFailed = false
+        iptvBusy = true
         viewModelScope.launch {
             val result = runCatching { syncEngine.takePlaylist(offer) }
+            iptvBusy = false
             if (result.isFailure) {
-                iptvMessage = result.exceptionOrNull()?.message.orEmpty()
+                EnigmaLog.service("setup iptv take failed: ${result.exceptionOrNull()?.javaClass?.simpleName}")
+                iptvFailed = true
                 return@launch
             }
-            go(forward(SetupStep.IPTV_OFFER))
+            iptvAnswered = true
+            go(SetupFlow.next(SetupStep.IPTV_OFFER, conditions()))
         }
     }
 
     fun leaveIptv() {
         iptvOffer?.let { syncEngine.declinePlaylist(it.changeId) }
-        go(forward(SetupStep.IPTV_OFFER))
+        iptvAnswered = true
+        go(SetupFlow.next(SetupStep.IPTV_OFFER, conditions()))
     }
 
     private fun go(target: SetupStep) {
         step = target
         stepToken++
         when (target) {
-            SetupStep.SYNC_LINK -> searchSync()
             SetupStep.PROFILE -> loadProfile()
             SetupStep.BOUQUETS -> loadBouquets()
             else -> Unit
@@ -223,30 +274,31 @@ class SetupViewModel @Inject constructor(
         viewModelScope.launch { settings.update { it.copy(streamMode = mode) } }
     }
 
-    fun searchSync() {
+    /** Asks the receiver whether it runs the sync server. A search that ends empty while its step is shown moves on. */
+    private fun searchSync(receiverHost: String?) {
         if (syncSearchStarted) return
         syncSearchStarted = true
-        if (syncClient.config() != null) {
+        val config = syncClient.config()
+        if (config != null) {
+            prePaired = true
             syncLinked = true
-            syncHost = syncClient.config()?.host
             viewModelScope.launch { runCatching { syncEngine.importProfiles() } }
             return
         }
         syncSearching = true
-        syncMessage = ""
         viewModelScope.launch {
-            val host = runCatching { discovery.onReceiver(receiver.value?.host) }.getOrNull()
-            syncSearching = false
+            val host = runCatching { discovery.onReceiver(receiverHost) }.getOrNull()
             syncHost = host
-            if (host == null) syncMessage = "missing"
+            syncSearching = false
+            if (host == null && step == SetupStep.SYNC_LINK) go(forward(SetupStep.SYNC_LINK))
         }
     }
 
     fun linkSync() {
         val host = syncHost ?: return
-        if (syncSearching) return
-        syncSearching = true
-        syncMessage = ""
+        if (syncLinking || syncSearching) return
+        syncLinking = true
+        syncFailed = false
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
@@ -256,59 +308,18 @@ class SetupViewModel @Inject constructor(
                     syncEngine.importProfiles()
                 }
             }
-            syncSearching = false
+            syncLinking = false
             result.fold(
                 onSuccess = {
                     syncLinked = true
                     leaveSyncLink()
                 },
-                onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
-            )
-        }
-    }
-
-    fun installSync() {
-        val address = (syncHost ?: receiver.value?.host).orEmpty().trim()
-        if (address.isBlank() || sshPassword.isBlank() || syncSearching) return
-        syncSearching = true
-        syncMessage = ""
-        val user = sshUser.trim().ifBlank { "root" }
-        val password = sshPassword
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val report = installer.install(address, user, password)
-                    val paired = JSONObject(syncClient.join(address, report.pin, "EnigmaCast"))
-                    syncClient.save(address, report.pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
-                    syncEngine.importProfiles()
-                    report
-                }
-            }
-            syncSearching = false
-            sshPassword = ""
-            result.fold(
-                onSuccess = { report ->
-                    syncHost = address
-                    syncLinked = true
-                    dashboardUrl = report.dashboardUrl
-                    dashboardPassword = report.dashboardPassword
+                onFailure = {
+                    EnigmaLog.service("setup sync pair failed: ${it.javaClass.simpleName} ${it.message.orEmpty()}")
+                    syncFailed = true
                 },
-                onFailure = { syncMessage = it.message ?: it.javaClass.simpleName },
             )
         }
-    }
-
-    fun continueAfterInstall() {
-        dashboardPassword = ""
-        leaveSyncLink()
-    }
-
-    fun openDashboard(context: Context) {
-        val url = dashboardUrl
-        if (url.isBlank()) return
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.onFailure { syncMessage = it.message.orEmpty() }
     }
 
     fun stayStandalone() {
@@ -420,5 +431,13 @@ class SetupViewModel @Inject constructor(
         step = SetupStep.WELCOME
         profileLoaded = false
         bouquetsFor = null
+        syncSearchStarted = false
+        syncHost = null
+        syncFailed = false
+        prePaired = false
+        iptvOfferReady = false
+        iptvOffer = null
+        iptvAnswered = false
+        iptvFailed = false
     }
 }

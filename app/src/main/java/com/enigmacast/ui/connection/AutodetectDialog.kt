@@ -65,6 +65,9 @@ fun AutodetectDialogHost(
     viewModel: ConnectionViewModel,
     returnFocus: FocusRequester,
     onChosen: (DiscoveredReceiver) -> Unit = {},
+    /** First-run wizard: plain texts, bigger type, and "Enter the address yourself" when nothing is found. */
+    wizard: Boolean = false,
+    onManual: () -> Unit = {},
 ) {
     val state = viewModel.autodetectState
     var wasOpen by remember { mutableStateOf(false) }
@@ -87,6 +90,11 @@ fun AutodetectDialogHost(
         },
         onRetry = viewModel::startAutodetect,
         onClose = viewModel::closeAutodetect,
+        wizard = wizard,
+        onManual = {
+            viewModel.closeAutodetect()
+            onManual()
+        },
     )
 }
 
@@ -97,8 +105,12 @@ private fun AutodetectDialog(
     onChoose: (DiscoveredReceiver) -> Unit,
     onRetry: () -> Unit,
     onClose: () -> Unit,
+    wizard: Boolean,
+    onManual: () -> Unit,
 ) {
     if (state is AutodetectState.Hidden) return
+    val body = if (wizard) 16.sp else 13.sp
+    val lead = if (wizard) 17.sp else 15.sp
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         NavigationSoundsForWindow()
         val primary = remember { FocusRequester() }
@@ -115,14 +127,23 @@ private fun AutodetectDialog(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.autodetect_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Text(
+                stringResource(if (wizard) R.string.setup_autodetect_title else R.string.autodetect_title),
+                color = EnigmaColors.Text,
+                fontSize = if (wizard) 20.sp else 18.sp,
+                fontWeight = EnigmaType.Strong,
+            )
             when (state) {
                 AutodetectState.Searching -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(24.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(stringResource(R.string.autodetect_searching), color = EnigmaColors.Text, fontSize = 15.sp)
-                            Text(stringResource(R.string.autodetect_searching_hint), color = EnigmaColors.Muted, fontSize = 13.sp)
+                            if (wizard) {
+                                Text(stringResource(R.string.setup_autodetect_searching), color = EnigmaColors.Text, fontSize = lead, lineHeight = 23.sp)
+                            } else {
+                                Text(stringResource(R.string.autodetect_searching), color = EnigmaColors.Text, fontSize = 15.sp)
+                                Text(stringResource(R.string.autodetect_searching_hint), color = EnigmaColors.Muted, fontSize = 13.sp)
+                            }
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
@@ -130,7 +151,11 @@ private fun AutodetectDialog(
                     }
                 }
                 is AutodetectState.Results -> {
-                    Text(stringResource(R.string.autodetect_results_hint), color = EnigmaColors.Muted, fontSize = 13.sp)
+                    Text(
+                        stringResource(if (wizard) R.string.setup_autodetect_results else R.string.autodetect_results_hint),
+                        color = EnigmaColors.Muted,
+                        fontSize = body,
+                    )
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
@@ -150,18 +175,23 @@ private fun AutodetectDialog(
                     }
                 }
                 is AutodetectState.NothingFound -> {
-                    Text(stringResource(R.string.autodetect_none), color = EnigmaColors.Text, fontSize = 15.sp)
-                    Text(
-                        stringResource(R.string.autodetect_none_detail, state.addresses, state.subnets),
-                        color = EnigmaColors.Muted,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                    )
-                    RetryClose(primary, onRetry, onClose)
+                    if (wizard) {
+                        Text(stringResource(R.string.setup_autodetect_none), color = EnigmaColors.Text, fontSize = lead, lineHeight = 23.sp)
+                        RetryManual(primary, onRetry, onManual)
+                    } else {
+                        Text(stringResource(R.string.autodetect_none), color = EnigmaColors.Text, fontSize = 15.sp)
+                        Text(
+                            stringResource(R.string.autodetect_none_detail, state.addresses, state.subnets),
+                            color = EnigmaColors.Muted,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                        )
+                        RetryClose(primary, onRetry, onClose)
+                    }
                 }
                 AutodetectState.NoNetwork -> {
-                    Text(stringResource(R.string.autodetect_no_network), color = EnigmaColors.Text, fontSize = 14.sp, lineHeight = 19.sp)
-                    RetryClose(primary, onRetry, onClose)
+                    Text(stringResource(R.string.autodetect_no_network), color = EnigmaColors.Text, fontSize = if (wizard) lead else 14.sp, lineHeight = if (wizard) 23.sp else 19.sp)
+                    if (wizard) RetryManual(primary, onRetry, onManual) else RetryClose(primary, onRetry, onClose)
                 }
                 AutodetectState.AlreadyAdded -> {
                     Text(stringResource(R.string.autodetect_already), color = EnigmaColors.Text, fontSize = 15.sp)
@@ -176,6 +206,14 @@ private fun AutodetectDialog(
                 AutodetectState.Hidden -> Unit
             }
         }
+    }
+}
+
+@Composable
+private fun RetryManual(primary: FocusRequester, onRetry: () -> Unit, onManual: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+        DialogButton(stringResource(R.string.autodetect_search_again), onRetry, destructive = false, enabled = true, modifier = Modifier.focusRequester(primary))
+        DialogButton(stringResource(R.string.setup_receiver_manual), onManual, destructive = false, enabled = true)
     }
 }
 

@@ -444,6 +444,7 @@ class OpenWebifApi @Inject constructor(
                 ?: return ConnectionTestResult(
                     false,
                     probe.failure?.let(UiText::Raw) ?: UiText.res(R.string.conn_openwebif_unavailable),
+                    authFailed = probe.authFailed,
                 )
             val service = runCatching { currentService(config) }.getOrNull()
             val summary = buildList {
@@ -475,7 +476,7 @@ class OpenWebifApi @Inject constructor(
             get(config, endpoints.about(config))
         } catch (error: OpenWebifException) {
             if (error.statusCode == 401) authRequired = true
-            return Probe(null, error.message)
+            return Probe(null, error.message, authFailed = error.statusCode == 401)
         }
         val pngOsd = probeGrab(config, GrabFormat.PNG, GrabMode.OSD)
         val jpgOsd = probeGrab(config, GrabFormat.JPG, GrabMode.OSD)
@@ -662,6 +663,7 @@ class OpenWebifApi @Inject constructor(
     private data class Probe(
         val capabilities: ReceiverCapabilities?,
         val failure: String?,
+        val authFailed: Boolean = false,
     )
 
     private data class TextStamp(val key: String, val text: String, val atMs: Long)

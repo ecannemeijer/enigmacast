@@ -93,6 +93,10 @@ class ConnectionViewModel @Inject constructor(
     /** True while adding a box, so a settings update does not refill the blank form. */
     private var adding = false
 
+    /** Why the last Connect failed, in plain terms for the setup wizard; null after a success or before a try. */
+    var failure by mutableStateOf<ConnectFailure?>(null)
+        private set
+
     /** True once a receiver has been saved, so the setup screen can name the current one. */
     var hasSavedReceiver by mutableStateOf(false)
         private set
@@ -390,14 +394,21 @@ class ConnectionViewModel @Inject constructor(
         onSaved()
     }
 
-    fun connect(onConnected: () -> Unit, onFailed: () -> Unit = {}) = launchAction(onFailed) { config ->
-        val result = api.testConnection(config)
-        status = result.message
-        if (result.success) {
-            rememberStored(settingsRepository.upsertReceiver(config))
-            onConnected()
-        } else {
+    fun connect(onConnected: () -> Unit, onFailed: () -> Unit = {}) {
+        failure = null
+        launchAction({
+            if (failure == null) failure = ConnectFailure.UNREACHABLE
             onFailed()
+        }) { config ->
+            val result = api.testConnection(config)
+            status = result.message
+            if (result.success) {
+                rememberStored(settingsRepository.upsertReceiver(config))
+                onConnected()
+            } else {
+                failure = if (result.authFailed) ConnectFailure.LOGIN else ConnectFailure.UNREACHABLE
+                onFailed()
+            }
         }
     }
 
@@ -421,7 +432,8 @@ class ConnectionViewModel @Inject constructor(
         val formHost = host.trim().takeIf { it.isNotBlank() }?.let { DiscoveredHost(it, httpPort.trim().toIntOrNull() ?: 80) }
         autodetectJob = viewModelScope.launch {
             val result = try {
-                autodetect.find(formHost)
+                // Interface listing and the scan stay off the main thread.
+                withContext(Dispatchers.IO) { autodetect.find(formHost) }
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 EnigmaLog.discoveryError("autodetect failed: ${error.javaClass.simpleName} ${error.message.orEmpty()}")
@@ -466,6 +478,7 @@ class ConnectionViewModel @Inject constructor(
         val validation = ReceiverConfigValidator.validate(config)
         if (!validation.isValid) {
             status = UiText.Joined(validation.errors)
+            failure = if (config.host.isBlank()) ConnectFailure.NO_ADDRESS else ConnectFailure.INVALID
             onFailed()
             return
         }
@@ -538,3 +551,6 @@ class ConnectionViewModel @Inject constructor(
         const val PORT_SAVE_DELAY_MS = 500L
     }
 }
+
+/** Plain-language reasons the wizard shows when Connect fails. */
+enum class ConnectFailure { NO_ADDRESS, INVALID, LOGIN, UNREACHABLE }

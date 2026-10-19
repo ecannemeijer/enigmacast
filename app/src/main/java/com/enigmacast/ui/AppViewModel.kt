@@ -163,6 +163,17 @@ class AppViewModel @Inject constructor(
                 null
             } ?: return@launch
             if (isNewerRelease(BuildConfig.VERSION_CODE, remote)) {
+                // Never over the first-run wizard: wait until setup is behind the viewer.
+                kotlinx.coroutines.flow.combine(
+                    androidx.compose.runtime.snapshotFlow { screen },
+                    settingsRepository.settings,
+                ) { current, settings ->
+                    com.enigmacast.domain.setup.SetupStep.allowsUpdatePrompt(
+                        receiverCount = settings.receivers.size,
+                        completed = settings.setupCompleted,
+                        onSetupScreen = current == AppScreen.Setup || current == AppScreen.Loading,
+                    )
+                }.first { it }
                 updatePrompt = UpdatePrompt(remote)
             }
         }

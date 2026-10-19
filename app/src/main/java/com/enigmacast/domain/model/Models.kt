@@ -449,6 +449,8 @@ data class ConnectionTestResult(
     val message: UiText,
     val capabilities: ReceiverCapabilities? = null,
     val service: EnigmaService? = null,
+    /** The receiver answered 401: wrong or missing username and password. */
+    val authFailed: Boolean = false,
 )
 
 /** IPTV page source: the receiver's XStreamity playlists, or a playlist entered in the app. */
