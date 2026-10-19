@@ -737,13 +737,22 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
+    private val starved = com.enigmacast.playback.StarvedBuffer(8_000)
+
     private fun startTicker() {
+        starved.reset()
         tickJob?.cancel()
         tickJob = viewModelScope.launch {
             var sinceSave = 0L
             while (true) {
                 delay(500)
                 val p = player ?: continue
+                // Stuck with nothing playable and not loading: reload at the position (empties the buffer).
+                val stuck = p.playbackState == Player.STATE_BUFFERING && p.playWhenReady
+                if (starved.update(stuck, p.isLoading, p.totalBufferedDuration, android.os.SystemClock.elapsedRealtime())) {
+                    EnigmaLog.player("iptv player starved (${p.totalBufferedDuration} ms buffered, not loading): reload")
+                    p.seekTo(p.currentPosition)
+                }
                 val duration = p.duration.takeIf { it > 0 } ?: catchupDurationMs
                 playerState = playerState.copy(positionMs = p.currentPosition.coerceAtLeast(0), durationMs = duration, bufferedPositionMs = p.bufferedPosition.coerceAtLeast(0))
                 sinceSave += 500
@@ -1167,6 +1176,9 @@ class XtreamViewModel @Inject constructor(
             .setSelectUndeterminedTextLanguage(playbackSubtitles)
             .build()
         ExoPlayer.Builder(context)
+            // Read-ahead capped to the heap (Media3's ~144 MB default does not fit many TV boxes,
+            // and the picture-in-picture inset may play next to this player).
+            .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
             .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync))
             .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))

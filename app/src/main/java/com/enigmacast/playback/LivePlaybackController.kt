@@ -822,9 +822,14 @@ class LivePlaybackController @Inject constructor(
             playback = 2_000
             rebuffer = 2_000
         }
+        // A byte target that fits the heap, and size before time: "time over size" let a stream
+        // whose buffered duration stays short (a track that does not advance, a stream that never
+        // finishes preparing) fill the whole heap, then stop loading and re-check every 10 ms.
+        // Live seconds take little room: even 2 s of UHD is a few MB of the 16–64 MB target.
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(minBuffer, maxBuffer, playback, rebuffer)
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setTargetBufferBytes(PlayerBuffers.targetBytes(BufferPolicy.Kind.LIVE))
+            .setPrioritizeTimeOverSizeThresholds(false)
             .build()
     }
 
@@ -962,6 +967,20 @@ class LivePlaybackController @Inject constructor(
         _stats.value = StreamStats()
     }
 
+    private val starved = StarvedBuffer(STARVED_RECOVER_MS)
+
+    /**
+     * Buffering, not loading and nothing to play: the load control will not load again by itself.
+     * A tuner stream reconnects (a fresh start at the live edge), a recording reloads where it is.
+     */
+    private fun recoverIfStarved(now: Long) {
+        val exo = player ?: return
+        val buffering = exo.playbackState == Player.STATE_BUFFERING
+        if (!starved.update(buffering, exo.isLoading, exo.totalBufferedDuration, now)) return
+        EnigmaLog.player("buffer starved (${exo.totalBufferedDuration} ms, not loading): ${if (filePlayback) "reload at position" else "reconnect"}")
+        if (filePlayback) exo.seekTo(exo.currentPosition) else scheduleReconnect()
+    }
+
     /** Once a second: bitrate from the bytes that came in, plus the frame and stall counters. */
     private fun startStatsSampler() {
         ownScope.launch {
@@ -972,6 +991,7 @@ class LivePlaybackController @Inject constructor(
                 val now = System.currentTimeMillis()
                 val bytes = totalBytes.get()
                 if (currentUrl != null && player?.playWhenReady == true) {
+                    recoverIfStarved(now)
                     meter.add(bytes - lastBytes, now - lastAt)
                     _stats.value = StreamStats(
                         bitrateKbps = meter.kbps,
@@ -979,7 +999,7 @@ class LivePlaybackController @Inject constructor(
                         stalls = stalls,
                         bufferMs = player?.totalBufferedDuration ?: 0L,
                     )
-                }
+                } else starved.reset()
                 lastBytes = bytes
                 lastAt = now
             }
@@ -1289,3 +1309,4 @@ private fun PlaybackSettings.withoutInPlaceOptions() = copy(
 )
 
 private const val STATS_INTERVAL_MS = 1_000L
+private const val STARVED_RECOVER_MS = 6_000L

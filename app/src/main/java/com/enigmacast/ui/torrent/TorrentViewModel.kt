@@ -515,6 +515,8 @@ class TorrentViewModel @Inject constructor(
             .setSelectUndeterminedTextLanguage(playbackSubtitles)
             .build()
         ExoPlayer.Builder(context)
+            // Read-ahead capped to the heap: Media3's default (~144 MB) does not fit many TV boxes.
+            .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
             .setRenderersFactory(com.enigmacast.ui.xtream.IptvRenderersFactory(context, audioSync, subtitleSync))
             .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
@@ -619,6 +621,14 @@ class TorrentViewModel @Inject constructor(
                 val buffered = bufferedMs(position, duration, p.bufferedPosition)
                 if (player !== p) break
                 playerState = playerState.copy(positionMs = position, durationMs = duration, bufferedPositionMs = buffered)
+                // Stuck with nothing playable and not loading (the read-ahead full of one track):
+                // reload at the position, which empties the buffer. A read waiting for pieces is
+                // still loading and is left alone.
+                val buffering = p.playbackState == Player.STATE_BUFFERING && p.playWhenReady
+                if (starved.update(buffering, p.isLoading, p.totalBufferedDuration, android.os.SystemClock.elapsedRealtime())) {
+                    EnigmaLog.player("torrent player starved at ${position / 1000}s (${p.totalBufferedDuration} ms buffered, not loading): reload")
+                    p.seekTo(position)
+                }
                 if (++n % 10 == 0) {
                     saveResume()
                     engine.setDuration(p.duration)
@@ -926,7 +936,10 @@ class TorrentViewModel @Inject constructor(
         player?.setPlaybackSpeed(value)
     }
 
+    private val starved = com.enigmacast.playback.StarvedBuffer(8_000)
+
     private fun releasePlayback() {
+        starved.reset()
         playbackSpeed = 1f
         tickJob?.cancel()
         saveResume()

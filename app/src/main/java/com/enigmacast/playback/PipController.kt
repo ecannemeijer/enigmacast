@@ -255,6 +255,8 @@ class PipController @Inject constructor(
             if (header == null) spec else spec.withAdditionalHeaders(mapOf("Authorization" to header))
         }
         return ExoPlayer.Builder(context)
+            // A small inset next to the main player: a small byte target, so both fit the heap.
+            .setLoadControl(PlayerBuffers.inset())
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(DefaultDataSource.Factory(context, withAuth))
                     .setLoadErrorHandlingPolicy(InsetLoadPolicy()),
