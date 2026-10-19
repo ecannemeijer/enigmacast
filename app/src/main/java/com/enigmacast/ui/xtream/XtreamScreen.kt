@@ -449,7 +449,15 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             ) { panelOpen = false; model.closeGuide(); showBanner(fromZap = true) }
         }
 
-        IptvInfoDialog(model) { panelOpen = false; showBanner(fromZap = false) }
+        IptvInfoDialog(
+            model,
+            onClose = {
+                model.closeDetail()
+                // Opened from a My Items or Home card: Back goes there, onto that card (not to
+                // the IPTV grid the page sits on). From Search or the grid it stays on the grid.
+                if (com.enigmacast.domain.xtream.LibraryReturn.infoBackLeaves(model.launchOrigin) && model.playing == null) leave()
+            },
+        ) { panelOpen = false; showBanner(fromZap = false) }
 
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }

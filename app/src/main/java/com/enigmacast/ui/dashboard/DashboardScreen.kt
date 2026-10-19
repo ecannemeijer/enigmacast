@@ -79,6 +79,7 @@ import com.enigmacast.R
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.xtream.LibraryReturn
 import com.enigmacast.domain.model.OsdInfoFields
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.RecordingTarget
@@ -758,6 +759,8 @@ fun DashboardScreen(
                         DashSection.Home -> {
                         LaunchedEffect(sectionEnter) {
                             if (sectionEnter == 0) return@LaunchedEffect
+                            // Back from a page a Home card opened: Home puts the focus on that card.
+                            if (LibraryReturn.entryFocusYields(myItemsModel.returnKey, homePage = true)) return@LaunchedEffect
                             homeContentFocus.requestWhenReady()
                         }
                         com.enigmacast.ui.tuners.TunerHomePanel(
@@ -942,6 +945,10 @@ fun DashboardScreen(
                         LaunchedEffect(sectionEnter) {
                             if (sectionEnter == 0) return@LaunchedEffect
                             myItemsListActive = true
+                            // Back from a page a My Items card opened (the Torrent info page comes
+                            // back here with the counter its own entry left): the panel puts the
+                            // focus on that card. The page's entry would race it to the first card.
+                            if (LibraryReturn.entryFocusYields(myItemsModel.returnKey, homePage = false)) return@LaunchedEffect
                             myItemsEnterToken += 1
                         }
                         MyItemsPanel(
