@@ -1,6 +1,5 @@
 package com.enigmacast.domain.profile
 
-import com.enigmacast.domain.model.OsdSkinId
 import com.enigmacast.domain.model.SkinDefaults
 import com.enigmacast.domain.model.StartupLive
 import kotlinx.serialization.Serializable
@@ -48,23 +47,17 @@ object ProfileCloud {
 
     fun encode(snapshot: ProfileSettingsSnapshot): String = json.encodeToString(snapshot.normalized())
 
-    /** A server document from before skins were synced (no skin in its scope) keeps EnigmaCast. */
+    /** A server document from before the move to Glass Earth gets it once, like local settings ([SkinDefaults]). */
     fun decode(raw: String): ProfileSettingsSnapshot =
         json.decodeFromJsonElement(ProfileSettingsSnapshot.serializer(), pinScopeSkin(json.parseToJsonElement(raw))).normalized()
 
     private fun pinScopeSkin(element: JsonElement): JsonElement {
         val scope = (element as? JsonObject)?.get("scope") ?: return element
-        return JsonObject(element + ("scope" to SkinDefaults.pinLegacy(scope)))
+        return JsonObject(element + ("scope" to SkinDefaults.migrate(scope)))
     }
 
     /** Defaults only: do not upload them over a profile another device already filled in. */
-    fun untouched(snapshot: ProfileSettingsSnapshot): Boolean {
-        val defaults = ProfileSettingsSnapshot().normalized()
-        val same = snapshot.normalized()
-        // An install from before Glass Earth that never changed anything still has the old default skin.
-        val legacy = defaults.copy(scope = defaults.scope.copy(osdSkin = OsdSkinId.LEGACY_DEFAULT))
-        return same == defaults || same == legacy
-    }
+    fun untouched(snapshot: ProfileSettingsSnapshot): Boolean = snapshot.normalized() == ProfileSettingsSnapshot().normalized()
 
     /** Old server documents have no startup choice. Missing means "leave the value already stored". */
     fun includesStartupLive(raw: String): Boolean = runCatching {

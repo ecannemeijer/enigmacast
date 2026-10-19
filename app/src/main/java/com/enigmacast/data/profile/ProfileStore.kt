@@ -54,7 +54,8 @@ class ProfileStore @Inject constructor(
         val raw = prefs.getString(KEY, null)
         val parsed = raw?.let { runCatching { SkinDefaults.decodeScopes(json, ProfileState.serializer(), it) }.getOrNull() } ?: ProfileState()
         val next = ProfileRules.ensureDefault(parsed, context.getString(R.string.profile_default_name))
-        if (next != parsed) prefs.edit().putString(KEY, json.encodeToString(ProfileState.serializer(), next)).apply()
+        // The one-time skin move is written back at once, so it never runs twice for a scope.
+        if (next != parsed || (raw != null && SkinDefaults.pendingIn(json, raw))) prefs.edit().putString(KEY, json.encodeToString(ProfileState.serializer(), next)).apply()
         return next
     }
 
