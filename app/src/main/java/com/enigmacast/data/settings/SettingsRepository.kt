@@ -1,5 +1,6 @@
 package com.enigmacast.data.settings
 
+import com.enigmacast.domain.model.SkinDefaults
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -61,7 +62,7 @@ class SettingsRepository @Inject constructor(
     /** Writes per-receiver channel memory when older settings still keep a single last channel. */
     suspend fun migrateChannelMemory() {
         val raw = dataStore.data.first()[key] ?: return
-        val stored = withContext(dispatchers.default) { runCatching { openWebifJson.decodeFromString<AppSettings>(raw) }.getOrNull() } ?: return
+        val stored = withContext(dispatchers.default) { runCatching { SkinDefaults.decodeSettings(openWebifJson, AppSettings.serializer(), raw) }.getOrNull() } ?: return
         if (!ChannelMemory.needsMigration(stored)) return
         update { ChannelMemory.migrate(it) }
     }
@@ -78,12 +79,12 @@ class SettingsRepository @Inject constructor(
     /** Moves passwords that older versions kept in the settings JSON into the [SecretStore]. */
     suspend fun migrateSecrets() {
         val raw = dataStore.data.first()[key] ?: return
-        val stored = withContext(dispatchers.default) { runCatching { openWebifJson.decodeFromString<AppSettings>(raw) }.getOrNull() } ?: return
+        val stored = withContext(dispatchers.default) { runCatching { SkinDefaults.decodeSettings(openWebifJson, AppSettings.serializer(), raw) }.getOrNull() } ?: return
         if (stored.receivers.any { it.password.isNotEmpty() }) update { it }
     }
 
     private fun decode(raw: String?): AppSettings {
-        val parsed = raw?.let { runCatching { openWebifJson.decodeFromString<AppSettings>(it) }.getOrDefault(AppSettings()) } ?: AppSettings()
+        val parsed = raw?.let { runCatching { SkinDefaults.decodeSettings(openWebifJson, AppSettings.serializer(), it) }.getOrDefault(AppSettings()) } ?: AppSettings()
         return ChannelMemory.migrate(SecretFields.fill(parsed, secrets::read))
     }
 }

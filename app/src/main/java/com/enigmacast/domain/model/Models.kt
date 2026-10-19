@@ -146,6 +146,18 @@ enum class OsdSkinId(@StringRes val label: Int) {
     /** Frosted glass over a full-screen photo; added last so stored values keep their meaning. */
     GLASS_EARTH(R.string.skin_glass_earth),
     GLASS_WAVE(R.string.skin_glass_wave),
+    ;
+
+    companion object {
+        /** Fresh installs and new profiles. */
+        val DEFAULT = GLASS_EARTH
+
+        /**
+         * The default before Glass Earth. Settings and profiles written then left the skin out
+         * whenever it was this one, so stored JSON without a skin means EnigmaCast ([SkinDefaults]).
+         */
+        val LEGACY_DEFAULT = STANDARD
+    }
 }
 
 /** Which extra information the channel banner shows (Settings › OSD). */
@@ -237,7 +249,10 @@ data class AppSettings(
     val lastChannel: LastChannel = LastChannel(),
     /** Last channel per receiver id. */
     val lastChannels: Map<String, LastChannel> = emptyMap(),
-    val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
+    /** Always written, so stored settings without it are known to come from before [OsdSkinId.DEFAULT]. */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS)
+    val osdSkin: OsdSkinId = OsdSkinId.DEFAULT,
     /** Extra info in the channel banner; missing in older settings, so the defaults apply. */
     val osdInfo: OsdInfoFields = OsdInfoFields(),
     /** Picture mode per channel (key: `NowEvents.key` of the service); channels without one use AUTO. */

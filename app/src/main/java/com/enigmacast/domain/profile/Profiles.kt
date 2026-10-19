@@ -32,7 +32,10 @@ data class ProfileScope(
     val lastLiveSource: LastLiveSource = LastLiveSource.ENIGMA2,
     val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     val pictureModes: Map<String, PictureMode> = emptyMap(),
-    val osdSkin: OsdSkinId = OsdSkinId.STANDARD,
+    /** Always written, like [AppSettings.osdSkin]; a stored scope without it predates [OsdSkinId.DEFAULT]. */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS)
+    val osdSkin: OsdSkinId = OsdSkinId.DEFAULT,
     val osdInfo: OsdInfoFields = OsdInfoFields(),
     val navigationSounds: Boolean = true,
     val motionQuality: MotionQuality = MotionQuality.PREMIUM,
