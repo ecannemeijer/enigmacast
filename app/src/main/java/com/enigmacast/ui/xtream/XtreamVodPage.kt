@@ -429,9 +429,12 @@ private fun NextCardButton(
     }
 }
 
-/** Info page of a film or series, above the grid so Search can open it at once. */
+/**
+ * Info page of a film or series, above the grid so Search can open it at once.
+ * [onClose] is Back on the page: by default the grid (or page) under it stays.
+ */
 @Composable
-internal fun IptvInfoDialog(model: XtreamViewModel, onPlayed: () -> Unit) {
+internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model::closeDetail, onPlayed: () -> Unit) {
     val item = model.detail ?: return
     val film = model.detailFilm ?: return
     val isSeries = item.section == XtreamSection.SERIES
@@ -443,7 +446,7 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onPlayed: () -> Unit) {
         onWatch = {},
         onSchedule = {},
         onRecord = {},
-        onClose = model::closeDetail,
+        onClose = onClose,
         picon = { null },
         cachedPicon = { null },
         channel = BouquetEntry(item.name, "iptv:${item.id}"),

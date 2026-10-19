@@ -114,11 +114,13 @@ fun TunerHomePanel(
             // Still loading, or the card is gone (watched to the end): give up after a moment.
             kotlinx.coroutines.delay(1_500)
             library.consumeReturn()
+            // The dashboard left the entry to this return: the page's own entry instead.
+            contentFocus.requestWhenReady()
             return@LaunchedEffect
         }
         // The card on screen first, so its requester is attached; then the focus.
         iptvRowState.scrollToItem(index)
-        iptvReturnFocus.requestWhenAttached()
+        if (!iptvReturnFocus.requestWhenAttached(maxFrames = 90)) contentFocus.requestWhenReady()
         library.consumeReturn()
     }
     LaunchedEffect(Unit) { model.whileVisible() }

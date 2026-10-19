@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.flow.first
 import com.enigmacast.ui.soccer.tvClick
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -122,7 +123,7 @@ fun MyItemsPanel(
     val entryOnIptv = iptvBlocks.isNotEmpty() && recordingEntry == null
     // Entering the list: bring the entry on screen first, so its requester is attached.
     LaunchedEffect(rowsFocusable, entryOnIptv, recordingEntry) {
-        if (!rowsFocusable || allRecordings.isEmpty() || iptvReturnKey?.startsWith("home/") == false) return@LaunchedEffect
+        if (!rowsFocusable || allRecordings.isEmpty() || com.enigmacast.domain.xtream.LibraryReturn.isMyItems(iptvReturnKey)) return@LaunchedEffect
         val index = if (entryOnIptv) 0 else listIndexOf(recordingEntry ?: allRecordings.first().id, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
             .let { if (it < 0) -1 else it + iptvRowCount }
         if (index >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
@@ -250,22 +251,33 @@ fun MyItemsPanel(
         }
     }
     }
-    // Back from an IPTV film started here: focus returns to its card.
-    // Back from an IPTV film or a Torrent info page started here: its row and card on screen, then the focus.
-    LaunchedEffect(iptvReturnKey, iptvBlocks.isNotEmpty()) {
+    // Back from an IPTV or Torrent info page (or its player) opened here: its row and card on
+    // screen, then the focus on that card. The rows may still be loading when the page returns
+    // (each comes from its own flow), so wait for the card a moment before giving up.
+    val currentBlocks by androidx.compose.runtime.rememberUpdatedState(iptvBlocks)
+    val currentRecordings by androidx.compose.runtime.rememberUpdatedState(allRecordings.isNotEmpty())
+    LaunchedEffect(iptvReturnKey) {
         val key = iptvReturnKey ?: return@LaunchedEffect
-        if (key.startsWith("home/")) return@LaunchedEffect
-        val row = iptvBlocks.indexOfFirst { (h, _) -> key.startsWith("$h/") }
-        if (row < 0) {
-            // The row is still loading (or the card is gone): keep the key a moment, then give up.
-            if (iptvBlocks.isEmpty()) { kotlinx.coroutines.delay(1_500); if (iptvBlocks.isEmpty()) viewModel.consumeReturn() } else viewModel.consumeReturn()
+        if (!com.enigmacast.domain.xtream.LibraryReturn.isMyItems(key)) return@LaunchedEffect
+        val rows = { currentBlocks.map { (h, cards) -> h.toString() to cards.map { it.key } } }
+        val found = kotlinx.coroutines.withTimeoutOrNull(2_000) {
+            androidx.compose.runtime.snapshotFlow { com.enigmacast.domain.xtream.LibraryReturn.locate(key, rows()) }
+                .first { it != null }
+        }
+        if (found == null) {
+            // The card is gone (removed elsewhere): the page's own entry instead.
+            viewModel.consumeReturn()
+            listFocus.requestWhenAttached()
             return@LaunchedEffect
         }
-        if (allRecordings.isNotEmpty()) listState.scrollToItem(row)
-        val (header, cards) = iptvBlocks[row]
-        val card = cards.indexOfFirst { "$header/${it.key}" == key }
-        if (card >= 0) iptvRowStates[header]?.scrollToItem(card)
-        iptvReturnFocus.requestWhenAttached()
+        val (row, card) = found
+        // The rows sit inside the LazyColumn when there are recordings: that row first.
+        if (currentRecordings) listState.scrollToItem(row)
+        val header = currentBlocks[row].first
+        iptvRowStates.getOrPut(header) { androidx.compose.foundation.lazy.LazyListState() }.scrollToItem(card)
+        // The card's requester is attached once the row composed it; the list may also still be
+        // waiting to become focusable (the dashboard hands it over a few frames later).
+        if (!iptvReturnFocus.requestWhenAttached(maxFrames = 90)) listFocus.requestWhenAttached()
         viewModel.consumeReturn()
     }
     val focusTokenOnEnter = remember { viewModel.focusToken }
