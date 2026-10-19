@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.skinShape
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -238,6 +239,7 @@ fun EnigmaRemoteScreen(
                     .fillMaxHeight()
                     .width(600.dp)
                     .background(scrim)
+                    .glassSheen(androidx.compose.ui.graphics.RectangleShape)
                     .padding(horizontal = 12.dp, vertical = 20.dp),
             )
         }

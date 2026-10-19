@@ -695,6 +695,9 @@
     <string name="home_try_again">Erneut versuchen</string>
     <string name="about_tmdb_attribution">Dieses Produkt nutzt die TMDB-API, ist aber nicht von TMDB unterstützt oder zertifiziert.</string>
     <string name="about_sport_attribution">Sport: Flaggen von flag-icons (MIT, © Panayiotis Lipiridis); Stadionfotos von Wikimedia Commons (CC0) von Markus Spiske, Liane Metzler, Abigail Keenan und Christian Widell; Wettbewerbsdaten und Embleme von football-data.org. Namen und Logos der Wettbewerbe gehören ihren Inhabern.</string>
+    <string name="about_glass_attribution">Glas-Skins: Schrift Inter (SIL Open Font License 1.1, © The Inter Project Authors); Hintergrundbilder vom Entwickler.</string>
+    <string name="skin_glass_earth">Glas Erde</string>
+    <string name="skin_glass_wave">Glas Welle</string>
     <string name="home_director">Regie</string>
     <string name="home_cast">Besetzung</string>
     <string name="home_runtime">%d Min.</string>

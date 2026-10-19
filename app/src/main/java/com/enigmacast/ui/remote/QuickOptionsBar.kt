@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
@@ -260,7 +261,7 @@ private fun QuickPicker(option: QuickOption, ui: RemoteDisplayUiState, actions: 
         Column(
             modifier = Modifier
                 .widthIn(min = 220.dp, max = if (option == QuickOption.SUBTITLES) 640.dp else 340.dp)
-                .background(EnigmaColors.Selected, skinShape(12.dp))
+                .background(EnigmaColors.Selected, skinShape(12.dp)).glassSheen(skinShape(12.dp))
                 .border(1.dp, EnigmaColors.CardBorder, skinShape(12.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),

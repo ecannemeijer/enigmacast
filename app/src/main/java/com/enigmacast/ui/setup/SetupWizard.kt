@@ -1,5 +1,6 @@
 package com.enigmacast.ui.setup
 
+import com.enigmacast.ui.theme.skinCanvas
 import com.enigmacast.ui.theme.EnigmaType
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -103,7 +104,7 @@ fun SetupWizard(
         }
     }
     Column(
-        Modifier.fillMaxSize().background(Color(0xFF080D1C)).padding(horizontal = 56.dp, vertical = 22.dp),
+        Modifier.fillMaxSize().skinCanvas(Color(0xFF080D1C)).padding(horizontal = 56.dp, vertical = 22.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         StepHeader(model)

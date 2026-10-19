@@ -72,7 +72,45 @@ fun EnigmaCastTheme(content: @Composable () -> Unit) {
         onPrimary = p.onAccent,
         border = p.focus,
     )
-    MaterialTheme(colorScheme = colors, content = content)
+    val skin = ActiveSkin.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // Glass skins: decode the photo once, off the main thread; a flat skin frees it again.
+    androidx.compose.runtime.LaunchedEffect(skin.glass?.backdrop) {
+        val res = skin.glass?.backdrop
+        if (res == null) GlassBackdrop.release() else GlassBackdrop.load(context, res)
+    }
+    val family = skin.fontFamily
+    if (family == null) {
+        // Flat skins: exactly the theme they always had.
+        MaterialTheme(colorScheme = colors, content = content)
+        return
+    }
+    val base = androidx.tv.material3.Typography()
+    val typography = androidx.tv.material3.Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = family),
+        displayMedium = base.displayMedium.copy(fontFamily = family),
+        displaySmall = base.displaySmall.copy(fontFamily = family),
+        headlineLarge = base.headlineLarge.copy(fontFamily = family),
+        headlineMedium = base.headlineMedium.copy(fontFamily = family),
+        headlineSmall = base.headlineSmall.copy(fontFamily = family),
+        titleLarge = base.titleLarge.copy(fontFamily = family),
+        titleMedium = base.titleMedium.copy(fontFamily = family),
+        titleSmall = base.titleSmall.copy(fontFamily = family),
+        bodyLarge = base.bodyLarge.copy(fontFamily = family),
+        bodyMedium = base.bodyMedium.copy(fontFamily = family),
+        bodySmall = base.bodySmall.copy(fontFamily = family),
+        labelLarge = base.labelLarge.copy(fontFamily = family),
+        labelMedium = base.labelMedium.copy(fontFamily = family),
+        labelSmall = base.labelSmall.copy(fontFamily = family),
+    )
+    MaterialTheme(colorScheme = colors, typography = typography) {
+        // Text that does not take a typography style (tv Text's default, foundation text fields).
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.tv.material3.LocalTextStyle provides androidx.tv.material3.LocalTextStyle.current.copy(fontFamily = family),
+            androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(fontFamily = family),
+            content = content,
+        )
+    }
 }
 
 @Composable

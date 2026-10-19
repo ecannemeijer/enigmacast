@@ -1,5 +1,7 @@
 package com.enigmacast.ui.settings
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +75,7 @@ fun SignalMeterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(EnigmaColors.Canvas)
+            .skinCanvas()
             .padding(horizontal = 48.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

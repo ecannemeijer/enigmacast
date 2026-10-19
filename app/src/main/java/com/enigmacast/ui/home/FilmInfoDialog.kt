@@ -1,5 +1,7 @@
 package com.enigmacast.ui.home
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
@@ -91,7 +93,7 @@ fun FilmInfoDialog(
         // A series: this episode's guide text first, the show's overview when the guide has none.
         val plot = if (movie.isSeries) film.event.description.ifBlank { movie.overview } else movie.overview.ifBlank { film.event.description }
         var showPlot by remember(film.key) { mutableStateOf(false) }
-        Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+        Box(Modifier.fillMaxSize().skinCanvas()) {
             if (movie.backdropPath != null) {
                 AsyncImage(
                     model = TmdbJson.image(movie.backdropPath, "w1280"),
@@ -325,7 +327,7 @@ fun RecordingInfoDialog(
         val movie = film.movie
         val plot = movie.overview.ifBlank { film.event.description }
         var showPlot by remember(film.key) { mutableStateOf(false) }
-        Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+        Box(Modifier.fillMaxSize().skinCanvas()) {
             if (movie.backdropPath != null) {
                 AsyncImage(
                     model = TmdbJson.image(movie.backdropPath, "w1280"),

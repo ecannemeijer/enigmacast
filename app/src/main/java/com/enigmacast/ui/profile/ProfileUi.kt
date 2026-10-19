@@ -1,5 +1,7 @@
 package com.enigmacast.ui.profile
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.Image
@@ -93,7 +95,7 @@ internal fun ProfilePickerContent(model: ProfileViewModel) {
     val editing = state.profiles.firstOrNull { it.id == model.editorId }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     Column(
-            Modifier.fillMaxSize().background(EnigmaColors.Canvas).padding(48.dp).trapFocus(),
+            Modifier.fillMaxSize().skinCanvas().padding(48.dp).trapFocus(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {

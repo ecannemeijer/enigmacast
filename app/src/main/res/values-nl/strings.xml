@@ -695,6 +695,9 @@
     <string name="home_try_again">Opnieuw proberen</string>
     <string name="about_tmdb_attribution">Dit product gebruikt de TMDB API, maar is niet goedgekeurd of gecertificeerd door TMDB.</string>
     <string name="about_sport_attribution">Sport: vlaggen van flag-icons (MIT, © Panayiotis Lipiridis); stadionfoto\'s van Wikimedia Commons (CC0) door Markus Spiske, Liane Metzler, Abigail Keenan en Christian Widell; competitiegegevens en emblemen van football-data.org. Namen en logo\'s van competities zijn van hun eigenaren.</string>
+    <string name="about_glass_attribution">Glas-skins: lettertype Inter (SIL Open Font License 1.1, © The Inter Project Authors); achtergronden aangeleverd door de ontwikkelaar.</string>
+    <string name="skin_glass_earth">Glas Aarde</string>
+    <string name="skin_glass_wave">Glas Golf</string>
     <string name="home_director">Regie</string>
     <string name="home_cast">Cast</string>
     <string name="home_runtime">%d min</string>

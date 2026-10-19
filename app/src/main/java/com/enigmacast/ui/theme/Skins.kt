@@ -75,6 +75,27 @@ data class Skin(
     val strongWeight: FontWeight,
     val focusStyle: FocusStyle,
     val osd: OsdLayout,
+    /** Full-screen photo with frosted-glass surfaces; null for the flat skins. */
+    val glass: GlassLook? = null,
+    /** App-wide font; null keeps the system font (every non-glass skin). */
+    val fontFamily: androidx.compose.ui.text.font.FontFamily? = null,
+)
+
+/**
+ * A glass skin's backdrop and how its surfaces are tinted. Colours of panels come from the
+ * palette ([SkinPalette.card] etc. are translucent); this adds what only glass has.
+ */
+data class GlassLook(
+    /** 1920×1080 WebP in drawable-nodpi, decoded once off the main thread ([GlassBackdrop]). */
+    @androidx.annotation.DrawableRes val backdrop: Int,
+    /** Laid over the photo where pages draw their canvas, for text contrast. */
+    val dim: Color,
+    /** Tint of frosted panels over the blurred photo. */
+    val tint: Color,
+    /** Tint of a focused panel: brighter glass. */
+    val focusTint: Color,
+    /** Glow around focused glass. */
+    val glow: Color,
 )
 
 object Skins {
@@ -157,7 +178,56 @@ object Skins {
         cornerScale = 1.4f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.GLASS,
     )
 
-    val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora)
+    /** Inter (SIL OFL 1.1), subset to Latin, three weights; only the glass skins use it. */
+    val Inter = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_medium, FontWeight.Medium),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_semibold, FontWeight.SemiBold),
+    )
+
+    /** Glass over a dark space photo with a glowing blue Earth horizon: sky blue accents. */
+    val GlassEarth = Skin(
+        id = OsdSkinId.GLASS_EARTH,
+        palette = SkinPalette(
+            canvas = Color(0xFF03060F), card = Color(0x8C0F1E3A), cardBorder = Color(0x33FFFFFF),
+            raised = Color(0x99152A4C), selected = Color(0xCC17305A), focus = Color(0xFF2A6FDB),
+            onFocus = Color.White, accent = Color(0xFF5AA9FF), highlight = Color(0xFF9ADCFF),
+            secondary = Color(0xFFA8C2FF), onAccent = Color(0xFF03122E), text = Color.White,
+            muted = Color(0xFFCCD8EC), subtle = Color(0xFF93A5C2), success = Color(0xFF6FE3A5),
+            danger = Color(0xFFFF8A80), dangerFocus = Color(0xFFB3261E),
+            osdFill = Color(0xFF0B1A33), osdFillEnd = Color(0xFF0A2846), osdEdge = Color(0x59FFFFFF),
+        ),
+        cornerScale = 1.3f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.GLASS,
+        glass = GlassLook(
+            backdrop = com.enigmacast.R.drawable.skin_glass_earth,
+            dim = Color(0x59020611),
+            tint = Color(0x8C0C1A33), focusTint = Color(0xD92A62C8), glow = Color(0xFF5AA9FF),
+        ),
+        fontFamily = Inter,
+    )
+
+    /** Glass over dark navy with blue particle waves and a light flare: electric blue accents. */
+    val GlassWave = Skin(
+        id = OsdSkinId.GLASS_WAVE,
+        palette = SkinPalette(
+            canvas = Color(0xFF020A24), card = Color(0x8C0B1640), cardBorder = Color(0x33FFFFFF),
+            raised = Color(0x99101E52), selected = Color(0xCC142663), focus = Color(0xFF2E64F5),
+            onFocus = Color.White, accent = Color(0xFF4D94FF), highlight = Color(0xFF7FD6FF),
+            secondary = Color(0xFFB1A4FF), onAccent = Color(0xFF020A24), text = Color.White,
+            muted = Color(0xFFC9D4F0), subtle = Color(0xFF8E9CC6), success = Color(0xFF6FE3A5),
+            danger = Color(0xFFFF8A80), dangerFocus = Color(0xFFB3261E),
+            osdFill = Color(0xFF0A1440), osdFillEnd = Color(0xFF0B2A5A), osdEdge = Color(0x59FFFFFF),
+        ),
+        cornerScale = 1.3f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.GLASS,
+        glass = GlassLook(
+            backdrop = com.enigmacast.R.drawable.skin_glass_wave,
+            dim = Color(0x4D010516),
+            tint = Color(0x8C0A143C), focusTint = Color(0xD92D5BDF), glow = Color(0xFF4D94FF),
+        ),
+        fontFamily = Inter,
+    )
+
+    val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora, GlassEarth, GlassWave)
 
     fun of(id: OsdSkinId): Skin = all.firstOrNull { it.id == id } ?: EnigmaCast
 }

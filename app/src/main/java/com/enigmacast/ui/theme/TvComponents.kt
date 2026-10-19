@@ -229,8 +229,7 @@ fun SettingsCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(EnigmaColors.Card, CardShape)
-            .border(1.dp, EnigmaColors.CardBorder, CardShape)
+            .skinSurface(EnigmaColors.Card, CardShape)
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -515,8 +514,7 @@ fun ChannelsLoadingDialog(message: String, progress: Float = 0f) {
         Column(
             modifier = Modifier
                 .widthIn(min = 360.dp, max = 520.dp)
-                .background(EnigmaColors.Selected, skinShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
+                .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
                 .padding(20.dp)
                 .focusRequester(hold)
                 .focusable(),
@@ -600,8 +598,7 @@ fun TvConfirmDialog(
         Column(
             modifier = Modifier
                 .widthIn(min = if (compact) 240.dp else 320.dp, max = if (compact) 400.dp else 480.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(if (compact) 10.dp else 14.dp))
+                .skinSurface(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
                 .padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
         ) {
@@ -658,8 +655,7 @@ fun TvChoiceDialog(
         Column(
             modifier = Modifier
                 .widthIn(min = if (compact) 240.dp else 320.dp, max = if (compact) 420.dp else 480.dp)
-                .background(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(if (compact) 10.dp else 14.dp))
+                .skinSurface(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
                 .padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp),
         ) {
@@ -692,8 +688,7 @@ private fun StackedChoiceDialog(title: String, message: String, choices: List<St
             modifier = Modifier
                 .widthIn(min = 220.dp, max = 420.dp)
                 .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
-                .background(EnigmaColors.Selected, skinShape(10.dp))
-                .border(1.dp, EnigmaColors.CardBorder, skinShape(10.dp))
+                .skinSurface(EnigmaColors.Selected, skinShape(10.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -862,8 +857,7 @@ fun OptionListDialog(
             modifier = Modifier
                 .widthIn(min = 280.dp, max = 380.dp)
                 .heightIn(max = 470.dp)
-                .background(EnigmaColors.Selected, skinShape(14.dp))
-                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
+                .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {

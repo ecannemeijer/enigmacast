@@ -1,5 +1,7 @@
 package com.enigmacast.ui.components
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -72,7 +74,7 @@ fun EnigmaCastBootLogo(modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxSize()
-            .background(EnigmaColors.Canvas),
+            .skinCanvas(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

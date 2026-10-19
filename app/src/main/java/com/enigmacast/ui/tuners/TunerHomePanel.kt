@@ -1,5 +1,6 @@
 package com.enigmacast.ui.tuners
 
+import com.enigmacast.ui.theme.skinSurface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
@@ -458,6 +459,12 @@ private fun tunerCardLook(focused: Boolean, shape: androidx.compose.ui.graphics.
         bottom = androidx.compose.ui.graphics.lerp(c.Card, c.Raised, 0.5f)
     }
     val glow = if (focused) c.Cyan.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.55f)
+    if (com.enigmacast.ui.theme.ActiveSkin.current.glass != null) {
+        return Modifier
+            .then(if (dim) Modifier.alpha(0.6f) else Modifier)
+            .skinSurface(if (focused) c.Selected else c.Card, shape, focused = focused && !dim)
+            .clip(shape)
+    }
     return Modifier
         .then(if (dim) Modifier.alpha(0.6f) else Modifier)
         .shadow(elevation, shape, clip = false, ambientColor = glow, spotColor = glow)

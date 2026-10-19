@@ -1,5 +1,7 @@
 package com.enigmacast.ui.settings
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -70,7 +72,7 @@ fun OscamScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(EnigmaColors.Canvas)
+            .skinCanvas()
             .padding(horizontal = 36.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

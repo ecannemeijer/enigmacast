@@ -1,5 +1,8 @@
 package com.enigmacast.ui.xtream
 
+import com.enigmacast.ui.theme.glassSheen
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -561,7 +564,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
 
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas), contentAlignment = Alignment.Center) { content() }
+    Box(Modifier.fillMaxSize().skinCanvas(), contentAlignment = Alignment.Center) { content() }
 }
 
 /** Left/Right of one column, handled before the focus search (like the Enigma2 list). */
@@ -993,7 +996,7 @@ private fun IptvEpgPanel(
                 .fillMaxWidth()
                 .height(150.dp)
                 .padding(top = 10.dp)
-                .background(EnigmaColors.Card, skinShape(8.dp))
+                .background(EnigmaColors.Card, skinShape(8.dp)).glassSheen(skinShape(8.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {

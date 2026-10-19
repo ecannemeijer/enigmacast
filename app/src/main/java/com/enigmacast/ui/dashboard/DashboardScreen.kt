@@ -1,5 +1,7 @@
 package com.enigmacast.ui.dashboard
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -502,7 +504,7 @@ fun DashboardScreen(
         return
     }
     if (profileModel.pickerOpen) com.enigmacast.ui.profile.ProfilePicker(profileModel)
-    Box(modifier = Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+    Box(modifier = Modifier.fillMaxSize().skinCanvas()) {
         val drawerExpanded = navFocused || !contentFocused
         Row(modifier = Modifier.fillMaxSize()) {
             EnigmaNavigationDrawer(
@@ -739,7 +741,7 @@ fun DashboardScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .background(EnigmaColors.Canvas)
+                    .skinPane()
                     .padding(start = 12.dp, top = 28.dp, end = 28.dp, bottom = 24.dp),
             ) {
                 Box(
@@ -1968,6 +1970,13 @@ private fun InfoSettingsPanel(
         // Sport page art and data; full licence texts in NOTICE.md.
         Text(
             stringResource(R.string.about_sport_attribution),
+            color = EnigmaColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+        )
+        // Glass skins: the bundled font (OFL) and the background photos; full texts in NOTICE.md.
+        Text(
+            stringResource(R.string.about_glass_attribution),
             color = EnigmaColors.Muted,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),

@@ -1,5 +1,8 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.ui.theme.glassSheen
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -124,7 +127,7 @@ fun GuideTimelineGrid(
 ) {
     val cursor = state.cursor
     val focusSec = maxOf(cursor.focusSec, nowSec)
-    BoxWithConstraints(modifier = modifier.background(EnigmaColors.Canvas)) {
+    BoxWithConstraints(modifier = modifier.skinCanvas()) {
         val timeline = maxWidth - ChannelColumn
         val dpPerSec = timeline.value / GuideTimeline.WINDOW_SEC
         Column(Modifier.fillMaxSize()) {
@@ -205,7 +208,7 @@ private fun GuideHeader(
     val event = cell?.event
     Column(
         modifier = modifier
-            .background(EnigmaColors.Canvas)
+            .skinPane()
             .padding(start = 16.dp, end = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -591,7 +594,7 @@ fun ChannelEpgPanel(
                 .fillMaxWidth()
                 .height(150.dp)
                 .padding(top = 10.dp)
-                .background(EnigmaColors.Card, skinShape(8.dp))
+                .background(EnigmaColors.Card, skinShape(8.dp)).glassSheen(skinShape(8.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {

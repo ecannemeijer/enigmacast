@@ -1,5 +1,7 @@
 package com.enigmacast.ui.xtream
 
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.trapVertical
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Color
@@ -109,7 +111,7 @@ internal fun XtreamVodPage(
     var focusedIndex by remember(model.cards) { mutableStateOf<Int?>(null) }
     // Built once per category (off the main thread); an artwork update only changes its own card.
     val cards = model.cards
-    Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+    Box(Modifier.fillMaxSize().skinCanvas()) {
         Box(Modifier.padding(start = 260.dp)) { Backdrop(focused) }
         // After a category is chosen the column slides away. It stays laid out at zero width so Left
         // from the first poster can focus it and it slides back open.
