@@ -1965,6 +1965,13 @@ private fun InfoSettingsPanel(
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
         )
+        // Sport page art and data; full licence texts in NOTICE.md.
+        Text(
+            stringResource(R.string.about_sport_attribution),
+            color = EnigmaColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+        )
     }
     SettingsCard(stringResource(R.string.diagnostics)) {
         ToggleRow(stringResource(R.string.debug_overlay), settings.debug.overlay, viewModel::setDebugOverlay)

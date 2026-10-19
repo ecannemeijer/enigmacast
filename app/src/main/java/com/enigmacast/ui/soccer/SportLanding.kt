@@ -65,7 +65,7 @@ import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.skinShape
 
 /**
- * The first page of Sport: a hero for the focused region (drawn backdrop in its colours, name,
+ * The first page of Sport: a hero for the focused region (stadium photo tinted in its colours, name,
  * three lines of text, the main competition's emblem) and a row of region cards. OK opens the
  * Soccer page for that region. Up from the cards reaches Refresh; Left from the first card the menu.
  */
@@ -90,7 +90,16 @@ fun SportLanding(
 
     Box(Modifier.fillMaxSize()) {
         Crossfade(targetState = card.id, animationSpec = tween(if (LocalMotionSpec.current.animate) 450 else 0), label = "sportHero") { id ->
-            SportBackdrop(cards.firstOrNull { it.id == id }?.look ?: card.look, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(EnigmaColors.Canvas)) {
+                // CC0 stadium photo (NOTICE.md), decoded by Coil off the main thread; the drawn glows tint it.
+                AsyncImage(
+                    model = SportArt.photo(id),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                SportBackdrop(cards.firstOrNull { it.id == id }?.look ?: card.look, Modifier.fillMaxSize(), overPhoto = true)
+            }
         }
         // Text side and card row stay readable on every backdrop.
         Box(
@@ -212,7 +221,14 @@ private fun RegionCard(card: SportRegions.Card, modifier: Modifier, onClick: () 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { RegionLogo(card, 70.dp) }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            RegionLogo(card, 70.dp)
+            // With an emblem in the middle, the flag sits small in the corner.
+            val flag = SportArt.flag(card.id)
+            if (card.emblem.isNotBlank() && flag != null) {
+                Box(Modifier.align(Alignment.TopStart)) { FlagImage(flag, 22.dp, onError = {}) }
+            }
+        }
         Text(
             countryName(card.id),
             color = EnigmaColors.Text,
@@ -225,11 +241,24 @@ private fun RegionCard(card: SportRegions.Card, modifier: Modifier, onClick: () 
     }
 }
 
-/** The main competition's emblem (football-data.org, loaded by Coil off the main thread); the region's colours and code until then. */
+/**
+ * The main competition's emblem (football-data.org, loaded by Coil off the main thread). Without
+ * one: the region's flag (flag-icons, MIT), a drawn globe for World, and the colour badge last.
+ */
 @Composable
 private fun RegionLogo(card: SportRegions.Card, size: Dp) {
     val context = LocalContext.current
     var failed by remember(card.emblem) { mutableStateOf(false) }
+    var flagFailed by remember(card.id) { mutableStateOf(false) }
+    val flag = SportArt.flag(card.id)
+    if ((card.emblem.isBlank() || failed) && flag != null && !flagFailed) {
+        FlagImage(flag, size, onError = { flagFailed = true })
+        return
+    }
+    if ((card.emblem.isBlank() || failed) && card.id == "WORLD") {
+        Globe(size)
+        return
+    }
     if (card.emblem.isBlank() || failed) {
         Box(
             Modifier.size(size).clip(CircleShape).background(Brush.linearGradient(listOf(Color(card.look.primary), Color(card.look.secondary)))),
@@ -248,17 +277,19 @@ private fun RegionLogo(card: SportRegions.Card, size: Dp) {
 }
 
 /**
- * Drawn, not a photo: a dark field with two soft glows in the region's colours and faint pitch
- * markings in perspective. No image assets, nothing to license, nothing to decode.
+ * Two soft glows in the region's colours and faint pitch markings in perspective, on a dark
+ * field or (with [overPhoto]) over the dimmed stadium photo.
  */
 @Composable
-fun SportBackdrop(look: SportRegions.Look, modifier: Modifier = Modifier) {
+fun SportBackdrop(look: SportRegions.Look, modifier: Modifier = Modifier, overPhoto: Boolean = false) {
     val base = EnigmaColors.Canvas
     val primary = Color(look.primary)
     val secondary = Color(look.secondary)
-    Canvas(modifier.background(base)) {
+    Canvas(if (overPhoto) modifier else modifier.background(base)) {
         val w = size.width
         val h = size.height
+        // Over a photo: dim it first so text and cards keep their contrast.
+        if (overPhoto) drawRect(base.copy(alpha = 0.55f))
         drawRect(Brush.radialGradient(listOf(primary.copy(alpha = 0.55f), Color.Transparent), center = Offset(w * 0.72f, h * 0.18f), radius = w * 0.48f))
         drawRect(Brush.radialGradient(listOf(secondary.copy(alpha = 0.38f), Color.Transparent), center = Offset(w * 0.95f, h * 0.75f), radius = w * 0.40f))
         drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color(0xFF0B3A22).copy(alpha = 0.55f)))
@@ -288,3 +319,63 @@ private fun regionDescription(id: String): String = stringResource(
         else -> R.string.sport_desc_world
     },
 )
+
+/** Bundled art for the landing page; see NOTICE.md for sources and licences. */
+internal object SportArt {
+    /** flag-icons (MIT), rendered 4:3 to WebP. World has no flag. */
+    fun flag(id: String): Int? = when (id) {
+        "NL" -> R.drawable.sport_flag_nl
+        "ENG" -> R.drawable.sport_flag_eng
+        "DE" -> R.drawable.sport_flag_de
+        "ES" -> R.drawable.sport_flag_es
+        "IT" -> R.drawable.sport_flag_it
+        "FR" -> R.drawable.sport_flag_fr
+        "PT" -> R.drawable.sport_flag_pt
+        "BR" -> R.drawable.sport_flag_br
+        "EU" -> R.drawable.sport_flag_eu
+        else -> null
+    }
+
+    /** CC0 photos from Wikimedia Commons, 1600×900 WebP. */
+    fun photo(id: String): Int = when (id) {
+        "NL", "DE", "EU" -> R.drawable.sport_bg_aerial
+        "ENG", "FR", "PT" -> R.drawable.sport_bg_evening
+        "ES", "IT", "BR" -> R.drawable.sport_bg_seats
+        else -> R.drawable.sport_bg_field
+    }
+}
+
+/** A 4:3 flag with rounded corners and a hairline edge; [height] sets the size. */
+@Composable
+private fun FlagImage(res: Int, height: Dp, onError: () -> Unit) {
+    val shape = skinShape(4.dp)
+    AsyncImage(
+        model = res,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        onError = { onError() },
+        modifier = Modifier
+            .width(height * 4 / 3)
+            .height(height)
+            .clip(shape)
+            .border(1.dp, Color.White.copy(alpha = 0.25f), shape),
+    )
+}
+
+/** A drawn globe for World (no flag stands for it). */
+@Composable
+private fun Globe(size: Dp) {
+    val accent = EnigmaColors.Cyan
+    Canvas(Modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        val c = center
+        val stroke = Stroke(width = r * 0.06f)
+        drawCircle(accent.copy(alpha = 0.18f), r)
+        drawCircle(accent, r * 0.97f, style = stroke)
+        drawOval(accent, topLeft = Offset(c.x - r * 0.45f, c.y - r * 0.97f), size = androidx.compose.ui.geometry.Size(r * 0.9f, r * 1.94f), style = stroke)
+        drawLine(accent, Offset(c.x, c.y - r * 0.97f), Offset(c.x, c.y + r * 0.97f), strokeWidth = stroke.width)
+        drawLine(accent, Offset(c.x - r * 0.97f, c.y), Offset(c.x + r * 0.97f, c.y), strokeWidth = stroke.width)
+        drawLine(accent, Offset(c.x - r * 0.84f, c.y - r * 0.5f), Offset(c.x + r * 0.84f, c.y - r * 0.5f), strokeWidth = stroke.width)
+        drawLine(accent, Offset(c.x - r * 0.84f, c.y + r * 0.5f), Offset(c.x + r * 0.84f, c.y + r * 0.5f), strokeWidth = stroke.width)
+    }
+}
