@@ -451,7 +451,9 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
         cachedPicon = { null },
         channel = BouquetEntry(item.name, "iptv:${item.id}"),
         vod = VodDetail(
-            onPlay = if (isSeries) null else ({ model.closeDetail(); model.requestFilm(item, onPlayed) }),
+            // A series plays the Continue watching / latest watched / first episode (Play is always
+            // there and has the focus; the episodes below still pick any other one).
+            onPlay = if (isSeries) ({ model.playSeries(item, onPlayed) }) else ({ model.closeDetail(); model.requestFilm(item, onPlayed) }),
             resumeLabel = null,
             onResume = null,
             below = if (isSeries) ({ Episodes(model, item, onPlayed) }) else null,
@@ -470,7 +472,8 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
         return
     }
     val seasons = remember(episodes) { episodes.map { it.season }.distinct().sorted() }
-    var season by remember(episodes) { mutableIntStateOf(seasons.first()) }
+    // The season of the episode Play starts (the one being watched), else the first.
+    var season by remember(episodes) { mutableIntStateOf(model.seriesPlayTarget(show)?.season?.takeIf { it in seasons } ?: seasons.first()) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(seasons) { index, s ->

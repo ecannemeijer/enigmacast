@@ -139,7 +139,8 @@ fun TunerHomePanel(
                 .clip(skinShape(16.dp))
                 .background(Brush.verticalGradient(0f to Color(0xFF0E1C2E), 0.6f to EnigmaColors.Canvas))
                 .onFocusChanged { if (it.hasFocus) onRetreatTo(menuFocus) }
-                .holdPageFocus(contentFocus, model.cards.map { it.index }),
+                // A Continue watching card removed (long press › Remove) also keeps the focus on the page.
+                .holdPageFocus(contentFocus, model.cards.map { it.index } to iptvContinue.map { it.key }),
         ) {
             val sections = remember { PivotState() }
             val chain = rememberFocusChain()
@@ -160,7 +161,7 @@ fun TunerHomePanel(
                     }
                     TunersRow(model, left, menuFocus, nextDown, showStream, dot) { chosen = it }
                 })
-                // IPTV Continue watching (Home has no recordings resume row): OK plays with the resume dialog / opens the series.
+                // IPTV/Torrent Continue watching (Home has no recordings resume row): OK opens the info page, long press the options.
                 if (iptvContinue.isNotEmpty() && library.iptvAllowed()) add(PageSection("iptv") {
                     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(stringResource(R.string.library_continue), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
@@ -172,8 +173,9 @@ fun TunerHomePanel(
                                     modifier = (if (i == 0) left else Modifier).then(rowNav("iptv"))
                                         .then(if (iptvReturn == "home/${card.key}") Modifier.trackedFocusRequester(iptvReturnFocus) else Modifier)
                                         .focusProperties { if (i == iptvContinue.lastIndex) right = FocusRequester.Cancel },
-                                    onClick = { library.openIptv(card, onXtream, "home/${card.key}", onTorrent) },
-                                    onOptions = {},
+                                    // As in My Items: OK the info page (Back returns to this card), long press the options.
+                                    onClick = { library.okIptv(card, "home/${card.key}", onXtream, onTorrent) },
+                                    onOptions = { library.optionsIptv(card, "home/${card.key}") },
                                 )
                             }
                         }
@@ -199,6 +201,7 @@ fun TunerHomePanel(
         }
     }
 
+    com.enigmacast.ui.dashboard.IptvCardDialogs(library, onXtream, onTorrent)
     chosen?.let { card ->
         val use = card.primary
         val canWatch = card.uses.any { it.reference.isNotBlank() }
