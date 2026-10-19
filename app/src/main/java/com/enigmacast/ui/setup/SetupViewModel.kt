@@ -190,7 +190,7 @@ class SetupViewModel @Inject constructor(
         return true
     }
 
-    /** Done › one of the optional extras (name, channel lists, football). */
+    /** Done › one of the optional extras (name, channel lists). */
     fun openExtra(extra: SetupStep) {
         if (extra.extra) go(extra)
     }

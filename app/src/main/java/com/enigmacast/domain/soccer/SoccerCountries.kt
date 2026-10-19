@@ -32,6 +32,9 @@ object SoccerCountries {
     fun offered(available: Set<String>?): List<Country> =
         if (available == null) ALL else ALL.mapNotNull { c -> c.competitions.filter { it in available }.takeIf { it.isNotEmpty() }?.let { c.copy(competitions = it) } }
 
+    /** The region [id] with the competitions the key reads; the full region before /v4/competitions answered. */
+    fun resolve(id: String, available: Set<String>?): Country = offered(available).firstOrNull { it.id == id } ?: byId(id)
+
     /** Default from an ISO-3166 country code (TV locale or detected country); falls back to the Netherlands. */
     fun defaultFor(iso: String?): String = when (iso?.uppercase()) {
         "GB", "UK" -> "ENG"
