@@ -50,6 +50,8 @@ class SetupViewModel @Inject constructor(
     private val discovery: SyncDiscovery,
     private val syncClient: EnigmaSyncClient,
     private val syncEngine: EnigmaSyncEngine,
+    private val activity: com.enigmacast.activity.BackgroundActivityTracker,
+    private val iptvPlaylist: com.enigmacast.data.xtream.IptvPlaylistSync,
     names: ReceiverNames,
 ) : ViewModel() {
     var step by mutableStateOf(SetupStep.WELCOME)
@@ -423,9 +425,20 @@ class SetupViewModel @Inject constructor(
         viewModelScope.launch {
             settings.update { it.copy(setupCompleted = true) }
             val current = settings.current()
-            if (current.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+            val playlist = current.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST
+            if (playlist) {
                 syncEngine.armIptvLoad()
             }
+            // The status window shows this first full sync, and only this one. Home films are not
+            // listed: they run straight after the guide (when a film key is set) and keep it open.
+            val paired = withContext(Dispatchers.IO) { syncClient.config() != null }
+            val expected = buildSet {
+                add(com.enigmacast.activity.ActivityKind.CHANNELS)
+                add(com.enigmacast.activity.ActivityKind.GUIDE)
+                if (playlist && iptvPlaylist.hasLogin(current.iptvPlaylistKind)) add(com.enigmacast.activity.ActivityKind.IPTV)
+                if (paired) add(com.enigmacast.activity.ActivityKind.SYNC_SERVER)
+            }
+            activity.beginInitialSetup(expected)
             SyncScheduler.runNow(context, force = true)
         }
         step = SetupStep.WELCOME

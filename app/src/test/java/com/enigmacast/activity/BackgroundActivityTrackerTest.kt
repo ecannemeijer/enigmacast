@@ -9,8 +9,17 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class BackgroundActivityTrackerTest {
+    private class MemoryStore(var saved: SetupSession? = null) : SetupSessionStore {
+        override fun load() = saved
+        override fun save(session: SetupSession?) { saved = session }
+    }
+
     private var now = 10_000L
-    private val tracker = BackgroundActivityTracker { now }
+    private val store = MemoryStore()
+    private val tracker = BackgroundActivityTracker({ now }, store, null).also {
+        // The existing window rules are tested inside a setup session with work still expected.
+        it.beginInitialSetup(ActivityKind.entries.toSet())
+    }
     private fun view() = ActivityRules.view(tracker.board.value, now)
 
     @Test fun shortTasksNeverShow() {
@@ -123,5 +132,118 @@ class BackgroundActivityTrackerTest {
         assertEquals(5_000 + ActivityRules.DONE_MS, ActivityRules.nextChangeMs(ended, 5_000))
         assertNull(ActivityRules.nextChangeMs(ended, 5_000 + ActivityRules.DONE_MS))
         assertEquals(ended, ActivityRules.finish(ended, 99, 6_000, failed = true))
+    }
+
+    // --- Setup session: the window only shows during the first sync after the wizard. ---
+
+    private fun freshTracker(saved: SetupSession? = null) = MemoryStore(saved).let { it to BackgroundActivityTracker({ now }, it, null) }
+
+    @Test fun withoutSessionNothingEverShows() {
+        val (_, plain) = freshTracker()
+        val id = plain.start(ActivityKind.SYNC_SERVER)
+        now += 10_000
+        assertNull(ActivityRules.view(plain.board.value, now))
+        plain.finish(id)
+        assertNull(ActivityRules.view(plain.board.value, now))
+        // Tracking itself still works.
+        assertTrue(plain.board.value.tasks.isEmpty())
+    }
+
+    @Test fun sessionEndsWhenAllExpectedWorkIsDoneAndSettled() {
+        val (saved, t) = freshTracker()
+        t.beginInitialSetup(setOf(ActivityKind.CHANNELS, ActivityKind.GUIDE))
+        assertEquals(ActivityKind.CHANNELS, saved.saved!!.expected.first())
+        val channels = t.start(ActivityKind.CHANNELS)
+        now += 2_000
+        t.finish(channels)
+        val guide = t.start(ActivityKind.GUIDE)
+        // Straight on from a shown task: no gap in the window.
+        assertTrue(ActivityRules.view(t.board.value, now) is ActivityView.Running)
+        now += 3_000
+        t.finish(guide)
+        assertEquals(ActivityView.Done, ActivityRules.view(t.board.value, now))
+        assertEquals(setOf(ActivityKind.CHANNELS, ActivityKind.GUIDE), saved.saved!!.finished)
+        now += ActivityRules.SETTLE_MS
+        t.refresh()
+        assertNull(t.board.value.session)
+        assertNull(saved.saved)
+        // Later work (a zap sync, a scheduled refresh) stays out of sight.
+        val zap = t.start(ActivityKind.SYNC_SERVER)
+        now += 20_000
+        assertNull(ActivityRules.view(t.board.value, now))
+        t.finish(zap)
+    }
+
+    @Test fun workAfterTheGuideKeepsTheSessionOpen() {
+        val (_, t) = freshTracker()
+        t.beginInitialSetup(setOf(ActivityKind.CHANNELS))
+        val channels = t.start(ActivityKind.CHANNELS)
+        now += 2_000
+        t.finish(channels)
+        now += 1_000
+        val home = t.start(ActivityKind.HOME)
+        now += ActivityRules.SETTLE_MS
+        t.refresh()
+        assertEquals(ActivityKind.HOME, (ActivityRules.view(t.board.value, now) as ActivityView.Running).kind)
+        t.finish(home)
+        now += ActivityRules.SETTLE_MS
+        t.refresh()
+        assertNull(t.board.value.session)
+    }
+
+    @Test fun missingExpectedWorkEndsAfterIdleStretch() {
+        val (_, t) = freshTracker()
+        t.beginInitialSetup(setOf(ActivityKind.CHANNELS, ActivityKind.IPTV))
+        val channels = t.start(ActivityKind.CHANNELS)
+        now += 2_000
+        t.finish(channels)
+        now += ActivityRules.SETTLE_MS
+        t.refresh()
+        assertTrue(t.board.value.session != null)
+        now += ActivityRules.IDLE_END_MS
+        assertNull(ActivityRules.view(t.board.value, now))
+        t.refresh()
+        assertNull(t.board.value.session)
+    }
+
+    @Test fun sessionNeverOutlivesTheTimeout() {
+        val (saved, t) = freshTracker()
+        t.beginInitialSetup(setOf(ActivityKind.CHANNELS))
+        val stuck = t.start(ActivityKind.CHANNELS)
+        now += ActivityRules.SESSION_TIMEOUT_MS - 1
+        assertTrue(ActivityRules.view(t.board.value, now) is ActivityView.Running)
+        now += 1
+        assertNull(ActivityRules.view(t.board.value, now))
+        t.refresh()
+        assertNull(saved.saved)
+        t.finish(stuck)
+    }
+
+    @Test fun restartMidSetupResumesUntilDone() {
+        val session = SetupSession(startedMs = now - 30_000, expected = setOf(ActivityKind.CHANNELS, ActivityKind.GUIDE), finished = setOf(ActivityKind.CHANNELS), lastEndMs = now - 20_000)
+        val (saved, t) = freshTracker(session)
+        assertEquals(session, t.board.value.session)
+        val guide = t.start(ActivityKind.GUIDE)
+        now += 2_000
+        assertTrue(ActivityRules.view(t.board.value, now) is ActivityView.Running)
+        t.finish(guide)
+        now += ActivityRules.SETTLE_MS
+        t.refresh()
+        assertNull(saved.saved)
+    }
+
+    @Test fun restartAfterTheTimeoutDropsTheOldSession() {
+        val old = SetupSession(startedMs = now - ActivityRules.SESSION_TIMEOUT_MS - 1, expected = setOf(ActivityKind.CHANNELS))
+        val (saved, t) = freshTracker(old)
+        assertNull(t.board.value.session)
+        assertNull(saved.saved)
+    }
+
+    @Test fun nextChangeIncludesTheSessionEnd() {
+        val session = SetupSession(startedMs = 0, expected = setOf(ActivityKind.CHANNELS), finished = setOf(ActivityKind.CHANNELS), lastEndMs = 1_000)
+        val board = ActivityBoard(session = session)
+        assertEquals(1_000 + ActivityRules.SETTLE_MS, ActivityRules.nextChangeMs(board, 2_000))
+        assertTrue(ActivityRules.sessionOver(session, idle = true, nowMs = 1_000 + ActivityRules.SETTLE_MS))
+        assertTrue(!ActivityRules.sessionOver(session, idle = false, nowMs = 1_000 + ActivityRules.SETTLE_MS))
     }
 }

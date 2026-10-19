@@ -85,8 +85,9 @@ fun Modifier.reportFullscreenVideo(): Modifier {
 }
 
 /**
- * The small status window at the top of the screen: what runs in the background, with a bar that
- * fills when the count is known and moves when it is not. It never takes focus; it hides over
+ * The small status window at the top of the screen, only during the first sync after the wizard
+ * ([com.enigmacast.activity.SetupSession]): what runs, with a bar that fills when the count is
+ * known and moves when it is not. It never takes focus; it hides over
  * fullscreen video and fades out shortly after "Done".
  */
 @Composable
@@ -97,10 +98,13 @@ fun ActivityOverlay(viewModel: ActivityOverlayViewModel, modifier: Modifier = Mo
     LaunchedEffect(board) {
         // Wake up exactly when a task becomes visible or Done/Failed runs out; no polling loop.
         now = viewModel.tracker.now()
+        viewModel.tracker.refresh()
         while (true) {
             val next = ActivityRules.nextChangeMs(board, now) ?: break
             delay((next - now).coerceAtLeast(16))
             now = viewModel.tracker.now()
+            // Ends the setup session once it is over (a new board restarts this effect).
+            viewModel.tracker.refresh()
         }
     }
     val view = ActivityRules.view(board, now)
