@@ -1359,7 +1359,7 @@
     <string name="torrent_empty">Aucun résultat.</string>
     <string name="torrent_streams_title">Flux</string>
     <string name="torrent_no_streams">Aucun flux trouvé pour ce titre.</string>
-    <string name="torrent_streams_error">Le scraper est injoignable.</string>
+    <string name="torrent_streams_error">L\'addon est injoignable.</string>
     <string name="torrent_direct">Lien direct</string>
     <string name="torrent_status_metadata">Récupération des infos du torrent…</string>
     <string name="torrent_status_buffer">Mise en mémoire tampon</string>
@@ -1370,15 +1370,15 @@
     <string name="torrent_channel">Streaming torrent</string>
     <string name="torrent_notification">Streaming d\'un torrent</string>
     <string name="premium_feature_torrent">Torrent</string>
-    <string name="settings_scrapers">Scrapers</string>
-    <string name="scraper_help">Collez l\'URL du manifeste d\'un addon Stremio (par exemple une URL Torrentio configurée se terminant par /manifest.json). Elle est enregistrée chiffrée sur cet appareil.</string>
+    <string name="settings_scrapers">Torrent</string>
+    <string name="scraper_help">Collez l\'URL du manifeste de votre propre addon Stremio (se terminant par /manifest.json). Avec une URL, Torrent est activé ; sans, il est désactivé. Elle est enregistrée chiffrée sur cet appareil.</string>
     <string name="scraper_current">Actuel : %1$s</string>
     <string name="scraper_none">aucun</string>
     <string name="scraper_url_label">URL du manifeste de l\'addon</string>
     <string name="scraper_save">Enregistrer et vérifier</string>
     <string name="scraper_check">Vérifier à nouveau</string>
     <string name="scraper_remove">Supprimer</string>
-    <string name="scraper_status_none">Aucun scraper configuré.</string>
+    <string name="scraper_status_none">Aucun addon défini : Torrent est désactivé. Ajoutez l\'URL de votre manifeste pour l\'activer.</string>
     <string name="scraper_status_checking">Vérification du manifeste…</string>
     <string name="scraper_status_valid">%1$s %2$s · OK</string>
     <string name="scraper_error_url">Ce n\'est pas une adresse http(s) ou stremio:// valide.</string>
@@ -1387,9 +1387,6 @@
     <string name="scraper_error_stream">Cet addon ne propose pas de flux.</string>
     <string name="scraper_error_types">Cet addon ne propose ni films ni séries.</string>
     <string name="torrent_error_engine">Le moteur torrent n\'est pas disponible sur cet appareil (ABI %1$s).</string>
-    <string name="scraper_torrentio">Activer avec Torrentio</string>
-    <string name="scraper_torrentio_desc">Utilise Torrentio trié par seeders. Une URL de manifeste personnalisée ci-dessous est prioritaire.</string>
-    <string name="scraper_custom_overrides">URL personnalisée utilisée (prioritaire sur Torrentio)</string>
     <string name="torrent_filter_genre">Genre : %1$s</string>
     <string name="torrent_genre_all">Tous</string>
     <string name="torrent_genre">Genre</string>
@@ -1506,4 +1503,5 @@
     <string name="sport_desc_world">La Coupe du monde de la FIFA, le plus grand tournoi du football, avec des sélections de tous les continents.</string>
     <string name="subs_switch_unseekable">Impossible de changer les sous-titres pendant ce flux : il n\'est pas possible d\'y naviguer. Choisissez-les avant la lecture.</string>
     <string name="seek_unseekable">Ce flux ne peut pas être avancé ni reculé.</string>
+    <string name="library_up_next">Épisode suivant</string>
 </resources>

@@ -11,7 +11,7 @@ Enigma2 receiver (OpenWebif)
     /grab?mode=osd (follow-receiver mode) ---> OSD overlay ---------------+
     /api/remotecontrol <-------------------- D-pad / remote keys
 IPTV (Xtream Codes / M3U) -----------------> same player, row EPG, VOD grids
-Stremio addon (Torrentio / custom) -------> jlibtorrent engine -> 127.0.0.1 range server -> player
+Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range server -> player
 ```
 
 ## Contents
@@ -62,7 +62,7 @@ Stremio addon (Torrentio / custom) -------> jlibtorrent engine -> 127.0.0.1 rang
 
 **Torrents (Stremio addons)**
 - Torrent page with Movies and Series from TMDB (popular or discover), search, compact **Genre** and **Sort** (Popular, Year, TMDB score) dropdowns, and a TMDB info page.
-- Streams come from a Stremio addon: *Enable with Torrentio* (sorted by seeders) or a custom addon manifest URL (`https://` or `stremio://`), which overrides Torrentio. The manifest is validated when saved.
+- Streams come from your own Stremio addon: Settings › Torrent takes its manifest URL (`https://` or `stremio://`). With a URL set the Torrent feature is on; without one it is off. EnigmaCast ships no addon and no preset. The manifest is validated when saved.
 - Streams dialog per title or episode (torrents and direct links), a Stremio-style loading page, and streaming with the built-in [jlibtorrent engine](#torrent-engine).
 - Favourites and Continue watching (per profile, synced with the sync server); a resume prompt with *Resume from …*, *Start from the beginning* and *Choose another source* (the last torrent stream is remembered; direct links are never stored).
 
@@ -342,8 +342,8 @@ Channel logos start loading after a row has been on screen for 150 ms, 4 at a ti
 The **Torrent** page browses TMDB: Movies and Series tabs, TMDB's popular list or `/discover` for a genre or another order, a search icon that opens the keyboard at once, and two compact dropdowns under their chips: **Genre** (capped height, scrolling) and **Sort** (Popular, Year (newest), TMDB score). Cards show poster, title, year and TMDB rating.
 
 - OK on a card opens the TMDB info page (backdrop, rating, plot, seasons and episodes for series, favourite toggle); Play asks the addon for streams and lists them in the **Streams** dialog (torrents with their release name, and direct links). A Stremio-style loading page shows the progress until the first frame.
-- **Addon:** Settings › Scrapers has *Enable with Torrentio* (Torrentio sorted by seeders) and a field for a custom Stremio addon manifest URL. A custom URL overrides Torrentio. Saving checks the manifest (valid JSON, offers `stream` for movies or series). Manifest URLs can contain a debrid key: they are kept in the encrypted store and only shown and logged masked.
-- **Library:** favourites and Continue watching per profile, shown on Home and in My Items and synced through the sync server. Removals sync too: each device keeps the removal time, so an older copy from another device cannot bring the item back; removing a series from Continue watching removes all of its saved episodes. The last torrent stream of a title or episode (info hash, file index, public trackers) is remembered, so **Resume** starts it again without asking the addon; the resume prompt offers *Resume from …*, *Start from the beginning* and *Choose another source*. Direct links are never stored.
+- **Addon:** Settings › Torrent has one field for your own Stremio addon manifest URL; there is no on/off switch and no default addon. A saved URL turns Torrent on, removing it turns it off. Settings from older versions keep their saved URL (also one saved while the old switch was off, which a URL always overrode); the switch and its preset are gone, so an install that only used the preset shows the hint until a URL is added. Saving checks the manifest (valid JSON, offers `stream` for movies or series). Manifest URLs can contain a debrid key: they are kept in the encrypted store and only shown and logged masked.
+- **Library:** favourites and Continue watching per profile, shown on Home and in My Items and synced through the sync server. Removals sync too: each device keeps the removal time, so an older copy from another device cannot bring the item back; removing a series from Continue watching removes all of its saved episodes. A series stays in Continue watching until its last episode of the last known season is watched: after each finished episode the card moves to the next one (or the next season's first), marked *Next episode* until it is started, also on the Android TV Watch Next row. The last torrent stream of a title or episode (info hash, file index, public trackers) is remembered, so **Resume** starts it again without asking the addon; the resume prompt offers *Resume from …*, *Start from the beginning* and *Choose another source*. Direct links are never stored.
 - **Player:** the shared VOD OSD (below) with the buffered range in the seek bar, SubSource subtitles, audio and video track choice. See [Torrent engine](#torrent-engine) for how streaming works.
 
 You are responsible for what you stream; see [Attribution and legal](#attribution-and-legal).
@@ -481,7 +481,7 @@ Right from Settings opens a submenu, in this order. Each page groups its options
 - Guide & Home: Home country, Home bouquets, own TMDB key, data & sync (guide days, sync frequency, Refresh now, Clear cache).
 - Sync server: install, connect, status, recovery code (see [Sync server](#sync-server)).
 - IPTV: source (XStreamity or own M3U / Xtream playlist), load, categories to hide.
-- Scrapers: Enable with Torrentio, custom Stremio addon manifest URL (see [Torrents](#torrents)).
+- Torrent: your own Stremio addon manifest URL (see [Torrents](#torrents)).
 - Lock: 4-digit PIN for Settings.
 - Recordings: recording size of captures on this device (where to record is asked per recording).
 - Appearance: language, navigation sounds, motion quality, OSD (transparency, banner fields, receiver OSD) and GUI skins.
@@ -647,7 +647,7 @@ Settings can enable:
 - Sound behind the picture: open Settings → Playback → Audio sync and raise the value of the row marked "active now" until lips and voice match. Usually 60–200 ms with passthrough to an amplifier or soundbar. Check the TV or amplifier for its own lip-sync or "AV sync" setting first, so the two do not add up.
 - Menus feel sluggish: turn on the debug overlay and read OSD latency and frame rate. The receiver's `grab` cost is usually the limit, not Compose.
 - A torrent does not start: the loading page says whether metadata or the first pieces are missing. `adb logcat | grep -i torrent` shows peers, the gate and blocked reads. Try another source from the Streams dialog (more seeders). "The torrent engine is not available on this device (ABI …)" means no jlibtorrent binary could be loaded for that CPU type.
-- The Stremio addon URL is refused: Settings › Scrapers says why (not a valid address, manifest not loaded, not a Stremio manifest, no streams, no movies or series).
+- The Stremio addon URL is refused: Settings › Torrent says why (not a valid address, manifest not loaded, not a Stremio manifest, no streams, no movies or series).
 
 ## Attribution and legal
 
@@ -672,7 +672,7 @@ Recent work on `feature/torrents` (newest first; the version stays `1.0.0-beta.5
   - Torrent Genre/Sort as compact dropdowns; left menu D-pad fixes (Right enters the open page, ends stay in the menu).
   - Main-thread safety pass (OpenWebif parsing, guide cache, settings/secrets, search and file IO off Main) and debug `StrictMode`.
   - Stremio-style VOD OSD for IPTV films/series, recordings and torrents.
-  - Torrent page: TMDB browsing, info page, streams dialog, loading page, player, Settings › Scrapers (Torrentio default or custom addon URL), favourites and Continue watching synced, per-title resume with the remembered stream, SubSource subtitles; jlibtorrent native loader with x86.
+  - Torrent page: TMDB browsing, info page, streams dialog, loading page, player, Settings › Torrent (own addon manifest URL), favourites and Continue watching synced, per-title resume with the remembered stream, SubSource subtitles; jlibtorrent native loader with x86.
   - Larger launcher art.
 - **2026-10-17:** Picture-in-picture, catch-up, satellite/IPTV fallback; IPTV next-episode card and Watch Next; bouquet order from `bouquets.tv`; subtitle delay.
 - **2026-10-15 – 16:** Sync server on the receiver (install over SSH from GitHub, pairing, admin takeover, profile and IPTV-login sync); per-profile viewing data; IPTV subtitles; programme on the IPTV channel rows.

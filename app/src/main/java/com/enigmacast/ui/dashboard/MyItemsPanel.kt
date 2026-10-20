@@ -591,6 +591,7 @@ internal fun IptvCard(
             }
         }
         Text(card.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (card.subtitle.isNotBlank()) Text(card.subtitle, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val subtitle = if (card.upNext) listOf(stringResource(R.string.library_up_next), card.subtitle).filter { it.isNotBlank() }.joinToString(" · ") else card.subtitle
+        if (subtitle.isNotBlank()) Text(subtitle, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

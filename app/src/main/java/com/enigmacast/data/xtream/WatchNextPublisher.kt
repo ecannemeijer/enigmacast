@@ -39,7 +39,11 @@ class WatchNextPublisher @Inject constructor(
         else TvContractCompat.WatchNextPrograms.TYPE_MOVIE
         val builder = WatchNextProgram.Builder()
             .setType(type)
-            .setWatchNextType(TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
+            // A series card on its next, unstarted episode is "next", not "continue".
+            .setWatchNextType(
+                if (com.enigmacast.domain.resume.SeriesContinue.isUpNext(row.kind, row.positionMs)) TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_NEXT
+                else TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE,
+            )
             .setTitle(if (row.kind == "e") row.seriesTitle?.ifBlank { row.title } ?: row.title else row.title)
             .setPosterArtUri(Uri.parse(poster))
             .setIntentUri(watchUri(row.source, row.kind, row.id))

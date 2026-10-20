@@ -1384,7 +1384,7 @@
     <string name="torrent_empty">Nothing found.</string>
     <string name="torrent_streams_title">Streams</string>
     <string name="torrent_no_streams">No streams found for this title.</string>
-    <string name="torrent_streams_error">The scraper could not be reached.</string>
+    <string name="torrent_streams_error">The addon could not be reached.</string>
     <string name="torrent_direct">Direct link</string>
     <string name="torrent_status_metadata">Fetching torrent info…</string>
     <string name="torrent_status_buffer">Buffering</string>
@@ -1395,15 +1395,15 @@
     <string name="torrent_channel">Torrent streaming</string>
     <string name="torrent_notification">Streaming a torrent</string>
     <string name="premium_feature_torrent">Torrent</string>
-    <string name="settings_scrapers">Scrapers</string>
-    <string name="scraper_help">Paste the manifest URL of a Stremio addon (for example a configured Torrentio URL ending in /manifest.json). It is stored encrypted on this device.</string>
+    <string name="settings_scrapers">Torrent</string>
+    <string name="scraper_help">Paste the manifest URL of your own Stremio addon (ending in /manifest.json). With a URL set, Torrent is on; without one it is off. It is stored encrypted on this device.</string>
     <string name="scraper_current">Current: %1$s</string>
     <string name="scraper_none">none</string>
     <string name="scraper_url_label">Addon manifest URL</string>
     <string name="scraper_save">Save &amp; check</string>
     <string name="scraper_check">Check again</string>
     <string name="scraper_remove">Remove</string>
-    <string name="scraper_status_none">No scraper configured.</string>
+    <string name="scraper_status_none">No addon set: Torrent is off. Add your manifest URL to turn it on.</string>
     <string name="scraper_status_checking">Checking the manifest…</string>
     <string name="scraper_status_valid">%1$s %2$s · OK</string>
     <string name="scraper_error_url">That is not a valid http(s) or stremio:// address.</string>
@@ -1412,10 +1412,6 @@
     <string name="scraper_error_stream">This addon does not offer streams.</string>
     <string name="scraper_error_types">This addon offers no movies or series.</string>
     <string name="torrent_error_engine">The torrent engine is not available on this device (ABI %1$s).</string>
-    <string name="scraper_torrentio">Enable with Torrentio</string>
-    <string name="scraper_torrentio_desc">Uses Torrentio sorted by seeders. A custom manifest URL below takes priority.</string>
-    <string name="scraper_custom_overrides">Custom URL in use (overrides Torrentio)</string>
-    <string name="scraper_using_torrentio" translatable="false">Torrentio</string>
     <string name="torrent_filter_genre">Genre: %1$s</string>
     <string name="torrent_genre_all">All</string>
     <string name="torrent_genre">Genre</string>
@@ -1506,4 +1502,5 @@
     <string name="sport_desc_world">The FIFA World Cup, the biggest tournament in football, with national teams from every continent.</string>
     <string name="subs_switch_unseekable">Subtitles can\'t be switched while this stream plays: it can\'t be searched. Pick them before playback starts.</string>
     <string name="seek_unseekable">This stream can\'t be fast-forwarded or rewound.</string>
+    <string name="library_up_next">Next episode</string>
 </resources>

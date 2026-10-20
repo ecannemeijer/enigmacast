@@ -23,8 +23,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-/** Where the scraper comes from: a custom manifest URL wins over the Torrentio toggle. */
-enum class ScraperSource { NONE, TORRENTIO, CUSTOM }
+/** Torrent is on exactly when the user saved their own addon manifest URL. There is no preset. */
+enum class ScraperSource {
+    NONE, CUSTOM;
+
+    companion object {
+        fun of(hasUrl: Boolean) = if (hasUrl) CUSTOM else NONE
+    }
+}
 
 sealed interface ScraperStatus {
     data object None : ScraperStatus
@@ -34,7 +40,7 @@ sealed interface ScraperStatus {
 }
 
 /**
- * The Stremio addon (e.g. Torrentio) used to find streams. Its manifest URL can carry a debrid
+ * The user's own Stremio addon used to find streams. Its manifest URL can carry a debrid
  * key, so it lives in the encrypted [SecretStore] and only the masked form is ever logged or shown.
  * The manifest is checked when the app starts and when a new URL is saved.
  */
@@ -44,42 +50,37 @@ class ScraperRepository @Inject constructor(private val secrets: SecretStore) {
     private val client = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
     private val _status = MutableStateFlow<ScraperStatus>(ScraperStatus.None)
     val status: StateFlow<ScraperStatus> = _status.asStateFlow()
-    private val _torrentio = MutableStateFlow(false)
-    /** Settings › Scrapers › Enable with Torrentio (persisted). */
-    val torrentio: StateFlow<Boolean> = _torrentio.asStateFlow()
-
     init {
         scope.launch {
-            _torrentio.value = secrets.read(KEY_TORRENTIO) == "1"
+            migrateToggle()
             check()
         }
     }
 
+    /**
+     * Older versions had an on/off switch next to the URL. A saved URL always won over it, so a
+     * URL that was saved with the switch off was in use anyway: it stays and Torrent stays on.
+     * Only the switch itself (and the preset it stood for) goes.
+     */
+    private fun migrateToggle() {
+        val old = secrets.read(LEGACY_TOGGLE) ?: return
+        secrets.write(LEGACY_TOGGLE, null)
+        EnigmaLog.network("scraper: removed the old on/off switch (${if (old == "1") "on" else "off"}), url ${if (custom() != null) "kept" else "none"}")
+    }
+
     private fun custom(): ScraperUrl? = secrets.read(KEY)?.let(StremioManifest::normalize)
 
-    /** The custom URL when set, else Torrentio when enabled. */
-    fun source(): ScraperSource = when {
-        custom() != null -> ScraperSource.CUSTOM
-        _torrentio.value -> ScraperSource.TORRENTIO
-        else -> ScraperSource.NONE
-    }
+    fun source(): ScraperSource = ScraperSource.of(custom() != null)
 
     /** The scraper in use (a custom one is secret: never log it; show [masked]). */
-    fun url(): ScraperUrl? = custom() ?: if (_torrentio.value) StremioManifest.normalize(TORRENTIO_MANIFEST) else null
+    fun url(): ScraperUrl? = custom()
     /** The custom URL, masked; null when none is saved. */
     fun masked(): String? = custom()?.let { StremioManifest.mask(it.manifest) }
-
-    /** Turns the Torrentio preset on or off and checks the scraper in use again. */
-    suspend fun setTorrentio(enabled: Boolean): ScraperStatus {
-        withContext(Dispatchers.IO) { secrets.write(KEY_TORRENTIO, if (enabled) "1" else null) }
-        _torrentio.value = enabled
-        return check()
-    }
 
     /** Saves and checks [input]; an empty value removes the scraper. */
     suspend fun save(input: String): ScraperStatus {
         if (input.isBlank()) {
-            // Removing the custom URL falls back to Torrentio when that is on.
+            // No URL: Torrent is off.
             withContext(Dispatchers.IO) { secrets.write(KEY, null) }
             return check()
         }
@@ -119,8 +120,7 @@ class ScraperRepository @Inject constructor(private val secrets: SecretStore) {
 
     companion object {
         private const val KEY = "torrent_scraper_manifest"
-        private const val KEY_TORRENTIO = "torrent_scraper_torrentio"
-        /** Torrentio sorted by seeders, all qualities. */
-        const val TORRENTIO_MANIFEST = "https://torrentio.strem.fun/sort=seeders/manifest.json"
+        /** The removed on/off switch (secret key name kept so it can be cleared). */
+        private const val LEGACY_TOGGLE = "torrent_scraper_torrentio"
     }
 }
