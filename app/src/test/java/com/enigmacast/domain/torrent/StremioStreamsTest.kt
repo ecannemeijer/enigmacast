@@ -18,13 +18,13 @@ class StremioStreamsTest {
     }
 
     @Test
-    fun readsTorrentioTitles() {
+    fun readsAddonTitles() {
         val t = "Movie.2019.2160p.WEB-DL.HDR\n👤 1520 💾 14.3 GB ⚙️ Site"
         assertEquals(1520, StremioStreams.seedersOf(t))
         assertEquals((14.3 * (1L shl 30)).toLong(), StremioStreams.sizeOf(t))
         assertEquals(2160, StremioStreams.resolutionOf(t))
-        assertEquals(720, StremioStreams.resolutionOf("Torrentio\n720p"))
-        assertEquals(2160, StremioStreams.resolutionOf("Torrentio\n4k DV"))
+        assertEquals(720, StremioStreams.resolutionOf("Addon\n720p"))
+        assertEquals(2160, StremioStreams.resolutionOf("Addon\n4k DV"))
         assertEquals(0, StremioStreams.resolutionOf("Some.Release.CAM"))
         assertEquals(800L shl 20, StremioStreams.sizeOf("💾 800 MB"))
         assertEquals((1.5 * (1L shl 30)).toLong(), StremioStreams.sizeOf("💾 1,5 GB"))
@@ -33,10 +33,10 @@ class StremioStreamsTest {
     }
 
     @Test
-    fun parsesTorrentioStreams() {
+    fun parsesAddonStreams() {
         val body = """{"streams":[
-            {"name":"Torrentio\n4k HDR","title":"The.Shawshank.Redemption.1994.2160p.UHD.BluRay.x265-HDR\n👤 100 💾 6.91 GB ⚙️ YTS","infoHash":"$hashA","fileIdx":0,"behaviorHints":{"bingeGroup":"torrentio|4k|HDR","filename":"The.Shawshank.Redemption.1994.2160p.mkv"}},
-            {"name":"Torrentio\n1080p","title":"The.Shawshank.Redemption.1994.1080p.BluRay\n👤 250 💾 2.1 GB ⚙️ ThePirateBay","infoHash":"${"d".repeat(40)}","fileIdx":1}
+            {"name":"Addon\n4k HDR","title":"The.Shawshank.Redemption.1994.2160p.UHD.BluRay.x265-HDR\n👤 100 💾 6.91 GB ⚙️ YTS","infoHash":"$hashA","fileIdx":0,"behaviorHints":{"bingeGroup":"addon|4k|HDR","filename":"The.Shawshank.Redemption.1994.2160p.mkv"}},
+            {"name":"Addon\n1080p","title":"The.Shawshank.Redemption.1994.1080p.BluRay\n👤 250 💾 2.1 GB ⚙️ ThePirateBay","infoHash":"${"d".repeat(40)}","fileIdx":1}
         ]}"""
         val s = StremioStreams.sorted(StremioStreams.parse(body))
         assertEquals(listOf(2160, 1080), s.map { it.resolution })
@@ -51,9 +51,9 @@ class StremioStreamsTest {
     @Test
     fun parsesAndSortsStreams() {
         val body = """{"streams":[
-            {"name":"Torrentio\n1080p","title":"Rel.1080p\n👤 10 💾 2 GB","infoHash":"$hashA","fileIdx":3,"sources":["tracker:udp://t.example:80/announce","dht:$hashA"],"behaviorHints":{"filename":"Rel.mkv"}},
-            {"name":"Torrentio\n2160p","title":"Rel.2160p\n👤 5 💾 20 GB","infoHash":"$hashB"},
-            {"name":"Torrentio\n1080p","title":"Other.1080p\n👤 99 💾 3 GB","infoHash":"${"c".repeat(40)}"},
+            {"name":"Addon\n1080p","title":"Rel.1080p\n👤 10 💾 2 GB","infoHash":"$hashA","fileIdx":3,"sources":["tracker:udp://t.example:80/announce","dht:$hashA"],"behaviorHints":{"filename":"Rel.mkv"}},
+            {"name":"Addon\n2160p","title":"Rel.2160p\n👤 5 💾 20 GB","infoHash":"$hashB"},
+            {"name":"Addon\n1080p","title":"Other.1080p\n👤 99 💾 3 GB","infoHash":"${"c".repeat(40)}"},
             {"name":"Direct 720p","title":"Web","url":"https://cdn.example/v.mp4"},
             {"name":"broken","title":"no hash, no url"},
             {"name":"bad","infoHash":"xyz"}

@@ -37,7 +37,7 @@ object StremioManifest {
 
     /**
      * For the screen and logs: scheme and host only, the configuration path (which can hold a
-     * debrid key) is masked: "https://torrentio.strem.fun/•••/manifest.json".
+     * debrid key) is masked: "https://addon.example.com/•••/manifest.json".
      */
     fun mask(url: String): String {
         val scheme = url.substringBefore("://", "")
@@ -53,7 +53,7 @@ object StremioManifest {
     }
 
     /**
-     * The address as OkHttp sends it: characters not allowed in a path ('|' in Torrentio's
+     * The address as OkHttp sends it: characters not allowed in a path ('|' in some addons'
      * "sort=seeders|qualityfilter=…" config, spaces, …) percent-encoded; ',' '=' ':' stay.
      */
     fun httpUrl(address: String): okhttp3.HttpUrl = address.toHttpUrl()
@@ -190,7 +190,7 @@ object StremioStreams {
         }
     }
 
-    /** First line of a Torrentio title (the release name), for the list. */
+    /** First line of an addon's stream title (the release name), for the list. */
     fun release(stream: TorrentStream): String = stream.title.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: stream.name
 }
 

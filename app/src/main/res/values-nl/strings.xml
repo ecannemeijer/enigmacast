@@ -1376,7 +1376,7 @@
     <string name="torrent_empty">Niets gevonden.</string>
     <string name="torrent_streams_title">Streams</string>
     <string name="torrent_no_streams">Geen streams gevonden voor deze titel.</string>
-    <string name="torrent_streams_error">De scraper is niet bereikbaar.</string>
+    <string name="torrent_streams_error">De addon is niet bereikbaar.</string>
     <string name="torrent_direct">Directe link</string>
     <string name="torrent_status_metadata">Torrentinfo ophalen…</string>
     <string name="torrent_status_buffer">Bufferen</string>
@@ -1387,15 +1387,15 @@
     <string name="torrent_channel">Torrent streamen</string>
     <string name="torrent_notification">Torrent wordt gestreamd</string>
     <string name="premium_feature_torrent">Torrent</string>
-    <string name="settings_scrapers">Scrapers</string>
-    <string name="scraper_help">Plak de manifest-URL van een Stremio-addon (bijvoorbeeld een geconfigureerde Torrentio-URL die eindigt op /manifest.json). Hij wordt versleuteld op dit apparaat bewaard.</string>
+    <string name="settings_scrapers">Torrent</string>
+    <string name="scraper_help">Plak de manifest-URL van je eigen Stremio-addon (eindigt op /manifest.json). Met een URL staat Torrent aan, zonder staat het uit. Hij wordt versleuteld op dit apparaat bewaard.</string>
     <string name="scraper_current">Huidig: %1$s</string>
     <string name="scraper_none">geen</string>
     <string name="scraper_url_label">Manifest-URL van de addon</string>
     <string name="scraper_save">Opslaan &amp; controleren</string>
     <string name="scraper_check">Opnieuw controleren</string>
     <string name="scraper_remove">Verwijderen</string>
-    <string name="scraper_status_none">Geen scraper ingesteld.</string>
+    <string name="scraper_status_none">Geen addon ingesteld: Torrent staat uit. Vul je manifest-URL in om het aan te zetten.</string>
     <string name="scraper_status_checking">Manifest controleren…</string>
     <string name="scraper_status_valid">%1$s %2$s · OK</string>
     <string name="scraper_error_url">Dat is geen geldig http(s)- of stremio://-adres.</string>
@@ -1404,9 +1404,6 @@
     <string name="scraper_error_stream">Deze addon biedt geen streams.</string>
     <string name="scraper_error_types">Deze addon biedt geen films of series.</string>
     <string name="torrent_error_engine">De torrent-engine is niet beschikbaar op dit apparaat (ABI %1$s).</string>
-    <string name="scraper_torrentio">Inschakelen met Torrentio</string>
-    <string name="scraper_torrentio_desc">Gebruikt Torrentio gesorteerd op seeders. Een eigen manifest-URL hieronder gaat voor.</string>
-    <string name="scraper_custom_overrides">Eigen URL in gebruik (gaat voor Torrentio)</string>
     <string name="torrent_filter_genre">Genre: %1$s</string>
     <string name="torrent_genre_all">Alle</string>
     <string name="torrent_genre">Genre</string>

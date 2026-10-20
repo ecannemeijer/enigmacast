@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LastStreamTest {
-    private val torrent = TorrentStream("Torrentio\n1080p", "Movie.2024.1080p.mkv\n👤 50", "abcdef0123", 3, null, listOf("udp://t:1/announce"), 50, 2_000_000_000, 1080, "Movie.2024.1080p.mkv")
+    private val torrent = TorrentStream("Addon\n1080p", "Movie.2024.1080p.mkv\n👤 50", "abcdef0123", 3, null, listOf("udp://t:1/announce"), 50, 2_000_000_000, 1080, "Movie.2024.1080p.mkv")
 
     @Test fun torrentRoundTrips() {
         val back = LastStream.decode(LastStream.encode(torrent))!!

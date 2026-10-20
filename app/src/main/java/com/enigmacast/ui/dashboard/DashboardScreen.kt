@@ -638,7 +638,7 @@ fun DashboardScreen(
                         )
                     }
                 }
-                // Torrent: only with a valid scraper (Settings › Scrapers); a page in the dashboard like IPTV Films.
+                // Torrent: only with a valid addon URL (Settings › Torrent); a page in the dashboard like IPTV Films.
                 if (torrentAvailable) NavItem(
                     icon = Icons.Filled.PlayArrow,
                     label = stringResource(R.string.nav_torrent),

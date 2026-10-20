@@ -31,43 +31,34 @@ class StremioManifestTest {
     }
 
     @Test
-    fun torrentioPresetSortsBySeeders() {
-        val u = StremioManifest.normalize(com.enigmacast.data.torrent.ScraperRepository.TORRENTIO_MANIFEST)!!
-        assertEquals("https://torrentio.strem.fun/sort=seeders/manifest.json", u.manifest)
-        assertEquals("https://torrentio.strem.fun/sort=seeders", u.base)
-        assertEquals("https://torrentio.strem.fun/sort=seeders/stream/movie/tt0111161.json", StremioManifest.httpUrl(StremioStreams.url(u.base, "tt0111161")!!).toString())
-        assertEquals(listOf("sort=seeders", "manifest.json"), StremioManifest.httpUrl(u.manifest).pathSegments)
-    }
-
-    @Test
     fun configWithPipeKeepsItsConfig() {
-        // A custom Torrentio configuration ("sort=…|qualityfilter=…").
-        val u = StremioManifest.normalize("https://torrentio.strem.fun/sort=seeders|qualityfilter=1080p,720p/manifest.json")!!
-        assertEquals("https://torrentio.strem.fun/sort=seeders|qualityfilter=1080p,720p", u.base)
+        // An addon configuration ("sort=…|qualityfilter=…").
+        val u = StremioManifest.normalize("https://addon.example.com/sort=seeders|qualityfilter=1080p,720p/manifest.json")!!
+        assertEquals("https://addon.example.com/sort=seeders|qualityfilter=1080p,720p", u.base)
         val movie = StremioStreams.url(u.base, "tt0111161")!!
-        assertEquals("https://torrentio.strem.fun/sort=seeders|qualityfilter=1080p,720p/stream/movie/tt0111161.json", movie)
+        assertEquals("https://addon.example.com/sort=seeders|qualityfilter=1080p,720p/stream/movie/tt0111161.json", movie)
         // On the wire '|' is %7C; the config segment, ',' and the series ':' stay as they are.
-        assertEquals("https://torrentio.strem.fun/sort=seeders%7Cqualityfilter=1080p,720p/stream/movie/tt0111161.json", StremioManifest.httpUrl(movie).toString())
+        assertEquals("https://addon.example.com/sort=seeders%7Cqualityfilter=1080p,720p/stream/movie/tt0111161.json", StremioManifest.httpUrl(movie).toString())
         assertEquals(
-            "https://torrentio.strem.fun/sort=seeders%7Cqualityfilter=1080p,720p/stream/series/tt0903747:1:1.json",
+            "https://addon.example.com/sort=seeders%7Cqualityfilter=1080p,720p/stream/series/tt0903747:1:1.json",
             StremioManifest.httpUrl(StremioStreams.url(u.base, "tt0903747", 1, 1)!!).toString(),
         )
-        assertEquals("https://torrentio.strem.fun/sort=seeders%7Cqualityfilter=1080p,720p/manifest.json", StremioManifest.httpUrl(u.manifest).toString())
+        assertEquals("https://addon.example.com/sort=seeders%7Cqualityfilter=1080p,720p/manifest.json", StremioManifest.httpUrl(u.manifest).toString())
         assertEquals(listOf("sort=seeders|qualityfilter=1080p,720p", "manifest.json"), StremioManifest.httpUrl(u.manifest).pathSegments)
     }
 
     @Test
-    fun acceptsTorrentio() {
-        val u = StremioManifest.normalize("stremio://torrentio.strem.fun/manifest.json")!!
-        assertEquals("https://torrentio.strem.fun/manifest.json", u.manifest)
-        assertEquals("https://torrentio.strem.fun", u.base)
-        assertEquals("https://torrentio.strem.fun/stream/movie/tt0111161.json", StremioStreams.url(u.base, "tt0111161"))
-        assertEquals("https://torrentio.strem.fun/stream/series/tt0903747:1:1.json", StremioStreams.url(u.base, "tt0903747", 1, 1))
+    fun acceptsAddonConfigurationPaths() {
+        val u = StremioManifest.normalize("stremio://addon.example.com/manifest.json")!!
+        assertEquals("https://addon.example.com/manifest.json", u.manifest)
+        assertEquals("https://addon.example.com", u.base)
+        assertEquals("https://addon.example.com/stream/movie/tt0111161.json", StremioStreams.url(u.base, "tt0111161"))
+        assertEquals("https://addon.example.com/stream/series/tt0903747:1:1.json", StremioStreams.url(u.base, "tt0903747", 1, 1))
         val m = StremioManifest.parse(
-            """{"id":"com.stremio.torrentio.addon","version":"0.0.15","name":"Torrentio","description":"Provides torrent streams","catalogs":[],"resources":[{"name":"stream","types":["movie","series","anime"],"idPrefixes":["tt","kitsu"]}],"types":["movie","series","anime","other"],"behaviorHints":{"configurable":true}}""",
+            """{"id":"org.example.streams","version":"0.0.15","name":"Example streams","description":"Provides torrent streams","catalogs":[],"resources":[{"name":"stream","types":["movie","series","anime"],"idPrefixes":["tt","kitsu"]}],"types":["movie","series","anime","other"],"behaviorHints":{"configurable":true}}""",
         ).getOrThrow()
-        assertEquals("com.stremio.torrentio.addon", m.id)
-        assertEquals("Torrentio", m.name)
+        assertEquals("org.example.streams", m.id)
+        assertEquals("Example streams", m.name)
     }
 
     @Test
