@@ -1500,4 +1500,15 @@
     <string name="subs_switch_unseekable">Untertitel können während dieser Wiedergabe nicht gewechselt werden: der Stream ist nicht durchsuchbar. Wähle sie vor dem Start.</string>
     <string name="seek_unseekable">Dieser Stream kann nicht vor- oder zurückgespult werden.</string>
     <string name="library_up_next">Nächste Folge</string>
+    <string name="profile_photo_qr">Profilfoto per QR-Code hinzufügen</string>
+    <string name="profile_photo_qr_title">Profilfoto vom Handy</string>
+    <string name="profile_photo_qr_steps">Scanne den QR-Code mit der Handykamera, wähle ein Foto, richte den Ausschnitt ein und tippe auf Speichern.</string>
+    <string name="profile_photo_qr_same_network">Dein Handy muss im selben Netzwerk (WLAN) sein wie dieser Fernseher. Nichts geht über das Internet.</string>
+    <string name="profile_photo_qr_url">Oder gib diese Adresse im Browser deines Handys ein:</string>
+    <string name="profile_photo_qr_expires">Code gültig für %1$d:%2$02d</string>
+    <string name="profile_photo_qr_starting">Wird gestartet…</string>
+    <string name="profile_photo_qr_no_network">Kein Heimnetzwerk gefunden. Verbinde den Fernseher per WLAN oder Ethernet und versuche es erneut.</string>
+    <string name="profile_photo_qr_expired">Der Code ist abgelaufen.</string>
+    <string name="profile_photo_qr_new">Neuer Code</string>
+    <string name="profile_photo_qr_done">Profilfoto festgelegt</string>
 </resources>

@@ -1503,4 +1503,15 @@
     <string name="subs_switch_unseekable">Subtitles can\'t be switched while this stream plays: it can\'t be searched. Pick them before playback starts.</string>
     <string name="seek_unseekable">This stream can\'t be fast-forwarded or rewound.</string>
     <string name="library_up_next">Next episode</string>
+    <string name="profile_photo_qr">Add profile photo via QR code</string>
+    <string name="profile_photo_qr_title">Profile photo from your phone</string>
+    <string name="profile_photo_qr_steps">Scan the QR code with your phone camera, choose a photo, frame it and tap Save.</string>
+    <string name="profile_photo_qr_same_network">Your phone must be on the same network (Wi-Fi) as this TV. Nothing goes through the internet.</string>
+    <string name="profile_photo_qr_url">Or type this address in your phone\'s browser:</string>
+    <string name="profile_photo_qr_expires">Code valid for %1$d:%2$02d</string>
+    <string name="profile_photo_qr_starting">Starting…</string>
+    <string name="profile_photo_qr_no_network">No home network found. Connect the TV to Wi-Fi or Ethernet and try again.</string>
+    <string name="profile_photo_qr_expired">The code has expired.</string>
+    <string name="profile_photo_qr_new">New code</string>
+    <string name="profile_photo_qr_done">Profile photo set</string>
 </resources>

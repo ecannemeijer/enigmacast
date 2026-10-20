@@ -1504,4 +1504,15 @@
     <string name="subs_switch_unseekable">Impossible de changer les sous-titres pendant ce flux : il n\'est pas possible d\'y naviguer. Choisissez-les avant la lecture.</string>
     <string name="seek_unseekable">Ce flux ne peut pas être avancé ni reculé.</string>
     <string name="library_up_next">Épisode suivant</string>
+    <string name="profile_photo_qr">Ajouter une photo de profil via code QR</string>
+    <string name="profile_photo_qr_title">Photo de profil depuis votre téléphone</string>
+    <string name="profile_photo_qr_steps">Scannez le code QR avec l’appareil photo de votre téléphone, choisissez une photo, cadrez-la et appuyez sur Enregistrer.</string>
+    <string name="profile_photo_qr_same_network">Votre téléphone doit être sur le même réseau (Wi-Fi) que cette TV. Rien ne passe par Internet.</string>
+    <string name="profile_photo_qr_url">Ou saisissez cette adresse dans le navigateur de votre téléphone :</string>
+    <string name="profile_photo_qr_expires">Code valable %1$d:%2$02d</string>
+    <string name="profile_photo_qr_starting">Démarrage…</string>
+    <string name="profile_photo_qr_no_network">Aucun réseau domestique trouvé. Connectez la TV en Wi-Fi ou Ethernet et réessayez.</string>
+    <string name="profile_photo_qr_expired">Le code a expiré.</string>
+    <string name="profile_photo_qr_new">Nouveau code</string>
+    <string name="profile_photo_qr_done">Photo de profil définie</string>
 </resources>

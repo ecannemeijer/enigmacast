@@ -21,6 +21,7 @@ class ProfileCleanup @Inject constructor(
     private val bouquets: HomeBouquetStore,
     private val pins: ProfilePinLock,
     private val tombstones: com.enigmacast.data.xtream.LibraryTombstones,
+    private val photos: AvatarPhotos,
 ) {
     suspend fun purge(profile: Profile) {
         val uuid = profile.uuid.ifBlank { ProfileState.LEGACY_UUID }
@@ -32,5 +33,6 @@ class ProfileCleanup @Inject constructor(
         bouquets.purge(profile.id)
         pins.clear(uuid)
         tombstones.clearProfile(uuid)
+        photos.delete(uuid)
     }
 }

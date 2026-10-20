@@ -25,6 +25,7 @@ class ProfileViewModel @Inject constructor(
     private val pins: ProfilePinLock,
     private val cleanup: ProfileCleanup,
     private val sync: EnigmaSyncEngine,
+    private val photos: com.enigmacast.data.profile.AvatarPhotos,
 ) : ViewModel() {
     val state = store.state
 
@@ -153,4 +154,79 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun closeEditor() { editorId = null }
+
+    /** The "photo via QR code" dialog, null when closed. */
+    var photoQr by mutableStateOf<PhotoQrState?>(null)
+        private set
+    private var photoServer: com.enigmacast.data.profile.PhotoUploadServer? = null
+    private var photoTimer: kotlinx.coroutines.Job? = null
+
+    /** Starts the one-off upload server for profile [id] and shows its QR code. */
+    fun startPhotoQr(id: String) {
+        stopPhotoQr()
+        val profile = store.state.value.profiles.firstOrNull { it.id == id } ?: return
+        photoQr = PhotoQrState.Starting
+        photoTimer = viewModelScope.launch {
+            val token = com.enigmacast.domain.profile.photo.UploadToken.create(System.currentTimeMillis())
+            val started = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val address = com.enigmacast.data.profile.PhotoUploadServer.lanAddress() ?: return@withContext null
+                val uuid = profile.uuid.ifBlank { com.enigmacast.domain.profile.ProfileState.LEGACY_UUID }
+                val server = com.enigmacast.data.profile.PhotoUploadServer(
+                    address, token, profile.name,
+                    onPhoto = { bytes, x, y, side -> photos.save(uuid, bytes, x, y, side) },
+                    onSuccess = {
+                        viewModelScope.launch {
+                            store.setPhoto(id, System.currentTimeMillis())
+                            photoQr = PhotoQrState.Done
+                        }
+                    },
+                )
+                runCatching { server.start() }.getOrNull()?.let { server }
+            }
+            if (started == null) {
+                photoQr = PhotoQrState.NoNetwork
+                return@launch
+            }
+            photoServer = started
+            val url = started.url()
+            val qr = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.enigmacast.domain.profile.photo.QrCode.encode(url) }
+            photoQr = PhotoQrState.Ready(url, qr, token.expiresAt())
+            kotlinx.coroutines.delay((token.expiresAt() - System.currentTimeMillis()).coerceAtLeast(0))
+            if (photoQr is PhotoQrState.Ready) {
+                started.stop()
+                photoQr = PhotoQrState.Expired
+            }
+        }
+    }
+
+    /** Closes the dialog; the server stops with it. */
+    fun stopPhotoQr() {
+        photoTimer?.cancel()
+        photoTimer = null
+        val server = photoServer
+        photoServer = null
+        if (server != null) viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { server.stop() }
+        photoQr = null
+    }
+
+    /** Back to the bundled avatar for profile [id]; the stored photo is removed. */
+    fun clearPhoto(id: String) {
+        val profile = store.state.value.profiles.firstOrNull { it.id == id } ?: return
+        if (profile.photo == 0L) return
+        store.clearPhoto(id)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { photos.delete(profile.uuid.ifBlank { com.enigmacast.domain.profile.ProfileState.LEGACY_UUID }) }
+    }
+
+    override fun onCleared() {
+        photoServer?.stop()
+        photoServer = null
+    }
+}
+
+sealed interface PhotoQrState {
+    data object Starting : PhotoQrState
+    data class Ready(val url: String, val qr: com.enigmacast.domain.profile.photo.QrCode, val expiresAt: Long) : PhotoQrState
+    data object Done : PhotoQrState
+    data object Expired : PhotoQrState
+    data object NoNetwork : PhotoQrState
 }

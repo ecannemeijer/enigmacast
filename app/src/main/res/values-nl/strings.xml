@@ -1495,4 +1495,15 @@
     <string name="subs_switch_unseekable">Ondertitels kunnen niet worden gewisseld terwijl deze stream speelt: er kan niet in gezocht worden. Kies ze voordat het afspelen begint.</string>
     <string name="seek_unseekable">Deze stream kan niet vooruit- of teruggespoeld worden.</string>
     <string name="library_up_next">Volgende aflevering</string>
+    <string name="profile_photo_qr">Profielfoto toevoegen via QR-code</string>
+    <string name="profile_photo_qr_title">Profielfoto vanaf je telefoon</string>
+    <string name="profile_photo_qr_steps">Scan de QR-code met de camera van je telefoon, kies een foto, stel het kader in en tik op Opslaan.</string>
+    <string name="profile_photo_qr_same_network">Je telefoon moet op hetzelfde netwerk (wifi) zitten als deze tv. Er gaat niets via internet.</string>
+    <string name="profile_photo_qr_url">Of typ dit adres in de browser van je telefoon:</string>
+    <string name="profile_photo_qr_expires">Code geldig voor %1$d:%2$02d</string>
+    <string name="profile_photo_qr_starting">Bezig met starten…</string>
+    <string name="profile_photo_qr_no_network">Geen thuisnetwerk gevonden. Verbind de tv met wifi of ethernet en probeer het opnieuw.</string>
+    <string name="profile_photo_qr_expired">De code is verlopen.</string>
+    <string name="profile_photo_qr_new">Nieuwe code</string>
+    <string name="profile_photo_qr_done">Profielfoto ingesteld</string>
 </resources>

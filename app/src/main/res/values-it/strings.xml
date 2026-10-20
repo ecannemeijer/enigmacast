@@ -1504,4 +1504,15 @@
     <string name="subs_switch_unseekable">I sottotitoli non possono essere cambiati durante questo stream: non è possibile cercare al suo interno. Sceglili prima dell\'avvio.</string>
     <string name="seek_unseekable">Questo stream non può essere mandato avanti o indietro.</string>
     <string name="library_up_next">Prossimo episodio</string>
+    <string name="profile_photo_qr">Aggiungi foto profilo tramite codice QR</string>
+    <string name="profile_photo_qr_title">Foto profilo dal telefono</string>
+    <string name="profile_photo_qr_steps">Scansiona il codice QR con la fotocamera del telefono, scegli una foto, regola il riquadro e tocca Salva.</string>
+    <string name="profile_photo_qr_same_network">Il telefono deve essere sulla stessa rete (Wi-Fi) di questa TV. Niente passa da Internet.</string>
+    <string name="profile_photo_qr_url">Oppure digita questo indirizzo nel browser del telefono:</string>
+    <string name="profile_photo_qr_expires">Codice valido per %1$d:%2$02d</string>
+    <string name="profile_photo_qr_starting">Avvio…</string>
+    <string name="profile_photo_qr_no_network">Nessuna rete domestica trovata. Collega la TV al Wi-Fi o via Ethernet e riprova.</string>
+    <string name="profile_photo_qr_expired">Il codice è scaduto.</string>
+    <string name="profile_photo_qr_new">Nuovo codice</string>
+    <string name="profile_photo_qr_done">Foto profilo impostata</string>
 </resources>

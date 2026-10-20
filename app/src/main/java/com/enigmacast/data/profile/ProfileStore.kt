@@ -110,6 +110,14 @@ class ProfileStore @Inject constructor(
 
     fun edit(id: String, name: String, avatar: Int) = save(ProfileRules.edit(_state.value, id, name, avatar))
 
+    /** A phone photo was stored for [id]: show it (the stamp also refreshes cached images). */
+    fun setPhoto(id: String, stamp: Long) {
+        val s = _state.value
+        save(s.copy(profiles = s.profiles.map { if (it.id == id) it.copy(photo = stamp) else it }))
+    }
+
+    fun clearPhoto(id: String) = setPhoto(id, 0)
+
     fun delete(id: String) {
         val uuid = _state.value.profiles.firstOrNull { it.id == id }?.uuid.orEmpty()
         save(ProfileRules.delete(_state.value, id))

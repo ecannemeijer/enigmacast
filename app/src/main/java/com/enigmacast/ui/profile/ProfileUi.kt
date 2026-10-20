@@ -30,7 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -66,6 +68,24 @@ internal val Avatars = intArrayOf(
     R.drawable.avatar_09, R.drawable.avatar_10, R.drawable.avatar_11, R.drawable.avatar_12,
     R.drawable.avatar_13, R.drawable.avatar_14, R.drawable.avatar_15, R.drawable.avatar_16,
 )
+
+/** The profile's phone photo when it has one, else its bundled avatar. Decoded off the main thread. */
+@Composable
+fun ProfileAvatar(profile: Profile, size: Dp, modifier: Modifier = Modifier) {
+    if (profile.photo == 0L) return AvatarImage(profile.avatar, size, modifier)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val uuid = profile.uuid.ifBlank { ProfileState.LEGACY_UUID }
+    val bitmap by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, uuid, profile.photo) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                android.graphics.BitmapFactory.decodeFile(com.enigmacast.data.profile.AvatarPhotos.fileFor(context, uuid).path)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    val image = bitmap
+    if (image == null) AvatarImage(profile.avatar, size, modifier)
+    else Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier.size(size).clip(RoundedCornerShape(size / 5)))
+}
 
 @Composable
 fun AvatarImage(index: Int, size: Dp, modifier: Modifier = Modifier) {
@@ -105,7 +125,7 @@ internal fun ProfilePickerContent(model: ProfileViewModel) {
             )
             Row(Modifier.padding(top = 32.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 state.profiles.forEachIndexed { i, p ->
-                    ProfileTile(p.name, p.avatar, p.id == state.activeId, model.managing, Modifier.focusRequesterIf(i == 0, first)) {
+                    ProfileTile(p.name, p.avatar, p.id == state.activeId, model.managing, Modifier.focusRequesterIf(i == 0, first), photo = p) {
                         model.choose(p.id)
                     }
                 }
@@ -131,8 +151,13 @@ internal fun ProfilePickerContent(model: ProfileViewModel) {
             showPin = true,
             onSetPin = { pinSetup = p },
             onClearPin = { model.clearPin(p.id) },
+            photo = p,
+            onPhotoQr = { model.startPhotoQr(p.id) },
+            onClearPhoto = { model.clearPhoto(p.id) },
+            qrOpen = model.photoQr != null,
         )
     }
+    model.photoQr?.let { qr -> PhotoQrDialog(qr, onRetry = { editing?.let { model.startPhotoQr(it.id) } }, onClose = model::stopPhotoQr) }
     if (adding) {
         ProfileEditor(
             title = stringResource(R.string.profile_add),
@@ -172,7 +197,7 @@ internal fun ProfilePickerContent(model: ProfileViewModel) {
 private const val MAX_PROFILES = 6
 
 @Composable
-internal fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: Boolean, modifier: Modifier, photo: Profile? = null, onClick: () -> Unit) {
     val focus = rememberTvFocus()
     Column(
         modifier.width(132.dp).tvClick(focus, onClick).padding(6.dp),
@@ -180,10 +205,8 @@ internal fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: B
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box {
-            AvatarImage(
-                avatar, 120.dp,
-                Modifier.border(if (focus.focused) 4.dp else 0.dp, if (focus.focused) Color.White else Color.Transparent, skinShape(24.dp)),
-            )
+            val ring = Modifier.border(if (focus.focused) 4.dp else 0.dp, if (focus.focused) Color.White else Color.Transparent, skinShape(24.dp))
+            if (photo != null) ProfileAvatar(photo, 120.dp, ring) else AvatarImage(avatar, 120.dp, ring)
             if (managing) {
                 Text("✎", color = Color.White, fontSize = 18.sp, modifier = Modifier.align(Alignment.Center).background(Color(0x99000000), CircleShape).padding(horizontal = 10.dp, vertical = 4.dp))
             }
@@ -227,9 +250,24 @@ fun ProfileEditor(
     showPin: Boolean = false,
     onSetPin: () -> Unit = {},
     onClearPin: () -> Unit = {},
+    /** The profile being edited, for its phone photo; null when adding. */
+    photo: Profile? = null,
+    onPhotoQr: (() -> Unit)? = null,
+    onClearPhoto: () -> Unit = {},
+    /** The QR dialog is on top; when it closes, focus goes back to the QR button. */
+    qrOpen: Boolean = false,
 ) {
+    val qrButton = remember { FocusRequester() }
+    var qrWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(qrOpen) {
+        if (qrOpen) qrWasOpen = true
+        else if (qrWasOpen) { qrWasOpen = false; qrButton.requestWhenReady() }
+    }
     var name by remember { mutableStateOf(initialName) }
     var avatar by remember { mutableIntStateOf(initialAvatar) }
+    val stamp = photo?.photo ?: 0L
+    // A photo that arrives while the editor is open is selected right away.
+    var photoOn by remember(stamp) { mutableStateOf(stamp > 0L) }
     var playlistOn by remember { mutableStateOf(playlist) }
     var confirmDelete by remember { mutableStateOf(false) }
     val field = remember { FocusRequester() }
@@ -263,18 +301,34 @@ fun ProfileEditor(
                         val i = row * 8 + col
                         val focus = rememberTvFocus()
                         Box(
-                            Modifier.tvClick(focus) { avatar = i }
+                            Modifier.tvClick(focus) { avatar = i; photoOn = false }
                                 .border(
-                                    if (focus.focused || avatar == i) 3.dp else 0.dp,
-                                    when { focus.focused -> Color.White; avatar == i -> EnigmaColors.Cyan; else -> Color.Transparent },
+                                    if (focus.focused || (!photoOn && avatar == i)) 3.dp else 0.dp,
+                                    when { focus.focused -> Color.White; !photoOn && avatar == i -> EnigmaColors.Cyan; else -> Color.Transparent },
                                     skinShape(12.dp),
                                 ).padding(3.dp),
                         ) { AvatarImage(i, 52.dp) }
                     }
                 }
             }
+            if (onPhotoQr != null && photo != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (stamp > 0L) {
+                        val focus = rememberTvFocus()
+                        Box(
+                            Modifier.tvClick(focus) { photoOn = true }
+                                .border(
+                                    if (focus.focused || photoOn) 3.dp else 0.dp,
+                                    when { focus.focused -> Color.White; photoOn -> EnigmaColors.Cyan; else -> Color.Transparent },
+                                    skinShape(12.dp),
+                                ).padding(3.dp),
+                        ) { ProfileAvatar(photo, 52.dp) }
+                    }
+                    DialogButton(stringResource(R.string.profile_photo_qr), onPhotoQr, destructive = false, enabled = true, compact = true, modifier = Modifier.focusRequester(qrButton))
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogButton(stringResource(R.string.profile_save), { if (name.isNotBlank()) onSave(name, avatar, playlistOn) }, destructive = false, enabled = name.isNotBlank(), compact = true)
+                DialogButton(stringResource(R.string.profile_save), { if (name.isNotBlank()) { if (stamp > 0L && !photoOn) onClearPhoto(); onSave(name, avatar, playlistOn) } }, destructive = false, enabled = name.isNotBlank(), compact = true)
                 if (canDelete) DialogButton(stringResource(R.string.profile_delete), { confirmDelete = true }, destructive = true, enabled = true, compact = true)
                 if (showPin) {
                     DialogButton(stringResource(if (hasPin) R.string.profile_pin_clear else R.string.profile_pin_set), { if (hasPin) onClearPin() else onSetPin() }, destructive = false, enabled = true, compact = true)
@@ -300,7 +354,7 @@ fun ProfileChip(model: ProfileViewModel, expanded: Boolean, modifier: Modifier =
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        AvatarImage(p.avatar, 30.dp)
+        ProfileAvatar(p, 30.dp)
         if (expanded) Text(p.name, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 120.dp))
     }
 }
@@ -332,7 +386,7 @@ fun ProfileMenu(model: ProfileViewModel, powerLabel: String, powerAction: String
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    AvatarImage(p.avatar, 32.dp)
+                    ProfileAvatar(p, 32.dp)
                     Text(p.name, color = EnigmaColors.Text, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (p.id == state.activeId) Text("✓", color = EnigmaColors.Cyan, fontSize = 14.sp)
                 }
