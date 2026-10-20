@@ -1506,4 +1506,5 @@
     <string name="sport_desc_world">La Coppa del Mondo FIFA, il torneo più grande del calcio, con nazionali di ogni continente.</string>
     <string name="subs_switch_unseekable">I sottotitoli non possono essere cambiati durante questo stream: non è possibile cercare al suo interno. Sceglili prima dell\'avvio.</string>
     <string name="seek_unseekable">Questo stream non può essere mandato avanti o indietro.</string>
+    <string name="library_up_next">Prossimo episodio</string>
 </resources>

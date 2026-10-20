@@ -572,33 +572,75 @@ class XtreamViewModel @Inject constructor(
         val parts = key.split('/')
         if (parts.size != 3) return
         val (source, kind, id) = parts
-        when (val keep = IptvResume.toStore(p.currentPosition, p.duration)) {
+        val what = playing
+        val item = what?.item
+        val episode = what?.episode
+        val position = p.currentPosition
+        val duration = p.duration.coerceAtLeast(0)
+        if (episode != null && item != null && duration > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(position, duration)) {
+            finishEpisode(source, kind, item, episode, position, duration)
+            resumeVersion++
+            return
+        }
+        when (val keep = IptvResume.toStore(position, p.duration)) {
             null -> {
                 library.clearResume(source, kind, id)
                 watchNext.remove(source, kind, id)
             }
             else -> {
-                val what = playing
-                val item = what?.item
-                val episode = what?.episode
-                val row = com.enigmacast.data.db.IptvResumeRow(
-                    source = source, kind = kind, id = id,
-                    positionMs = keep, durationMs = p.duration.coerceAtLeast(0), updatedMs = System.currentTimeMillis(),
-                    title = if (episode != null) episode.title.ifBlank { what.title } else item?.name ?: what?.title.orEmpty(),
-                    poster = item?.let(::posterOf),
-                    extension = episode?.extension ?: item?.extension.orEmpty(),
-                    url = if (episode == null) item?.url.orEmpty() else "",
-                    categoryId = item?.categoryId.orEmpty(),
-                    seriesId = if (episode != null) item?.id else null,
-                    seriesTitle = if (episode != null) item?.name else null,
-                    season = episode?.season ?: 0,
-                    episode = episode?.episode ?: 0,
-                )
+                val row = resumeRow(source, kind, id, item, episode, what?.title.orEmpty(), keep, duration)
                 library.saveResume(row)
                 watchNext.publish(row)
             }
         }
         resumeVersion++
+    }
+
+    private fun resumeRow(
+        source: String, kind: String, id: String, item: XtreamItem?, episode: XtreamEpisode?,
+        fallbackTitle: String, positionMs: Long, durationMs: Long,
+    ) = com.enigmacast.data.db.IptvResumeRow(
+        source = source, kind = kind, id = id,
+        positionMs = positionMs, durationMs = durationMs, updatedMs = System.currentTimeMillis(),
+        title = if (episode != null) episode.title.ifBlank { fallbackTitle } else item?.name ?: fallbackTitle,
+        poster = item?.let(::posterOf),
+        extension = episode?.extension ?: item?.extension.orEmpty(),
+        url = if (episode == null) item?.url.orEmpty() else "",
+        categoryId = item?.categoryId.orEmpty(),
+        seriesId = if (episode != null) item?.id else null,
+        seriesTitle = if (episode != null) item?.name else null,
+        season = episode?.season ?: 0,
+        episode = episode?.episode ?: 0,
+    )
+
+    /** A watched episode: the series card moves on to the next one, or goes after the very last. */
+    private fun finishEpisode(source: String, kind: String, item: XtreamItem, episode: XtreamEpisode, position: Long, duration: Long) {
+        val saved = library.resumeMap.value
+        when (val done = com.enigmacast.domain.resume.SeriesContinue.afterIptv(episode, playbackEpisodes)) {
+            com.enigmacast.domain.resume.EpisodeDone.Unknown -> {
+                val row = resumeRow(source, kind, episode.id, item, episode, episode.title, position, duration)
+                library.saveResume(row)
+                watchNext.publish(row)
+            }
+            com.enigmacast.domain.resume.EpisodeDone.SeriesDone -> {
+                // The whole series (every saved episode, with tombstones) leaves Continue watching.
+                if (saved.values.any { it.source == source && it.kind == "e" && it.seriesId == item.id }) {
+                    library.removeContinue(source, kind, episode.id)
+                }
+            }
+            is com.enigmacast.domain.resume.EpisodeDone.Next -> {
+                val next = playbackEpisodes.firstOrNull { it.id == done.id } ?: return
+                if (!com.enigmacast.domain.resume.SeriesContinue.keepNext(saved[com.enigmacast.data.xtream.IptvLibrary.key(source, kind, next.id)])) {
+                    val row = resumeRow(source, kind, next.id, item, next, next.title, 0L, 0L)
+                    library.saveResume(row)
+                    watchNext.publish(row)
+                }
+                if (saved.containsKey(com.enigmacast.data.xtream.IptvLibrary.key(source, kind, episode.id))) {
+                    library.clearResume(source, kind, episode.id)
+                    watchNext.remove(source, kind, episode.id)
+                }
+            }
+        }
     }
 
     /** IPTV favorites (Library): the film or series on the info page. */

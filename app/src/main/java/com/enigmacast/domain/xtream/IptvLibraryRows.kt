@@ -17,6 +17,8 @@ data class IptvLibraryCard(
     val poster: String?,
     val progress: Float,
     val open: XtreamItem,
+    /** A series card on its next episode, not started yet. */
+    val upNext: Boolean = false,
 )
 
 object IptvLibraryRows {
@@ -39,6 +41,7 @@ object IptvLibraryRows {
                     "cw/${row.source}/e/${row.id}", row.source, "e", row.id, row.seriesTitle ?: row.title,
                     listOf(mark, row.title).filter { it.isNotBlank() }.joinToString(" · "), row.poster, progress,
                     XtreamItem(row.seriesId!!, row.seriesTitle ?: row.title, XtreamSection.SERIES, row.categoryId, row.poster.orEmpty()),
+                    upNext = com.enigmacast.domain.resume.SeriesContinue.isUpNext(row.kind, row.positionMs),
                 )
             } else {
                 IptvLibraryCard(

@@ -583,6 +583,7 @@ class TorrentViewModel @Inject constructor(
     private fun play(url: String, title: String) {
         // The info page closes once playback starts; Back from the player lands on the grid card.
         infoJob?.cancel()
+        info?.let { playSeasons = it.seasons }
         info = null
         // One player at a time: Enigma2 and IPTV stop (and free the decoder) first.
         owner.register(PlaybackOwner.Owner.TORRENT) { stopPlayback() }
@@ -706,8 +707,38 @@ class TorrentViewModel @Inject constructor(
         val target = resumeTarget ?: return
         if (action == com.enigmacast.domain.torrent.ResumeSave.KEEP) {
             library.saveResume(target.copy(positionMs = pos, durationMs = dur, updatedMs = System.currentTimeMillis()))
+        } else if (target.kind == "e") {
+            finishEpisode(target, pos, dur)
         } else if (library.resume(target.kind, target.id) != null) {
             library.clearResume(target.kind, target.id)
+        }
+    }
+
+    /** Seasons of the playing series (from its info page), for the next episode after a watched one. */
+    private var playSeasons: List<TmdbSeason> = emptyList()
+
+    /** A watched episode: the series card moves to the next episode, or goes after the very last. */
+    private fun finishEpisode(target: com.enigmacast.data.db.IptvResumeRow, pos: Long, dur: Long) {
+        val tv = target.seriesId?.toIntOrNull() ?: return
+        when (val done = com.enigmacast.domain.resume.SeriesContinue.afterTorrent(playSeasons, target.season, target.episode)) {
+            com.enigmacast.domain.resume.EpisodeDone.Unknown ->
+                library.saveResume(target.copy(positionMs = pos, durationMs = dur, updatedMs = System.currentTimeMillis()))
+            com.enigmacast.domain.resume.EpisodeDone.SeriesDone ->
+                if (library.resumes.value.any { it.source == com.enigmacast.domain.torrent.TorrentLibraryRows.SOURCE && it.kind == "e" && it.seriesId == target.seriesId }) {
+                    library.removeSeries(target.kind, target.id)
+                }
+            is com.enigmacast.domain.resume.EpisodeDone.Next -> {
+                val nextId = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeId(tv, done.season, done.episode)
+                if (!com.enigmacast.domain.resume.SeriesContinue.keepNext(library.resume("e", nextId))) {
+                    library.saveResume(
+                        target.copy(
+                            id = nextId, title = "S${done.season}E${done.episode}", season = done.season, episode = done.episode,
+                            positionMs = 0L, durationMs = 0L, updatedMs = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+                if (library.resume(target.kind, target.id) != null) library.clearResume(target.kind, target.id)
+            }
         }
     }
 

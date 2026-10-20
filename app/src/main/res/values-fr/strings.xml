@@ -1506,4 +1506,5 @@
     <string name="sport_desc_world">La Coupe du monde de la FIFA, le plus grand tournoi du football, avec des sélections de tous les continents.</string>
     <string name="subs_switch_unseekable">Impossible de changer les sous-titres pendant ce flux : il n\'est pas possible d\'y naviguer. Choisissez-les avant la lecture.</string>
     <string name="seek_unseekable">Ce flux ne peut pas être avancé ni reculé.</string>
+    <string name="library_up_next">Épisode suivant</string>
 </resources>

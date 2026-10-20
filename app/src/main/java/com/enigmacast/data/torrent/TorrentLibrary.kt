@@ -40,4 +40,7 @@ class TorrentLibrary @Inject constructor(private val library: IptvLibrary) {
     fun saveResume(row: IptvResumeRow) = library.saveResume(row)
 
     fun clearResume(kind: String, id: String) = library.clearResume(TorrentLibraryRows.SOURCE, kind, id)
+
+    /** Every saved episode of the series of this row (the series left Continue watching). */
+    fun removeSeries(kind: String, id: String) = library.removeContinue(TorrentLibraryRows.SOURCE, kind, id)
 }
