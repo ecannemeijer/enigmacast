@@ -19,6 +19,8 @@ data class Profile(
     val avatar: Int = 0,
     val language: String? = null,
     val uuid: String = "",
+    /** When a photo from the phone was set (millis); 0 = the bundled [avatar]. The photo stays on this TV. */
+    val photo: Long = 0,
 )
 
 /**
