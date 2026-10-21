@@ -1,5 +1,7 @@
 package com.enigmacast.ui.dashboard
 
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.snapshotFlow
 import com.enigmacast.ui.theme.focusRequesterIf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -121,11 +123,23 @@ internal fun LiveBrowser(
     val tunedReference = guideModel.tunedReference
     val tunedIndex = ChannelListNavigation.channelFocusIndex(channels, tunedReference)
     val tunedExactly = channels.getOrNull(tunedIndex)?.reference.equals(tunedReference, ignoreCase = true)
+    // Written on every focus step but read only by effects and lambdas, so a step recomposes nothing.
     var focusedIndex by remember(bouquet) { mutableIntStateOf(tunedIndex) }
+    // What the screen shows (preview pane, the row focus returns to): follows focus once it rests.
+    var settledIndex by remember(bouquet) { mutableIntStateOf(tunedIndex) }
+    LaunchedEffect(bouquet) {
+        snapshotFlow { focusedIndex }.collectLatest { index ->
+            if (index != settledIndex) delay(com.enigmacast.domain.ui.FocusSettle.PREVIEW_MS)
+            settledIndex = index
+        }
+    }
     var handledEnter by remember { mutableIntStateOf(0) }
     LaunchedEffect(channels.size, bouquet) {
         if (channels.isEmpty()) return@LaunchedEffect
-        if (focusedIndex !in channels.indices) focusedIndex = tunedIndex.coerceIn(0, channels.lastIndex)
+        if (focusedIndex !in channels.indices) {
+            focusedIndex = tunedIndex.coerceIn(0, channels.lastIndex)
+            settledIndex = focusedIndex
+        }
     }
     LaunchedEffect(enterToken, guideModel.bouquets.size, channels.size) {
         if (enterToken == 0 || enterToken == handledEnter) return@LaunchedEffect
@@ -144,13 +158,14 @@ internal fun LiveBrowser(
         if (!focusPlayingChannel || channels.isEmpty()) return@LaunchedEffect
         guideModel.focusTunedInGrid()
         focusedIndex = tunedIndex.coerceIn(0, channels.lastIndex)
+        settledIndex = focusedIndex
         if (menuFocused()) {
             listState.scrollToItem(focusedIndex)
             listFocus.requestWhenReady()
         }
         onPlayingChannelFocused()
     }
-    val selected = channels.getOrNull(focusedIndex)
+    val selected = channels.getOrNull(settledIndex)
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         BouquetColumn(
             bouquets = guideModel.bouquets,
@@ -192,7 +207,7 @@ internal fun LiveBrowser(
                     .weight(1f)
                     .onFocusChanged { if (it.hasFocus) onRetreatTo(bouquetFocus) },
             ) {
-                itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }) { index, entry ->
+                itemsIndexed(channels, key = { index, entry -> "$index:${entry.reference}" }, contentType = { _, _ -> "channel" }) { index, entry ->
                     val events = grid.eventsOf(entry)
                     val now = events.firstOrNull { it.isAiring(nowSec) }
                     val next = now?.let { current -> events.firstOrNull { it.beginEpochSec >= current.endEpochSec } }
@@ -200,7 +215,7 @@ internal fun LiveBrowser(
                         onClick = { guideModel.tune(entry, onMiniPlayer, onFullscreen) },
                         selected = if (tunedExactly) index == tunedIndex else BouquetChannels.sameService(entry.reference, tunedReference),
                         modifier = Modifier
-                            .focusRequesterIf(index == focusedIndex, listFocus)
+                            .focusRequesterIf(index == settledIndex, listFocus)
                             .focusRequesterIf(index == 0, firstFocus)
                             .focusRequesterIf(index == channels.lastIndex && channels.lastIndex > 0, lastFocus)
                             .onFocusChanged { if (it.isFocused) focusedIndex = index }

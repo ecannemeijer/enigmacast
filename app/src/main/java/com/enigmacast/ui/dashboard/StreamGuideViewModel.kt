@@ -988,19 +988,33 @@ class StreamGuideViewModel @Inject constructor(
         bouquetPinned = false
     }
 
+    /**
+     * Focus resting on a bouquet shows its channels. Holding Up/Down passes many bouquets: each step
+     * only restarts the timer. Nothing observable changes until focus has rested
+     * [com.enigmacast.domain.ui.FocusSettle.BOUQUET_MS]; writing [selectedBouquetReference] on every
+     * step recomposed the whole Live browser (bouquets, channels, preview) per key repeat.
+     */
     fun previewBouquet(bouquet: BouquetEntry) {
-        if (bouquet.reference == selectedBouquetReference && bouquetLoaded) return
-        bouquetPinned = true
-        lastPressedReference = ""
-        selectedBouquetReference = bouquet.reference
+        if (bouquet.reference == selectedBouquetReference && bouquetLoaded) {
+            bouquetJob?.takeIf { pendingPreview != null }?.cancel()
+            pendingPreview = null
+            return
+        }
+        if (bouquet.reference == pendingPreview && bouquetJob?.isActive == true) return
+        pendingPreview = bouquet.reference
         val token = ++bouquetToken
         bouquetJob?.cancel()
         bouquetJob = viewModelScope.launch {
-            delay(500)
+            delay(com.enigmacast.domain.ui.FocusSettle.BOUQUET_MS)
             if (token != bouquetToken) return@launch
+            pendingPreview = null
+            bouquetPinned = true
+            lastPressedReference = ""
+            selectedBouquetReference = bouquet.reference
             showBouquet(bouquet, token)
         }
     }
+    private var pendingPreview: String? = null
 
     private suspend fun showBouquet(bouquet: BouquetEntry, token: Int) {
         val receiver = settingsRepository.current().activeReceiver() ?: return

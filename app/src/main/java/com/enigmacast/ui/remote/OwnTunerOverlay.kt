@@ -503,7 +503,10 @@ internal fun Picon(
 ) {
     var bitmap by remember(entry.reference, entry.picon) { mutableStateOf(cachedPicon(entry)) }
     LaunchedEffect(entry.reference, entry.picon) {
-        if (bitmap == null) bitmap = picon(entry)
+        if (bitmap != null) return@LaunchedEffect
+        // A row that is only scrolled past leaves before this and never loads its picon.
+        kotlinx.coroutines.delay(com.enigmacast.domain.ui.FocusSettle.PICON_MS)
+        bitmap = picon(entry)
     }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         val image = bitmap
