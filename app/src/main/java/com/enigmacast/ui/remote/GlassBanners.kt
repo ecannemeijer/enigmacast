@@ -97,7 +97,8 @@ private val DateFormat get() = DateTimeFormatter.ofPattern("EEE d MMM", Locale.g
 /**
  * Glass Earth, "orbit": a floating glass capsule centred at the bottom with a cyan horizon line on
  * its top edge, the picon in a glowing circle, the programme title large over a thin glowing arc
- * (the horizon) as progress, the clock on the channel line and the facts as small chips. The next
+ * (the horizon) as progress, the clock floating just above the capsule's right edge and the facts
+ * as small chips top right. The next
  * programme shares the time line, so the banner is one compact capsule.
  */
 @Composable
@@ -123,12 +124,29 @@ internal fun OrbitBanner(
     val fill = Brush.linearGradient(listOf(EnigmaColors.scrimOf(p.osdFill, scrim), EnigmaColors.scrimOf(p.osdFillEnd, scrim)))
     Column(
         modifier
-            .padding(start = EnigmaColors.SafeHorizontal, end = EnigmaColors.SafeHorizontal, top = 12.dp, bottom = if (docked) 0.dp else 18.dp)
+            .padding(start = EnigmaColors.SafeHorizontal, end = EnigmaColors.SafeHorizontal, top = 4.dp, bottom = if (docked) 0.dp else 18.dp)
             .fillMaxWidth()
             .appear(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(Modifier.widthIn(max = 1080.dp).fillMaxWidth()) {
+            // The clock floats just above the capsule, flush with its right edge, in a small glass
+            // chip. It is part of this column, so it fades in and out with the banner.
+            Text(
+                clockLabel(nowSec),
+                color = Color.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.55f), Offset(0f, 2f), 8f)),
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(bottom = 6.dp)
+                    .background(EnigmaColors.scrimOf(p.osdFill, scrim).copy(alpha = 0.55f), RoundedCornerShape(50))
+                    .glassSheen(RoundedCornerShape(50))
+                    .padding(horizontal = 14.dp, vertical = 2.dp),
+            )
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -169,9 +187,6 @@ internal fun OrbitBanner(
                         if (loading) EnigmaLoadingIndicator(Modifier.padding(start = 8.dp))
                         if (recording) RecordingDot(Modifier.padding(start = 8.dp))
                         if (tuner.status == TunerStatus.FULL) StatusPill(stringResource(R.string.osd_tuners_busy), p.danger)
-                        Spacer(Modifier.weight(1f))
-                        // The clock shares the channel line instead of a row of its own.
-                        Text(clockLabel(nowSec), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
                     }
                     if (current != null) {
                         Text(current.title.ifBlank { stringResource(R.string.osd_unknown_programme) }, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -199,7 +214,8 @@ internal fun OrbitBanner(
                     }
                 }
                 Spacer(Modifier.width(16.dp))
-                Column(Modifier.widthIn(min = 150.dp, max = 300.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                // The info chips take the clock's old place: top right inside the capsule.
+                Column(Modifier.align(Alignment.Top).widthIn(min = 150.dp, max = 300.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     info()
                 }
             }
