@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import kotlinx.coroutines.flow.collectLatest
 import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.skinCanvas
 import com.enigmacast.ui.theme.skinPane
@@ -522,6 +523,14 @@ fun ChannelEpgPanel(
     val nowIndex = events.indexOfFirst { it.isAiring(nowSec) }
         .let { if (it >= 0) it else events.indexOfFirst { event -> event.beginEpochSec >= nowSec }.coerceAtLeast(0) }
     var focusedIndex by remember(channel.reference) { mutableIntStateOf(nowIndex) }
+    // The details below follow focus once it rests, so holding Up/Down does not rebuild the panel per row.
+    var detailIndex by remember(channel.reference) { mutableIntStateOf(nowIndex) }
+    LaunchedEffect(channel.reference) {
+        androidx.compose.runtime.snapshotFlow { focusedIndex }.collectLatest { index ->
+            if (index != detailIndex) kotlinx.coroutines.delay(com.enigmacast.domain.ui.FocusSettle.PREVIEW_MS)
+            detailIndex = index
+        }
+    }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(channel.reference, events.size, ui.epgLoading) {
         if (events.isEmpty()) {
@@ -529,6 +538,7 @@ fun ChannelEpgPanel(
             return@LaunchedEffect
         }
         focusedIndex = nowIndex
+        detailIndex = nowIndex
         listState.scrollToItem(nowIndex)
         focus.requestWhenReady()
     }
@@ -588,7 +598,7 @@ fun ChannelEpgPanel(
                 }
             }
         }
-        val selected = events.getOrNull(focusedIndex) ?: events.first()
+        val selected = events.getOrNull(detailIndex) ?: events.first()
         Column(
             modifier = Modifier
                 .fillMaxWidth()

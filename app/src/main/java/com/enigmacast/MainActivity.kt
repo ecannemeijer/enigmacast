@@ -216,7 +216,28 @@ class MainActivity : ComponentActivity() {
         if (!AppLanguageStore.choose(this, language)) recreate()
     }
 
+    private val repeatGate = com.enigmacast.domain.ui.KeyRepeatGate()
+    private var framesDrawn = 0L
+    private val countFrame = android.view.Choreographer.FrameCallback { framesDrawn++ }
+
+    /** Held D-pad keys: one move per drawn frame, stale queued repeats dropped (see [KeyRepeatGate]). */
+    private fun dropRepeat(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> Unit
+            else -> return false
+        }
+        val accepted = repeatGate.accept(event.repeatCount, event.eventTime, android.os.SystemClock.uptimeMillis(), framesDrawn)
+        if (accepted) {
+            // Counts the next frame only; nothing runs while no key is held.
+            android.view.Choreographer.getInstance().removeFrameCallback(countFrame)
+            android.view.Choreographer.getInstance().postFrameCallback(countFrame)
+        }
+        return !accepted
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (dropRepeat(event)) return true
         if (appViewModel.updatePrompt != null) {
             return super.dispatchKeyEvent(event)
         }

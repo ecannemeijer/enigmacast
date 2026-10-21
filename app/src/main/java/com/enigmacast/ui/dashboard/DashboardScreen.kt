@@ -1317,7 +1317,7 @@ internal fun BouquetColumn(
                     )
                 }
             } else {
-                itemsIndexed(bouquets) { index, bouquet ->
+                itemsIndexed(bouquets, key = { index, b -> "$index:${b.reference}" }, contentType = { _, _ -> "bouquet" }) { index, bouquet ->
                     BouquetRow(
                         name = bouquet.name,
                         selected = bouquet.reference == selectedReference,
