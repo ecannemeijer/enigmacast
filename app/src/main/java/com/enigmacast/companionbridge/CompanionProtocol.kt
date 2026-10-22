@@ -47,6 +47,7 @@ object CompanionProtocol {
     const val TYPE_STATE_SETTINGS = "state.settings"
     const val TYPE_STATE_LIBRARY = "state.library"
     const val TYPE_STATE_RECENT = "state.recent"
+    const val TYPE_STATE_IPTV = "state.iptv"
     const val TYPE_FORM = "form"
     const val TYPE_TOAST = "toast"
     const val TYPE_CMD_KEY = "cmd.key"
@@ -84,7 +85,7 @@ object CompanionProtocol {
     }
 
     val CAPABILITIES = listOf(
-        "key", "nav", "zap", "volume", "player", "text.form", "settings", "photo", "profile", "library", "history", "state", "power",
+        "key", "nav", "zap", "volume", "player", "text.form", "settings", "photo", "profile", "library", "history", "iptv", "state", "power",
     )
 
     data class CompanionProfile(

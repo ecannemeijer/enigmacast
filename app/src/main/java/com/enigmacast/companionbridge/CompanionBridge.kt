@@ -15,6 +15,8 @@ import com.enigmacast.data.profile.AvatarPhotos
 import com.enigmacast.data.profile.ProfileCleanup
 import com.enigmacast.data.profile.ProfileStore
 import com.enigmacast.data.security.ProfilePinLock
+import com.enigmacast.data.xtream.IptvPlaylistLogin
+import com.enigmacast.data.xtream.IptvPlaylistStore
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.ChannelMemory
@@ -22,6 +24,8 @@ import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.domain.model.PlayerState
 import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.StreamMode
+import com.enigmacast.domain.model.IptvPlaylistKind
+import com.enigmacast.domain.model.IptvSourceMode
 import com.enigmacast.domain.profile.Profile
 import com.enigmacast.domain.profile.ProfileRules
 import com.enigmacast.domain.profile.ProfileState
@@ -114,6 +118,8 @@ class CompanionBridge @Inject constructor(
     private val formHost: CompanionFormHost,
     private val settingsHost: CompanionSettingsHost,
     private val libraryHost: CompanionLibraryHost,
+    private val playlist: IptvPlaylistStore,
+    private val syncEngine: com.enigmacast.data.enigmasync.EnigmaSyncEngine,
     private val photos: AvatarPhotos,
     private val pins: ProfilePinLock,
     private val cleanup: ProfileCleanup,
@@ -133,11 +139,15 @@ class CompanionBridge @Inject constructor(
     private var snapshot = CompanionSnapshot()
 
     private var server: CompanionServer? = null
+    private var nsd: CompanionNsd? = null
     private var activity: WeakReference<Activity>? = null
     private var stopJob: Job? = null
 
     @Volatile
     private var recentJsonState: JsonObject = buildJsonObject { }
+
+    @Volatile
+    private var iptvJsonState: JsonObject = emptyIptvJson()
 
     init {
         CompanionFormHub.host = formHost
@@ -170,6 +180,14 @@ class CompanionBridge @Inject constructor(
         }
         scope.launch {
             libraryHost.state.collect { server?.broadcastLibrary(libraryJson(it)) }
+        }
+        scope.launch {
+            combine(settings.settings, playlist.login) { current, login -> iptvJson(current, login) }
+                .distinctUntilChanged()
+                .collect { json ->
+                    iptvJsonState = json
+                    server?.broadcastIptv(json)
+                }
         }
         scope.launch {
             combine(settings.settings, profiles.state, ownTuner.state, playback.state) { s, p, o, pl ->
@@ -210,6 +228,8 @@ class CompanionBridge @Inject constructor(
     }
 
     fun shutdown() {
+        runCatching { nsd?.unregister() }
+        nsd = null
         runCatching { server?.stop() }
         server = null
         pairing.clear()
@@ -250,6 +270,7 @@ class CompanionBridge @Inject constructor(
     private fun start() {
         if (!BuildConfig.COMPANION_BRIDGE) return
         if (server != null) return
+        EnigmaLog.service("Companion-brug starten")
         scope.launch {
             val pin = runCatching { CompanionTls.pin() }.getOrElse { error ->
                 update { it.copy(error = "TLS: ${error.message ?: error.javaClass.simpleName}") }
@@ -270,16 +291,32 @@ class CompanionBridge @Inject constructor(
                 settings = { settingsHost.state.value?.let(::settingsJson) },
                 library = { libraryJson(libraryHost.state.value) },
                 recent = { recentJsonState },
+                iptv = { iptvJsonState },
                 onPhoto = { request -> savePhoto(request) },
                 onPhotoRead = { id -> readPhoto(id) },
                 onPhotoDelete = { id -> deletePhoto(id) },
                 onCommand = { envelope -> handleCommand(envelope) },
-                onClients = { count -> update { it.copy(clients = count) } },
+                onClients = { count ->
+                    update { it.copy(clients = count) }
+                    if (count > 0) scope.launch { peekRemoteIptv() }
+                },
                 log = { message -> EnigmaLog.service(message) },
             )
             val result = created.start()
             if (result.isSuccess) {
                 server = created
+                EnigmaLog.service("Companion-brug luistert op ${CompanionProtocol.PORT}")
+                main.post {
+                    nsd = CompanionNsd(context).also {
+                        it.register(
+                            serviceName = tvName(),
+                            id = tvId(),
+                            appVersion = BuildConfig.VERSION_NAME,
+                            pin = pin,
+                        )
+                    }
+                }
+                scope.launch { peekRemoteIptv() }
                 val code = pairing.newCode()
                 update {
                     it.copy(
@@ -304,6 +341,10 @@ class CompanionBridge @Inject constructor(
     }
 
     private fun stop() {
+        main.post {
+            nsd?.unregister()
+            nsd = null
+        }
         runCatching { server?.stop() }
         server = null
         pairing.clear()
@@ -406,6 +447,43 @@ class CompanionBridge @Inject constructor(
                 )
             },
         )
+    }
+
+    private fun emptyIptvJson(): JsonObject = buildJsonObject { put("configured", false) }
+
+    private fun iptvJson(settings: AppSettings, login: IptvPlaylistLogin): JsonObject {
+        val kind = when {
+            login.configured(settings.iptvPlaylistKind) -> settings.iptvPlaylistKind
+            login.configured(IptvPlaylistKind.M3U) -> IptvPlaylistKind.M3U
+            login.configured(IptvPlaylistKind.XTREAM) -> IptvPlaylistKind.XTREAM
+            else -> null
+        }
+        if (settings.iptvSource != IptvSourceMode.PLAYLIST || kind == null) return emptyIptvJson()
+        return iptvJson(kind, login, 0L, false)
+    }
+
+    private fun iptvJson(
+        kind: IptvPlaylistKind,
+        login: IptvPlaylistLogin,
+        updatedMs: Long,
+        fromSyncServer: Boolean,
+    ): JsonObject = buildJsonObject {
+        put("configured", true)
+        put("kind", kind.name)
+        put("m3uUrl", login.m3uUrl)
+        put("server", login.server)
+        put("username", login.username)
+        put("password", login.password)
+        put("updatedMs", updatedMs)
+        put("fromSyncServer", fromSyncServer)
+    }
+
+    private suspend fun peekRemoteIptv() {
+        if ((iptvJsonState["configured"] as? JsonPrimitive)?.booleanOrNull == true) return
+        val offer = runCatching { syncEngine.peekPlaylist() }.getOrNull() ?: return
+        val json = iptvJson(offer.kind, offer.login, offer.updatedMs, true)
+        iptvJsonState = json
+        server?.broadcastIptv(json)
     }
 
     private fun recentJson(settings: AppSettings): JsonObject {

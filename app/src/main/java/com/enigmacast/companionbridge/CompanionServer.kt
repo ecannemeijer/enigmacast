@@ -43,6 +43,7 @@ class CompanionServer(
     private val settings: () -> JsonObject?,
     private val library: () -> JsonObject?,
     private val recent: () -> JsonObject?,
+    private val iptv: () -> JsonObject?,
     private val onPhoto: suspend (PhotoRequest) -> PhotoResult,
     private val onPhotoRead: suspend (String) -> ByteArray?,
     private val onPhotoDelete: suspend (String) -> Boolean,
@@ -142,6 +143,14 @@ class CompanionServer(
     fun broadcastRecent(recentJson: JsonObject) {
         if (!running) return
         val envelope = CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_RECENT, recentJson)
+        clients.forEach { client ->
+            runCatching { client.send(envelope, client.nextSeq()) }.onFailure { clients.remove(client) }
+        }
+    }
+
+    fun broadcastIptv(iptvJson: JsonObject) {
+        if (!running) return
+        val envelope = CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_IPTV, iptvJson)
         clients.forEach { client ->
             runCatching { client.send(envelope, client.nextSeq()) }.onFailure { clients.remove(client) }
         }
@@ -276,6 +285,7 @@ class CompanionServer(
             settings()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_SETTINGS, it), 3) }
             library()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_LIBRARY, it), 4) }
             recent()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_RECENT, it), 5) }
+            iptv()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_IPTV, it), 6) }
         }
 
         var fragment: ByteArrayOutputStream? = null
