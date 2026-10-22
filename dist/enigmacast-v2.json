@@ -2,12 +2,12 @@
   "versionCode": 86,
   "versionName": "1.0.0-beta.83",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Standby/scherm-uit sluit nu alle streams en netwerkverbindingen; bij terugkomst worden HTTP-clients ververst. Inclusief IPTV-herstel en statuslogging.",
+  "notes": "Standby/scherm-uit sluit streams en netwerkverbindingen; bij terugkomst worden HTTP-clients ververst.",
   "companion": {
-    "versionCode": 112,
-    "versionName": "1.0.0-beta.13",
+    "versionCode": 113,
+    "versionName": "1.0.0-beta.14",
     "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-    "notes": "Enigma2- en IPTV-streams herstellen automatisch na wegvallen of stilstand; netwerkherstel, watchdog en begrensde retries.",
+    "notes": "IPTV blijft via bewaarde externe bron werken na wifi/mobiel wisselen; Xtream-zenders tonen echte now/next-EPG.",
     "sideloadFile": "enigmacast-companion.apk"
   }
 }
