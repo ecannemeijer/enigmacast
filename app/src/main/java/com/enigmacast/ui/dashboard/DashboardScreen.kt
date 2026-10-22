@@ -310,7 +310,7 @@ fun DashboardScreen(
     val myItemsModel: MyItemsViewModel = hiltViewModel()
     val accountModel: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
     val account by accountModel.account.collectAsState()
-    val premium = accountModel.isPremium(account)
+    val premium = accountModel.gate.isUnlocked()
     val xtreamAvailable = xtreamModel.detection.collectAsState().value?.available == true
     // IPTV live (not catch-up) that plays on behind the dashboard: the mini players show it.
     val iptvLive = xtreamModel.playingLive

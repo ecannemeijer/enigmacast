@@ -27,6 +27,9 @@ class PremiumGate @Inject constructor(
     fun isPremium(): Boolean =
         access.current().mode == AccessMode.PREMIUM && account.isSignedIn()
 
+    /** Free or a signed-in Premium account: every feature is open. */
+    fun isUnlocked(): Boolean = unlocked()
+
     fun canAddReceiver(count: Int): Boolean = unlocked()
 
     private fun unlocked(): Boolean =
