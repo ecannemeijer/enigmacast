@@ -22,6 +22,7 @@ import com.enigmacast.domain.sync.LibrarySync
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.withLock
 import com.enigmacast.sync.SyncScheduler
+import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -83,6 +84,11 @@ class EnigmaSyncEngine @Inject constructor(
 
     private suspend fun syncOnce() {
         val config = client.config() ?: return
+        EnigmaLog.service("sync: start host=${config.host}")
+        // Progress has priority: send the outbox before the slower profile/settings pass so
+        // stopping a film or episode reaches the receiver's API immediately.
+        runCatching { push(config) }
+            .onFailure { EnigmaLog.service("sync: push vooraf mislukt: ${it.message}") }
         runCatching {
             publishProfiles(config)
             val current = settings.current()
@@ -96,10 +102,14 @@ class EnigmaSyncEngine @Inject constructor(
                 }
             }
             pushSettings(config)
-        }
+        }.onFailure { EnigmaLog.service("sync: profiel/pull mislukt: ${it.message}") }
         runCatching { syncPlaylist(config) }
+            .onFailure { EnigmaLog.service("sync: playlist mislukt: ${it.message}") }
         runCatching { backfill(config) }
+            .onFailure { EnigmaLog.service("sync: backfill mislukt: ${it.message}") }
         runCatching { push(config) }
+            .onFailure { EnigmaLog.service("sync: push mislukt: ${it.message}") }
+        EnigmaLog.service("sync: klaar")
     }
 
     /**
@@ -130,7 +140,11 @@ class EnigmaSyncEngine @Inject constructor(
         val local = profiles.state.value.profiles.filter { it.uuid.isNotBlank() }
         val now = System.currentTimeMillis()
         local.forEach { profile ->
+            val signature = "${profile.name}|${profile.avatar}|${profile.language.orEmpty()}"
+            val key = "profile-published:${config.deviceId}:${profile.uuid}"
+            if (marks.getString(key, null) == signature) return@forEach
             runCatching { postProfile(config, profile.uuid, profile.name, profile.avatar, profile.language, false, now) }
+                .onSuccess { marks.edit().putString(key, signature).apply() }
         }
         val removed = profiles.deletedUuids()
         if (removed.isEmpty()) return
@@ -175,21 +189,49 @@ class EnigmaSyncEngine @Inject constructor(
         batch.settled.forEach { outbox.delete(it) }
     }
 
-    /** @return true when this pull carried a settings document for the profile. */
-    private suspend fun pull(config: SyncServerConfig, profileId: String): Boolean {
-        val cursor = outbox.cursor(profileId)?.cursor?.toIntOrNull() ?: 0
-        val text = client.request(config, "GET", "/api/v1/sync/pull?profileId=${java.net.URLEncoder.encode(profileId, "UTF-8")}&cursor=$cursor")
-        val root = JSONObject(text)
-        val changes = root.optJSONArray("changes")
-        var sawSettings = false
-        if (changes != null) {
-            for (i in 0 until changes.length()) {
-                val change = changes.getJSONObject(i)
-                if (change.optString("entity") == "settings") sawSettings = true
-                apply(profileId, change)
+    /** One pull page, retried because the receiver's old TLS stack occasionally drops a connection. */
+    private suspend fun fetchPullPage(config: SyncServerConfig, encodedProfile: String, cursor: Int): String {
+        var last: Exception? = null
+        repeat(4) { attempt ->
+            try {
+                return client.request(
+                    config,
+                    "GET",
+                    "/api/v1/sync/pull?profileId=$encodedProfile&cursor=$cursor&limit=${LibrarySync.PULL_CHUNK}",
+                )
+            } catch (error: Exception) {
+                last = error
+                EnigmaLog.service("sync: pull pagina mislukt (poging ${attempt + 1}): ${error.message}")
+                kotlinx.coroutines.delay(400)
             }
         }
-        outbox.putCursor(SyncCursorRow(profileId, root.optInt("cursor", cursor).toString()))
+        throw last ?: IllegalStateException("pull failed")
+    }
+
+    /** @return true when this pull carried a settings document for the profile. */
+    private suspend fun pull(config: SyncServerConfig, profileId: String): Boolean {
+        val encoded = java.net.URLEncoder.encode(profileId, "UTF-8")
+        var cursor = outbox.cursor(profileId)?.cursor?.toIntOrNull() ?: 0
+        var sawSettings = false
+        // The receiver returns at most 500 changes per request. Keep pulling pages until the
+        // cursor stops moving; the old single huge TLS response was the reason a TV pull died
+        // with BrokenPipe and never reached the local database.
+        while (true) {
+            val text = fetchPullPage(config, encoded, cursor)
+            val root = JSONObject(text)
+            val changes = root.optJSONArray("changes")
+            if (changes != null) {
+                for (i in 0 until changes.length()) {
+                    val change = changes.getJSONObject(i)
+                    if (change.optString("entity") == "settings") sawSettings = true
+                    apply(profileId, change)
+                }
+            }
+            val next = root.optInt("cursor", cursor)
+            outbox.putCursor(SyncCursorRow(profileId, next.toString()))
+            if (next <= cursor || changes == null || changes.length() < LibrarySync.PULL_CHUNK) break
+            cursor = next
+        }
         return sawSettings
     }
 
@@ -418,3 +460,5 @@ class EnigmaSyncEngine @Inject constructor(
         append('"')
     }
 }
+
+

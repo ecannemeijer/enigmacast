@@ -1,4 +1,4 @@
-package com.enigmacast.domain.sync
+﻿package com.enigmacast.domain.sync
 
 import com.enigmacast.data.db.IptvLibraryRow
 import com.enigmacast.data.db.IptvResumeRow
@@ -28,12 +28,14 @@ object LibrarySync {
     const val PROGRESS = "progress"
     /** Most changes sent in one push request. */
     const val PUSH_CHUNK = 100
+    /** Changes per pull page; the receiver caps its response at this size. */
+    const val PULL_CHUNK = 50
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     fun recordKey(source: String, kind: String, id: String) = "$source/$kind/$id"
 
-    /** "<source>/<kind>/<id>" → its parts; the id may itself contain "/". */
+    /** "<source>/<kind>/<id>" â†’ its parts; the id may itself contain "/". */
     fun parts(recordKey: String): Triple<String, String, String>? {
         val p = recordKey.split('/', limit = 3)
         if (p.size != 3 || p.any { it.isBlank() }) return null
@@ -194,3 +196,4 @@ object LibrarySync {
             SyncOutboxRow(changeId(recordKey(row.source, row.kind, row.id)), profileId, PROGRESS, "upsert", progressPayload(row), row.updatedMs, "")
         }
 }
+

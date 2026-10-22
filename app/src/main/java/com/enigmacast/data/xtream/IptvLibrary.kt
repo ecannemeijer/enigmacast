@@ -11,7 +11,7 @@ import com.enigmacast.domain.profile.ProfileState
 import com.enigmacast.domain.sync.LibrarySync
 import com.enigmacast.domain.xtream.XtreamItem
 import com.enigmacast.domain.xtream.XtreamSection
-import com.enigmacast.util.EnigmaLog
+
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -103,12 +103,10 @@ class IptvLibrary @Inject constructor(
     fun keepLatestEpisodePerSeries() {
         scope.launch {
             val rows = dao.resumes().first()
-                .filter { it.kind == "e" && !it.seriesId.isNullOrBlank() }
-            EnigmaLog.service("keepLatestEpisodePerSeries: ${rows.size} afleveringen")
+                .filter { it.kind == "e" && seriesKeyOf(it) != null }
             val now = System.currentTimeMillis()
-            rows.groupBy { Triple(it.profileId, it.source, it.seriesId) }.values.forEach { group ->
+            rows.groupBy { Triple(it.profileId, it.source, seriesKeyOf(it)) }.values.forEach { group ->
                 group.sortedByDescending { it.updatedMs }.drop(1).forEach { row ->
-                    EnigmaLog.service("serie-opruiming: ${row.seriesTitle} S${row.season}E${row.episode}")
                     deleteResume(row.profileId, row.source, row.kind, row.id, now)
                 }
             }
@@ -116,11 +114,22 @@ class IptvLibrary @Inject constructor(
         }
     }
 
-    private suspend fun trimSeries(profileId: String, source: String, seriesId: String) {
+    /**
+     * Phone progress carries no seriesId, but its title does contain the series name.
+     * Fall back to the title prefix so those rows are cleaned up too.
+     */
+    private fun seriesKeyOf(row: IptvResumeRow): String? {
+        row.seriesId?.takeIf { it.isNotBlank() }?.let { return it }
+        row.seriesTitle?.takeIf { it.isNotBlank() }?.let { return it }
+        val marker = SERIES_MARKER.find(row.title) ?: return null
+        return row.title.substring(0, marker.range.first).takeIf { it.isNotBlank() }
+    }
+
+    private suspend fun trimSeries(profileId: String, source: String, seriesKey: String) {
         dao.resumes().first()
             .filter {
                 it.profileId == profileId && it.kind == "e" &&
-                    it.source == source && it.seriesId == seriesId
+                    it.source == source && seriesKeyOf(it) == seriesKey
             }
             .sortedByDescending { it.updatedMs }
             .drop(1)
@@ -140,8 +149,8 @@ class IptvLibrary @Inject constructor(
             tombstones.clear(profileId, LibrarySync.PROGRESS, key(stamped.source, stamped.kind, stamped.id))
             enqueue(profileId, LibrarySync.PROGRESS, "upsert", stamped.updatedMs, LibrarySync.progressPayload(stamped))
             trigger.nudge()
-            if (stamped.kind == "e" && !stamped.seriesId.isNullOrBlank()) {
-                trimSeries(profileId, stamped.source, stamped.seriesId)
+            if (stamped.kind == "e") {
+                seriesKeyOf(stamped)?.let { trimSeries(profileId, stamped.source, it) }
             }
         }
     }
@@ -218,6 +227,7 @@ class IptvLibrary @Inject constructor(
     }
 
     companion object {
+        private val SERIES_MARKER = Regex(" - S\\d+E\\d+")
         fun key(source: String, kind: String, id: String) = "$source/$kind/$id"
         fun kindOf(section: XtreamSection) = if (section == XtreamSection.SERIES) "s" else "m"
     }

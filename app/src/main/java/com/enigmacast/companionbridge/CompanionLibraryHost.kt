@@ -45,7 +45,6 @@ class CompanionLibraryHost @Inject constructor(
         // Oude demo-/loopback-items uit de TV-bibliotheek verwijderen; ze mogen niet
         // via de Companion-brug naar de telefoon blijven terugkomen.
         library.removeDemoEntries()
-        library.keepLatestEpisodePerSeries()
     }
 
     val state: StateFlow<State> = combine(library.favorites, library.resumes) { favorites, resumes ->

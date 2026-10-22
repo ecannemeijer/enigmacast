@@ -1,13 +1,13 @@
 {
-  "versionCode": 82,
-  "versionName": "1.0.0-beta.79",
+  "versionCode": 84,
+  "versionName": "1.0.0-beta.81",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Verder kijken houdt per serie alleen de nieuwste aflevering; oudere afleveringen worden ook uit de sync verwijderd.",
+  "notes": "TV-sync haalt de bibliotheek nu in kleine pagina's op en herstelt een afgebroken pull; grote SSL-responses blokkeerden het opslaan.",
   "companion": {
-    "versionCode": 110,
-    "versionName": "1.0.0-beta.11",
+    "versionCode": 111,
+    "versionName": "1.0.0-beta.12",
     "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-    "notes": "Verder kijken toont één kaart per serie; VOD gebruikt de juiste container-extensie via get_vod_info.",
+    "notes": "OSD na 5 seconden weg, VOD met tijdlijn en -10/+30 seconden, juiste VOD-extensie en betrouwbare voortgang bij stoppen.",
     "sideloadFile": "enigmacast-companion.apk"
   }
 }

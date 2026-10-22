@@ -1567,7 +1567,10 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun togglePause() {
-        player?.let { it.playWhenReady = !it.playWhenReady }
+        player?.let {
+            if (it.playWhenReady) saveResume()
+            it.playWhenReady = !it.playWhenReady
+        }
     }
 
     /** Leaving the page: the stream stops, the lists stay for next time. */

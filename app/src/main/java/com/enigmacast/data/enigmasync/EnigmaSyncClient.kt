@@ -64,6 +64,7 @@ class EnigmaSyncClient @Inject constructor(
             .header("X-Timestamp", stamp)
             .header("X-Nonce", nonce)
             .header("X-Signature", signature)
+            .header("Connection", "close")
         val request = if (method == "GET") builder.get().build() else builder.post(body.toRequestBody(JSON)).build()
         client.newCall(request).execute().use { response ->
             val text = response.body.string()
@@ -165,7 +166,7 @@ class EnigmaSyncClient @Inject constructor(
             .sslSocketFactory(ssl.socketFactory, trust)
             .hostnameVerifier { hostname, _ -> hostname == host }
             .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
             .build()
     }
 
