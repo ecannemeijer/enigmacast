@@ -3,6 +3,8 @@
 package com.enigmacast.ui.xtream
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
@@ -49,6 +51,9 @@ import com.enigmacast.domain.xtream.XtreamEpisode
 import com.enigmacast.domain.xtream.XtreamItem
 import com.enigmacast.domain.xtream.XtreamSection
 import com.enigmacast.domain.xtream.XtreamUrls
+import com.enigmacast.domain.tuner.RestartBudget
+import com.enigmacast.playback.LiveLoadErrorHandlingPolicy
+import com.enigmacast.playback.StreamFailures
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -217,6 +222,21 @@ class XtreamViewModel @Inject constructor(
     var playing by mutableStateOf<XtreamPlaying?>(null)
         private set
     var playerError by mutableStateOf<String?>(null)
+    private val iptvRetries = RestartBudget(5, 1_000L, 8_000L)
+    private var iptvRecoveryJob: Job? = null
+    private var mediaAccount: XtreamAccount? = null
+    private var lastIptvPosition = -1L
+    private var lastIptvAdvanceAt = 0L
+    private var iptvStableSince = 0L
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            viewModelScope.launch {
+                if (playing == null) return@launch
+                iptvRetries.reset()
+                requestIptvRecovery("network available", immediate = true)
+            }
+        }
+    }
     var catchup by mutableStateOf(false)
         private set
     var showPipPicker by mutableStateOf(false)
@@ -819,11 +839,27 @@ class XtreamViewModel @Inject constructor(
                 val p = player ?: continue
                 // Stuck with nothing playable and not loading: reload at the position (empties the buffer).
                 val stuck = p.playbackState == Player.STATE_BUFFERING && p.playWhenReady
-                if (starved.update(stuck, p.isLoading, p.totalBufferedDuration, android.os.SystemClock.elapsedRealtime())) {
-                    EnigmaLog.player("iptv player starved (${p.totalBufferedDuration} ms buffered, not loading): reload")
-                    // Only a seekable stream: on an unseekable one this seek restarts it at 0.
-                    if (p.isCurrentMediaItemSeekable || mediaLive) p.seekTo(p.currentPosition)
-                    else EnigmaLog.subs("iptv starved at ${p.currentPosition}ms but not seekable: no reload seek")
+                val now = android.os.SystemClock.elapsedRealtime()
+                val position = p.currentPosition
+                if (p.playWhenReady && position > lastIptvPosition + 500) {
+                    lastIptvPosition = position
+                    lastIptvAdvanceAt = now
+                }
+                if (starved.update(stuck, p.isLoading, p.totalBufferedDuration, now)) {
+                    requestIptvRecovery("starved")
+                } else if (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING && now - lastIptvAdvanceAt >= 15_000L) {
+                    // Also recover when the loader itself is stuck (isLoading=true), not only
+                    // when Media3 refuses to load because the buffer is empty.
+                    requestIptvRecovery("no progress while buffering")
+                }
+                if (p.isPlaying) {
+                    if (iptvStableSince == 0L) iptvStableSince = now
+                    if (now - iptvStableSince >= 30_000L) {
+                        iptvRetries.reset()
+                        iptvStableSince = now
+                    }
+                } else {
+                    iptvStableSince = 0L
                 }
                 if (p.duration != C.TIME_UNSET && p.duration > 0) lastDurationMs = p.duration
                 val duration = com.enigmacast.playback.SubtitleSafety.durationFor(p.duration, lastDurationMs, catchupDurationMs)
@@ -860,6 +896,10 @@ class XtreamViewModel @Inject constructor(
     private var epgJob: Job? = null
 
     init {
+        runCatching {
+            context.getSystemService(ConnectivityManager::class.java)
+                ?.registerDefaultNetworkCallback(networkCallback)
+        }
         viewModelScope.launch {
             val playback = settingsRepository.current().playback
             playbackSubtitles = playback.subtitlesEnabled
@@ -1269,12 +1309,18 @@ class XtreamViewModel @Inject constructor(
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
             .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync))
             .setTrackSelector(selector)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
+                    .setLoadErrorHandlingPolicy(LiveLoadErrorHandlingPolicy()),
+            )
             .build()
             .also { p ->
                 p.addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
                         buffering = state == Player.STATE_BUFFERING
+                        if (state == Player.STATE_ENDED && mediaLive && !catchup && playing != null) {
+                            requestIptvRecovery("live stream ended")
+                        }
                         playerState = playerState.copy(
                             playbackState = when (state) {
                                 Player.STATE_BUFFERING -> "BUFFERING"
@@ -1322,17 +1368,77 @@ class XtreamViewModel @Inject constructor(
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        // The message never has the URL: only the error code name.
-                        EnigmaLog.networkError("Xtream playback: ${error.errorCodeName}")
-                        playerError = error.errorCodeName
-                        trySatelliteFallback()
+                        onIptvPlaybackError(error)
                     }
                 })
                 player = p
             }
     }
 
-    private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null, archive: Boolean = false) {
+    /**
+     * Rebuild the current IPTV item at the live edge, or at the last VOD position, within a
+     * small retry budget. A hard 4xx/auth/parse failure is not retried; it is shown instead.
+     */
+    private fun requestIptvRecovery(reason: String, immediate: Boolean = false) {
+        val what = playing ?: return
+        val account = mediaAccount ?: return
+        if (mediaUrl.isBlank()) return
+        if (iptvRecoveryJob?.isActive == true && !immediate) return
+        val delayMs = if (immediate) 0L else (iptvRetries.next() ?: run {
+            playerError = "STREAM_STALLED"
+            trySatelliteFallback()
+            return
+        })
+        iptvRecoveryJob?.cancel()
+        lastIptvAdvanceAt = android.os.SystemClock.elapsedRealtime()
+        EnigmaLog.player("iptv recovery ($reason), try ${iptvRetries.attempts}/${RestartBudget.MAX_ATTEMPTS} in ${delayMs}ms")
+        iptvRecoveryJob = viewModelScope.launch {
+            if (delayMs > 0) delay(delayMs)
+            if (playing !== what) return@launch
+            val position = if (mediaLive || catchup) 0L else player?.currentPosition ?: 0L
+            playerError = null
+            start(mediaUrl, what, mediaLive, account, position, resumeKey, catchup, automaticRetry = true)
+        }
+    }
+
+    private fun httpStatus(error: Throwable): Int? {
+        var current: Throwable? = error
+        var depth = 0
+        while (current != null && depth < 8) {
+            if (current is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return current.responseCode
+            current = current.cause
+            depth++
+        }
+        return null
+    }
+
+    private fun isPermanentIptvFailure(error: PlaybackException): Boolean {
+        val status = httpStatus(error)
+        if (status != null && status in 400..499) return true
+        return StreamFailures.classify(error) == com.enigmacast.domain.tuner.StreamFailure.PARSE
+    }
+
+    private fun onIptvPlaybackError(error: PlaybackException) {
+        if (StreamFailures.isCancellation(error)) return
+        EnigmaLog.networkError("Xtream playback: ${error.errorCodeName}")
+        if (isPermanentIptvFailure(error)) {
+            playerError = error.errorCodeName
+            trySatelliteFallback()
+            return
+        }
+        playerError = null
+        requestIptvRecovery(error.errorCodeName)
+    }
+
+    private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null, archive: Boolean = false, automaticRetry: Boolean = false) {
+        if (!automaticRetry) {
+            iptvRecoveryJob?.cancel()
+            iptvRetries.reset()
+        }
+        mediaAccount = account
+        lastIptvPosition = -1L
+        lastIptvAdvanceAt = android.os.SystemClock.elapsedRealtime()
+        iptvStableSince = 0L
         saveResume()
         resumeKey = resume
         // Playlist addresses can carry a login anywhere: only the section is logged for those.
@@ -1368,7 +1474,7 @@ class XtreamViewModel @Inject constructor(
             playWhenReady = true
         }
         if (!live && !archive) loadExternalSubtitles(what, account)
-        if (live && !archive) { tickJob?.cancel(); tickJob = null } else startTicker()
+        startTicker()
         val item = what.item
         if (live && !archive && item != null) {
             val recent = com.enigmacast.domain.model.LastChannel(item.id, item.name, item.categoryId)
@@ -1575,6 +1681,9 @@ class XtreamViewModel @Inject constructor(
 
     /** Leaving the page: the stream stops, the lists stay for next time. */
     fun stop() {
+        iptvRecoveryJob?.cancel()
+        iptvRecoveryJob = null
+        iptvRetries.reset()
         tickJob?.cancel()
         saveResume()
         resumeKey = null
@@ -1605,6 +1714,11 @@ class XtreamViewModel @Inject constructor(
         private set
 
     override fun onCleared() {
+        runCatching {
+            context.getSystemService(ConnectivityManager::class.java)
+                ?.unregisterNetworkCallback(networkCallback)
+        }
+        iptvRecoveryJob?.cancel()
         playbackOwner.unregister(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         player?.release()
         player = null
