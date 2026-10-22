@@ -1,8 +1,8 @@
 {
-  "versionCode": 85,
-  "versionName": "1.0.0-beta.82",
+  "versionCode": 86,
+  "versionName": "1.0.0-beta.83",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "IPTV-streams herstellen nu automatisch na een fout of stilstand, met netwerkherstel en een begrensd retry-budget.",
+  "notes": "Standby/scherm-uit sluit nu alle streams en netwerkverbindingen; bij terugkomst worden HTTP-clients ververst. Inclusief IPTV-herstel en statuslogging.",
   "companion": {
     "versionCode": 112,
     "versionName": "1.0.0-beta.13",

@@ -1105,10 +1105,21 @@ class LivePlaybackController @Inject constructor(
         player = null
     }
 
+    private fun httpStatus(error: Throwable): Int? {
+        var current: Throwable? = error
+        var depth = 0
+        while (current != null && depth < 8) {
+            if (current is HttpDataSource.InvalidResponseCodeException) return current.responseCode
+            current = current.cause
+            depth++
+        }
+        return null
+    }
+
     private val listener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             if (StreamFailures.isCancellation(error)) return
-            EnigmaLog.player("error ${error.errorCodeName}")
+            EnigmaLog.player("error ${error.errorCodeName} http=${httpStatus(error) ?: "-"}")
             if (internet) {
                 val exo = player
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && exo != null) {

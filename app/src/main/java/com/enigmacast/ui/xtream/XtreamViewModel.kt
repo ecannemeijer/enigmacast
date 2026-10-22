@@ -1420,7 +1420,7 @@ class XtreamViewModel @Inject constructor(
 
     private fun onIptvPlaybackError(error: PlaybackException) {
         if (StreamFailures.isCancellation(error)) return
-        EnigmaLog.networkError("Xtream playback: ${error.errorCodeName}")
+        EnigmaLog.networkError("Xtream playback: ${error.errorCodeName} http=${httpStatus(error) ?: "-"}")
         if (isPermanentIptvFailure(error)) {
             playerError = error.errorCodeName
             trySatelliteFallback()

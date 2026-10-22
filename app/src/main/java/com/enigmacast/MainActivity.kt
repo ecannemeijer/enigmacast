@@ -2,9 +2,12 @@ package com.enigmacast
 
 import android.app.Activity
 import android.app.SearchManager
+import android.content.BroadcastReceiver
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.KeyEvent
@@ -13,6 +16,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +44,8 @@ import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.remote.RemoteInputBus
 import com.enigmacast.companionbridge.CompanionBridge
 import com.enigmacast.companionbridge.CompanionHooks
+import com.enigmacast.data.network.OkHttpClientFactory
+import com.enigmacast.util.EnigmaLog
 import com.enigmacast.ui.AppScreen
 import com.enigmacast.ui.AppViewModel
 import com.enigmacast.ui.animation.ProvideEnigmaMotion
@@ -68,6 +75,29 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var receiverSwitcher: com.enigmacast.live.ReceiverSwitcher
     @Inject lateinit var settingsRepository: com.enigmacast.data.settings.SettingsRepository
     @Inject lateinit var iptvLibrary: com.enigmacast.data.xtream.IptvLibrary
+    @Inject lateinit var clients: OkHttpClientFactory
+    private var screenReceiverRegistered = false
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    EnigmaLog.player("screen off: stopping playback and closing streams")
+                    appViewModel.setForeground(false)
+                    appViewModel.stopForBackground()
+                    clients.evictIdleConnections()
+                    companionBridge.onBackground()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+                    EnigmaLog.player("screen on: refreshing network connections")
+                    clients.evictIdleConnections()
+                    appViewModel.setForeground(true)
+                    appViewModel.resumeFromBackground()
+                    companionBridge.onForeground(this@MainActivity)
+                }
+            }
+        }
+    }
     private var menuKeys: com.enigmacast.domain.remote.Bindings =
         com.enigmacast.domain.remote.KeyBindings.defaults(com.enigmacast.domain.remote.KeyMode.MENU)
     private val appViewModel: AppViewModel by viewModels()
@@ -83,6 +113,16 @@ class MainActivity : ComponentActivity() {
         insets.hide(WindowInsetsCompat.Type.systemBars())
         insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        ContextCompat.registerReceiver(
+            this,
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        screenReceiverRegistered = true
         appViewModel.requestFinish = { finish() }
         // The Companion bridge only knows these four hooks; the UI layer stays untouched.
         companionBridge.hooks = CompanionHooks().apply {
@@ -166,6 +206,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // A standby can leave dead keep-alive sockets behind; never reuse them.
+        clients.evictIdleConnections()
         appViewModel.setForeground(true)
         appViewModel.resumeFromBackground()
         companionBridge.onForeground(this)
@@ -176,14 +218,30 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         appViewModel.setForeground(false)
         // Not for a language restart (same activity again) or picture-in-picture (still visible).
-        if (!isChangingConfigurations && !isInPictureInPictureMode) appViewModel.stopForBackground()
+        if (!isChangingConfigurations && !isInPictureInPictureMode) {
+            appViewModel.stopForBackground()
+            clients.evictIdleConnections()
+        }
         companionBridge.onBackground()
         super.onStop()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            EnigmaLog.player("ui hidden: stopping playback and closing streams")
+            appViewModel.stopForBackground()
+            clients.evictIdleConnections()
+        }
     }
 
     override fun onDestroy() {
         if (isFinishing) appViewModel.stopForBackground()
         if (isFinishing) companionBridge.shutdown()
+        if (screenReceiverRegistered) {
+            runCatching { unregisterReceiver(screenReceiver) }
+            screenReceiverRegistered = false
+        }
         super.onDestroy()
     }
 

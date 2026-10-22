@@ -79,6 +79,17 @@ class OkHttpClientFactory @javax.inject.Inject constructor() {
         oneStream?.cancel()
     }
 
+    /**
+     * Drops idle keep-alive sockets after TV standby or app background. The next request then
+     * opens a fresh connection instead of reusing a socket the TV's network stack lost.
+     */
+    fun evictIdleConnections() {
+        synchronized(this) {
+            webifClient?.connectionPool?.evictAll()
+            streamClient?.connectionPool?.evictAll()
+        }
+    }
+
     /** Closes the stream and ignores new Enigma2 stream calls until [releaseStream]. */
     fun holdStreamClosed(): Int = streamCalls().let { (oneStream ?: return 0).holdClosed() }
 
