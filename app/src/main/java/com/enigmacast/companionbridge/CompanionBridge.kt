@@ -30,6 +30,7 @@ import com.enigmacast.domain.profile.Profile
 import com.enigmacast.domain.profile.ProfileRules
 import com.enigmacast.domain.profile.ProfileState
 import com.enigmacast.domain.security.PinCheck
+import com.enigmacast.domain.xtream.XtreamUrls
 import com.enigmacast.live.OwnTunerSession
 import com.enigmacast.live.OwnTunerState
 import com.enigmacast.playback.LivePlaybackController
@@ -56,6 +57,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -113,6 +115,7 @@ class CompanionBridge @Inject constructor(
     private val ownTuner: OwnTunerSession,
     private val playback: LivePlaybackController,
     private val openWebif: OpenWebifApi,
+    private val tunerSource: com.enigmacast.domain.source.TunerStatusSource,
     private val devices: CompanionDevices,
     private val auth: CompanionAuth,
     private val formHost: CompanionFormHost,
@@ -140,6 +143,20 @@ class CompanionBridge @Inject constructor(
 
     private var server: CompanionServer? = null
     private var nsd: CompanionNsd? = null
+    private var tunerJob: Job? = null
+    private var recordingJob: Job? = null
+
+    @Volatile
+    private var recordingsJson: JsonArray = buildJsonArray { }
+
+    @Volatile
+    private var receiverTunerUsed = 0
+
+    @Volatile
+    private var receiverTunerTotal = 0
+
+    @Volatile
+    private var receiverTunerStatus = "IDLE"
     private var activity: WeakReference<Activity>? = null
     private var stopJob: Job? = null
 
@@ -228,6 +245,10 @@ class CompanionBridge @Inject constructor(
     }
 
     fun shutdown() {
+        tunerJob?.cancel()
+        tunerJob = null
+        recordingJob?.cancel()
+        recordingJob = null
         runCatching { nsd?.unregister() }
         nsd = null
         runCatching { server?.stop() }
@@ -306,6 +327,8 @@ class CompanionBridge @Inject constructor(
             if (result.isSuccess) {
                 server = created
                 EnigmaLog.service("Companion-brug luistert op ${CompanionProtocol.PORT}")
+                startTunerPolling()
+                startRecordingPolling()
                 main.post {
                     nsd = CompanionNsd(context).also {
                         it.register(
@@ -340,7 +363,109 @@ class CompanionBridge @Inject constructor(
         }
     }
 
+    private fun startTunerPolling() {
+        tunerJob?.cancel()
+        tunerJob = scope.launch {
+            while (true) {
+                refreshReceiverTuners()
+                delay(15_000)
+            }
+        }
+    }
+
+    /**
+     * De eigen-tunerstatus is alleen gevuld als de TV zelf een stream start. In volgmodus
+     * halen we de echte bezetting bij de receiver op, zodat de telefoon niet 0/0 toont.
+     */
+    private suspend fun refreshReceiverTuners() {
+        val receiver = settings.current().activeReceiver()
+        if (receiver == null) {
+            if (receiverTunerTotal != 0 || receiverTunerUsed != 0) {
+                receiverTunerUsed = 0
+                receiverTunerTotal = 0
+                receiverTunerStatus = "IDLE"
+                snapshot = snapshot.copy(tunerUsed = 0, tunerTotal = 0, tunerStatus = "IDLE")
+                server?.broadcastState()
+            }
+            return
+        }
+        val tuner = runCatching { tunerSource.snapshot(receiver) }.getOrNull() ?: return
+        val total = tuner.tuners.size
+        val used = tuner.tuners.count {
+            it.live.isNotBlank() || it.recording.isNotBlank() || it.stream.isNotBlank()
+        }
+        val status = when {
+            total == 0 -> "IDLE"
+            used >= total -> "FULL"
+            used > 0 -> "PLAYING"
+            else -> "IDLE"
+        }
+        if (used != receiverTunerUsed || total != receiverTunerTotal || status != receiverTunerStatus) {
+            receiverTunerUsed = used
+            receiverTunerTotal = total
+            receiverTunerStatus = status
+            snapshot = snapshot.copy(
+                tunerUsed = used,
+                tunerTotal = total,
+                tunerStatus = status,
+            )
+            server?.broadcastState()
+        }
+    }
+
+    private fun startRecordingPolling() {
+        recordingJob?.cancel()
+        recordingJob = scope.launch {
+            while (true) {
+                refreshRecordings()
+                delay(60_000)
+            }
+        }
+    }
+
+    private suspend fun refreshRecordings() {
+        val receiver = settings.current().activeReceiver()
+        if (receiver == null) {
+            if (recordingsJson.isNotEmpty()) {
+                recordingsJson = buildJsonArray { }
+                server?.broadcastLibrary(libraryJson(libraryHost.state.value))
+            }
+            return
+        }
+        val movies = runCatching { openWebif.movies(receiver) }.getOrNull() ?: return
+        EnigmaLog.service("recordings: ${movies.size} op ${receiver.host}")
+        val authorization = if (receiver.username.isBlank()) {
+            ""
+        } else {
+            "Basic " + java.util.Base64.getEncoder().encodeToString(
+                "${receiver.username}:${receiver.password}".toByteArray(Charsets.UTF_8),
+            )
+        }
+        val fresh = buildJsonArray {
+            movies.forEach { movie ->
+                add(
+                    buildJsonObject {
+                        put("title", movie.name.ifBlank { movie.filename.substringAfterLast('/') })
+                        put("channel", movie.serviceName)
+                        put("url", openWebif.recordedFileUrl(receiver, movie.filename))
+                        put("startMs", movie.begin * 1000)
+                        put("durationMs", movie.lengthSec * 1000)
+                        put("authorization", authorization)
+                    },
+                )
+            }
+        }
+        if (fresh != recordingsJson) {
+            recordingsJson = fresh
+            server?.broadcastLibrary(libraryJson(libraryHost.state.value))
+        }
+    }
+
     private fun stop() {
+        tunerJob?.cancel()
+        tunerJob = null
+        recordingJob?.cancel()
+        recordingJob = null
         main.post {
             nsd?.unregister()
             nsd = null
@@ -394,9 +519,9 @@ class CompanionBridge @Inject constructor(
             playing = player.playing,
             paused = player.timeshiftPaused,
             positionMs = player.positionMs,
-            tunerUsed = own.tuner.used,
-            tunerTotal = own.tuner.total,
-            tunerStatus = own.tuner.status.name,
+            tunerUsed = if (own.tuner.total > 0) own.tuner.used else receiverTunerUsed,
+            tunerTotal = if (own.tuner.total > 0) own.tuner.total else receiverTunerTotal,
+            tunerStatus = if (own.tuner.total > 0) own.tuner.status.name else receiverTunerStatus,
             source = if (channel != null) "enigma2" else "idle",
             screenApp = hooks.screenName(),
         )
@@ -507,40 +632,57 @@ class CompanionBridge @Inject constructor(
         }
     }
 
-    private fun libraryJson(state: CompanionLibraryHost.State): JsonObject = buildJsonObject {
-        putJsonArray("favorites") {
-            state.favorites.forEach { row ->
-                add(
-                    buildJsonObject {
-                        put("title", row.title)
-                        put("url", row.url)
-                        put("source", row.source)
-                        put("kind", row.kind)
-                        put("id", row.id)
-                        put("positionMs", 0L)
-                        put("durationMs", 0L)
-                        put("favorite", true)
-                        put("updatedMs", row.addedMs)
-                    },
-                )
+    private fun libraryJson(state: CompanionLibraryHost.State): JsonObject {
+        val account = playlist.login.value.xtreamAccount()
+        fun streamUrl(rowUrl: String, source: String, kind: String, id: String, extension: String): String {
+            if (rowUrl.isNotBlank()) return rowUrl
+            val sourceAccount = account?.takeIf { it.key == source } ?: return ""
+            return when (kind) {
+                "m" -> XtreamUrls.movie(sourceAccount, id, extension)
+                "e" -> XtreamUrls.episode(sourceAccount, id, extension)
+                else -> ""
             }
         }
-        putJsonArray("resume") {
-            state.resumes.forEach { row ->
-                add(
-                    buildJsonObject {
-                        put("title", row.title)
-                        put("url", row.url)
-                        put("source", row.source)
-                        put("kind", row.kind)
-                        put("id", row.id)
-                        put("positionMs", row.positionMs)
-                        put("durationMs", row.durationMs)
-                        put("favorite", false)
-                        put("updatedMs", row.updatedMs)
-                    },
-                )
+        return buildJsonObject {
+            putJsonArray("favorites") {
+                state.favorites.forEach { row ->
+                    if (row.source == "torrent" || row.title.isBlank()) return@forEach
+                    add(
+                        buildJsonObject {
+                            put("title", row.title)
+                            put("url", streamUrl(row.url, row.source, row.kind, row.id, row.extension))
+                            put("source", row.source)
+                            put("kind", row.kind)
+                            put("id", row.id)
+                            put("positionMs", 0L)
+                            put("durationMs", 0L)
+                            put("favorite", true)
+                            put("updatedMs", row.addedMs)
+                            put("extension", row.extension)
+                        },
+                    )
+                }
             }
+            putJsonArray("resume") {
+                state.resumes.forEach { row ->
+                    if (row.source == "torrent" || row.title.isBlank()) return@forEach
+                    add(
+                        buildJsonObject {
+                            put("title", row.title)
+                            put("url", streamUrl(row.url, row.source, row.kind, row.id, row.extension))
+                            put("source", row.source)
+                            put("kind", row.kind)
+                            put("id", row.id)
+                            put("positionMs", row.positionMs)
+                            put("durationMs", row.durationMs)
+                            put("favorite", false)
+                            put("updatedMs", row.updatedMs)
+                            put("extension", row.extension)
+                        },
+                    )
+                }
+            }
+            put("recordings", recordingsJson)
         }
     }
 
@@ -1039,3 +1181,4 @@ class CompanionBridge @Inject constructor(
         const val MAX_PROFILES = 6
     }
 }
+

@@ -1,13 +1,13 @@
 {
-  "versionCode": 76,
-  "versionName": "1.0.0-beta.73",
+  "versionCode": 82,
+  "versionName": "1.0.0-beta.79",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Companion bridge: phone remote, full settings, profiles/photos, live/IPTV on the phone and a shared library. The Companion app is distributed separately (see the companion block).",
+  "notes": "Verder kijken houdt per serie alleen de nieuwste aflevering; oudere afleveringen worden ook uit de sync verwijderd.",
   "companion": {
-    "versionCode": 103,
-    "versionName": "1.0.0-beta.4",
+    "versionCode": 110,
+    "versionName": "1.0.0-beta.11",
     "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-    "notes": "Automatische tv-detectie via mDNS met lokale-netwerkpermissie op Android 16+; in-app updatemelding; TV-launcher-icoon; IPTV-sync en fullscreen speler.",
-    "sideloadFile": "EnigmaCast-Companion-1.0.0-beta.4-build103-sideload.apk"
+    "notes": "Verder kijken toont één kaart per serie; VOD gebruikt de juiste container-extensie via get_vod_info.",
+    "sideloadFile": "enigmacast-companion.apk"
   }
 }

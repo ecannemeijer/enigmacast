@@ -433,6 +433,9 @@ class OpenWebifApi @Inject constructor(
         return parsed { OpenWebifJson.parseMovies(get(config, endpoints.movieList(config))) }
     }
 
+    /** Direct download/stream URL for a receiver movie path. */
+    fun recordedFileUrl(config: ReceiverConfig, path: String): String = endpoints.recordedFile(config, path)
+
     suspend fun deleteMovie(config: ReceiverConfig, serviceReference: String) {
         get(config, endpoints.movieDelete(config, serviceReference))
     }

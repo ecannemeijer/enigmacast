@@ -40,6 +40,14 @@ class CompanionLibraryHost @Inject constructor(
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // Oude demo-/loopback-items uit de TV-bibliotheek verwijderen; ze mogen niet
+        // via de Companion-brug naar de telefoon blijven terugkomen.
+        library.removeDemoEntries()
+        library.keepLatestEpisodePerSeries()
+    }
+
     val state: StateFlow<State> = combine(library.favorites, library.resumes) { favorites, resumes ->
         State(favorites, resumes)
     }.stateIn(scope, SharingStarted.Eagerly, State())
@@ -47,6 +55,7 @@ class CompanionLibraryHost @Inject constructor(
     /** Returns false for an unknown action or an incomplete entry. */
     fun apply(action: String, entry: Entry): Boolean {
         if (entry.source.isBlank() || entry.kind.isBlank() || entry.id.isBlank()) return false
+        if (isDemoUrl(entry.url)) return false
         return when (action) {
             "FAVORITE" -> {
                 library.setFavorite(
@@ -87,9 +96,15 @@ class CompanionLibraryHost @Inject constructor(
                         episode = 0,
                     ),
                 )
+                library.keepLatestEpisodePerSeries()
                 true
             }
             else -> false
         }
+    }
+
+    private fun isDemoUrl(url: String): Boolean {
+        val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase().orEmpty()
+        return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "0.0.0.0"
     }
 }

@@ -11,6 +11,7 @@ import com.enigmacast.domain.profile.ProfileState
 import com.enigmacast.domain.sync.LibrarySync
 import com.enigmacast.domain.xtream.XtreamItem
 import com.enigmacast.domain.xtream.XtreamSection
+import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -76,7 +77,60 @@ class IptvLibrary @Inject constructor(
     val returnTo = MutableStateFlow<String?>(null)
     val openRequest = MutableStateFlow<IptvOpenRequest?>(null)
 
-    init { scope.launch { migratePrefs() } }
+    init {
+        scope.launch {
+            migratePrefs()
+            // Ook zonder geopende Companion-brug opruimen, zodat Verder kijken nooit
+            // meerdere afleveringen van dezelfde serie houdt.
+            keepLatestEpisodePerSeries()
+        }
+    }
+
+    /** Verwijdert oude demo-/loopback-items uit de IPTV-bibliotheek (en uit de sync). */
+    fun removeDemoEntries() {
+        val profileId = profiles.state.value.activeUuid
+        scope.launch {
+            dao.favorites().first()
+                .filter { it.profileId == profileId && isDemoUrl(it.url) }
+                .forEach { setFavorite(it, false) }
+            dao.resumes().first()
+                .filter { it.profileId == profileId && isDemoUrl(it.url) }
+                .forEach { clearResume(it.source, it.kind, it.id) }
+        }
+    }
+
+    /** Houdt per serie alleen de nieuwste aflevering in Verder kijken; de rest gaat ook uit de sync. */
+    fun keepLatestEpisodePerSeries() {
+        scope.launch {
+            val rows = dao.resumes().first()
+                .filter { it.kind == "e" && !it.seriesId.isNullOrBlank() }
+            EnigmaLog.service("keepLatestEpisodePerSeries: ${rows.size} afleveringen")
+            val now = System.currentTimeMillis()
+            rows.groupBy { Triple(it.profileId, it.source, it.seriesId) }.values.forEach { group ->
+                group.sortedByDescending { it.updatedMs }.drop(1).forEach { row ->
+                    EnigmaLog.service("serie-opruiming: ${row.seriesTitle} S${row.season}E${row.episode}")
+                    deleteResume(row.profileId, row.source, row.kind, row.id, now)
+                }
+            }
+            trigger.nudge()
+        }
+    }
+
+    private suspend fun trimSeries(profileId: String, source: String, seriesId: String) {
+        dao.resumes().first()
+            .filter {
+                it.profileId == profileId && it.kind == "e" &&
+                    it.source == source && it.seriesId == seriesId
+            }
+            .sortedByDescending { it.updatedMs }
+            .drop(1)
+            .forEach { clearResume(it.source, it.kind, it.id) }
+    }
+
+    private fun isDemoUrl(url: String): Boolean {
+        val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase().orEmpty()
+        return host == "127.0.0.1" || host == "localhost" || host == "::1" || host == "0.0.0.0"
+    }
 
     fun saveResume(row: IptvResumeRow) {
         val profileId = profiles.state.value.activeUuid
@@ -86,6 +140,9 @@ class IptvLibrary @Inject constructor(
             tombstones.clear(profileId, LibrarySync.PROGRESS, key(stamped.source, stamped.kind, stamped.id))
             enqueue(profileId, LibrarySync.PROGRESS, "upsert", stamped.updatedMs, LibrarySync.progressPayload(stamped))
             trigger.nudge()
+            if (stamped.kind == "e" && !stamped.seriesId.isNullOrBlank()) {
+                trimSeries(profileId, stamped.source, stamped.seriesId)
+            }
         }
     }
 
