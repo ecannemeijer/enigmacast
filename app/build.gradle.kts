@@ -14,14 +14,16 @@ android {
         applicationId = libs.versions.applicationId.get()
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 67
-        versionName = "1.0.0-beta.64"
+        versionCode = 76
+        versionName = "1.0.0-beta.73"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey()}\"")
         buildConfigField("String", "FOOTBALL_DATA_API_KEY", "\"${localProperty("FOOTBALL_DATA_API_KEY")}\"")
         buildConfigField("String", "PITCH_API_KEY", "\"${localProperty("PITCH_API_KEY")}\"")
         buildConfigField("String", "SUBSOURCE_API_KEY", "\"${localProperty("SUBSOURCE_API_KEY")}\"")
         // EnigmaCast accounts (VelixaTV API server). Not a secret.
         buildConfigField("String", "ACCOUNT_API_URL", "\"https://api.velixatv.com/\"")
+        // The phone bridge (Companion). Remove or set false to build EnigmaCast without it.
+        buildConfigField("boolean", "COMPANION_BRIDGE", "true")
     }
 
     // The app's languages (see AppLanguage and res/xml/locales_config.xml); other library translations are left out.

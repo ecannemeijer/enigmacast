@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -95,6 +96,9 @@ fun ReceiverSetup(
             if (onSettings != null) {
                 CompactButton(stringResource(R.string.settings), onSettings)
             }
+            if (step != ReceiverSetupStep.Choose) {
+                PhoneFillButton(viewModel)
+            }
         }
         when (step) {
             ReceiverSetupStep.Choose -> Unit
@@ -135,6 +139,48 @@ fun ReceiverSetup(
             }
         }
     }
+}
+
+@Composable
+private fun PhoneFillButton(viewModel: ConnectionViewModel) {
+    val host = com.enigmacast.companionbridge.CompanionFormHub.host ?: return
+    var formId by remember { mutableStateOf<String?>(null) }
+    val title = stringResource(R.string.companion_receiver_form)
+    val address = stringResource(R.string.field_host)
+    val username = stringResource(R.string.field_username)
+    val password = stringResource(R.string.field_password)
+    DisposableEffect(Unit) {
+        onDispose { formId?.let { host.close(it) } }
+    }
+    CompactButton(
+        stringResource(R.string.companion_fill_phone),
+        {
+            formId = host.openForm(
+                title = title,
+                fields = listOf(
+                    com.enigmacast.companionbridge.CompanionFormHost.FieldSpec(
+                        id = "host",
+                        label = address,
+                        type = "HOST",
+                        value = viewModel.host,
+                    ) { viewModel.host = it },
+                    com.enigmacast.companionbridge.CompanionFormHost.FieldSpec(
+                        id = "username",
+                        label = username,
+                        type = "TEXT",
+                        value = viewModel.username,
+                    ) { viewModel.username = it },
+                    com.enigmacast.companionbridge.CompanionFormHost.FieldSpec(
+                        id = "password",
+                        label = password,
+                        type = "PASSWORD",
+                        value = viewModel.password,
+                        masked = true,
+                    ) { viewModel.password = it },
+                ),
+            )
+        },
+    )
 }
 
 @Composable

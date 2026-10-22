@@ -1,0 +1,25 @@
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"play","data":{"name":"Film1 Premiere HD","url":"http://192.168.1.209:8001/1%3A0%3A19%3A51DB%3AC96%3A3%3AEB0000%3A0%3A0%3A0%3A"},"timestamp":1792222565241}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222565265}
+{"sessionId":"d0c56b","hypothesisId":"B","location":"PipController","message":"decoder","data":{"name":"c2.android.avc.decoder"},"timestamp":1792222567949}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222568515}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222568592}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222571179}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222571191}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222582065}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222582080}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222589549}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222589558}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222594675}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222594690}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222599492}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222599498}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222601189}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222601198}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222614003}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222614021}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":1,"error":""},"timestamp":1792222775606}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"play","data":{"name":"ESPN 2 HD","url":"http://192.168.1.209:8001/1%3A0%3A19%3A1BFC%3AC88%3A3%3AEB0000%3A0%3A0%3A0%3A"},"timestamp":1792222805438}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222805457}
+{"sessionId":"d0c56b","hypothesisId":"B","location":"PipController","message":"decoder","data":{"name":"c2.android.avc.decoder"},"timestamp":1792222806987}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":3,"error":""},"timestamp":1792222807645}
+{"sessionId":"d0c56b","hypothesisId":"A","location":"PipController","message":"state","data":{"state":2,"error":""},"timestamp":1792222807911}

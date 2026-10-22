@@ -36,6 +36,7 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 - [Stream type](#stream-type): Normal, Transcoded (receiver hardware encoder) or Automatic (steps quality down/up on stalls when away from home).
 - Picture-in-picture (satellite or IPTV source) and a fallback that plays the same channel from the other source (satellite ↔ IPTV) when a channel drops out.
 - Several receivers, power controls (standby, wake, reboot, GUI restart, sleep timer), signal meter and an Oscam page.
+- Phone remote (Companion bridge): the EnigmaCast Companion app on your phone controls this TV over the local network; Settings › Phone & remote pairs it with a six-digit code. HTTPS + WebSocket on port 8750, TLS pinned, only while EnigmaCast is on screen. See [Phone remote](#phone-remote-companion-bridge).
 
 **EPG, bouquets and cache**
 - [TV guide](#tv-guide) grid (seven days ahead), per-channel programme panel, bouquet selection per page.
@@ -381,7 +382,7 @@ An account (e-mail + password) unlocks Premium; it is optional (the setup wizard
 - A new account gets a Premium trial (14 days; 1 year during the beta). The length is decided by the account server (`premium_until`, `is_trial`), not by the app; each account has a device limit. The plan is checked on start and every 6 hours; offline, the cached answer is honoured for 14 days, never past `premium_until`. All rules are in `domain/account/Entitlements.kt`. Locked items show a lock and open the Premium dialog.
 - Settings › Lock can ask for a 4-digit PIN before Settings opens (PBKDF2-SHA256 in the secret store; 5 tries, then a 30 s wait).
 
-**Update manifest.** The app reads `dist/enigmacast-v2.json` (published with the release); older builds read `dist/enigmacast.json`, which may mark a release that needs a reinstall (`reinstallRequired`, `reinstallMessage`, `reinstallMessageNl`). The update dialog then only offers OK.
+**Update manifest.** The app reads `dist/enigmacast-v2.json` (published with the release); older builds read `dist/enigmacast.json`, which may mark a release that needs a reinstall (`reinstallRequired`, `reinstallMessage`, `reinstallMessageNl`). The update dialog then only offers OK. The same manifest can carry a `companion` object with the phone app's version and APK; the TV ignores unknown keys, so the combined file stays backwards-compatible.
 
 ### AutoSwitch
 
@@ -493,6 +494,35 @@ Right from Settings opens a submenu, in this order. Each page groups its options
 - About: Run setup wizard again, version and build, debug overlay, verbose logging, OSD border, and the TMDB attribution.
 
 The old RC Info page is gone; the keys are now listed (and changeable) under Remote control keys.
+
+### Phone remote (Companion bridge)
+
+Settings › Phone & remote turns this TV into a Companion host. The EnigmaCast Companion app
+on an Android phone pairs once with a six-digit code and then controls the TV: D-pad, OK,
+Back, Home, Menu, media keys, zapping, volume, profiles and power. Pairing also stores the
+phone's public key; every later request is signed (ECDSA P-256) and the connection is pinned
+to the TV's certificate.
+
+- One port (8750) serves HTTPS and the WebSocket; TLS 1.2/1.3 with a key in the Android Keystore.
+- The bridge runs only while EnigmaCast is on screen: it starts in `onStart` and stops 30 s
+  after `onStop`. Nothing goes through the internet.
+- Settings shows the pairing code (valid for two minutes), the certificate pin and the paired
+  phones; a phone can be revoked per device.
+- Text input: press OK on any text field (search, receiver login, settings) and type on the
+  phone; the TV updates live. Passwords stay masked and are never echoed back. A Test field
+  under Settings › Phone demonstrates it without a receiver.
+- Settings: the phone shows the full user-settings catalog (24 entries in Display,
+  Playback, Startup, Remote and Debug; switches, choices and sliders) and writes it through
+  the same settings store as this UI. Dangerous entries ask for confirmation; with a
+  Settings PIN they are hidden and rejected. Profile management: create (max. six), rename,
+  choose an avatar, delete (with cleanup) and clear a photo; profile PINs are enforced, and
+  photo upload is blocked for PIN profiles.
+- Live and IPTV: the phone also plays Enigma2 channels and IPTV directly (OpenWebif +
+  Media3), without this TV app running. See the companion repository's
+  `docs/playback.md`.
+- Code: `app/src/main/java/com/enigmacast/companionbridge/`. The feature is behind the
+  `COMPANION_BRIDGE` BuildConfig flag; see the Companion repository's `docs/tv-bridge.md` for
+  the protocol and the test.
 
 **Remote control keys.** One card per viewing mode (the mode in use first). Each action shows its keys: channel up/down, channel list, programme info, channel banner, options bar, TV guide, search, record, pause/resume, next audio track, next subtitles, next picture mode (own tuner); options bar, guide, search, record, audio, subtitles and picture mode (follow receiver). OK on an action offers Assign a key, Remove keys, Default keys. Assign waits for a key press; holding the key past the long-press time assigns a long press (so Info and held Info can do different things). A key already used by another action asks before it moves. Reset to default keys restores a mode. OK, Back and the number keys are fixed. Following the receiver, keys without an app action still go to the receiver. Stored in `remote.keyBindings`; defaults equal the previous behaviour (plus Play/Pause, Rec, Audio, Captions, Search and Blue = options bar on the own tuner).
 

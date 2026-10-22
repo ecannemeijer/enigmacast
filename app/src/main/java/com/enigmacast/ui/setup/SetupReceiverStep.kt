@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,6 +89,15 @@ fun WizardReceiverSetup(
     var loginNeeded by rememberSaveable { mutableStateOf(false) }
     var advanced by rememberSaveable { mutableStateOf(false) }
     var autoStarted by rememberSaveable { mutableStateOf(false) }
+    val phoneHost = com.enigmacast.companionbridge.CompanionFormHub.host
+    var phoneFormId by remember { mutableStateOf<String?>(null) }
+    val addressLabel = stringResource(R.string.setup_receiver_address)
+    val usernameLabel = stringResource(R.string.field_username)
+    val passwordLabel = stringResource(R.string.field_password)
+    val receiverFormTitle = stringResource(R.string.companion_receiver_form)
+    DisposableEffect(Unit) {
+        onDispose { phoneFormId?.let { id -> phoneHost?.close(id) } }
+    }
     LaunchedEffect(Unit) {
         // A first run searches straight away; a re-run from Settings keeps the receiver it has.
         if (!autoStarted && !viewModel.hasSavedReceiver) {
@@ -184,6 +195,39 @@ fun WizardReceiverSetup(
             ::connect,
             enabled = !viewModel.busy,
         )
+        if (phoneHost != null && mode != ReceiverMode.NONE) {
+            val host = phoneHost
+            TvButton(
+                stringResource(R.string.companion_fill_phone),
+                {
+                    phoneFormId = host.openForm(
+                        title = receiverFormTitle,
+                        fields = listOf(
+                            com.enigmacast.companionbridge.CompanionFormHost.FieldSpec(
+                                id = "host",
+                                label = addressLabel,
+                                type = "HOST",
+                                value = viewModel.host,
+                            ) { viewModel.host = it },
+                            com.enigmacast.companionbridge.CompanionFormHost.FieldSpec(
+                                id = "username",
+                                label = usernameLabel,
+                                type = "TEXT",
+                                value = viewModel.username,
+                            ) { viewModel.username = it },
+                            com.enigmacast.companionbridge.CompanionFormHost.FieldSpec(
+                                id = "password",
+                                label = passwordLabel,
+                                type = "PASSWORD",
+                                value = viewModel.password,
+                                masked = true,
+                            ) { viewModel.password = it },
+                        ),
+                    )
+                },
+                compact = true,
+            )
+        }
         val failure = viewModel.failure
         if (failure != null && !viewModel.busy) {
             val text = when (failure) {

@@ -1,6 +1,13 @@
 {
-  "versionCode": 59,
-  "versionName": "1.0.0-beta.56",
+  "versionCode": 75,
+  "versionName": "1.0.0-beta.72",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Subtitle delay under the OSD. Option icons sit under the banner, grow when focused, and the banner hides while they have focus. Bouquet order follows bouquets.tv."
+  "notes": "Companion bridge: phone remote, full settings, profiles/photos, live/IPTV on the phone and a shared library. The Companion app is distributed separately (see the companion block).",
+  "companion": {
+    "versionCode": 100,
+    "versionName": "1.0.0-beta.1",
+    "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
+    "notes": "Eerste bèta: live Enigma2 en IPTV, catch-up, gedeelde bibliotheek, profielen, instellingen en foto's.",
+    "sideloadFile": "EnigmaCast-Companion-1.0.0-beta.1-build100-sideload.apk"
+  }
 }

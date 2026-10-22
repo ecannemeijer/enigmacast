@@ -37,6 +37,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.enigmacast.locale.AppLanguage
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.remote.RemoteInputBus
+import com.enigmacast.companionbridge.CompanionBridge
+import com.enigmacast.companionbridge.CompanionHooks
 import com.enigmacast.ui.AppScreen
 import com.enigmacast.ui.AppViewModel
 import com.enigmacast.ui.animation.ProvideEnigmaMotion
@@ -62,6 +64,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var remoteInputBus: RemoteInputBus
+    @Inject lateinit var companionBridge: CompanionBridge
     @Inject lateinit var receiverSwitcher: com.enigmacast.live.ReceiverSwitcher
     @Inject lateinit var settingsRepository: com.enigmacast.data.settings.SettingsRepository
     @Inject lateinit var iptvLibrary: com.enigmacast.data.xtream.IptvLibrary
@@ -81,6 +84,13 @@ class MainActivity : ComponentActivity() {
         insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         appViewModel.requestFinish = { finish() }
+        // The Companion bridge only knows these four hooks; the UI layer stays untouched.
+        companionBridge.hooks = CompanionHooks().apply {
+            openHome = { appViewModel.showDashboard() }
+            openPlayer = { appViewModel.openStream() }
+            openSettings = { appViewModel.openSettings() }
+            screenName = { appViewModel.screen.name.lowercase() }
+        }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (appViewModel.exitPrompt) {
@@ -158,6 +168,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         appViewModel.setForeground(true)
         appViewModel.resumeFromBackground()
+        companionBridge.onForeground(this)
         // Bouquets or channels edited on the box itself show up without waiting for the daily refresh.
         com.enigmacast.sync.SyncScheduler.checkForChanges(applicationContext)
     }
@@ -166,11 +177,13 @@ class MainActivity : ComponentActivity() {
         appViewModel.setForeground(false)
         // Not for a language restart (same activity again) or picture-in-picture (still visible).
         if (!isChangingConfigurations && !isInPictureInPictureMode) appViewModel.stopForBackground()
+        companionBridge.onBackground()
         super.onStop()
     }
 
     override fun onDestroy() {
         if (isFinishing) appViewModel.stopForBackground()
+        if (isFinishing) companionBridge.shutdown()
         super.onDestroy()
     }
 

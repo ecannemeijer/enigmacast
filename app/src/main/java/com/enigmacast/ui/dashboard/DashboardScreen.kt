@@ -164,6 +164,7 @@ private class DashBack {
 private enum class SettingPage {
     Account,
     Profiles,
+    Companion,
     Receivers,
     Receiver,
     Playback,
@@ -1445,6 +1446,7 @@ private fun SettingsHub(
             ) {
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_account), page == SettingPage.Account, navFocus.getValue(SettingPage.Account), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Account) }) { enterPage(SettingPage.Account) }
                 SettingNav(Icons.Filled.Person, stringResource(R.string.settings_profiles), page == SettingPage.Profiles, navFocus.getValue(SettingPage.Profiles), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Profiles) }) { enterPage(SettingPage.Profiles) }
+                SettingNav(EnigmaIcons.Sync, stringResource(R.string.settings_companion), page == SettingPage.Companion, navFocus.getValue(SettingPage.Companion), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Companion) }) { enterPage(SettingPage.Companion) }
                 SettingNav(EnigmaIcons.Tv, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
                 SettingNav(EnigmaIcons.Power, stringResource(R.string.nav_receiver), page == SettingPage.Receiver, navFocus.getValue(SettingPage.Receiver), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receiver) }) { enterPage(SettingPage.Receiver) }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, navFocus.getValue(SettingPage.Playback), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Playback) }) { enterPage(SettingPage.Playback) }
@@ -1521,6 +1523,7 @@ private fun SettingsHub(
                     )
                     SettingPage.Receiver -> Unit
                     SettingPage.Profiles -> ProfilesSettingsPanel(pageContentFocus)
+                    SettingPage.Companion -> com.enigmacast.companionbridge.ui.CompanionLinkPanel(pageContentFocus)
                     SettingPage.Account -> com.enigmacast.ui.account.AccountSettingsPanel(pageContentFocus)
                     SettingPage.Remote -> RemoteAccessSettingsPanel(contentFocus = pageContentFocus)
                     SettingPage.Playback -> PlaybackSettingsPanel(

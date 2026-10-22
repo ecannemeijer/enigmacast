@@ -17,10 +17,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.companionbridge.CompanionFormHub
 
 /** What a [TvTextField] holds; picks the keyboard and how the value is shown. */
 enum class TvFieldKind {
@@ -111,6 +114,41 @@ fun TvTextField(
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val multiline = kind == TvFieldKind.MULTILINE
+    var formId by remember { mutableStateOf<String?>(null) }
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+
+    // Zolang dit veld wordt bewerkt, kan de telefoon meetypen. De host stuurt elke
+    // wijziging naar de Companion-app en past de telefoontekst hier weer toe.
+    LaunchedEffect(editing) {
+        if (editing) {
+            formId = CompanionFormHub.host?.open(
+                label = label,
+                type = when (kind) {
+                    TvFieldKind.TEXT -> "TEXT"
+                    TvFieldKind.HOST -> "HOST"
+                    TvFieldKind.NUMBER -> "NUMBER"
+                    TvFieldKind.PASSWORD -> "PASSWORD"
+                    TvFieldKind.MULTILINE -> "MULTILINE"
+                },
+                value = value,
+                masked = kind == TvFieldKind.PASSWORD,
+                onValueChange = { latestOnValueChange(it) },
+            )
+        } else {
+            formId?.let { CompanionFormHub.host?.close(it) }
+            formId = null
+        }
+    }
+
+    // Wat de gebruiker op de TV typt, ziet de telefoon ook.
+    LaunchedEffect(value, formId) {
+        formId?.let { CompanionFormHub.host?.sync(it, value) }
+    }
+
+    val latestFormId by rememberUpdatedState(formId)
+    DisposableEffect(Unit) {
+        onDispose { latestFormId?.let { CompanionFormHub.host?.close(it) } }
+    }
 
     fun stopEditing(move: FocusDirection? = null) {
         if (!editing) return
