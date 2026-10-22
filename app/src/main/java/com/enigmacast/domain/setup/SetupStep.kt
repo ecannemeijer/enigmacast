@@ -54,6 +54,8 @@ data class SetupConditions(
     /** Paired with a sync server: the profile is chosen on "Who's watching?" after the wizard. */
     val paired: Boolean = false,
     val hasReceiver: Boolean = false,
+    /** Premium: the wizard keeps the account step. Free: it is hidden completely. */
+    val accountRequired: Boolean = false,
 )
 
 object SetupFlow {
@@ -62,6 +64,7 @@ object SetupFlow {
         when (step) {
             SetupStep.SYNC_LINK -> conditions.syncOffered
             SetupStep.IPTV_OFFER -> conditions.iptvOffered
+            SetupStep.ACCOUNT -> conditions.accountRequired
             else -> !step.extra
         }
     }

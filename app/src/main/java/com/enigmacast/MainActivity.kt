@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.background
@@ -380,10 +381,23 @@ class MainActivity : ComponentActivity() {
 private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (AppLanguage) -> Unit) {
     val navigationSounds by appViewModel.navigationSounds.collectAsState()
     val motionQuality by appViewModel.motionQuality.collectAsState()
-    CompositionLocalProvider(LocalNavigationSounds provides navigationSounds) {
-        ProvideEnigmaMotion(motionQuality) {
-            NavigationSoundsForWindow()
-            EnigmaCastAppBody(appViewModel, onChooseLanguage)
+    val accessModel: com.enigmacast.ui.access.AccessViewModel = hiltViewModel()
+    com.enigmacast.ui.access.AccessGate(
+        model = accessModel,
+        onBlocked = { blocked ->
+            if (blocked) {
+                appViewModel.setForeground(false)
+                appViewModel.stopForBackground()
+            } else {
+                appViewModel.resumeFromBackground()
+            }
+        },
+    ) {
+        CompositionLocalProvider(LocalNavigationSounds provides navigationSounds) {
+            ProvideEnigmaMotion(motionQuality) {
+                NavigationSoundsForWindow()
+                EnigmaCastAppBody(appViewModel, onChooseLanguage)
+            }
         }
     }
 }

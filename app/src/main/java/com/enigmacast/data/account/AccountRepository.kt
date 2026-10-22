@@ -107,6 +107,11 @@ class AccountRepository @Inject constructor(
         if (Entitlements.needsRefresh(_account.value, nowMs)) refresh()
     }
 
+    /** Drops the local session without a server call; used when a new access epoch requires login. */
+    fun forceSignOut() {
+        clear()
+    }
+
     /** Unregisters this device on the server (best effort) and forgets the session here. */
     suspend fun logout() = mutex.withLock {
         val token = secrets.read(TOKEN)

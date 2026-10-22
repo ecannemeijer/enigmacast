@@ -7,7 +7,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SetupStepTest {
-    private val plain = SetupConditions()
+    private val plain = SetupConditions(accountRequired = true)
+    private val free = SetupConditions(accountRequired = false)
+
+    @Test fun freeModeHidesTheAccountStep() {
+        assertEquals(
+            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.VIEWING, SetupStep.DONE),
+            SetupFlow.steps(free),
+        )
+        assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.VIEWING, free))
+        assertEquals(1 to 4, SetupFlow.position(SetupStep.WELCOME, free))
+    }
 
     @Test fun standardPathHasFiveSteps() {
         assertEquals(
@@ -17,7 +27,7 @@ class SetupStepTest {
     }
 
     @Test fun syncAndIptvOnlyWhenOffered() {
-        val sync = SetupConditions(syncOffered = true)
+        val sync = SetupConditions(syncOffered = true, accountRequired = true)
         assertEquals(
             listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.SYNC_LINK, SetupStep.VIEWING, SetupStep.ACCOUNT, SetupStep.DONE),
             SetupFlow.steps(sync),
@@ -66,7 +76,7 @@ class SetupStepTest {
         assertEquals(1 to 5, SetupFlow.position(SetupStep.WELCOME, plain))
         assertEquals(3 to 5, SetupFlow.position(SetupStep.VIEWING, plain))
         assertEquals(5 to 5, SetupFlow.position(SetupStep.DONE, plain))
-        val sync = SetupConditions(syncOffered = true, iptvOffered = true)
+        val sync = SetupConditions(syncOffered = true, iptvOffered = true, accountRequired = true)
         assertEquals(3 to 7, SetupFlow.position(SetupStep.SYNC_LINK, sync))
         assertEquals(5 to 7, SetupFlow.position(SetupStep.VIEWING, sync))
         // A step that just dropped out keeps a sensible number until the wizard moves on.

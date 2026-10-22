@@ -1,7 +1,8 @@
 package com.enigmacast.live
 
+import com.enigmacast.data.access.RemoteAccessRepository
 import com.enigmacast.data.account.AccountRepository
-import com.enigmacast.domain.account.Entitlements
+import com.enigmacast.domain.access.AccessMode
 import com.enigmacast.domain.account.PremiumFeature
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,23 +11,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Asks [Entitlements] for the signed-in account and, when a feature is locked, raises the
- * "Premium" dialog (shown by the activity over every screen).
+ * Decides which features are available. In Free everything is unlocked; in Premium a signed-in
+ * account unlocks everything (login only for now, no paid entitlement check).
  */
 @Singleton
 class PremiumGate @Inject constructor(
     private val account: AccountRepository,
+    private val access: RemoteAccessRepository,
 ) {
     private val _prompt = MutableStateFlow<PremiumFeature?>(null)
     val prompt: StateFlow<PremiumFeature?> = _prompt.asStateFlow()
 
-    fun allows(feature: PremiumFeature): Boolean =
-        Entitlements.allows(account.account.value, feature, System.currentTimeMillis())
+    fun allows(feature: PremiumFeature): Boolean = unlocked()
 
-    fun isPremium(): Boolean = Entitlements.isPremium(account.account.value, System.currentTimeMillis())
+    fun isPremium(): Boolean =
+        access.current().mode == AccessMode.PREMIUM && account.isSignedIn()
 
-    fun canAddReceiver(count: Int): Boolean =
-        Entitlements.canAddReceiver(account.account.value, count, System.currentTimeMillis())
+    fun canAddReceiver(count: Int): Boolean = unlocked()
+
+    private fun unlocked(): Boolean =
+        access.current().mode == AccessMode.FREE || account.isSignedIn()
 
     /** True when [feature] may be used; otherwise shows the Premium dialog and returns false. */
     fun require(feature: PremiumFeature): Boolean {

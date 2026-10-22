@@ -47,6 +47,7 @@ class SetupViewModel @Inject constructor(
     private val homeFilms: HomeFilmsRepository,
     private val bouquetStore: HomeBouquetStore,
     private val account: com.enigmacast.data.account.AccountRepository,
+    private val access: com.enigmacast.data.access.RemoteAccessRepository,
     private val discovery: SyncDiscovery,
     private val syncClient: EnigmaSyncClient,
     private val syncEngine: EnigmaSyncEngine,
@@ -125,6 +126,7 @@ class SetupViewModel @Inject constructor(
         iptvOffered = iptvOffer != null && !iptvAnswered,
         paired = syncPaired(),
         hasReceiver = receiver.value != null,
+        accountRequired = access.current().requiresLogin,
     )
 
     fun position(): Pair<Int, Int>? = SetupFlow.position(step, conditions())
@@ -143,7 +145,7 @@ class SetupViewModel @Inject constructor(
 
     /** Skip is offered on optional steps until there is nothing left to skip. */
     fun canSkip(): Boolean = step.optional && when (step) {
-        SetupStep.ACCOUNT -> accountState.value == null
+        SetupStep.ACCOUNT -> !conditions().accountRequired && accountState.value == null
         SetupStep.SYNC_LINK -> !syncLinked && !syncLinking
         SetupStep.IPTV_OFFER -> !iptvBusy
         else -> true

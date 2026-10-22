@@ -1,4 +1,4 @@
-package com.enigmacast.ui.account
+﻿package com.enigmacast.ui.account
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +20,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** The account form (wizard and Settings › Account) and the account status. */
+/** The account form (wizard and Settings â€º Account) and the account status. */
 @HiltViewModel
 class AccountViewModel @Inject constructor(
     private val repository: AccountRepository,
@@ -40,7 +40,7 @@ class AccountViewModel @Inject constructor(
     var info by mutableStateOf<UiText?>(null)
         private set
 
-    fun isPremium(snapshot: AccountSnapshot?): Boolean = Entitlements.isPremium(snapshot, System.currentTimeMillis())
+    fun isPremium(snapshot: AccountSnapshot?): Boolean = gate.isPremium()
     fun allows(feature: PremiumFeature): Boolean = gate.allows(feature)
     fun offline(snapshot: AccountSnapshot?): Boolean = Entitlements.inOfflineGrace(snapshot, System.currentTimeMillis())
 
@@ -118,3 +118,4 @@ class AccountViewModel @Inject constructor(
         AccountError.SERVER -> UiText.res(R.string.account_error_server)
     }
 }
+

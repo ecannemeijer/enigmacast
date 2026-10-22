@@ -1,8 +1,8 @@
 {
-  "versionCode": 86,
-  "versionName": "1.0.0-beta.83",
+  "versionCode": 87,
+  "versionName": "1.0.0-beta.84",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Standby/scherm-uit sluit streams en netwerkverbindingen; bij terugkomst worden HTTP-clients ververst.",
+  "notes": "EnigmaCast is nu gratis. De app kan op afstand naar Premium worden gezet; dan is bij de volgende start inloggen verplicht. Inclusief minimale-versiescherm en anonieme gebruiksstatistieken.",
   "companion": {
     "versionCode": 113,
     "versionName": "1.0.0-beta.14",
