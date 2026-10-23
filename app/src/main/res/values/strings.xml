@@ -1068,7 +1068,7 @@
     <string name="setup_sync_link_title">More than one TV at home?</string>
     <string name="setup_sync_link_body">With the sync server on your receiver, all your TVs share the same profiles, favourites and watching progress. Not needed if you only have one TV.</string>
     <string name="setup_iptv_title">Your IPTV subscription on this TV too?</string>
-    <string name="setup_iptv_body">Your sync server has an IPTV subscription. Do you want those channels here too? They appear below your regular channels in the guide.</string>
+    <string name="setup_iptv_body">The sync server has IPTV providers. Choose which providers to include on this TV. They appear below your regular channels in the guide.</string>
     <string name="setup_iptv_yes">Yes, add them</string>
     <string name="setup_iptv_no">No, thanks</string>
     <string name="setup_sync_link_searching">Checking whether your receiver has a sync server…</string>
@@ -1565,6 +1565,9 @@
     <string name="iptv_provider_enabled">Enabled</string>
     <string name="iptv_provider_disabled">Disabled</string>
     <string name="iptv_provider_delete">Delete</string>
+    <string name="setup_iptv_choose">Choose which IPTV providers to include.</string>
+    <string name="setup_iptv_select_all">Select all</string>
+    <string name="setup_iptv_continue">Continue</string>
     <string name="iptv_provider_choose">Choose an IPTV provider</string>
     <string name="iptv_provider_categories">Categories of %s</string>
     <string name="iptv_provider_export">Export providers</string>

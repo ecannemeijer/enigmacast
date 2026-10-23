@@ -410,27 +410,36 @@ class EnigmaSyncEngine @Inject constructor(
         if ((result == "accept" || result == "replay") && playlist.revision()?.changeId == rev.changeId) playlist.clearDirty()
     }
 
-    private suspend fun applyProviders(array: org.json.JSONArray) {
-        val providers = buildList {
-            for (index in 0 until array.length()) {
-                val row = array.optJSONObject(index) ?: continue
-                val id = row.optString("id")
-                if (id.isBlank()) continue
-                add(
-                    IptvProvider(
-                        id = id,
-                        name = row.optString("name"),
-                        kind = runCatching { IptvPlaylistKind.valueOf(row.optString("kind")) }.getOrDefault(IptvPlaylistKind.M3U),
-                        m3uUrl = row.optString("m3uUrl"),
-                        server = row.optString("server"),
-                        username = row.optString("username"),
-                        password = row.optString("password"),
-                        enabled = row.optBoolean("enabled", true),
-                        sortOrder = row.optInt("sortOrder", index),
-                    ),
-                )
-            }
+    /** Providers waiting on the sync server, without applying them yet. */
+    suspend fun peekProviders(): List<IptvProvider> = withContext(Dispatchers.IO) {
+        val config = client.config() ?: return@withContext emptyList()
+        val text = runCatching { client.request(config, "GET", "/api/v1/iptv/providers") }.getOrNull() ?: return@withContext emptyList()
+        providersOf(JSONObject(text).optJSONArray("providers") ?: return@withContext emptyList())
+    }
+
+    private fun providersOf(array: org.json.JSONArray): List<IptvProvider> = buildList {
+        for (index in 0 until array.length()) {
+            val row = array.optJSONObject(index) ?: continue
+            val id = row.optString("id")
+            if (id.isBlank()) continue
+            add(
+                IptvProvider(
+                    id = id,
+                    name = row.optString("name"),
+                    kind = runCatching { IptvPlaylistKind.valueOf(row.optString("kind")) }.getOrDefault(IptvPlaylistKind.M3U),
+                    m3uUrl = row.optString("m3uUrl"),
+                    server = row.optString("server"),
+                    username = row.optString("username"),
+                    password = row.optString("password"),
+                    enabled = row.optBoolean("enabled", true),
+                    sortOrder = row.optInt("sortOrder", index),
+                ),
+            )
         }
+    }
+
+    private suspend fun applyProviders(array: org.json.JSONArray) {
+        val providers = providersOf(array)
         if (providers.isEmpty()) return
         playlist.applyingRemote = true
         try {

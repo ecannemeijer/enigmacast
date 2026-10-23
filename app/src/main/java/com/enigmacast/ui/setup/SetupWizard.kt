@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -51,6 +53,7 @@ import com.enigmacast.ui.profile.AvatarImage
 import com.enigmacast.ui.profile.Avatars
 import com.enigmacast.ui.profile.ProfileTile
 import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
 import androidx.compose.runtime.mutableStateOf
@@ -252,12 +255,41 @@ private fun SyncLinkStep(model: SetupViewModel, focus: FocusRequester) {
 
 @Composable
 private fun IptvOfferStep(model: SetupViewModel, focus: FocusRequester) {
-    TvButton(
-        stringResource(if (model.iptvBusy) R.string.setup_iptv_busy else R.string.setup_iptv_yes),
-        model::takeIptv,
-        Modifier.focusRequester(focus),
-        enabled = !model.iptvBusy,
-    )
+    if (model.iptvProviders.isNotEmpty()) {
+        Text(
+            stringResource(R.string.setup_iptv_choose),
+            color = EnigmaColors.Muted,
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+        )
+        CompactButton(
+            stringResource(R.string.setup_iptv_select_all),
+            model::selectAllIptvProviders,
+        )
+        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+            itemsIndexed(model.iptvProviders, key = { _, provider -> provider.id }) { index, provider ->
+                ToggleRow(
+                    title = provider.displayName(),
+                    description = provider.kind.name,
+                    checked = provider.id in model.iptvSelected,
+                    onCheckedChange = { model.toggleIptvProvider(provider.id) },
+                    modifier = if (index == 0) Modifier.focusRequester(focus) else Modifier,
+                )
+            }
+        }
+        TvButton(
+            stringResource(R.string.setup_iptv_continue),
+            model::takeIptv,
+            enabled = !model.iptvBusy && model.iptvSelected.isNotEmpty(),
+        )
+    } else {
+        TvButton(
+            stringResource(if (model.iptvBusy) R.string.setup_iptv_busy else R.string.setup_iptv_yes),
+            model::takeIptv,
+            Modifier.focusRequester(focus),
+            enabled = !model.iptvBusy,
+        )
+    }
     if (model.iptvFailed) SetupNotice(stringResource(R.string.setup_iptv_failed), NoticeKind.ERROR)
 }
 

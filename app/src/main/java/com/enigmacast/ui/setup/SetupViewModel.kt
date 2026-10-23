@@ -53,6 +53,7 @@ class SetupViewModel @Inject constructor(
     private val syncEngine: EnigmaSyncEngine,
     private val activity: com.enigmacast.activity.BackgroundActivityTracker,
     private val iptvPlaylist: com.enigmacast.data.xtream.IptvPlaylistSync,
+    private val playlistStore: com.enigmacast.data.xtream.IptvPlaylistStore,
     names: ReceiverNames,
 ) : ViewModel() {
     var step by mutableStateOf(SetupStep.WELCOME)
@@ -115,6 +116,25 @@ class SetupViewModel @Inject constructor(
     var iptvBusy by mutableStateOf(false)
         private set
     private var iptvOfferReady = false
+    /** Providers available from the sync server or this device, for the wizard's choice list. */
+    var iptvProviders by mutableStateOf<List<com.enigmacast.data.xtream.IptvProvider>>(emptyList())
+        private set
+    var iptvSelected by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    fun toggleIptvProvider(id: String) {
+        iptvSelected = if (id in iptvSelected) iptvSelected - id else iptvSelected + id
+    }
+
+    fun selectAllIptvProviders() {
+        iptvSelected = if (iptvSelected.size == iptvProviders.size) emptySet() else iptvProviders.map { it.id }.toSet()
+    }
+
+    init {
+        // Existing providers on this device are offered in the wizard even when there is no
+        // sync server to fetch a list from.
+        viewModelScope.launch { ensureIptvOffer() }
+    }
 
     /** Leaving the receiver step: the receiver is being saved and the sync check starts. */
     var leavingReceiver by mutableStateOf(false)
@@ -123,7 +143,7 @@ class SetupViewModel @Inject constructor(
     /** What decides the conditional steps right now. */
     fun conditions(): SetupConditions = SetupConditions(
         syncOffered = !prePaired && (syncSearching || syncHost != null),
-        iptvOffered = iptvOffer != null && !iptvAnswered,
+        iptvOffered = (iptvProviders.isNotEmpty() || iptvOffer != null) && !iptvAnswered,
         paired = syncPaired(),
         hasReceiver = receiver.value != null,
         accountRequired = access.current().requiresLogin,
@@ -213,7 +233,7 @@ class SetupViewModel @Inject constructor(
             try {
                 val host = settings.current().activeReceiver()?.host
                 searchSync(host)
-                if (prePaired) ensureIptvOffer()
+                if (prePaired) ensureIptvOffer(force = true)
                 if (step == SetupStep.RECEIVER) go(forward(SetupStep.RECEIVER))
             } finally {
                 leavingReceiver = false
@@ -227,23 +247,53 @@ class SetupViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            ensureIptvOffer()
+            ensureIptvOffer(force = true)
             if (step == SetupStep.SYNC_LINK) go(forward(SetupStep.SYNC_LINK))
         }
     }
 
-    private suspend fun ensureIptvOffer() {
-        if (iptvOfferReady) return
+    private suspend fun ensureIptvOffer(force: Boolean = false) {
+        if (iptvOfferReady && !force) return
         iptvOfferReady = true
-        iptvOffer = runCatching { syncEngine.peekPlaylist() }
-            .onFailure { EnigmaLog.service("setup iptv offer failed: ${it.javaClass.simpleName}") }
-            .getOrNull()
+        val local = playlistStore.providers.value
+        val remote = runCatching { syncEngine.peekProviders() }
+            .onFailure { EnigmaLog.service("setup iptv providers failed: ${it.javaClass.simpleName}") }
+            .getOrDefault(emptyList())
+        val available = (remote + local).distinctBy { it.id }.sortedBy { it.sortOrder }
+        iptvProviders = available
+        iptvSelected = available.filter { it.enabled }.map { it.id }.toSet()
+        if (available.isEmpty()) {
+            iptvOffer = runCatching { syncEngine.peekPlaylist() }
+                .onFailure { EnigmaLog.service("setup iptv offer failed: ${it.javaClass.simpleName}") }
+                .getOrNull()
+        }
     }
 
     fun takeIptv() {
-        val offer = iptvOffer ?: return
         if (iptvBusy) return
         iptvFailed = false
+        if (iptvProviders.isNotEmpty()) {
+            val chosen = iptvProviders.filter { it.id in iptvSelected }.map { it.copy(enabled = true) }
+            if (chosen.isEmpty()) return
+            iptvBusy = true
+            viewModelScope.launch {
+                val result = runCatching {
+                    playlistStore.replaceProviders(chosen)
+                    settings.update { it.copy(iptvSource = com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) }
+                    syncEngine.publishProviders()
+                }
+                iptvBusy = false
+                if (result.isFailure) {
+                    EnigmaLog.service("setup iptv providers save failed: ${result.exceptionOrNull()?.javaClass?.simpleName}")
+                    iptvFailed = true
+                    return@launch
+                }
+                iptvAnswered = true
+                go(SetupFlow.next(SetupStep.IPTV_OFFER, conditions()))
+            }
+            return
+        }
+        val offer = iptvOffer ?: return
         iptvBusy = true
         viewModelScope.launch {
             val result = runCatching { syncEngine.takePlaylist(offer) }
@@ -452,6 +502,8 @@ class SetupViewModel @Inject constructor(
         prePaired = false
         iptvOfferReady = false
         iptvOffer = null
+        iptvProviders = emptyList()
+        iptvSelected = emptySet()
         iptvAnswered = false
         iptvFailed = false
     }

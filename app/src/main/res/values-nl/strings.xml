@@ -1065,7 +1065,7 @@
     <string name="setup_sync_link_title">Meerdere tv\'s in huis?</string>
     <string name="setup_sync_link_body">Met de syncserver op je ontvanger delen al je tv\'s dezelfde profielen, favorieten en kijkvoortgang. Niet nodig als je maar één tv hebt.</string>
     <string name="setup_iptv_title">Je IPTV-abonnement ook op deze tv?</string>
-    <string name="setup_iptv_body">Op je syncserver staat een IPTV-abonnement. Wil je die zenders ook hier zien? Ze komen onder je gewone zenders in de gids.</string>
+    <string name="setup_iptv_body">Op je syncserver staan IPTV-providers. Kies welke providers je op deze tv meeneemt. Ze komen onder je gewone zenders in de gids.</string>
     <string name="setup_iptv_yes">Ja, toevoegen</string>
     <string name="setup_iptv_no">Nee, bedankt</string>
     <string name="setup_sync_link_searching">Even kijken of je ontvanger een syncserver heeft…</string>
@@ -1557,6 +1557,9 @@
     <string name="iptv_provider_enabled">Aan</string>
     <string name="iptv_provider_disabled">Uit</string>
     <string name="iptv_provider_delete">Verwijderen</string>
+    <string name="setup_iptv_choose">Kies welke IPTV-providers je meeneemt.</string>
+    <string name="setup_iptv_select_all">Alles selecteren</string>
+    <string name="setup_iptv_continue">Doorgaan</string>
     <string name="iptv_provider_choose">Kies een IPTV-provider</string>
     <string name="iptv_provider_categories">Categorieën van %s</string>
     <string name="iptv_provider_export">Providers exporteren</string>
