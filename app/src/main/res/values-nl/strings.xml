@@ -370,6 +370,7 @@
     <string name="quick_stream_info">Streaminfo</string>
     <string name="quick_restart">Stream herstarten</string>
     <string name="quick_restarting">Stream wordt herstart…</string>
+    <string name="quick_equivalent">Equivalent</string>
     <string name="quick_none">Geen</string>
     <string name="quick_no_subtitles">Deze zender heeft geen ondertiteling.</string>
     <string name="quick_no_recent">Nog geen andere zenders bekeken.</string>

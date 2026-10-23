@@ -41,6 +41,10 @@ interface IptvDao {
     @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section AND categoryId = :categoryId ORDER BY sort LIMIT :limit OFFSET :offset")
     suspend fun itemsPage(source: String, section: String, categoryId: String, limit: Int, offset: Int): List<IptvItemRow>
 
+    /** All rows of one section; used for name matching across the whole playlist. */
+    @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section ORDER BY sort")
+    suspend fun allItems(source: String, section: String): List<IptvItemRow>
+
     /** Items per category of a section (one query for the whole categories column). */
     @Query("SELECT categoryId AS categoryId, COUNT(*) AS n FROM iptv_item WHERE source = :source AND section = :section GROUP BY categoryId")
     suspend fun countsByCategory(source: String, section: String): List<IptvCategoryCount>

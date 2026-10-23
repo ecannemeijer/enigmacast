@@ -550,6 +550,11 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 )
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
+            com.enigmacast.ui.remote.EquivalentChannelsPanel(
+                state = model.equivalentsState,
+                onChoose = model::chooseEquivalent,
+                onDismiss = model::closeEquivalent,
+            )
             model.playerError?.let {
                 Text(
                     stringResource(R.string.xtream_play_error, it),
@@ -1127,6 +1132,7 @@ private fun IptvOsd(
                         model.stop()
                         onSearch()
                     },
+                    onEquivalent = model::openEquivalent,
                     onPip = model::openPipPicker,
                 ),
                 iptv = true,

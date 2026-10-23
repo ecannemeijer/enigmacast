@@ -104,6 +104,7 @@ data class QuickBarActions(
     val onQuality: (StreamLevel?) -> Unit,
     val onRecord: () -> Unit,
     val onSearch: () -> Unit,
+    val onEquivalent: () -> Unit,
     val onPip: () -> Unit = {},
 )
 
@@ -157,6 +158,7 @@ fun QuickOptionsBar(
                     caption = open != option,
                     onClick = {
                         when (option) {
+                            QuickOption.EQUIVALENT -> actions.onEquivalent()
                             QuickOption.SEARCH -> actions.onSearch()
                             QuickOption.GUIDE -> actions.onGuide()
                             QuickOption.RESTART -> actions.onRestart()
@@ -351,7 +353,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }
-        QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP -> emptyList()
+        QuickOption.SEARCH, QuickOption.EQUIVALENT, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP -> emptyList()
     }
 }
 
@@ -499,6 +501,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     QuickOption.STREAM_INFO -> bitrateLabel(ui.stats.bitrateKbps)
     QuickOption.QUALITY -> qualityLabel(ui.quality.level)
     QuickOption.SEARCH -> ""
+    QuickOption.EQUIVALENT -> ""
     QuickOption.RESTART -> ""
     QuickOption.PIP -> ""
     QuickOption.RECORD -> if (ui.recordingTitle.isNotBlank()) ui.recordingTitle else {
@@ -525,6 +528,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.QUALITY -> R.string.quick_quality
         QuickOption.RESTART -> R.string.quick_restart
         QuickOption.SEARCH -> R.string.nav_search
+        QuickOption.EQUIVALENT -> R.string.quick_equivalent
         QuickOption.RECORD -> R.string.epg_record
         QuickOption.PIP -> R.string.pip
     },
@@ -543,6 +547,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.QUALITY -> EnigmaIcons.Speed
     QuickOption.RESTART -> Icons.Filled.Refresh
     QuickOption.SEARCH -> Icons.Filled.Search
+    QuickOption.EQUIVALENT -> EnigmaIcons.Sync
     QuickOption.RECORD -> EnigmaIcons.Record
     QuickOption.PIP -> EnigmaIcons.Tv
 }

@@ -98,6 +98,8 @@ class XtreamViewModel @Inject constructor(
     val pip: com.enigmacast.playback.PipController,
     private val fallbackFinder: com.enigmacast.live.TvFallbackFinder,
     @ApplicationContext private val context: Context,
+    private val equivalents: com.enigmacast.data.channel.EquivalentChannelsController,
+    private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
     /** Null until the active receiver was checked. The menu item shows when it has playlists. */
@@ -221,6 +223,8 @@ class XtreamViewModel @Inject constructor(
         private set
     var playing by mutableStateOf<XtreamPlaying?>(null)
         private set
+    val equivalentsState get() = equivalents.state
+    private var pendingEquivalent: com.enigmacast.domain.channel.ChannelSwitchRequest.Iptv? = null
     var playerError by mutableStateOf<String?>(null)
     private val iptvRetries = RestartBudget(5, 1_000L, 8_000L)
     private var iptvRecoveryJob: Job? = null
@@ -896,6 +900,14 @@ class XtreamViewModel @Inject constructor(
     private var epgJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            channelSwitch.request.collect { request ->
+                if (request is com.enigmacast.domain.channel.ChannelSwitchRequest.Iptv) {
+                    pendingEquivalent = request
+                    applyPendingEquivalent()
+                }
+            }
+        }
         runCatching {
             context.getSystemService(ConnectivityManager::class.java)
                 ?.registerDefaultNetworkCallback(networkCallback)
@@ -1049,10 +1061,43 @@ class XtreamViewModel @Inject constructor(
         if (same) {
             if (start != null && start != section) selectSection(start)
             if (fullscreen) playLastLiveFullscreen() else if (startLive) startRememberedLive()
+            applyPendingEquivalent()
             return
         }
         selectSection(start ?: if (startLive) XtreamSection.LIVE else section, force = true)
         if (fullscreen) playLastLiveFullscreen() else if (startLive) startRememberedLive()
+        applyPendingEquivalent()
+    }
+
+    /** First quick-bar tile: same channel on satellite or another IPTV source. */
+    fun openEquivalent() {
+        val name = playing?.item?.name?.takeIf { it.isNotBlank() }
+            ?: playing?.title?.takeIf { it.isNotBlank() }
+            ?: return
+        viewModelScope.launch {
+            equivalents.open(
+                name = name,
+                receiverId = settingsRepository.current().activeReceiver()?.id,
+                account = account,
+                playlistMode = playlist != null,
+            )
+        }
+    }
+
+    fun chooseEquivalent(channel: com.enigmacast.domain.channel.ChannelAlternative) {
+        equivalents.choose(channel)
+    }
+
+    fun closeEquivalent() = equivalents.close()
+
+    private fun applyPendingEquivalent() {
+        val request = pendingEquivalent ?: return
+        val current = account ?: return
+        pendingEquivalent = null
+        val target = request.account
+        if (target != null && target.key != current.key) choose(target, startLive = false)
+        play(request.item)
+        channelSwitch.clear(request.id)
     }
 
     /**

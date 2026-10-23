@@ -221,12 +221,15 @@ class RemoteDisplayViewModel @Inject constructor(
     private val listEvents: com.enigmacast.sync.ChannelListEvents,
     val pip: com.enigmacast.playback.PipController,
     private val fallbackFinder: com.enigmacast.live.TvFallbackFinder,
+    private val equivalents: com.enigmacast.data.channel.EquivalentChannelsController,
+    private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
 ) : ViewModel() {
     /** The receiver whose bouquets are in [RemoteDisplayUiState.bouquets]; another box loads its own. */
     private var bouquetsReceiverId: String? = null
 
     private val _ui = MutableStateFlow(RemoteDisplayUiState())
     val uiState: StateFlow<RemoteDisplayUiState> = _ui.asStateFlow()
+    val equivalentsState get() = equivalents.state
     private val analyzer = AndroidOsdAnalyzer()
     private var settingsSnapshot = AppSettings()
     var showPipPicker by mutableStateOf(false)
@@ -264,6 +267,14 @@ class RemoteDisplayViewModel @Inject constructor(
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     init {
+        viewModelScope.launch {
+            channelSwitch.request.collect { request ->
+                if (request is com.enigmacast.domain.channel.ChannelSwitchRequest.Enigma) {
+                    channelSwitch.clear(request.id)
+                    zapTo(request.channel)
+                }
+            }
+        }
         playback.attach(viewModelScope)
         inputBus.handler = ::handleKey
         viewModelScope.launch {
@@ -798,6 +809,26 @@ class RemoteDisplayViewModel @Inject constructor(
         closeChannelList()
         ownSession.start(entry)
     }
+
+    /** First quick-bar tile: the same channel on the other source. */
+    fun openEquivalent() {
+        val name = _ui.value.own.channel?.name?.takeIf { it.isNotBlank() }
+            ?: _ui.value.currentService?.name?.takeIf { it.isNotBlank() }
+            ?: return
+        _ui.update { it.copy(quickBar = false) }
+        equivalents.open(
+            name = name,
+            receiverId = settingsSnapshot.activeReceiver()?.id,
+            account = null,
+            playlistMode = settingsSnapshot.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST,
+        )
+    }
+
+    fun chooseEquivalent(channel: com.enigmacast.domain.channel.ChannelAlternative) {
+        equivalents.choose(channel)
+    }
+
+    fun closeEquivalent() = equivalents.close()
 
     fun openPipPicker() {
         if (pip.playing()) pip.stop() else showPipPicker = true

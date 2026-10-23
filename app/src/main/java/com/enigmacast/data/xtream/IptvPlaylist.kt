@@ -374,6 +374,11 @@ class IptvPlaylistSync @Inject constructor(
         out
     }
 
+    /** Every live channel in the loaded playlist, for matching an equivalent channel. */
+    suspend fun liveItems(): List<XtreamItem> = withContext(Dispatchers.IO) {
+        dao.allItems(SOURCE, XtreamSection.LIVE.name).map { it.toItem(XtreamSection.LIVE) }
+    }
+
     /** Background refresh (WorkManager): once a day in playlist mode. */
     suspend fun refreshIfDue(kind: IptvPlaylistKind, maxAgeMs: Long = 24 * 60 * 60_000L): IptvLoadResult? {
         if (!store.login.value.configured(kind)) return null

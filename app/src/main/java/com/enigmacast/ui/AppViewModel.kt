@@ -63,11 +63,21 @@ class AppViewModel @Inject constructor(
     private val autoSwitcher: AutoSwitcher,
     private val recordings: com.enigmacast.live.RecordingBook,
     private val account: com.enigmacast.data.account.AccountRepository,
+    private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
 ) : ViewModel() {
     var screen by mutableStateOf(AppScreen.Loading)
         private set
 
     init {
+        // Equivalent channel: the target player consumes the request; the shell switches screen.
+        viewModelScope.launch {
+            channelSwitch.events.collect { request ->
+                when (request) {
+                    is com.enigmacast.domain.channel.ChannelSwitchRequest.Enigma -> screen = AppScreen.Remote
+                    is com.enigmacast.domain.channel.ChannelSwitchRequest.Iptv -> screen = AppScreen.Xtream
+                }
+            }
+        }
         // Settings › Appearance › GUI skins: repaints every screen and the OSD right away.
         viewModelScope.launch {
             settingsRepository.settings.map { it.osdSkin }.distinctUntilChanged()

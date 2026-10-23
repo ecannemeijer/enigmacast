@@ -111,6 +111,7 @@ fun EnigmaRemoteScreen(
             onQuality = viewModel::chooseQuality,
             onRecord = viewModel::recordWatching,
             onSearch = viewModel::openSearch,
+            onEquivalent = viewModel::openEquivalent,
             onPip = viewModel::openPipPicker,
         )
     }
@@ -252,6 +253,11 @@ fun EnigmaRemoteScreen(
         ui.recordAsk?.let { ask ->
             RecordConfirmDialog(ask, onConfirm = viewModel::confirmRecord, onDismiss = viewModel::dismissRecord)
         }
+        EquivalentChannelsPanel(
+            state = viewModel.equivalentsState,
+            onChoose = viewModel::chooseEquivalent,
+            onDismiss = viewModel::closeEquivalent,
+        )
     }
 }
 

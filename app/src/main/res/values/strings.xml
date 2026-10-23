@@ -373,6 +373,7 @@
     <string name="quick_stream_info">Stream info</string>
     <string name="quick_restart">Restart stream</string>
     <string name="quick_restarting">Restarting the stream…</string>
+    <string name="quick_equivalent">Equivalent</string>
     <string name="quick_none">None</string>
     <string name="quick_no_subtitles">This channel has no subtitles.</string>
     <string name="quick_no_recent">No other channels watched yet.</string>

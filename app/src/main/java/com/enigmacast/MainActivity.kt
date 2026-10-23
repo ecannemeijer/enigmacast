@@ -396,9 +396,36 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (
         CompositionLocalProvider(LocalNavigationSounds provides navigationSounds) {
             ProvideEnigmaMotion(motionQuality) {
                 NavigationSoundsForWindow()
-                EnigmaCastAppBody(appViewModel, onChooseLanguage)
+                ProfileStartupGate(appViewModel) {
+                    EnigmaCastAppBody(appViewModel, onChooseLanguage)
+                }
             }
         }
+    }
+}
+
+/**
+ * "Who's watching?" belongs before every screen, not only before the dashboard. Otherwise a
+ * satellite/IPTV startup opens its fullscreen player first and the picker only appears after Back.
+ */
+@Composable
+private fun ProfileStartupGate(appViewModel: AppViewModel, content: @Composable () -> Unit) {
+    val profileModel: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()
+    val open = profileModel.pickerOpen
+    LaunchedEffect(open) {
+        if (open) {
+            appViewModel.setForeground(false)
+            appViewModel.stopForBackground()
+        } else {
+            appViewModel.resumeFromBackground()
+        }
+    }
+    if (open) {
+        EnigmaCastTheme {
+            com.enigmacast.ui.profile.ProfilePickerContent(profileModel)
+        }
+    } else {
+        content()
     }
 }
 

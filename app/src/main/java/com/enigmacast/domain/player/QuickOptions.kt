@@ -5,6 +5,7 @@ import com.enigmacast.domain.tuner.NowEvents
 
 /** The tiles of the quick options bar, left to right. */
 enum class QuickOption {
+    EQUIVALENT,
     SEARCH,
     RECORD,
     SUBTITLES,
@@ -37,8 +38,8 @@ object QuickOptions {
             QuickOption.RESTART,
             QuickOption.SLEEP,
         )
-        ownTuner -> QuickOption.entries
-        else -> QuickOption.entries - setOf(QuickOption.GUIDE, QuickOption.RECENT, QuickOption.PIP)
+        ownTuner -> QuickOption.entries.filter { it != QuickOption.SEARCH }
+        else -> QuickOption.entries - setOf(QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RECENT, QuickOption.PIP)
     }
 
     /**
@@ -47,7 +48,7 @@ object QuickOptions {
      * The guide and recent channels are the IPTV list, so they only show for live.
      */
     fun iptvTiles(vod: Boolean): List<QuickOption> = buildList {
-        add(QuickOption.SEARCH)
+        if (!vod) add(QuickOption.EQUIVALENT)
         add(QuickOption.SUBTITLES)
         add(QuickOption.AUDIO)
         add(QuickOption.PICTURE)
