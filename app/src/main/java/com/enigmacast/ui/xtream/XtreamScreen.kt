@@ -135,6 +135,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     val rootFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
     var quickBar by remember { mutableStateOf(false) }
+    var recentBar by remember { mutableStateOf(false) }
+    var recentToken by remember { mutableIntStateOf(0) }
     // Films, episodes and catch-up: the Stremio-style VOD OSD (keys in VodOsdKeys).
     val vodOsd = remember { com.enigmacast.ui.player.VodOsdController() }
     fun playingVod() = model.playing?.let { it.episode != null || it.item?.section == XtreamSection.MOVIES } == true || model.catchup
@@ -330,6 +332,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                         code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
                     if (steer) return@onPreviewKeyEvent false
                 }
+                if (recentBar) return@onPreviewKeyEvent false
                 if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
                     if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
                     return@onPreviewKeyEvent true
@@ -356,7 +359,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                         if (bannerShown && details) bannerUntil = 0L else showBanner(fromZap = false, withDetails = true)
                     }
                     IptvKeyAction.Options -> if (repeat == 0 && model.playing != null) {
-                        if (playingVod()) vodOsd.show() else { quickBar = true; quickToken++ }
+                        if (playingVod()) vodOsd.show() else { recentBar = false; quickBar = true; quickToken++ }
                     }
                     IptvKeyAction.ChannelList -> if (repeat == 0) {
                         if (model.pip.playing() && model.pip.swapped.value) model.pip.openList() else openPanel()
@@ -521,6 +524,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     showIcons = !bannerFromZap || quickBar,
                     onGuide = openPlayingGuide,
                     onSearch = onSearch,
+                    onRecentBar = { recentBar = true; recentToken++; quickBar = false },
                 )
             }
             val upcoming = model.nextOffer()
@@ -555,6 +559,28 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 onChoose = model::chooseEquivalent,
                 onDismiss = model::closeEquivalent,
             )
+            if (recentBar) {
+                com.enigmacast.ui.remote.RecentChannelsBar(
+                    channels = model.recentChannels,
+                    currentReference = model.playing?.item?.id.orEmpty(),
+                    focusToken = recentToken,
+                    onChoose = { channel -> model.playRecent(channel); recentBar = false },
+                    onBackToOptions = { recentBar = false; quickBar = true; quickToken++ },
+                    onClose = { recentBar = false },
+                    logo = { channel, modifier ->
+                        com.enigmacast.ui.remote.Picon(
+                            entry = com.enigmacast.domain.model.BouquetEntry(
+                                channel.name,
+                                channel.reference,
+                                picon = channel.logo,
+                            ),
+                            picon = { model.logo(it.picon) },
+                            cachedPicon = { model.cachedLogo(it.picon) },
+                            modifier = modifier,
+                        )
+                    },
+                )
+            }
             model.playerError?.let {
                 Text(
                     stringResource(R.string.xtream_play_error, it),
@@ -1069,6 +1095,7 @@ private fun IptvOsd(
     showIcons: Boolean = true,
     onGuide: () -> Unit,
     onSearch: () -> Unit,
+    onRecentBar: () -> Unit,
 ) {
     val look by model.osdLook.collectAsStateWithLifecycle()
     val scrim = EnigmaColors.scrim(look.second)
@@ -1133,6 +1160,7 @@ private fun IptvOsd(
                         onSearch()
                     },
                     onEquivalent = model::openEquivalent,
+                    onRecentBar = onRecentBar,
                     onPip = model::openPipPicker,
                 ),
                 iptv = true,

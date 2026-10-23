@@ -93,6 +93,7 @@ class XtreamViewModel @Inject constructor(
     private val library: com.enigmacast.data.xtream.IptvLibrary,
     private val watchNext: com.enigmacast.data.xtream.WatchNextPublisher,
     private val profiles: com.enigmacast.data.profile.ProfileStore,
+    private val recentIptv: com.enigmacast.data.xtream.RecentIptvStore,
     private val sleepTimer: com.enigmacast.playback.AppSleepTimer,
     private val subtitles: SubSourceClient,
     val pip: com.enigmacast.playback.PipController,
@@ -939,7 +940,10 @@ class XtreamViewModel @Inject constructor(
         }
         // Another profile: a channel that went on in the mini player was the previous profile's.
         viewModelScope.launch {
-            profiles.switched.collect { if (playing != null && playbackOwner.foreground != com.enigmacast.playback.PlaybackOwner.Owner.IPTV) stop() }
+            profiles.switched.collect {
+                recentChannels = recentIptv.load(account?.key.orEmpty())
+                if (playing != null && playbackOwner.foreground != com.enigmacast.playback.PlaybackOwner.Owner.IPTV) stop()
+            }
         }
         // Categories changed in Settings: the open section is read again (from the cache).
         viewModelScope.launch {
@@ -1058,6 +1062,7 @@ class XtreamViewModel @Inject constructor(
         // Stream ids are per account: another playlist's rows start without listings.
         if (this.account?.key != account.key) clearEpgRows()
         this.account = account
+        recentChannels = recentIptv.load(account.key)
         if (same) {
             if (start != null && start != section) selectSection(start)
             if (fullscreen) playLastLiveFullscreen() else if (startLive) startRememberedLive()
@@ -1522,8 +1527,8 @@ class XtreamViewModel @Inject constructor(
         startTicker()
         val item = what.item
         if (live && !archive && item != null) {
-            val recent = com.enigmacast.domain.model.LastChannel(item.id, item.name, item.categoryId)
-            recentChannels = listOf(recent) + recentChannels.filter { it.reference != item.id }.take(11)
+            val recent = com.enigmacast.domain.model.LastChannel(item.id, item.name, item.categoryId, item.icon)
+            recentChannels = recentIptv.remember(account.key, recent)
             viewModelScope.launch {
                 settingsRepository.update { settings ->
                     com.enigmacast.domain.model.ChannelMemory.rememberIptv(
@@ -1701,10 +1706,18 @@ class XtreamViewModel @Inject constructor(
         sleepTimer.set(minutes)
     }
 
-    /** Recent tile: zap to a live channel watched earlier in this visit. */
+    /** Recent strip: zap back to a live channel watched earlier. */
     fun playRecent(channel: com.enigmacast.domain.model.LastChannel) {
         val known = items.firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference }
-        play(known ?: XtreamItem(channel.reference, channel.name, XtreamSection.LIVE, channel.bouquetReference))
+        play(
+            known ?: XtreamItem(
+                channel.reference,
+                channel.name,
+                XtreamSection.LIVE,
+                channel.bouquetReference,
+                icon = channel.logo,
+            ),
+        )
     }
 
     /** Live reloads the stream. A film or episode goes back to the start. */

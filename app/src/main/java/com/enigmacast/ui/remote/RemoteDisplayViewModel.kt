@@ -143,6 +143,9 @@ data class RemoteDisplayUiState(
     val quickBar: Boolean = false,
     /** Bumped when the quick bar opens, so its first tile takes the focus. */
     val quickBarToken: Int = 0,
+    /** Recent channels under the options; Down on the options opens it. */
+    val recentBar: Boolean = false,
+    val recentBarToken: Int = 0,
     /** Unified search over the picture, opened from the first quick-bar tile. */
     val searchOpen: Boolean = false,
     /** Bumped when search opens, so the field takes the focus. */
@@ -442,8 +445,33 @@ class RemoteDisplayViewModel @Inject constructor(
 
     fun openQuickBar() {
         bannerJob?.cancel()
-        _ui.update { it.copy(quickBar = true, quickBarToken = it.quickBarToken + 1) }
+        _ui.update { it.copy(quickBar = true, quickBarToken = it.quickBarToken + 1, recentBar = false) }
         watchOsdInfo()
+    }
+
+    /** Down on the quick bar: show the recent channels with their picons. */
+    fun openRecentBar() {
+        if (!_ui.value.quickBar) return
+        bannerJob?.cancel()
+        _ui.update {
+            it.copy(
+                quickBar = false,
+                recentBar = true,
+                recentBarToken = it.recentBarToken + 1,
+            )
+        }
+    }
+
+    /** Up from the recent strip returns to the options; Back closes the OSD. */
+    fun closeRecentBar(backToOptions: Boolean = false) {
+        if (!_ui.value.recentBar) return
+        _ui.update {
+            it.copy(
+                recentBar = false,
+                quickBar = backToOptions,
+                quickBarToken = if (backToOptions) it.quickBarToken + 1 else it.quickBarToken,
+            )
+        }
     }
 
     fun openSearch() {
@@ -490,7 +518,7 @@ class RemoteDisplayViewModel @Inject constructor(
     /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
     fun closeQuickBar() {
         if (!_ui.value.quickBar) return
-        _ui.update { it.copy(quickBar = false, searchOpen = false) }
+        _ui.update { it.copy(quickBar = false, recentBar = false, searchOpen = false) }
         if (_ui.value.playerState.filePlayback) {
             fileOsd.show()
         } else if (_ui.value.ownTuner && _ui.value.banner) {
@@ -562,7 +590,7 @@ class RemoteDisplayViewModel @Inject constructor(
     }
 
     fun zapRecent(channel: LastChannel) {
-        _ui.update { it.copy(quickBar = false) }
+        _ui.update { it.copy(quickBar = false, recentBar = false) }
         ownSession.start(BouquetEntry(channel.name, channel.reference))
     }
 
@@ -1404,6 +1432,17 @@ class RemoteDisplayViewModel @Inject constructor(
         if (_ui.value.searchOpen) {
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_UP) closeSearch()
+                return true
+            }
+            return false
+        }
+        if (_ui.value.recentBar) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) closeRecentBar()
+                return true
+            }
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                closeRecentBar(backToOptions = true)
                 return true
             }
             return false

@@ -1,8 +1,8 @@
 {
-  "versionCode": 89,
-  "versionName": "1.0.0-beta.86",
+  "versionCode": 91,
+  "versionName": "1.0.0-beta.88",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "De eerste optie in de live-optiebalk is nu Equivalent: alle IPTV- en satellietkanalen met dezelfde zendernaam, ook met andere voor- of achtervoegsels. De profielkeuze staat nu altijd vóór de satelliet-/IPTV-start.",
+  "notes": "Live-optiebalk: Equivalent kanaal, en bij nog een keer Down de recente zenders met logo's. Profielkeuze staat altijd vóór satelliet-/IPTV-start.",
   "companion": {
     "versionCode": 113,
     "versionName": "1.0.0-beta.14",

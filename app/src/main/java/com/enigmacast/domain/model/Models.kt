@@ -201,6 +201,8 @@ data class LastChannel(
     val reference: String = "",
     val name: String = "",
     val bouquetReference: String = "",
+    /** IPTV artwork URL; satellite channels load their picon from the receiver instead. */
+    val logo: String = "",
 )
 
 /** Which live picture was on last: the Enigma2 tuner, or an IPTV live channel. */

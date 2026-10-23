@@ -49,6 +49,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -105,6 +106,7 @@ data class QuickBarActions(
     val onRecord: () -> Unit,
     val onSearch: () -> Unit,
     val onEquivalent: () -> Unit,
+    val onRecentBar: () -> Unit,
     val onPip: () -> Unit = {},
 )
 
@@ -139,7 +141,14 @@ fun QuickOptionsBar(
         firstFocus.requestWhenReady()
     }
     LazyRow(
-        modifier = modifier,
+        modifier = modifier.onPreviewKeyEvent { event ->
+            if (interactive && event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                actions.onRecentBar()
+                true
+            } else {
+                false
+            }
+        },
         horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
         contentPadding = PaddingValues(horizontal = 8.dp),
     ) {

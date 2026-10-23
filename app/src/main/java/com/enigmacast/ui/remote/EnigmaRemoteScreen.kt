@@ -112,6 +112,7 @@ fun EnigmaRemoteScreen(
             onRecord = viewModel::recordWatching,
             onSearch = viewModel::openSearch,
             onEquivalent = viewModel::openEquivalent,
+            onRecentBar = viewModel::openRecentBar,
             onPip = viewModel::openPipPicker,
         )
     }
@@ -258,6 +259,24 @@ fun EnigmaRemoteScreen(
             onChoose = viewModel::chooseEquivalent,
             onDismiss = viewModel::closeEquivalent,
         )
+        if (ui.recentBar) {
+            RecentChannelsBar(
+                channels = ui.recent,
+                currentReference = ui.own.channel?.reference ?: ui.currentService?.reference.orEmpty(),
+                focusToken = ui.recentBarToken,
+                onChoose = viewModel::zapRecent,
+                onBackToOptions = { viewModel.closeRecentBar(backToOptions = true) },
+                onClose = { viewModel.closeRecentBar(backToOptions = false) },
+                logo = { channel, modifier ->
+                    Picon(
+                        entry = com.enigmacast.domain.model.BouquetEntry(channel.name, channel.reference),
+                        picon = viewModel::picon,
+                        cachedPicon = viewModel::cachedPicon,
+                        modifier = modifier,
+                    )
+                },
+            )
+        }
     }
 }
 
