@@ -40,13 +40,27 @@ class SyncServerInstaller @Inject constructor() {
             if (dataDir.isBlank()) error("No sync data directory on the receiver")
             exec(session, FETCH)
             val remote = "/usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync"
-            val init = exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init || true")
+            val init = exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init 2>&1 || true")
             exec(session, "/etc/init.d/enigmacast-sync restart || true; /etc/init.d/enigmacast-web restart || true")
             exec(session, setAdminPassword(dataDir))
             exec(session, "/etc/init.d/enigmacast-web restart || true")
-            val cert = exec(session, "cat '$dataDir/cert.pem'")
+            // The service creates the certificate after startup; on a slow receiver this can take
+            // a moment. Also keep the error readable when python3-sqlite3 is still missing.
+            val cert = exec(session, """
+                i=0
+                while [ ! -f '$dataDir/cert.pem' ] && [ ${'$'}i -lt 20 ]; do sleep 1; i=${'$'}((i+1)); done
+                cat '$dataDir/cert.pem' 2>/dev/null || true
+            """.trimIndent()).trim()
+            if (!cert.contains("BEGIN CERTIFICATE")) {
+                val details = exec(session, """
+                    echo 'sync:'; tail -20 '$dataDir/logs/sync.log' 2>/dev/null || true
+                    echo 'web:'; tail -20 '$dataDir/logs/web.log' 2>/dev/null || true
+                    echo 'python:'; python3 -c 'import sqlite3; print(sqlite3.sqlite_version)' 2>&1 || true
+                """.trimIndent()).trim()
+                error("Sync-server startte niet. Controleer python3-sqlite3 op de receiver.\n$details")
+            }
             val pin = pinOf(cert)
-            val scheme = if (cert.contains("BEGIN CERTIFICATE")) "https" else "http"
+            val scheme = "https"
             val code = Regex(""""pairingCode"\s*:\s*"(\d+)"""").find(init)?.groupValues?.get(1).orEmpty()
             return InstallReport(model, python, dataDir, code, pin, "$scheme://$host:8766/", "admin")
         } finally {
@@ -63,7 +77,9 @@ class SyncServerInstaller @Inject constructor() {
         try {
             session.connect(20_000)
             val dataDir = exec(session, pickDataDir(requireCert = true)).trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
-            if (dataDir.isBlank()) error("Sync server certificate was not found")
+            if (dataDir.isBlank()) {
+                error("Sync-server is niet actief: cert.pem ontbreekt. Controleer python3-sqlite3 en de sync-service.")
+            }
             return pinOf(exec(session, "cat '$dataDir/cert.pem'"))
         } finally {
             session.disconnect()
@@ -166,6 +182,13 @@ class SyncServerInstaller @Inject constructor() {
             URL=${'$'}(cat /tmp/enigmacast-sync-release/url)
             if ! wget -O /tmp/enigmacast-sync.ipk "${'$'}URL"; then
               python3 -c 'import urllib.request; urllib.request.urlretrieve(open("/tmp/enigmacast-sync-release/url", encoding="utf-8").read().strip(), "/tmp/enigmacast-sync.ipk")'
+            fi
+            if ! python3 -c 'import sqlite3, ssl' >/dev/null 2>&1; then
+              opkg update >/dev/null 2>&1 || true
+              opkg install python3-sqlite3 >/dev/null 2>&1 || {
+                echo "python3-sqlite3 ontbreekt en kon niet worden geïnstalleerd" >&2
+                exit 1
+              }
             fi
             opkg install --force-reinstall --force-overwrite /tmp/enigmacast-sync.ipk
             test -d /usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync/enigmacast_sync/web
