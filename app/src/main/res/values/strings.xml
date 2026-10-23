@@ -1559,4 +1559,12 @@
     <string name="companion_setting_hide_timeout">OSD duration</string>
     <string name="companion_opt_auto">Automatic</string>
     <string name="companion_hint">The bridge runs only while EnigmaCast is on screen. Nothing goes through the internet.</string>
+    <string name="iptv_providers">IPTV providers</string>
+    <string name="iptv_provider_new">New provider</string>
+    <string name="iptv_provider_name">Name</string>
+    <string name="iptv_provider_enabled">Enabled</string>
+    <string name="iptv_provider_disabled">Disabled</string>
+    <string name="iptv_provider_delete">Delete</string>
+    <string name="iptv_provider_choose">Choose an IPTV provider</string>
+    <string name="iptv_provider_categories">Categories of %s</string>
 </resources>

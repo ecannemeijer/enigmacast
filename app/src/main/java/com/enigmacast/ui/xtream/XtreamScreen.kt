@@ -104,6 +104,17 @@ private fun guideWhen(sec: Long, nowSec: Long): String {
 /** Which columns the side panel shows, as in the Enigma2 channel list. */
 private enum class PanelColumn { CATEGORIES, CHANNELS, GUIDE, VOD_CATEGORIES, VOD_GRID }
 
+/** A provider header or one of its categories in the live categories column. */
+private sealed interface CategoryEntry {
+    val providerId: String
+    val providerName: String
+    data class Provider(override val providerId: String, override val providerName: String, val expanded: Boolean) : CategoryEntry
+    data class Row(val category: com.enigmacast.domain.xtream.XtreamCategory) : CategoryEntry {
+        override val providerId: String get() = category.providerId
+        override val providerName: String get() = category.providerName
+    }
+}
+
 /**
  * IPTV in full screen, laid out and driven like the Enigma2 channel player. The list opens on
  * the channels only; Right shows the focused channel's programmes, Left the categories.
@@ -691,19 +702,48 @@ private fun SidePanel(
             val scope = rememberCoroutineScope()
             val firstFocus = remember { FocusRequester() }
             val lastFocus = remember { FocusRequester() }
-            val lastIndex = model.categories.lastIndex
-            val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
+            val providers = remember(model.categories) {
+                model.categories.groupBy { it.providerId }.map { (id, cats) -> id to (cats.firstOrNull()?.providerName.orEmpty()) }
+            }
+            val multipleProviders = providers.size > 1
+            var collapsed by remember { mutableStateOf(emptySet<String>()) }
+            val entries = remember(model.categories, multipleProviders, collapsed) {
+                if (!multipleProviders) {
+                    model.categories.map { CategoryEntry.Row(it) }
+                } else {
+                    providers.flatMap { (providerId, providerName) ->
+                        val cats = model.categories.filter { it.providerId == providerId }
+                        listOf(CategoryEntry.Provider(providerId, providerName, providerId !in collapsed)) +
+                            if (providerId in collapsed) emptyList() else cats.map { CategoryEntry.Row(it) }
+                    }
+                }
+            }
+            val lastIndex = entries.lastIndex
+            val selectedIndex = entries.indexOfFirst {
+                it is CategoryEntry.Row && it.category.id == model.category?.id && it.category.providerId == model.category?.providerId
+            }.coerceAtLeast(0)
             // Kept at the current category while hidden; only moves when it is off screen.
-            LaunchedEffect(model.categories) { categoryList.ensureVisible(selectedIndex, model.categories.size) }
-            val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
+            LaunchedEffect(entries, selectedIndex) { categoryList.ensureVisible(selectedIndex, entries.size) }
             // Focusing a visible row must not scroll (the TV default pulls it to ~30 % from the top).
             com.enigmacast.ui.theme.MinimalScrolling {
             LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
-                itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
-                    val c = k.value
+                itemsIndexed(
+                    entries,
+                    key = { _, entry ->
+                        when (entry) {
+                            is CategoryEntry.Provider -> "provider:${entry.providerId}"
+                            is CategoryEntry.Row -> "cat:${entry.category.providerId}:${entry.category.id}"
+                        }
+                    },
+                ) { index, entry ->
                     CompactListRow(
-                        onClick = { model.selectCategory(c) },
-                        selected = c.id == model.category?.id,
+                        onClick = {
+                            when (entry) {
+                                is CategoryEntry.Provider -> collapsed = if (entry.providerId in collapsed) collapsed - entry.providerId else collapsed + entry.providerId
+                                is CategoryEntry.Row -> model.selectCategory(entry.category)
+                            }
+                        },
+                        selected = entry is CategoryEntry.Row && entry.category.id == model.category?.id && entry.category.providerId == model.category?.providerId,
                         modifier = Modifier
                             .focusRequesterIf(index == selectedIndex, categoryFocus)
                             .focusRequesterIf(index == 0, firstFocus)
@@ -715,8 +755,19 @@ private fun SidePanel(
                                 onWrapToLast = { scope.launch { lastFocus.focusListRow(state, lastIndex) } },
                             ),
                     ) {
-                        Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        if (model.pendingCategory?.id == c.id) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
+                        if (entry is CategoryEntry.Provider) {
+                            Text(
+                                if (entry.expanded) "▾" else "▸",
+                                color = EnigmaColors.Accent,
+                                fontSize = 13.sp,
+                                modifier = Modifier.width(18.dp),
+                            )
+                            Text(entry.providerName.ifBlank { entry.providerId }, fontSize = 14.sp, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        } else {
+                            val c = (entry as CategoryEntry.Row).category
+                            Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = if (multipleProviders) 18.dp else 0.dp).weight(1f))
+                            if (model.pendingCategory?.id == c.id && model.pendingCategory?.providerId == c.providerId) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
+                        }
                     }
                 }
             }

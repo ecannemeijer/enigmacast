@@ -1551,4 +1551,12 @@
     <string name="companion_setting_hide_timeout">OSD-duur</string>
     <string name="companion_opt_auto">Automatisch</string>
     <string name="companion_hint">De brug draait alleen zolang EnigmaCast op het scherm staat. Er gaat niets via het internet.</string>
+    <string name="iptv_providers">IPTV-providers</string>
+    <string name="iptv_provider_new">Nieuwe provider</string>
+    <string name="iptv_provider_name">Naam</string>
+    <string name="iptv_provider_enabled">Aan</string>
+    <string name="iptv_provider_disabled">Uit</string>
+    <string name="iptv_provider_delete">Verwijderen</string>
+    <string name="iptv_provider_choose">Kies een IPTV-provider</string>
+    <string name="iptv_provider_categories">Categorieën van %s</string>
 </resources>

@@ -31,7 +31,12 @@ data class XtreamAccount(
 
 enum class XtreamSection { LIVE, MOVIES, SERIES }
 
-data class XtreamCategory(val id: String, val name: String)
+data class XtreamCategory(
+    val id: String,
+    val name: String,
+    val providerId: String = "",
+    val providerName: String = "",
+)
 
 /** A live channel, a film or a series in a category. [extension] is the container of a film. */
 data class XtreamItem(
@@ -48,6 +53,9 @@ data class XtreamItem(
     val archiveDays: Int = 0,
     /** M3U `catchup-source` template; empty when the archive uses the Xtream timeshift path. */
     val catchupSource: String = "",
+    /** Which configured IPTV provider this row came from. */
+    val providerId: String = "",
+    val providerName: String = "",
 ) {
     val hasArchive: Boolean get() = archiveDays > 0 || catchupSource.isNotBlank()
 }

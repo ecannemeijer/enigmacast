@@ -91,13 +91,16 @@ class ChannelAlternativesRepository @Inject constructor(
             .distinctBy { (item, login) -> "${login?.key}:${item.id}" }
             .forEach { (item, login) ->
                 val category = categoryNames[login?.key.orEmpty()]?.get(item.categoryId)
-                val context = category?.takeIf { it.isNotBlank() }?.let { "IPTV · $it" } ?: "IPTV"
+                val provider = item.providerName.takeIf { it.isNotBlank() }
+                val context = listOfNotNull(provider, category?.takeIf { it.isNotBlank() })
+                    .joinToString(" · ")
+                    .ifBlank { "IPTV" }
                 out += ChannelAlternative(
                     name = item.name,
                     source = ChannelSource.IPTV,
-                    subtitle = "IPTV",
+                    subtitle = provider ?: "IPTV",
                     context = context,
-                    reference = "iptv:${login?.key.orEmpty()}:${item.id}",
+                    reference = "iptv:${item.providerId}:${login?.key.orEmpty()}:${item.id}",
                     item = item,
                     account = login,
                 )

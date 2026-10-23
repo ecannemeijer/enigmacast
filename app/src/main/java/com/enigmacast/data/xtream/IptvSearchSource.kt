@@ -31,12 +31,27 @@ class IptvSearchSource @Inject constructor(
             val s = settings.current()
             if (s.iptvSource == IptvSourceMode.PLAYLIST) {
                 if (!profiles.seesPlaylist()) return IptvSearchResults()
-                val login = playlistStore.login.value
-                val source = when (s.iptvPlaylistKind) {
-                    IptvPlaylistKind.XTREAM -> login.xtreamAccount()?.key
-                    IptvPlaylistKind.M3U -> if (login.configured(IptvPlaylistKind.M3U)) com.enigmacast.ui.xtream.XtreamViewModel.M3U_ACCOUNT.key else null
-                } ?: return IptvSearchResults()
-                IptvSearch.results(source, playlist.search(query))
+                val providers = playlistStore.providers.value.filter { it.enabled && it.configured() }
+                if (providers.isNotEmpty()) {
+                    val found = playlist.search(query)
+                    val all = providers.mapNotNull { provider ->
+                        val account = provider.account() ?: return@mapNotNull null
+                        val items = found.filter { it.providerId == provider.id }
+                        if (items.isEmpty()) null else IptvSearch.results(account.key, items)
+                    }
+                    IptvSearchResults(
+                        live = all.flatMap { it.live }.take(com.enigmacast.domain.xtream.IptvSearch.LIMIT),
+                        films = all.flatMap { it.films }.take(com.enigmacast.domain.xtream.IptvSearch.LIMIT),
+                        series = all.flatMap { it.series }.take(com.enigmacast.domain.xtream.IptvSearch.LIMIT),
+                    )
+                } else {
+                    val login = playlistStore.login.value
+                    val source = when (s.iptvPlaylistKind) {
+                        IptvPlaylistKind.XTREAM -> login.xtreamAccount()?.key
+                        IptvPlaylistKind.M3U -> if (login.configured(IptvPlaylistKind.M3U)) com.enigmacast.ui.xtream.XtreamViewModel.M3U_ACCOUNT.key else null
+                    } ?: return IptvSearchResults()
+                    IptvSearch.results(source, playlist.search(query))
+                }
             } else withContext(Dispatchers.Default) {
                 val receiver = s.activeReceiver() ?: return@withContext IptvSearchResults()
                 val account = repository.cachedDetection(receiver.id)?.accounts?.firstOrNull() ?: return@withContext IptvSearchResults()

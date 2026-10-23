@@ -47,11 +47,16 @@ class MyItemsViewModel @Inject constructor(
         activeSources.value = runCatching {
             if (settings.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
                 if (!profiles.seesPlaylist()) return@runCatching emptySet()
-                val login = playlistStore.login.value
-                when (settings.iptvPlaylistKind) {
-                    com.enigmacast.domain.model.IptvPlaylistKind.XTREAM -> setOfNotNull(login.xtreamAccount()?.key)
-                    com.enigmacast.domain.model.IptvPlaylistKind.M3U ->
-                        if (login.configured(com.enigmacast.domain.model.IptvPlaylistKind.M3U)) setOf(com.enigmacast.ui.xtream.XtreamViewModel.M3U_ACCOUNT.key) else emptySet()
+                val providers = playlistStore.providers.value.filter { it.enabled && it.configured() }
+                if (providers.isNotEmpty()) {
+                    providers.mapNotNull { it.account()?.key }.toSet()
+                } else {
+                    val login = playlistStore.login.value
+                    when (settings.iptvPlaylistKind) {
+                        com.enigmacast.domain.model.IptvPlaylistKind.XTREAM -> setOfNotNull(login.xtreamAccount()?.key)
+                        com.enigmacast.domain.model.IptvPlaylistKind.M3U ->
+                            if (login.configured(com.enigmacast.domain.model.IptvPlaylistKind.M3U)) setOf(com.enigmacast.ui.xtream.XtreamViewModel.M3U_ACCOUNT.key) else emptySet()
+                    }
                 }
             } else {
                 val receiver = settings.activeReceiver() ?: return@runCatching emptySet<String>()

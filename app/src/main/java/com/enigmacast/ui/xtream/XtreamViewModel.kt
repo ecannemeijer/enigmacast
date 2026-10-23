@@ -108,6 +108,10 @@ class XtreamViewModel @Inject constructor(
 
     var account by mutableStateOf<XtreamAccount?>(null)
         private set
+    /** Provider id → the account used for that provider's playback, EPG and resume rows. */
+    private var providerAccounts: Map<String, XtreamAccount> = emptyMap()
+    private var providerAccountsKey: String = ""
+    private fun accountFor(providerId: String): XtreamAccount? = providerAccounts[providerId] ?: account
     var section by mutableStateOf(XtreamSection.LIVE)
         private set
     /** Section chosen in the IPTV menu, applied when the page opens. */
@@ -467,10 +471,13 @@ class XtreamViewModel @Inject constructor(
      * short list, and the satellite guide when those have no programme on now. The column
      * keeps the archive window so Up reaches programmes catch-up can play.
      */
+    private fun isM3uProvider(providerId: String): Boolean =
+        playlistStore.provider(providerId)?.kind == IptvPlaylistKind.M3U
+
     private suspend fun loadGuide(item: XtreamItem): List<XtreamEpg> {
         val now = System.currentTimeMillis() / 1000
         val pastDays = com.enigmacast.domain.xtream.Catchup.windowDays(item).coerceAtLeast(1)
-        val xtream = account?.takeIf { it !== M3U_ACCOUNT }
+        val xtream = accountFor(item.providerId)?.takeIf { !isM3uProvider(item.providerId) && it !== M3U_ACCOUNT }
         val full = if (xtream != null) repository.guideFull(xtream, item.id) else emptyList()
         val listings = full.ifEmpty { if (xtream != null) repository.guide(xtream, item.id) else emptyList() }
         val chosen = if (listings.airingAt(now) != null) listings else {
@@ -527,7 +534,7 @@ class XtreamViewModel @Inject constructor(
             detailLoading = true
             try {
                 runCatching { artworkSource.resolve(listOf(item)) }
-                val xtream = account?.takeIf { it !== M3U_ACCOUNT }
+                val xtream = accountFor(item.providerId)?.takeIf { !isM3uProvider(item.providerId) && it !== M3U_ACCOUNT }
                 val info = xtream?.let { repository.vodInfo(it, item) }
                 detailFilm = vod.film(item, vod.merge(item, artwork.value[vod.key(item)], info))
                 if (item.section == XtreamSection.SERIES && xtream != null) {
@@ -547,7 +554,7 @@ class XtreamViewModel @Inject constructor(
      * episode watched, else the first one. Null while nothing is known yet (list still loading).
      */
     fun seriesPlayTarget(show: XtreamItem): XtreamEpisode? {
-        val source = account?.key
+        val source = accountFor(show.providerId)?.key
         val latest = library.resumes.value
             .filter { it.kind == "e" && it.source == source && it.seriesId == show.id }
             .maxByOrNull { it.updatedMs }
@@ -573,15 +580,17 @@ class XtreamViewModel @Inject constructor(
 
     private var resumeKey: String? = null
 
-    private fun resumeKeyOf(kind: String, id: String): String? = account?.let { "${it.key}/$kind/$id" }
-    private fun resumeRow(kind: String, id: String) = resumeKeyOf(kind, id)?.let { library.resumeMap.value[it] }
+    private fun resumeKeyOf(kind: String, id: String, providerId: String = ""): String? =
+        (accountFor(providerId) ?: account)?.let { "${it.key}/$kind/$id" }
+    private fun resumeRow(kind: String, id: String, providerId: String = "") =
+        resumeKeyOf(kind, id, providerId)?.let { library.resumeMap.value[it] }
 
     /** Where a film or episode was left, in ms; 0 when it was not started or watched to the end. */
-    fun resumeOf(item: XtreamItem): Long = resumeRow("m", item.id)?.positionMs ?: 0L
+    fun resumeOf(item: XtreamItem): Long = resumeRow("m", item.id, item.providerId)?.positionMs ?: 0L
     fun resumeOf(episode: XtreamEpisode): Long = resumeRow("e", episode.id)?.positionMs ?: 0L
 
     /** 0..1 for the progress line on a card (0 when nothing to resume). */
-    fun progressOf(item: XtreamItem): Float = resumeRow("m", item.id)?.let { row ->
+    fun progressOf(item: XtreamItem): Float = resumeRow("m", item.id, item.providerId)?.let { row ->
         com.enigmacast.domain.resume.ResumePolicy.fraction(com.enigmacast.domain.resume.ResumePoint(row.id, row.positionMs, row.durationMs), 0L)
     } ?: 0f
 
@@ -669,12 +678,12 @@ class XtreamViewModel @Inject constructor(
     }
 
     /** IPTV favorites (Library): the film or series on the info page. */
-    fun isFavorite(item: XtreamItem): Boolean = account?.let {
+    fun isFavorite(item: XtreamItem): Boolean = accountFor(item.providerId)?.let {
         com.enigmacast.data.xtream.IptvLibrary.key(it.key, com.enigmacast.data.xtream.IptvLibrary.kindOf(item.section), item.id) in library.favoriteKeys.value
     } == true
 
     fun toggleFavorite(item: XtreamItem) {
-        val account = account ?: return
+        val account = accountFor(item.providerId) ?: return
         val movie = artwork.value[com.enigmacast.data.xtream.IptvVod.key(item)]
         val on = !isFavorite(item)
         library.setFavorite(
@@ -890,10 +899,10 @@ class XtreamViewModel @Inject constructor(
     fun seekBy(deltaMs: Long) { player?.let { seekTo(it.currentPosition + deltaMs) } }
 
     fun playFilm(item: XtreamItem, fromStart: Boolean) {
-        val account = account ?: return
+        val account = accountFor(item.providerId) ?: return
         if (launchOrigin == null) vodFromDashboard = true
         val url = item.url.ifBlank { XtreamUrls.movie(account, item.id, item.extension) }
-        start(url, XtreamPlaying(item.name, item), live = false, account = account, startMs = if (fromStart) 0L else resumeOf(item), resume = resumeKeyOf("m", item.id))
+        start(url, XtreamPlaying(item.name, item), live = false, account = account, startMs = if (fromStart) 0L else resumeOf(item), resume = resumeKeyOf("m", item.id, item.providerId))
     }
 
     private var player: ExoPlayer? = null
@@ -953,9 +962,12 @@ class XtreamViewModel @Inject constructor(
             kotlinx.coroutines.flow.combine(
                 settingsRepository.settings.map { Triple(it.iptvSource, it.iptvPlaylistKind, it.activeReceiver()) },
                 playlistStore.login,
+                playlistStore.providers,
                 playlistSync.lastLoad,
                 profiles.state.map { com.enigmacast.domain.profile.ProfileRules.seesPlaylist(it, it.activeUuid) },
-            ) { s, login, loaded, sees -> Source(s.first, s.second, s.third?.let { it.id to it.host }, login, loaded, sees) }
+            ) { s, login, providers, loaded, sees ->
+                Source(s.first, s.second, s.third?.let { it.id to it.host }, login, providers, loaded, sees)
+            }
                 .distinctUntilChanged()
                 .collectLatest { source -> apply(source) }
         }
@@ -966,6 +978,7 @@ class XtreamViewModel @Inject constructor(
         val kind: IptvPlaylistKind,
         val receiver: Pair<String, String>?,
         val login: com.enigmacast.data.xtream.IptvPlaylistLogin,
+        val providers: List<com.enigmacast.data.xtream.IptvProvider>,
         val loaded: Int,
         val seesPlaylist: Boolean,
     )
@@ -974,12 +987,38 @@ class XtreamViewModel @Inject constructor(
         if (source.mode == IptvSourceMode.PLAYLIST) {
             val wasPlaylist = playlist != null
             playlist = source.kind
-            val playlistAccount = if (!source.seesPlaylist) null else when (source.kind) {
-                IptvPlaylistKind.XTREAM -> source.login.xtreamAccount()?.copy(name = "Playlist")
-                IptvPlaylistKind.M3U -> M3U_ACCOUNT.takeIf { source.login.configured(IptvPlaylistKind.M3U) }
+            val providers = if (source.seesPlaylist) {
+                source.providers.filter { it.enabled && it.configured() }.ifEmpty {
+                    if (source.login.configured(source.kind)) {
+                        listOf(
+                            com.enigmacast.data.xtream.IptvProvider(
+                                id = "legacy",
+                                name = "IPTV",
+                                kind = source.kind,
+                                m3uUrl = source.login.m3uUrl,
+                                server = source.login.server,
+                                username = source.login.username,
+                                password = source.login.password,
+                            ),
+                        )
+                    } else {
+                        emptyList()
+                    }
+                }
+            } else {
+                emptyList()
             }
-            val hasRows = playlistAccount != null && playlistSync.count() > 0
-            _detection.value = XtreamDetection(false, listOfNotNull(playlistAccount?.takeIf { hasRows }))
+            val accounts = providers.mapNotNull { provider ->
+                provider.account()?.copy(name = provider.displayName())
+            }
+            providerAccounts = providers.mapNotNull { provider ->
+                provider.account()?.let { provider.id to it }
+            }.toMap()
+            val key = accounts.joinToString("|") { it.key }
+            val changedProviders = key != providerAccountsKey
+            providerAccountsKey = key
+            _detection.value = XtreamDetection(false, accounts)
+            val hasRows = accounts.isNotEmpty() && playlistSync.count() > 0
             if (hasRows && !catchupIndexStarted && playlistStore.needsCatchupIndex()) {
                 catchupIndexStarted = true
                 viewModelScope.launch {
@@ -987,12 +1026,14 @@ class XtreamViewModel @Inject constructor(
                     if (result !is com.enigmacast.data.xtream.IptvLoadResult.Done) catchupIndexStarted = false
                 }
             }
-            // A new load or another playlist: the lists start over from Room.
-            if (wasPlaylist || account != null) { account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList(); series = null }
+            if (wasPlaylist && changedProviders) {
+                account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList(); series = null
+            }
+            if (account == null || account?.key !in accounts.map { it.key }) account = accounts.firstOrNull()
             open()
             return
         }
-        if (playlist != null) { playlist = null; account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList() }
+        if (playlist != null) { playlist = null; account = null; providerAccounts = emptyMap(); categories = emptyList(); category = null; items = emptyList(); cards = emptyList() }
         _detection.value = null
         val receiver = settingsRepository.current().activeReceiver() ?: return
         _detection.value = repository.cachedDetection(receiver.id) ?: repository.detect(receiver)
@@ -1009,13 +1050,20 @@ class XtreamViewModel @Inject constructor(
 
     /** The section's categories without the ones hidden in Settings › IPTV › Categories. */
     private suspend fun categoriesOf(account: XtreamAccount, section: XtreamSection, force: Boolean = false): List<XtreamCategory> {
-        val all = if (playlist != null) playlistSync.categories(section) else repository.categories(account, section, force)
-        val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(playlist?.name, account.key)
+        if (playlist != null) {
+            return playlistSync.categories(section).filter { category ->
+                val source = com.enigmacast.data.xtream.IptvProvider.sourceKey(category.providerId)
+                category.id !in hiddenCategories.hidden(source, section)
+            }
+        }
+        val all = repository.categories(account, section, force)
+        val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(null, account.key)
         return com.enigmacast.domain.xtream.IptvCategoryFilter.visible(all, hiddenCategories.hidden(source, section))
     }
 
-    private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, id: String, force: Boolean) =
-        if (playlist != null) playlistSync.items(section, id) else repository.items(account, section, id, force)
+    private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, category: XtreamCategory, force: Boolean) =
+        if (playlist != null) playlistSync.items(section, category.id, category.providerId)
+        else repository.items(account, section, category.id, force)
 
     /**
      * Films or series inside the dashboard: pick the playlist and the requested section,
@@ -1083,7 +1131,7 @@ class XtreamViewModel @Inject constructor(
             equivalents.open(
                 name = name,
                 receiverId = settingsRepository.current().activeReceiver()?.id,
-                account = account,
+                account = playing?.item?.providerId?.let { accountFor(it) } ?: account,
                 playlistMode = playlist != null,
             )
         }
@@ -1097,7 +1145,8 @@ class XtreamViewModel @Inject constructor(
 
     /** "Geschiedenis wissen" in the recent strip. */
     fun clearRecent() {
-        recentIptv.clear(account?.key.orEmpty())
+        val source = playing?.item?.providerId?.let { accountFor(it) }?.key ?: account?.key.orEmpty()
+        recentIptv.clear(source)
         recentChannels = emptyList()
     }
 
@@ -1209,7 +1258,7 @@ class XtreamViewModel @Inject constructor(
         try {
             val started = System.currentTimeMillis()
             runCatching {
-                val list = itemsOf(account, section, category.id, force)
+                val list = itemsOf(account, section, category, force)
                 // The cards' playlist data (title clean-up per name) is built once, off the main thread.
                 val base = if (section == XtreamSection.LIVE) emptyList()
                 else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { IptvCard.of(list) }
@@ -1247,8 +1296,8 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun openSeries(item: XtreamItem) {
-        val account = account ?: return
-        if (account === M3U_ACCOUNT) {
+        val account = accountFor(item.providerId) ?: return
+        if (item.url.isNotBlank() || isM3uProvider(item.providerId)) {
             if (item.url.isNotBlank()) start(item.url, XtreamPlaying(item.name, item), live = false, account = account)
             return
         }
@@ -1272,7 +1321,7 @@ class XtreamViewModel @Inject constructor(
 
     /** The playing live channel's listings for the OSD (not called per focused row). */
     private fun loadPlayingGuide(item: XtreamItem) {
-        if (item.section != XtreamSection.LIVE || account == null) return
+        if (item.section != XtreamSection.LIVE || accountFor(item.providerId) == null) return
         if (epgNow(item.id)?.airingAt(System.currentTimeMillis() / 1000) != null) return
         epgJob?.cancel()
         epgJob = viewModelScope.launch {
@@ -1286,7 +1335,7 @@ class XtreamViewModel @Inject constructor(
         catchupDurationMs = 0L
         fallbackLatched = false
         httpFactory.setDefaultRequestProperties(emptyMap())
-        val account = account ?: return
+        val account = accountFor(item.providerId) ?: return
         if (item.url.isNotBlank() && item.section != XtreamSection.SERIES) {
             start(item.url, XtreamPlaying(item.name, item), live = item.section == XtreamSection.LIVE, account = account)
             return
@@ -1299,8 +1348,8 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun playCatchup(item: XtreamItem, event: XtreamEpg) {
-        val loginAccount = account ?: return
-        val login = loginAccount.takeIf { it !== M3U_ACCOUNT }
+        val loginAccount = accountFor(item.providerId) ?: return
+        val login = loginAccount.takeIf { !isM3uProvider(item.providerId) && it !== M3U_ACCOUNT }
         val url = com.enigmacast.domain.xtream.Catchup.url(login, item, event) ?: return
         catchup = true
         catchupDurationMs = (event.endSec - event.startSec).coerceAtLeast(1) * 1000
@@ -1313,7 +1362,7 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun playEpisode(episode: XtreamEpisode, show: XtreamItem? = series, fromStart: Boolean = false) {
-        val account = account ?: return
+        val account = show?.let { accountFor(it.providerId) } ?: account ?: return
         if (launchOrigin == null) vodFromDashboard = true
         val series = show
         if (playbackEpisodes.none { it.id == episode.id } && series != null) {

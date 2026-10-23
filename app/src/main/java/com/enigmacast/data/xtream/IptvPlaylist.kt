@@ -33,6 +33,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.DecodeSequenceMode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -80,8 +82,15 @@ class IptvPlaylistStore @Inject constructor(
     private val secrets: SecretStore,
 ) {
     private val revisionPrefs = context.getSharedPreferences(REVISION_PREFS, Context.MODE_PRIVATE)
-    private val _login = MutableStateFlow(read())
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val _providers = MutableStateFlow(readProviders())
+    val providers: StateFlow<List<IptvProvider>> = _providers
+    private val _login = MutableStateFlow(_providers.value.firstOrNull { it.enabled && it.configured() }?.login ?: IptvPlaylistLogin())
     val login: StateFlow<IptvPlaylistLogin> = _login
+
+    init {
+        if (_providers.value.isEmpty()) migrateLegacy()
+    }
 
     /** Set while a server login is written locally, so that write is not uploaded again. */
     @Volatile var applyingRemote: Boolean = false
@@ -122,12 +131,90 @@ class IptvPlaylistStore @Inject constructor(
         secrets.read(M3U).orEmpty(), secrets.read(SERVER).orEmpty(), secrets.read(USER).orEmpty(), secrets.read(PASS).orEmpty(),
     )
 
+    private fun readProviders(): List<IptvProvider> {
+        val raw = secrets.read(PROVIDERS).orEmpty()
+        if (raw.isBlank()) return emptyList()
+        return runCatching { json.decodeFromString<List<IptvProvider>>(raw) }
+            .getOrDefault(emptyList())
+            .filter { it.id.isNotBlank() }
+    }
+
+    /** Existing single-playlist users keep their login as provider "default". */
+    private fun migrateLegacy() {
+        val legacy = read()
+        if (!legacy.m3uUrl.startsWith("http", true) && legacy.server.isBlank()) return
+        val kind = if (legacy.server.isNotBlank()) IptvPlaylistKind.XTREAM else IptvPlaylistKind.M3U
+        val provider = IptvProvider(
+            id = "default",
+            name = if (kind == IptvPlaylistKind.M3U) "M3U" else "Xtream",
+            kind = kind,
+            m3uUrl = legacy.m3uUrl,
+            server = legacy.server,
+            username = legacy.username,
+            password = legacy.password,
+            enabled = true,
+        )
+        persistProviders(listOf(provider))
+    }
+
+    private fun persistProviders(list: List<IptvProvider>) {
+        _providers.value = list
+        secrets.write(PROVIDERS, json.encodeToString(list))
+        if (list.isEmpty()) {
+            // Do not let a deleted provider come back through the old single-login fallback.
+            secrets.write(M3U, null); secrets.write(SERVER, null); secrets.write(USER, null); secrets.write(PASS, null)
+        }
+        _login.value = list.firstOrNull { it.enabled && it.configured() }?.login ?: IptvPlaylistLogin()
+    }
+
+    fun provider(id: String): IptvProvider? = _providers.value.firstOrNull { it.id == id }
+
+    fun enabledProviders(): List<IptvProvider> = _providers.value.filter { it.enabled && it.configured() }
+
+    /** Adds or updates one provider. A blank id creates a new one. */
+    fun saveProvider(provider: IptvProvider): IptvProvider {
+        if (!provider.configured()) error("provider is not configured")
+        val withId = if (provider.id.isBlank()) {
+            provider.copy(id = java.util.UUID.randomUUID().toString(), name = provider.displayName())
+        } else {
+            provider.copy(name = provider.displayName())
+        }
+        val list = _providers.value.toMutableList()
+        val index = list.indexOfFirst { it.id == withId.id }
+        if (index >= 0) list[index] = withId else list += withId
+        persistProviders(list)
+        return withId
+    }
+
+    fun deleteProvider(id: String) = persistProviders(_providers.value.filterNot { it.id == id })
+
+    fun setProviderEnabled(id: String, enabled: Boolean) {
+        persistProviders(_providers.value.map { if (it.id == id) it.copy(enabled = enabled) else it })
+    }
+
     fun save(login: IptvPlaylistLogin) {
         secrets.write(M3U, login.m3uUrl.trim())
         secrets.write(SERVER, login.server.trim())
         secrets.write(USER, login.username.trim())
         secrets.write(PASS, login.password)
-        _login.value = read()
+        val existing = _providers.value.firstOrNull()
+        if (existing == null) {
+            val kind = if (login.server.isNotBlank()) IptvPlaylistKind.XTREAM else IptvPlaylistKind.M3U
+            saveProvider(
+                IptvProvider(
+                    id = "default",
+                    name = if (kind == IptvPlaylistKind.M3U) "M3U" else "Xtream",
+                    kind = kind,
+                    m3uUrl = login.m3uUrl,
+                    server = login.server,
+                    username = login.username,
+                    password = login.password,
+                    enabled = true,
+                ),
+            )
+        } else {
+            saveProvider(existing.copy(m3uUrl = login.m3uUrl, server = login.server, username = login.username, password = login.password))
+        }
     }
 
     /** When the playlist was last loaded into Room (ms), 0 if never. Not a secret, kept alongside. */
@@ -150,6 +237,7 @@ class IptvPlaylistStore @Inject constructor(
         const val DECLINED = "declined_change_id"
         const val CATCHUP_INDEX = "catchup_v1"
         const val LOADED = "iptv.playlist.loaded_at"
+        const val PROVIDERS = "iptv.providers.v1"
         const val M3U = "iptv.playlist.m3u"
         const val SERVER = "iptv.playlist.server"
         const val USER = "iptv.playlist.user"
@@ -177,7 +265,8 @@ class IptvPlaylistSync @Inject constructor(
 
     fun arm() { loadAfterCache = true }
 
-    fun hasLogin(kind: IptvPlaylistKind): Boolean = store.login.value.configured(kind)
+    fun hasLogin(kind: IptvPlaylistKind): Boolean =
+        store.providers.value.any { it.enabled && it.configured() && it.kind == kind } || store.login.value.configured(kind)
     private val _lastLoad = MutableStateFlow(0)
     /** Goes up after every finished load, so pages reading Room reload. */
     val lastLoad: StateFlow<Int> = _lastLoad
@@ -191,7 +280,7 @@ class IptvPlaylistSync @Inject constructor(
         val armed = loadAfterCache
         val indexCatchup = store.needsCatchupIndex()
         if (!armed && !indexCatchup && System.currentTimeMillis() - store.loadedAt < 24 * 60 * 60_000L) return null
-        if (!store.login.value.configured(kind)) return null
+        if (store.enabledProviders().isEmpty() && !store.login.value.configured(kind)) return null
         loadAfterCache = false
         val result = load(kind)
         if (armed && result !is IptvLoadResult.Done) loadAfterCache = true
@@ -199,16 +288,45 @@ class IptvPlaylistSync @Inject constructor(
     }
 
     suspend fun load(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit = {}): IptvLoadResult = gate.withLock {
-        // The status window shows how many entries are read; the total is not known in advance.
+        val configured = if (store.providers.value.isNotEmpty()) {
+            store.enabledProviders()
+        } else {
+            listOfNotNull(legacyProvider(kind))
+        }
+        if (configured.isEmpty()) return@withLock IptvLoadResult.Failure.NOT_CONFIGURED
         val task = activity.start(com.enigmacast.activity.ActivityKind.IPTV)
         var failed = true
         try {
-            val result = loadBody(kind) { progress ->
-                activity.progress(task, progress.count, null)
-                onProgress(progress)
+            var categories = 0
+            var items = 0
+            var lastFailure: IptvLoadResult.Failure? = null
+            for (provider in configured) {
+                when (val result = loadProvider(provider) { progress ->
+                    activity.progress(task, progress.count, null)
+                    onProgress(progress)
+                }) {
+                    is IptvLoadResult.Done -> {
+                        categories += result.categories
+                        items += result.items
+                    }
+                    is IptvLoadResult.Failure -> lastFailure = result
+                }
             }
-            failed = result is IptvLoadResult.Failure && result != IptvLoadResult.Failure.NOT_CONFIGURED
-            result
+            // Old single-provider rows are no longer used once a provider list exists.
+            if (store.providers.value.isNotEmpty()) {
+                dao.clearCategories(SOURCE)
+                dao.clearItems(SOURCE)
+            }
+            if (items == 0) {
+                failed = lastFailure != null && lastFailure != IptvLoadResult.Failure.NOT_CONFIGURED
+                lastFailure ?: IptvLoadResult.Failure.EMPTY
+            } else {
+                failed = false
+                store.markLoaded(System.currentTimeMillis())
+                store.markCatchupIndex()
+                _lastLoad.value++
+                IptvLoadResult.Done(categories, items)
+            }
         } catch (cancel: kotlinx.coroutines.CancellationException) {
             failed = false
             throw cancel
@@ -217,43 +335,63 @@ class IptvPlaylistSync @Inject constructor(
         }
     }
 
-    private suspend fun loadBody(kind: IptvPlaylistKind, onProgress: (IptvLoadProgress) -> Unit): IptvLoadResult = withContext(Dispatchers.IO) {
+    /** A pre-multi-provider login, loaded under the old "playlist" source. */
+    private fun legacyProvider(kind: IptvPlaylistKind): IptvProvider? {
         val login = store.login.value
-        if (!login.configured(kind)) return@withContext IptvLoadResult.Failure.NOT_CONFIGURED
-        val started = System.currentTimeMillis()
-        dao.clearCategories(STAGING); dao.clearItems(STAGING)
-        try {
-            val counts = when (kind) {
-                IptvPlaylistKind.M3U -> loadM3u(login.m3uUrl, onProgress)
-                IptvPlaylistKind.XTREAM -> loadXtream(login.xtreamAccount()!!, onProgress)
-            }
-            if (counts.second == 0) {
-                dao.clearCategories(STAGING); dao.clearItems(STAGING)
-                return@withContext IptvLoadResult.Failure.EMPTY
-            }
-            onProgress(IptvLoadProgress(IptvLoadProgress.Step.SAVE, counts.second))
-            db.withTransaction {
-                dao.clearCategories(SOURCE); dao.clearItems(SOURCE)
-                dao.moveCategories(STAGING, SOURCE); dao.moveItems(STAGING, SOURCE)
-            }
-            EnigmaLog.network("IPTV playlist ($kind) loaded: ${counts.first} categories, ${counts.second} entries in ${System.currentTimeMillis() - started} ms")
-            store.markLoaded(System.currentTimeMillis())
-            store.markCatchupIndex()
-            _lastLoad.value++
-            IptvLoadResult.Done(counts.first, counts.second)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            withContext(kotlinx.coroutines.NonCancellable) { dao.clearCategories(STAGING); dao.clearItems(STAGING) }
-            throw e
-        } catch (e: HttpStatus) {
-            dao.clearCategories(STAGING); dao.clearItems(STAGING)
-            EnigmaLog.networkError("IPTV playlist load: HTTP ${e.code}")
-            if (e.code == 401 || e.code == 403) IptvLoadResult.Failure.LOGIN else IptvLoadResult.Failure.HTTP
-        } catch (e: IOException) {
-            dao.clearCategories(STAGING); dao.clearItems(STAGING)
-            EnigmaLog.networkError("IPTV playlist load: ${e.javaClass.simpleName}")
-            IptvLoadResult.Failure.UNREACHABLE
-        }
+        if (!login.configured(kind)) return null
+        return IptvProvider(
+            id = "legacy",
+            name = "IPTV",
+            kind = kind,
+            m3uUrl = login.m3uUrl,
+            server = login.server,
+            username = login.username,
+            password = login.password,
+            enabled = true,
+        )
     }
+
+    private fun sourceOf(provider: IptvProvider): String =
+        if (provider.id == "legacy") SOURCE else provider.sourceKey
+
+    private suspend fun loadProvider(provider: IptvProvider, onProgress: (IptvLoadProgress) -> Unit): IptvLoadResult =
+        withContext(Dispatchers.IO) {
+            if (!provider.configured()) return@withContext IptvLoadResult.Failure.NOT_CONFIGURED
+            val source = sourceOf(provider)
+            val staging = "$source.new"
+            val started = System.currentTimeMillis()
+            dao.clearCategories(staging); dao.clearItems(staging)
+            try {
+                val counts = when (provider.kind) {
+                    IptvPlaylistKind.M3U -> loadM3u(provider.m3uUrl, staging, provider, onProgress)
+                    IptvPlaylistKind.XTREAM -> loadXtream(
+                        provider.login.xtreamAccount()!!, staging, provider, onProgress,
+                    )
+                }
+                if (counts.second == 0) {
+                    dao.clearCategories(staging); dao.clearItems(staging)
+                    return@withContext IptvLoadResult.Failure.EMPTY
+                }
+                onProgress(IptvLoadProgress(IptvLoadProgress.Step.SAVE, counts.second))
+                db.withTransaction {
+                    dao.clearCategories(source); dao.clearItems(source)
+                    dao.moveCategories(staging, source); dao.moveItems(staging, source)
+                }
+                EnigmaLog.network("IPTV provider ${provider.id} (${provider.kind}) loaded: ${counts.first} categories, ${counts.second} entries in ${System.currentTimeMillis() - started} ms")
+                IptvLoadResult.Done(counts.first, counts.second)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                withContext(kotlinx.coroutines.NonCancellable) { dao.clearCategories(staging); dao.clearItems(staging) }
+                throw e
+            } catch (e: HttpStatus) {
+                dao.clearCategories(staging); dao.clearItems(staging)
+                EnigmaLog.networkError("IPTV provider load: HTTP ${e.code}")
+                if (e.code == 401 || e.code == 403) IptvLoadResult.Failure.LOGIN else IptvLoadResult.Failure.HTTP
+            } catch (e: IOException) {
+                dao.clearCategories(staging); dao.clearItems(staging)
+                EnigmaLog.networkError("IPTV provider load: ${e.javaClass.simpleName}")
+                IptvLoadResult.Failure.UNREACHABLE
+            }
+        }
 
     private class HttpStatus(val code: Int) : IOException("HTTP $code")
 
@@ -272,7 +410,12 @@ class IptvPlaylistSync @Inject constructor(
         }
     }
 
-    private suspend fun loadM3u(url: String, onProgress: (IptvLoadProgress) -> Unit): Pair<Int, Int> {
+    private suspend fun loadM3u(
+        url: String,
+        source: String,
+        provider: IptvProvider,
+        onProgress: (IptvLoadProgress) -> Unit,
+    ): Pair<Int, Int> {
         onProgress(IptvLoadProgress(IptvLoadProgress.Step.CONNECT, 0))
         val categories = LinkedHashMap<Pair<XtreamSection, String>, String>()
         val batch = ArrayList<IptvItemRow>(CHUNK)
@@ -285,7 +428,11 @@ class IptvPlaylistSync @Inject constructor(
                     val key = e.section to group
                     val catId = categories.getOrPut(key) { "g${categories.size}" }
                     total++
-                    batch += IptvItemRow(STAGING, e.section.name, catId, "m$total", e.name, e.logo, e.url.substringAfterLast('.', "").take(5), e.number, e.url, total, e.archiveDays, e.catchupSource)
+                    batch += IptvItemRow(
+                        source, e.section.name, catId, "m$total", e.name, e.logo,
+                        e.url.substringAfterLast('.', "").take(5), e.number, e.url, total,
+                        e.archiveDays, e.catchupSource,
+                    )
                     if (batch.size >= CHUNK) {
                         outer.ensureActive()
                         flushBlocking(batch)
@@ -295,7 +442,7 @@ class IptvPlaylistSync @Inject constructor(
             }
         }
         flush(batch)
-        dao.insertCategories(categories.entries.mapIndexed { i, (key, id) -> IptvCategoryRow(STAGING, key.first.name, id, key.second, i) })
+        dao.insertCategories(categories.entries.mapIndexed { i, (key, id) -> IptvCategoryRow(source, key.first.name, id, key.second, i) })
         return categories.size to total
     }
 
@@ -310,7 +457,12 @@ class IptvPlaylistSync @Inject constructor(
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    private suspend fun loadXtream(account: XtreamAccount, onProgress: (IptvLoadProgress) -> Unit): Pair<Int, Int> {
+    private suspend fun loadXtream(
+        account: XtreamAccount,
+        source: String,
+        provider: IptvProvider,
+        onProgress: (IptvLoadProgress) -> Unit,
+    ): Pair<Int, Int> {
         onProgress(IptvLoadProgress(IptvLoadProgress.Step.CONNECT, 0))
         var categories = 0
         var total = 0
@@ -323,14 +475,17 @@ class IptvPlaylistSync @Inject constructor(
             val (section, catAction, itemAction) = names
             onProgress(IptvLoadProgress(step, total))
             val cats: List<XtreamCategory> = stream(XtreamUrls.api(account, catAction)) { input -> objects(input).mapNotNull(XtreamJson::category).toList() }
-            dao.insertCategories(cats.mapIndexed { i, c -> IptvCategoryRow(STAGING, section.name, c.id, c.name, i) })
+            dao.insertCategories(cats.mapIndexed { i, c -> IptvCategoryRow(source, section.name, c.id, c.name, i) })
             categories += cats.size
             val batch = ArrayList<IptvItemRow>(CHUNK)
             stream(XtreamUrls.api(account, itemAction)) { input ->
                 for (o in objects(input)) {
                     val item: XtreamItem = XtreamJson.item(o, section) ?: continue
                     total++
-                    batch += IptvItemRow(STAGING, section.name, item.categoryId, item.id, item.name, item.icon, item.extension, item.number, "", total, item.archiveDays, item.catchupSource)
+                    batch += IptvItemRow(
+                        source, section.name, item.categoryId, item.id, item.name, item.icon,
+                        item.extension, item.number, "", total, item.archiveDays, item.catchupSource,
+                    )
                     if (batch.size >= CHUNK) {
                         flush(batch)
                         onProgress(IptvLoadProgress(step, total))
@@ -350,24 +505,42 @@ class IptvPlaylistSync @Inject constructor(
     /** Titles containing [query], at most [limit] per section; IO thread. */
     suspend fun search(query: String, limit: Int = com.enigmacast.domain.xtream.IptvSearch.LIMIT): List<XtreamItem> = withContext(Dispatchers.IO) {
         val pattern = com.enigmacast.domain.xtream.IptvSearch.likePattern(query)
-        XtreamSection.entries.flatMap { section ->
-            dao.search(SOURCE, section.name, pattern, limit).map { it.toItem(section) }
+        val sources = readProviders().map { it.id to it.displayName() }
+        sources.flatMap { (providerId, providerName) ->
+            val source = sourceOf(providerId)
+            XtreamSection.entries.flatMap { section ->
+                dao.search(source, section.name, pattern, limit).map { it.toItem(section, providerId, providerName) }
+            }
         }
     }
 
-    suspend fun counts(section: XtreamSection): Map<String, Int> =
-        dao.countsByCategory(SOURCE, section.name).associate { it.categoryId to it.n }
+    suspend fun counts(section: XtreamSection): Map<String, Int> {
+        val out = LinkedHashMap<String, Int>()
+        readProviders().forEach { provider ->
+            dao.countsByCategory(sourceOf(provider.id), section.name)
+                .forEach { out[it.categoryId] = (out[it.categoryId] ?: 0) + it.n }
+        }
+        return out
+    }
 
-    suspend fun categories(section: XtreamSection): List<XtreamCategory> =
-        dao.categories(SOURCE, section.name).map { XtreamCategory(it.id, it.name) }
+    suspend fun categories(section: XtreamSection, providerId: String? = null): List<XtreamCategory> =
+        readProviders()
+            .filter { providerId == null || it.id == providerId }
+            .flatMap { provider ->
+                dao.categories(sourceOf(provider.id), section.name).map {
+                    XtreamCategory(it.id, it.name, provider.id, provider.displayName())
+                }
+            }
 
     /** A whole category, read from Room in pages of [PAGE]. */
-    suspend fun items(section: XtreamSection, categoryId: String): List<XtreamItem> = withContext(Dispatchers.IO) {
+    suspend fun items(section: XtreamSection, categoryId: String, providerId: String = ""): List<XtreamItem> = withContext(Dispatchers.IO) {
+        val source = sourceOf(providerId)
+        val providerName = store.provider(providerId)?.displayName().orEmpty()
         val out = ArrayList<XtreamItem>()
         var offset = 0
         while (true) {
-            val page = dao.itemsPage(SOURCE, section.name, categoryId, PAGE, offset)
-            page.mapTo(out) { it.toItem(section) }
+            val page = dao.itemsPage(source, section.name, categoryId, PAGE, offset)
+            page.mapTo(out) { it.toItem(section, providerId, providerName) }
             if (page.size < PAGE) break
             offset += PAGE
         }
@@ -376,20 +549,48 @@ class IptvPlaylistSync @Inject constructor(
 
     /** Every live channel in the loaded playlist, for matching an equivalent channel. */
     suspend fun liveItems(): List<XtreamItem> = withContext(Dispatchers.IO) {
-        dao.allItems(SOURCE, XtreamSection.LIVE.name).map { it.toItem(XtreamSection.LIVE) }
+        readProviders().flatMap { provider ->
+            dao.allItems(sourceOf(provider.id), XtreamSection.LIVE.name)
+                .map { it.toItem(XtreamSection.LIVE, provider.id, provider.displayName()) }
+        }
     }
 
     /** Background refresh (WorkManager): once a day in playlist mode. */
     suspend fun refreshIfDue(kind: IptvPlaylistKind, maxAgeMs: Long = 24 * 60 * 60_000L): IptvLoadResult? {
-        if (!store.login.value.configured(kind)) return null
+        if (store.enabledProviders().isEmpty() && !store.login.value.configured(kind)) return null
         if (System.currentTimeMillis() - store.loadedAt < maxAgeMs) return null
         return load(kind)
     }
 
-    suspend fun count(): Int = dao.itemCount(SOURCE)
+    suspend fun count(): Int = readProviders().sumOf { dao.itemCount(sourceOf(it.id)) }
 
-    private fun IptvItemRow.toItem(section: XtreamSection) =
-        XtreamItem(id, name, section, categoryId, icon, extension, number, url, archiveDays, catchupSource)
+    suspend fun clearProvider(providerId: String) = withContext(Dispatchers.IO) {
+        val source = sourceOf(providerId)
+        dao.clearCategories(source)
+        dao.clearItems(source)
+        _lastLoad.value++
+    }
+
+    /** Providers that have loaded rows; the legacy source is shown only when no provider exists. */
+    private fun readProviders(): List<IptvProvider> {
+        val all = store.providers.value
+        if (all.isNotEmpty()) return all.filter { it.enabled && it.configured() }
+        return listOfNotNull(legacyProvider(store.login.value.let {
+            if (it.server.isNotBlank()) IptvPlaylistKind.XTREAM else IptvPlaylistKind.M3U
+        }))
+    }
+
+    private fun sourceOf(providerId: String): String =
+        if (providerId == "legacy") SOURCE
+        else if (providerId.isBlank()) SOURCE
+        else IptvProvider.sourceKey(providerId)
+
+    private fun IptvItemRow.toItem(section: XtreamSection, providerId: String, providerName: String) =
+        XtreamItem(
+            id, name, section, categoryId, icon, extension, number, url, archiveDays, catchupSource,
+            providerId = providerId,
+            providerName = providerName,
+        )
 
     companion object {
         const val SOURCE = "playlist"

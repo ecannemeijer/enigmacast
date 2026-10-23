@@ -1,8 +1,8 @@
 {
-  "versionCode": 97,
-  "versionName": "1.0.0-beta.94",
+  "versionCode": 98,
+  "versionName": "1.0.0-beta.95",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Sync-server installatie controleert python3-sqlite3, wacht op cert.pem en toont een duidelijke fout als de service niet start. Back/Up van equivalent en recente zenders blijven binnen live TV.",
+  "notes": "Meerdere IPTV-providers: M3U en Xtream naast elkaar, providerbeheer in Settings, categorieën gegroepeerd per provider en providerkeuze bij Categorieën. Favorieten, verder-kijken, zoeken en recente zenders gebruiken de juiste provider.",
   "companion": {
     "versionCode": 113,
     "versionName": "1.0.0-beta.14",

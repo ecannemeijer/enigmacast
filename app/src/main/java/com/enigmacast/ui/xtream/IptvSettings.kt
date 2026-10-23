@@ -43,6 +43,7 @@ import com.enigmacast.data.xtream.IptvLoadResult
 import com.enigmacast.data.xtream.IptvPlaylistLogin
 import com.enigmacast.data.xtream.IptvPlaylistStore
 import com.enigmacast.data.xtream.IptvPlaylistSync
+import com.enigmacast.data.xtream.IptvProvider
 import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.IptvSourceMode
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
@@ -50,6 +51,7 @@ import com.enigmacast.domain.subsource.SubSourceLanguages
 import com.enigmacast.locale.AppLanguageStore
 import com.enigmacast.ui.theme.ChoiceRow
 import com.enigmacast.ui.theme.CompactButton
+import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
@@ -91,6 +93,8 @@ class IptvSettingsViewModel @Inject constructor(
         val hidden: Set<String> = emptySet(),
         val failed: Boolean = false,
         val source: String = "",
+        val providerId: String = "",
+        val providers: List<com.enigmacast.data.xtream.IptvProvider> = emptyList(),
     )
     private val _categories = MutableStateFlow<CategoryPage?>(null)
     val categoryPage: StateFlow<CategoryPage?> = _categories
@@ -98,25 +102,44 @@ class IptvSettingsViewModel @Inject constructor(
 
     fun openCategories() = showCategories(com.enigmacast.domain.xtream.XtreamSection.LIVE)
 
-    fun showCategories(section: com.enigmacast.domain.xtream.XtreamSection) {
+    fun showCategories(section: com.enigmacast.domain.xtream.XtreamSection, providerId: String? = null) {
         categoryJob?.cancel()
-        _categories.value = CategoryPage(section, loading = true)
+        val providers = store.enabledProviders()
+        if (mode.value.first == IptvSourceMode.PLAYLIST && providerId == null && providers.size > 1) {
+            _categories.value = CategoryPage(section, loading = false, providers = providers)
+            return
+        }
+        _categories.value = CategoryPage(section, loading = true, providers = providers, providerId = providerId.orEmpty())
         categoryJob = viewModelScope.launch {
             val page = runCatching {
-                // Room (playlist) or the receiver's first XStreamity account; parsing runs off the main thread.
                 val (mode, kind) = mode.value
                 if (mode == IptvSourceMode.PLAYLIST) {
-                    val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(kind.name, "")
-                    CategoryPage(section, false, sync.categories(section), hidden.hidden(source, section), source = source)
+                    val chosen = providers.firstOrNull { it.id == providerId } ?: providers.firstOrNull()
+                    val source = chosen?.let { com.enigmacast.data.xtream.IptvProvider.sourceKey(it.id) }
+                        ?: com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(kind.name, "")
+                    CategoryPage(
+                        section,
+                        false,
+                        if (chosen == null) emptyList() else sync.categories(section, chosen.id),
+                        hidden.hidden(source, section),
+                        source = source,
+                        providerId = chosen?.id.orEmpty(),
+                        providers = providers,
+                    )
                 } else {
                     val receiver = settingsRepository.current().activeReceiver() ?: error("no receiver")
                     val account = (xtream.cachedDetection(receiver.id) ?: xtream.detect(receiver)).accounts.firstOrNull() ?: error("no playlist")
                     val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(null, account.key)
                     CategoryPage(section, false, xtream.categories(account, section), hidden.hidden(source, section), source = source)
                 }
-            }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it; CategoryPage(section, false, failed = true) }
+            }.getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it; CategoryPage(section, false, failed = true, providers = providers) }
             _categories.value = page
         }
+    }
+
+    fun selectCategoryProvider(id: String) {
+        val page = _categories.value ?: return
+        showCategories(page.section, id)
     }
 
     private fun saveHidden(ids: Set<String>) {
@@ -149,6 +172,7 @@ class IptvSettingsViewModel @Inject constructor(
         .map { it.iptvSource to it.iptvPlaylistKind }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IptvSourceMode.XSTREAMITY to IptvPlaylistKind.M3U)
     val login: StateFlow<IptvPlaylistLogin> = store.login
+    val providers: StateFlow<List<com.enigmacast.data.xtream.IptvProvider>> = store.providers
     val lastLoad: StateFlow<Int> = sync.lastLoad
 
     private val _load = MutableStateFlow<IptvLoadState?>(null)
@@ -161,17 +185,46 @@ class IptvSettingsViewModel @Inject constructor(
     fun setMode(mode: IptvSourceMode) = viewModelScope.launch { settingsRepository.update { it.copy(iptvSource = mode) } }
     fun setKind(kind: IptvPlaylistKind) = viewModelScope.launch { settingsRepository.update { it.copy(iptvPlaylistKind = kind) } }
 
-    /** Saves the fields (encrypted), writes that login to the sync server, and loads the channels. */
+    /** Saves the fields of the selected provider, writes it to the sync server, and reloads all. */
+    fun saveProvider(provider: com.enigmacast.data.xtream.IptvProvider): com.enigmacast.data.xtream.IptvProvider? {
+        val saved = runCatching { store.saveProvider(provider) }.getOrElse {
+            _load.value = IptvLoadState(false, result = IptvLoadResult.Failure.NOT_CONFIGURED)
+            return null
+        }
+        // The sync server still stores one playlist: keep it on the first enabled provider.
+        val primary = store.providers.value.firstOrNull { it.enabled && it.configured() }
+        if (primary != null) viewModelScope.launch { runCatching { syncEngine.publishPlaylist(primary.login, primary.kind) } }
+        viewModelScope.launch { settingsRepository.update { it.copy(iptvSource = IptvSourceMode.PLAYLIST) } }
+        reload()
+        return saved
+    }
+
+    fun deleteProvider(id: String) {
+        store.deleteProvider(id)
+        viewModelScope.launch { sync.clearProvider(id) }
+        reload()
+    }
+
+    fun setProviderEnabled(id: String, enabled: Boolean) {
+        store.setProviderEnabled(id, enabled)
+        reload()
+    }
+
+    private fun reload() {
+        job?.cancel()
+        _load.value = IptvLoadState(busy = true)
+        job = viewModelScope.launch {
+            val result = sync.load(mode.value.second) { p -> _load.value = IptvLoadState(true, p) }
+            _load.value = IptvLoadState(false, result = result)
+        }
+    }
+
+    /** Compatibility for the old single-login editor. */
     fun saveAndLoad(login: IptvPlaylistLogin) {
         val kind = mode.value.second
         store.save(login)
         viewModelScope.launch { runCatching { syncEngine.publishPlaylist(login, kind) } }
-        job?.cancel()
-        _load.value = IptvLoadState(busy = true)
-        job = viewModelScope.launch {
-            val result = sync.load(kind) { p -> _load.value = IptvLoadState(true, p) }
-            _load.value = IptvLoadState(false, result = result)
-        }
+        reload()
     }
 
     fun cancel() {
@@ -186,15 +239,23 @@ class IptvSettingsViewModel @Inject constructor(
 @Composable
 fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     val mode by model.mode.collectAsStateWithLifecycle()
-    val saved by model.login.collectAsStateWithLifecycle()
+    val providers by model.providers.collectAsStateWithLifecycle()
     val loads by model.lastLoad.collectAsStateWithLifecycle()
     val load by model.load.collectAsStateWithLifecycle()
-    var m3u by remember(saved) { mutableStateOf(saved.m3uUrl) }
-    var server by remember(saved) { mutableStateOf(saved.server) }
-    var user by remember(saved) { mutableStateOf(saved.username) }
-    var pass by remember(saved) { mutableStateOf(saved.password) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    val selected = providers.firstOrNull { it.id == selectedId }
+    var name by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.displayName().orEmpty()) }
+    var kind by remember(selected?.id, adding) { mutableStateOf(if (adding) IptvPlaylistKind.M3U else selected?.kind ?: IptvPlaylistKind.M3U) }
+    var m3u by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.m3uUrl.orEmpty()) }
+    var server by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.server.orEmpty()) }
+    var user by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.username.orEmpty()) }
+    var pass by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.password.orEmpty()) }
     var count by remember { mutableStateOf(0) }
     LaunchedEffect(loads) { count = model.count() }
+    LaunchedEffect(providers) {
+        if (!adding && selectedId == null && providers.isNotEmpty()) selectedId = providers.first().id
+    }
 
     SettingsCard(stringResource(R.string.iptv_settings_card)) {
         // Which categories the IPTV page shows, and which SubSource languages a film or series may use.
@@ -211,27 +272,85 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
             onSelect = { model.setMode(sources[it]) },
         )
         if (mode.first == IptvSourceMode.PLAYLIST) {
-            val kinds = IptvPlaylistKind.entries
-            ChoiceRow(
-                title = stringResource(R.string.iptv_playlist_kind),
-                options = listOf(stringResource(R.string.iptv_kind_m3u), stringResource(R.string.iptv_kind_xtream)),
-                selectedIndex = kinds.indexOf(mode.second),
-                onSelect = { model.setKind(kinds[it]) },
-            )
-            if (mode.second == IptvPlaylistKind.M3U) {
-                TvTextField(stringResource(R.string.iptv_m3u_url), m3u, { m3u = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
-            } else {
-                TvTextField(stringResource(R.string.iptv_xtream_server), server, { server = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
-                TvTextField(stringResource(R.string.iptv_xtream_user), user, { user = it }, Modifier.fillMaxWidth())
-                TvTextField(stringResource(R.string.iptv_xtream_pass), pass, { pass = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.PASSWORD)
+            Text(stringResource(R.string.iptv_providers), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
+            providers.forEach { provider ->
+                CompactListRow(
+                    onClick = { adding = false; selectedId = provider.id },
+                    selected = provider.id == selectedId,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            provider.displayName(),
+                            color = EnigmaColors.Text,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                        )
+                        Text(
+                            "${provider.kind.name} · ${if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}",
+                            color = EnigmaColors.Muted,
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
             }
-            val current = IptvPlaylistLogin(m3u, server, user, pass)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TvButton(
-                    stringResource(R.string.iptv_save_load),
-                    { model.saveAndLoad(current) },
-                    enabled = current.configured(mode.second),
+                CompactButton(stringResource(R.string.iptv_provider_new), onClick = {
+                    adding = true
+                    selectedId = null
+                    name = ""
+                    kind = IptvPlaylistKind.M3U
+                    m3u = ""
+                    server = ""
+                    user = ""
+                    pass = ""
+                })
+                selected?.let { provider ->
+                    CompactButton(
+                        if (provider.enabled) stringResource(R.string.iptv_provider_disabled) else stringResource(R.string.iptv_provider_enabled),
+                        onClick = { model.setProviderEnabled(provider.id, !provider.enabled) },
+                    )
+                    CompactButton(stringResource(R.string.iptv_provider_delete), onClick = { model.deleteProvider(provider.id) })
+                }
+            }
+            if (selected != null || adding) {
+                TvTextField(stringResource(R.string.iptv_provider_name), name, { name = it }, Modifier.fillMaxWidth())
+                val kinds = IptvPlaylistKind.entries
+                ChoiceRow(
+                    title = stringResource(R.string.iptv_playlist_kind),
+                    options = listOf(stringResource(R.string.iptv_kind_m3u), stringResource(R.string.iptv_kind_xtream)),
+                    selectedIndex = kinds.indexOf(kind),
+                    onSelect = { kind = kinds[it] },
                 )
+                if (kind == IptvPlaylistKind.M3U) {
+                    TvTextField(stringResource(R.string.iptv_m3u_url), m3u, { m3u = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
+                } else {
+                    TvTextField(stringResource(R.string.iptv_xtream_server), server, { server = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
+                    TvTextField(stringResource(R.string.iptv_xtream_user), user, { user = it }, Modifier.fillMaxWidth())
+                    TvTextField(stringResource(R.string.iptv_xtream_pass), pass, { pass = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.PASSWORD)
+                }
+                val draft = IptvProvider(
+                    id = selected?.id.orEmpty(),
+                    name = name,
+                    kind = kind,
+                    m3uUrl = m3u,
+                    server = server,
+                    username = user,
+                    password = pass,
+                    enabled = selected?.enabled ?: true,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvButton(
+                        stringResource(R.string.iptv_save_load),
+                        {
+                            val saved = model.saveProvider(draft)
+                            if (saved != null) {
+                                adding = false
+                                selectedId = saved.id
+                            }
+                        },
+                        enabled = name.isNotBlank() && draft.configured(),
+                    )
+                }
             }
             val at = model.loadedAt
             Text(
@@ -334,6 +453,25 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(stringResource(R.string.iptv_categories_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
+            if (page.providers.size > 1) {
+                Text(stringResource(R.string.iptv_provider_choose), color = EnigmaColors.Muted, fontSize = 12.sp)
+                val focusProvider = page.providerId.ifBlank { page.providers.firstOrNull()?.id.orEmpty() }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.focusGroup()) {
+                    page.providers.forEach { provider ->
+                        com.enigmacast.ui.theme.ChoiceChip(
+                            label = provider.displayName(),
+                            selected = provider.id == page.providerId,
+                            onClick = { model.selectCategoryProvider(provider.id) },
+                            modifier = Modifier
+                                .then(if (provider.id == focusProvider) Modifier.focusRequester(chipFocus) else Modifier)
+                                .focusProperties {
+                                    up = Cancel
+                                    down = if (page.categories.isNotEmpty()) allFocus else Cancel
+                                },
+                        )
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.focusGroup()) {
                 sections.forEachIndexed { index, section ->
                     com.enigmacast.ui.theme.ChoiceChip(
@@ -345,7 +483,7 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
                             },
                         ),
                         selected = section == page.section,
-                        onClick = { model.showCategories(section) },
+                        onClick = { model.showCategories(section, page.providerId.ifBlank { null }) },
                         modifier = Modifier
                             .then(if (section == page.section) Modifier.focusRequester(chipFocus) else Modifier)
                             .focusProperties {
@@ -360,6 +498,11 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
             when {
                 page.loading -> com.enigmacast.ui.components.EnigmaLoadingIndicator()
                 page.failed -> Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp)
+                page.providers.size > 1 && page.providerId.isBlank() -> Text(
+                    stringResource(R.string.iptv_provider_choose),
+                    color = EnigmaColors.Muted,
+                    fontSize = 13.sp,
+                )
                 page.categories.isEmpty() -> Text(stringResource(R.string.iptv_categories_none), color = EnigmaColors.Muted, fontSize = 13.sp)
                 else -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {

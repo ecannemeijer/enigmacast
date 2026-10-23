@@ -139,15 +139,17 @@ internal fun XtreamVodPage(
             ) {
                 VodHeader(stringResource(if (model.section == XtreamSection.SERIES) R.string.xtream_series else R.string.xtream_movies), model.loading && model.categories.isEmpty())
                 val state = rememberLazyListState()
-                val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id }.coerceAtLeast(0)
+                val multiProvider = remember(model.categories) { model.categories.map { it.providerId }.distinct().size > 1 }
+                val selectedIndex = model.categories.indexOfFirst { it.id == model.category?.id && it.providerId == model.category?.providerId }.coerceAtLeast(0)
                 LaunchedEffect(model.categories) { if (model.categories.isNotEmpty()) state.scrollToItem(selectedIndex) }
-                val keyedCategories = remember(model.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.categories, "cat") { it.id } }
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight()) {
-                    itemsIndexed(keyedCategories, key = { _, k -> k.key }) { index, k ->
-                        val c = k.value
+                    itemsIndexed(
+                        model.categories,
+                        key = { _, c -> "${c.providerId}:${c.id}" },
+                    ) { index, c ->
                         CompactListRow(
                             onClick = { model.selectCategory(c); onGrid() },
-                            selected = c.id == model.category?.id,
+                            selected = c.id == model.category?.id && c.providerId == model.category?.providerId,
                             modifier = Modifier
                                 .then(if (index == selectedIndex) Modifier.focusRequester(categoryFocus) else Modifier)
                                 .focusProperties {
@@ -155,8 +157,14 @@ internal fun XtreamVodPage(
                                     if (index == model.categories.lastIndex) down = FocusRequester.Cancel
                                 },
                         ) {
-                            Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            if (model.pendingCategory?.id == c.id) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
+                            Text(
+                                if (multiProvider && c.providerName.isNotBlank()) "${c.providerName} · ${c.name}" else c.name,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (model.pendingCategory?.id == c.id && model.pendingCategory?.providerId == c.providerId) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
                             else model.categoryCounts[c.id]?.let { Text(it.toString(), fontSize = 12.sp, color = EnigmaColors.Subtle, modifier = Modifier.padding(start = 6.dp)) }
                         }
                     }
