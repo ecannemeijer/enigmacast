@@ -199,7 +199,7 @@ class CompanionBridge @Inject constructor(
             libraryHost.state.collect { server?.broadcastLibrary(libraryJson(it)) }
         }
         scope.launch {
-            combine(settings.settings, playlist.login) { current, login -> iptvJson(current, login) }
+            combine(settings.settings, playlist.login, playlist.providers) { current, login, providers -> iptvJson(current, login, providers) }
                 .distinctUntilChanged()
                 .collect { json ->
                     iptvJsonState = json
@@ -576,7 +576,16 @@ class CompanionBridge @Inject constructor(
 
     private fun emptyIptvJson(): JsonObject = buildJsonObject { put("configured", false) }
 
-    private fun iptvJson(settings: AppSettings, login: IptvPlaylistLogin): JsonObject {
+    private fun iptvJson(
+        settings: AppSettings,
+        login: IptvPlaylistLogin,
+        providers: List<com.enigmacast.data.xtream.IptvProvider>,
+    ): JsonObject {
+        val enabled = providers.filter { it.enabled && it.configured() }
+        if (enabled.isNotEmpty() && settings.iptvSource == IptvSourceMode.PLAYLIST) {
+            val first = enabled.first()
+            return iptvJson(first.kind, first.login, 0L, false, enabled)
+        }
         val kind = when {
             login.configured(settings.iptvPlaylistKind) -> settings.iptvPlaylistKind
             login.configured(IptvPlaylistKind.M3U) -> IptvPlaylistKind.M3U
@@ -584,7 +593,7 @@ class CompanionBridge @Inject constructor(
             else -> null
         }
         if (settings.iptvSource != IptvSourceMode.PLAYLIST || kind == null) return emptyIptvJson()
-        return iptvJson(kind, login, 0L, false)
+        return iptvJson(kind, login, 0L, false, emptyList())
     }
 
     private fun iptvJson(
@@ -592,6 +601,7 @@ class CompanionBridge @Inject constructor(
         login: IptvPlaylistLogin,
         updatedMs: Long,
         fromSyncServer: Boolean,
+        providers: List<com.enigmacast.data.xtream.IptvProvider> = emptyList(),
     ): JsonObject = buildJsonObject {
         put("configured", true)
         put("kind", kind.name)
@@ -601,6 +611,23 @@ class CompanionBridge @Inject constructor(
         put("password", login.password)
         put("updatedMs", updatedMs)
         put("fromSyncServer", fromSyncServer)
+        putJsonArray("providers") {
+            providers.forEach { provider ->
+                add(
+                    buildJsonObject {
+                        put("id", provider.id)
+                        put("name", provider.displayName())
+                        put("kind", provider.kind.name)
+                        put("m3uUrl", provider.m3uUrl)
+                        put("server", provider.server)
+                        put("username", provider.username)
+                        put("password", provider.password)
+                        put("enabled", provider.enabled)
+                        put("sortOrder", provider.sortOrder)
+                    },
+                )
+            }
+        }
     }
 
     private suspend fun peekRemoteIptv() {

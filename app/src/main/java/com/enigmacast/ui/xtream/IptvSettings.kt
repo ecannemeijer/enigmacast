@@ -4,6 +4,7 @@ import com.enigmacast.ui.theme.skinSurface
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
@@ -22,7 +23,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
@@ -182,6 +185,14 @@ class IptvSettingsViewModel @Inject constructor(
     val loadedAt: Long get() = store.loadedAt
     suspend fun count(): Int = sync.count()
 
+    private val _providerCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val providerCounts: StateFlow<Map<String, Int>> = _providerCounts
+    fun refreshProviderCounts() = viewModelScope.launch {
+        _providerCounts.value = store.providers.value.associate { provider ->
+            provider.id to runCatching { sync.countProvider(provider.id) }.getOrDefault(0)
+        }
+    }
+
     fun setMode(mode: IptvSourceMode) = viewModelScope.launch { settingsRepository.update { it.copy(iptvSource = mode) } }
     fun setKind(kind: IptvPlaylistKind) = viewModelScope.launch { settingsRepository.update { it.copy(iptvPlaylistKind = kind) } }
 
@@ -191,9 +202,10 @@ class IptvSettingsViewModel @Inject constructor(
             _load.value = IptvLoadState(false, result = IptvLoadResult.Failure.NOT_CONFIGURED)
             return null
         }
-        // The sync server still stores one playlist: keep it on the first enabled provider.
-        val primary = store.providers.value.firstOrNull { it.enabled && it.configured() }
-        if (primary != null) viewModelScope.launch { runCatching { syncEngine.publishPlaylist(primary.login, primary.kind) } }
+        // Keep the server's provider list in step. The old single-playlist endpoint is only for
+        // devices that have no provider list at all.
+        store.markDirty()
+        viewModelScope.launch { runCatching { syncEngine.publishProviders() } }
         viewModelScope.launch { settingsRepository.update { it.copy(iptvSource = IptvSourceMode.PLAYLIST) } }
         reload()
         return saved
@@ -201,13 +213,36 @@ class IptvSettingsViewModel @Inject constructor(
 
     fun deleteProvider(id: String) {
         store.deleteProvider(id)
+        store.markDirty()
+        viewModelScope.launch { runCatching { syncEngine.publishProviders() } }
         viewModelScope.launch { sync.clearProvider(id) }
         reload()
     }
 
     fun setProviderEnabled(id: String, enabled: Boolean) {
         store.setProviderEnabled(id, enabled)
+        store.markDirty()
+        viewModelScope.launch { runCatching { syncEngine.publishProviders() } }
         reload()
+    }
+
+    fun moveProvider(id: String, delta: Int) {
+        store.moveProvider(id, delta)
+        store.markDirty()
+        viewModelScope.launch { runCatching { syncEngine.publishProviders() } }
+        refreshProviderCounts()
+    }
+
+    fun providersJson(): String = store.providersJson()
+
+    fun importProviders(raw: String): Int {
+        val count = store.importProviders(raw)
+        if (count > 0) {
+            store.markDirty()
+            viewModelScope.launch { runCatching { syncEngine.publishProviders() } }
+            reload()
+        }
+        return count
     }
 
     private fun reload() {
@@ -216,6 +251,7 @@ class IptvSettingsViewModel @Inject constructor(
         job = viewModelScope.launch {
             val result = sync.load(mode.value.second) { p -> _load.value = IptvLoadState(true, p) }
             _load.value = IptvLoadState(false, result = result)
+            refreshProviderCounts()
         }
     }
 
@@ -238,12 +274,15 @@ class IptvSettingsViewModel @Inject constructor(
 /** Settings › Guide & Home › IPTV: XStreamity on the receiver, or an M3U / Xtream playlist. */
 @Composable
 fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
+    val context = LocalContext.current
     val mode by model.mode.collectAsStateWithLifecycle()
     val providers by model.providers.collectAsStateWithLifecycle()
+    val providerCounts by model.providerCounts.collectAsStateWithLifecycle()
     val loads by model.lastLoad.collectAsStateWithLifecycle()
     val load by model.load.collectAsStateWithLifecycle()
     var selectedId by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf("") }
     val selected = providers.firstOrNull { it.id == selectedId }
     var name by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.displayName().orEmpty()) }
     var kind by remember(selected?.id, adding) { mutableStateOf(if (adding) IptvPlaylistKind.M3U else selected?.kind ?: IptvPlaylistKind.M3U) }
@@ -253,6 +292,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     var pass by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.password.orEmpty()) }
     var count by remember { mutableStateOf(0) }
     LaunchedEffect(loads) { count = model.count() }
+    LaunchedEffect(providers, loads) { model.refreshProviderCounts() }
     LaunchedEffect(providers) {
         if (!adding && selectedId == null && providers.isNotEmpty()) selectedId = providers.first().id
     }
@@ -286,7 +326,8 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                             maxLines = 1,
                         )
                         Text(
-                            "${provider.kind.name} · ${if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}",
+                            "${provider.kind.name} · ${if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}" +
+                                providerCounts[provider.id]?.let { " · " + stringResource(R.string.iptv_provider_channels, it) }.orEmpty(),
                             color = EnigmaColors.Muted,
                             fontSize = 11.sp,
                         )
@@ -304,14 +345,28 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                     user = ""
                     pass = ""
                 })
+                CompactButton(stringResource(R.string.iptv_provider_export), onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("EnigmaCast IPTV providers", model.providersJson()))
+                    notice = context.getString(R.string.iptv_provider_exported)
+                })
+                CompactButton(stringResource(R.string.iptv_provider_import), onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val raw = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
+                    val imported = model.importProviders(raw)
+                    notice = if (imported > 0) context.getString(R.string.iptv_provider_imported, imported) else context.getString(R.string.iptv_provider_import_failed)
+                })
                 selected?.let { provider ->
                     CompactButton(
                         if (provider.enabled) stringResource(R.string.iptv_provider_disabled) else stringResource(R.string.iptv_provider_enabled),
                         onClick = { model.setProviderEnabled(provider.id, !provider.enabled) },
                     )
+                    CompactButton(stringResource(R.string.iptv_provider_move_up), onClick = { model.moveProvider(provider.id, -1) })
+                    CompactButton(stringResource(R.string.iptv_provider_move_down), onClick = { model.moveProvider(provider.id, 1) })
                     CompactButton(stringResource(R.string.iptv_provider_delete), onClick = { model.deleteProvider(provider.id) })
                 }
             }
+            if (notice.isNotBlank()) Text(notice, color = EnigmaColors.Muted, fontSize = 12.sp)
             if (selected != null || adding) {
                 TvTextField(stringResource(R.string.iptv_provider_name), name, { name = it }, Modifier.fillMaxWidth())
                 val kinds = IptvPlaylistKind.entries

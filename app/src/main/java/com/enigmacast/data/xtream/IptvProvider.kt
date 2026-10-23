@@ -19,6 +19,7 @@ data class IptvProvider(
     val username: String = "",
     val password: String = "",
     val enabled: Boolean = true,
+    val sortOrder: Int = 0,
 ) {
     val login: IptvPlaylistLogin get() = IptvPlaylistLogin(m3uUrl, server, username, password)
 

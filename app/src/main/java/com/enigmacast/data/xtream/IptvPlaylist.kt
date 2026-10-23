@@ -137,6 +137,7 @@ class IptvPlaylistStore @Inject constructor(
         return runCatching { json.decodeFromString<List<IptvProvider>>(raw) }
             .getOrDefault(emptyList())
             .filter { it.id.isNotBlank() }
+            .sortedBy { it.sortOrder }
     }
 
     /** Existing single-playlist users keep their login as provider "default". */
@@ -158,13 +159,14 @@ class IptvPlaylistStore @Inject constructor(
     }
 
     private fun persistProviders(list: List<IptvProvider>) {
-        _providers.value = list
-        secrets.write(PROVIDERS, json.encodeToString(list))
-        if (list.isEmpty()) {
+        val ordered = list.sortedBy { it.sortOrder }
+        _providers.value = ordered
+        secrets.write(PROVIDERS, json.encodeToString(ordered))
+        if (ordered.isEmpty()) {
             // Do not let a deleted provider come back through the old single-login fallback.
             secrets.write(M3U, null); secrets.write(SERVER, null); secrets.write(USER, null); secrets.write(PASS, null)
         }
-        _login.value = list.firstOrNull { it.enabled && it.configured() }?.login ?: IptvPlaylistLogin()
+        _login.value = ordered.firstOrNull { it.enabled && it.configured() }?.login ?: IptvPlaylistLogin()
     }
 
     fun provider(id: String): IptvProvider? = _providers.value.firstOrNull { it.id == id }
@@ -175,7 +177,11 @@ class IptvPlaylistStore @Inject constructor(
     fun saveProvider(provider: IptvProvider): IptvProvider {
         if (!provider.configured()) error("provider is not configured")
         val withId = if (provider.id.isBlank()) {
-            provider.copy(id = java.util.UUID.randomUUID().toString(), name = provider.displayName())
+            provider.copy(
+                id = java.util.UUID.randomUUID().toString(),
+                name = provider.displayName(),
+                sortOrder = (_providers.value.maxOfOrNull { it.sortOrder } ?: -1) + 1,
+            )
         } else {
             provider.copy(name = provider.displayName())
         }
@@ -188,8 +194,40 @@ class IptvPlaylistStore @Inject constructor(
 
     fun deleteProvider(id: String) = persistProviders(_providers.value.filterNot { it.id == id })
 
+    fun moveProvider(id: String, delta: Int) {
+        val list = _providers.value.sortedBy { it.sortOrder }.toMutableList()
+        val index = list.indexOfFirst { it.id == id }
+        val target = index + delta
+        if (index < 0 || target !in list.indices) return
+        val item = list.removeAt(index)
+        list.add(target, item)
+        persistProviders(list.mapIndexed { i, provider -> provider.copy(sortOrder = i) })
+    }
+
     fun setProviderEnabled(id: String, enabled: Boolean) {
         persistProviders(_providers.value.map { if (it.id == id) it.copy(enabled = enabled) else it })
+    }
+
+    /** A JSON document for backup/import. Contains credentials, so the UI warns before copying. */
+    fun providersJson(): String = json.encodeToString(_providers.value)
+
+    /** Merges providers from [raw] by id; returns how many usable rows were imported. */
+    fun importProviders(raw: String): Int {
+        val incoming = runCatching { json.decodeFromString<List<IptvProvider>>(raw) }.getOrDefault(emptyList())
+            .filter { it.id.isNotBlank() && it.configured() }
+        if (incoming.isEmpty()) return 0
+        val merged = _providers.value.toMutableList()
+        incoming.forEach { provider ->
+            val index = merged.indexOfFirst { it.id == provider.id }
+            if (index >= 0) merged[index] = provider else merged += provider
+        }
+        persistProviders(merged)
+        return incoming.size
+    }
+
+    /** Used by the sync server: replace the whole list without writing legacy single-login fields. */
+    fun replaceProviders(list: List<IptvProvider>) {
+        persistProviders(list.filter { it.id.isNotBlank() })
     }
 
     fun save(login: IptvPlaylistLogin) {
@@ -563,6 +601,10 @@ class IptvPlaylistSync @Inject constructor(
     }
 
     suspend fun count(): Int = readProviders().sumOf { dao.itemCount(sourceOf(it.id)) }
+
+    suspend fun countProvider(providerId: String): Int = withContext(Dispatchers.IO) {
+        dao.itemCount(sourceOf(providerId))
+    }
 
     suspend fun clearProvider(providerId: String) = withContext(Dispatchers.IO) {
         val source = sourceOf(providerId)

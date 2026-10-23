@@ -1,13 +1,13 @@
 {
-  "versionCode": 98,
-  "versionName": "1.0.0-beta.95",
+  "versionCode": 99,
+  "versionName": "1.0.0-beta.96",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Meerdere IPTV-providers: M3U en Xtream naast elkaar, providerbeheer in Settings, categorieën gegroepeerd per provider en providerkeuze bij Categorieën. Favorieten, verder-kijken, zoeken en recente zenders gebruiken de juiste provider.",
+  "notes": "Meerdere IPTV-providers worden nu ook met de syncserver gedeeld. Provider-volgorde, importeren/exporteren en laadstatus per provider toegevoegd. Companion krijgt providerkeuze.",
   "companion": {
-    "versionCode": 113,
-    "versionName": "1.0.0-beta.14",
+    "versionCode": 114,
+    "versionName": "1.0.0-beta.15",
     "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-    "notes": "IPTV blijft via bewaarde externe bron werken na wifi/mobiel wisselen; Xtream-zenders tonen echte now/next-EPG.",
+    "notes": "IPTV-providerkeuze op de telefoon, meerdere M3U/Xtream-providers en dezelfde providerstatus als de TV.",
     "sideloadFile": "enigmacast-companion.apk"
   }
 }

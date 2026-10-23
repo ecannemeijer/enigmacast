@@ -1559,4 +1559,12 @@
     <string name="iptv_provider_delete">Verwijderen</string>
     <string name="iptv_provider_choose">Kies een IPTV-provider</string>
     <string name="iptv_provider_categories">Categorieën van %s</string>
+    <string name="iptv_provider_export">Providers exporteren</string>
+    <string name="iptv_provider_import">Providers importeren</string>
+    <string name="iptv_provider_exported">Providerlijst naar het klembord gekopieerd.</string>
+    <string name="iptv_provider_imported">%d providers geïmporteerd.</string>
+    <string name="iptv_provider_import_failed">Geen geldige providers op het klembord gevonden.</string>
+    <string name="iptv_provider_move_up">Omhoog</string>
+    <string name="iptv_provider_move_down">Omlaag</string>
+    <string name="iptv_provider_channels">%d zenders geladen</string>
 </resources>

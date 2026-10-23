@@ -11,6 +11,7 @@ import com.enigmacast.data.xtream.IptvHiddenCategories
 import com.enigmacast.data.xtream.IptvPlaylistLogin
 import com.enigmacast.data.xtream.IptvPlaylistStore
 import com.enigmacast.data.xtream.IptvPlaylistSync
+import com.enigmacast.data.xtream.IptvProvider
 import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.IptvSourceMode
 import com.enigmacast.domain.model.StartupLive
@@ -37,6 +38,8 @@ data class RemoteIptvOffer(
     val updatedMs: Long,
     val changeId: String,
 )
+
+data class RemoteProvidersOffer(val providers: List<IptvProvider>, val updatedMs: Long, val changeId: String)
 
 /** Pushes the local outbox and pulls newer rows. A missing server leaves Room as it is. */
 @Singleton
@@ -304,8 +307,21 @@ class EnigmaSyncEngine @Inject constructor(
         runCatching { postPlaylist(config, login, kind, rev) }
     }
 
+    /** Writes every configured provider to the server. Credentials stay sealed on the box. */
+    suspend fun publishProviders() = withContext(Dispatchers.IO) {
+        val config = client.config() ?: return@withContext
+        val providers = playlist.providers.value
+        playlist.clearDecline()
+        val rev = playlist.markDirty()
+        runCatching { postProviders(config, providers, rev) }
+    }
+
     /** One IPTV login for this device. A profile switch does not call this again. */
     private suspend fun syncPlaylist(config: SyncServerConfig) {
+        if (playlist.providers.value.isNotEmpty()) {
+            syncProviders(config)
+            return
+        }
         val text = runCatching { client.request(config, "GET", "/api/v1/playlists") }.getOrNull()
         val remote = text?.let { JSONObject(it).optJSONObject("playlist") }
         val local = playlist.revision()
@@ -342,6 +358,87 @@ class EnigmaSyncEngine @Inject constructor(
         val posted = client.request(config, "POST", "/api/v1/playlists", body.toString().toByteArray())
         val result = JSONObject(posted).optString("result")
         if ((result == "accept" || result == "replay") && playlist.revision()?.changeId == rev.changeId) playlist.clearDirty()
+    }
+
+    private suspend fun syncProviders(config: SyncServerConfig) {
+        val text = runCatching { client.request(config, "GET", "/api/v1/iptv/providers") }.getOrNull()
+        val remote = text?.let { JSONObject(it) }
+        val remoteProviders = remote?.optJSONArray("providers")
+        val local = playlist.revision()
+        if (remoteProviders != null && remoteProviders.length() > 0) {
+            val updated = remote.optLong("updatedMs")
+            val change = remote.optString("changeId")
+            val decision = SyncConflict.decide(local?.updatedMs, local?.changeId, updated, change)
+            if (decision == SyncApply.ACCEPT) {
+                if (!settings.current().setupCompleted || playlist.isDeclined(change)) return
+                applyProviders(remoteProviders)
+                playlist.acceptRevision(updated, change)
+                iptv.arm()
+                if (settings.current().setupCompleted) SyncScheduler.runIptvTail(context)
+                return
+            }
+        }
+        val now = settings.current()
+        if (now.iptvSource != IptvSourceMode.PLAYLIST) return
+        val rev = playlist.revision() ?: return
+        if (!rev.dirty) return
+        runCatching { postProviders(config, playlist.providers.value, rev) }
+    }
+
+    private fun postProviders(config: SyncServerConfig, providers: List<IptvProvider>, rev: com.enigmacast.data.xtream.PlaylistRevision) {
+        val array = org.json.JSONArray()
+        providers.forEach { provider ->
+            array.put(
+                JSONObject()
+                    .put("id", provider.id)
+                    .put("name", provider.name)
+                    .put("kind", provider.kind.name)
+                    .put("m3uUrl", provider.m3uUrl)
+                    .put("server", provider.server)
+                    .put("username", provider.username)
+                    .put("password", provider.password)
+                    .put("enabled", provider.enabled)
+                    .put("sortOrder", provider.sortOrder),
+            )
+        }
+        val body = JSONObject()
+            .put("providers", array)
+            .put("updatedMs", rev.updatedMs)
+            .put("changeId", rev.changeId)
+        val posted = client.request(config, "POST", "/api/v1/iptv/providers", body.toString().toByteArray())
+        val result = JSONObject(posted).optString("result")
+        if ((result == "accept" || result == "replay") && playlist.revision()?.changeId == rev.changeId) playlist.clearDirty()
+    }
+
+    private suspend fun applyProviders(array: org.json.JSONArray) {
+        val providers = buildList {
+            for (index in 0 until array.length()) {
+                val row = array.optJSONObject(index) ?: continue
+                val id = row.optString("id")
+                if (id.isBlank()) continue
+                add(
+                    IptvProvider(
+                        id = id,
+                        name = row.optString("name"),
+                        kind = runCatching { IptvPlaylistKind.valueOf(row.optString("kind")) }.getOrDefault(IptvPlaylistKind.M3U),
+                        m3uUrl = row.optString("m3uUrl"),
+                        server = row.optString("server"),
+                        username = row.optString("username"),
+                        password = row.optString("password"),
+                        enabled = row.optBoolean("enabled", true),
+                        sortOrder = row.optInt("sortOrder", index),
+                    ),
+                )
+            }
+        }
+        if (providers.isEmpty()) return
+        playlist.applyingRemote = true
+        try {
+            playlist.replaceProviders(providers)
+            settings.update { it.copy(iptvSource = IptvSourceMode.PLAYLIST) }
+        } finally {
+            playlist.applyingRemote = false
+        }
     }
 
     private fun offerOf(remote: JSONObject): RemoteIptvOffer? {

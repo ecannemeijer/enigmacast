@@ -1567,4 +1567,12 @@
     <string name="iptv_provider_delete">Delete</string>
     <string name="iptv_provider_choose">Choose an IPTV provider</string>
     <string name="iptv_provider_categories">Categories of %s</string>
+    <string name="iptv_provider_export">Export providers</string>
+    <string name="iptv_provider_import">Import providers</string>
+    <string name="iptv_provider_exported">Provider list copied to the clipboard.</string>
+    <string name="iptv_provider_imported">%d providers imported.</string>
+    <string name="iptv_provider_import_failed">No valid providers found on the clipboard.</string>
+    <string name="iptv_provider_move_up">Up</string>
+    <string name="iptv_provider_move_down">Down</string>
+    <string name="iptv_provider_channels">%d channels loaded</string>
 </resources>
