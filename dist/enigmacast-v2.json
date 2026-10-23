@@ -1,8 +1,8 @@
 {
-  "versionCode": 101,
-  "versionName": "1.0.0-beta.98",
+  "versionCode": 102,
+  "versionName": "1.0.0-beta.99",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Fix: providerkeuze in Categorieën is nu bereikbaar met de afstandsbediening en de eerste IPTV-provider laadt zijn categorieën en kanalen direct. Provider-sync, volgorde, import/export en status blijven aanwezig.",
+  "notes": "Lege IPTV-categorieën worden overgeslagen en de eerste categorie met kanalen wordt automatisch gekozen. Providerkeuze in Categorieën blijft met de afstandsbediening bereikbaar.",
   "companion": {
     "versionCode": 114,
     "versionName": "1.0.0-beta.15",

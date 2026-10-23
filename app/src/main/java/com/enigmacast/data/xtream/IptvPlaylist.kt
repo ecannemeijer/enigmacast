@@ -561,6 +561,10 @@ class IptvPlaylistSync @Inject constructor(
         return out
     }
 
+    /** Counts for one provider, so two providers with the same category id do not collide. */
+    suspend fun counts(section: XtreamSection, providerId: String): Map<String, Int> =
+        dao.countsByCategory(sourceOf(providerId), section.name).associate { it.categoryId to it.n }
+
     suspend fun categories(section: XtreamSection, providerId: String? = null): List<XtreamCategory> =
         readProviders()
             .filter { providerId == null || it.id == providerId }

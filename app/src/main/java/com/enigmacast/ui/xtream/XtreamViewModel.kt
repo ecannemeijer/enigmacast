@@ -205,12 +205,21 @@ class XtreamViewModel @Inject constructor(
     fun consumeVodFromDashboard() {
         vodFromDashboard = false
     }
-    /** Items per category id for the categories column (Room in playlist mode, fetched ones otherwise). */
+    /** Items per provider/category. Both parts are needed because category ids can repeat. */
     var categoryCounts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
+    fun countOf(category: XtreamCategory): Int =
+        categoryCounts[countKey(category)] ?: categoryCounts[category.id] ?: 0
+    private fun countKey(category: XtreamCategory): String = "${category.providerId}:${category.id}"
     private suspend fun loadCounts(account: XtreamAccount, section: XtreamSection) {
         categoryCounts = runCatching {
-            if (playlist != null) playlistSync.counts(section) else repository.cachedCounts(account, section)
+            if (playlist != null) {
+                categories.associate { category ->
+                    countKey(category) to (playlistSync.counts(section, category.providerId)[category.id] ?: 0)
+                }
+            } else {
+                repository.cachedCounts(account, section)
+            }
         }.getOrDefault(emptyMap())
     }
     var loading by mutableStateOf(false)
@@ -1230,14 +1239,20 @@ class XtreamViewModel @Inject constructor(
                 .onSuccess { list ->
                     categories = list
                     loadCounts(account, section)
+                    // An IPTV provider can expose many categories with no streams. Keep the
+                    // category column useful and start on one that actually has channels.
+                    if (playlist != null) {
+                        val populated = list.filter { countOf(it) > 0 }
+                        if (populated.isNotEmpty()) categories = populated
+                    }
                     categoriesReady++
                     val preferred = if (section == XtreamSection.LIVE) {
                         settingsRepository.current().lastIptvChannels[account.key]?.categoryId
                     } else null
                     val preferredProvider = providerAccounts.entries.firstOrNull { it.value.key == account.key }?.key
-                    val pick = list.firstOrNull {
+                    val pick = categories.firstOrNull {
                         it.id == preferred && (preferredProvider == null || it.providerId == preferredProvider)
-                    } ?: list.firstOrNull()
+                    } ?: categories.firstOrNull { countOf(it) > 0 } ?: categories.firstOrNull()
                     pick?.let { loadCategory(account, it) }
                 }
                 .onFailure { error = true }
@@ -1279,7 +1294,7 @@ class XtreamViewModel @Inject constructor(
                     this.category = category
                     series = null; episodes = emptyList()
                     cards = base
-                    categoryCounts = categoryCounts + (category.id to list.size)
+                    categoryCounts = categoryCounts + (countKey(category) to list.size)
                     items = list
                     // Only an OK-loaded category moves focus into the grid; the auto-loaded first one does not.
                     if (announce) itemsReady++

@@ -767,6 +767,7 @@ private fun SidePanel(
                             val c = (entry as CategoryEntry.Row).category
                             Text(c.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = if (multipleProviders) 18.dp else 0.dp).weight(1f))
                             if (model.pendingCategory?.id == c.id && model.pendingCategory?.providerId == c.providerId) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
+                            else model.countOf(c).takeIf { it > 0 }?.let { Text(it.toString(), color = EnigmaColors.Subtle, fontSize = 11.sp, modifier = Modifier.padding(start = 6.dp)) }
                         }
                     }
                 }

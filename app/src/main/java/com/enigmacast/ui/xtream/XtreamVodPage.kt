@@ -165,7 +165,7 @@ internal fun XtreamVodPage(
                                 modifier = Modifier.weight(1f),
                             )
                             if (model.pendingCategory?.id == c.id && model.pendingCategory?.providerId == c.providerId) EnigmaLoadingIndicator(Modifier.padding(start = 6.dp))
-                            else model.categoryCounts[c.id]?.let { Text(it.toString(), fontSize = 12.sp, color = EnigmaColors.Subtle, modifier = Modifier.padding(start = 6.dp)) }
+                            else model.countOf(c).takeIf { it > 0 }?.let { Text(it.toString(), fontSize = 12.sp, color = EnigmaColors.Subtle, modifier = Modifier.padding(start = 6.dp)) }
                         }
                     }
                 }
