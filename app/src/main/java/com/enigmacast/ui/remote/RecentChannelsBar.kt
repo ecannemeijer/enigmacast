@@ -100,6 +100,12 @@ fun RecentChannelsBar(
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
+                // Consume both Back events; closing on KeyDown would let the KeyUp reach the
+                // player and leave live TV as well.
+                if (event.key == Key.Back) {
+                    if (event.type == KeyEventType.KeyUp) onClose()
+                    return@onPreviewKeyEvent true
+                }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 activity++
                 when (event.key) {
@@ -110,7 +116,6 @@ fun RecentChannelsBar(
                         true
                     }
                     Key.DirectionUp -> { onBackToOptions(); true }
-                    Key.Back -> { onClose(); true }
                     else -> false
                 }
             },

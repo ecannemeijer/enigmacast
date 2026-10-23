@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var iptvLibrary: com.enigmacast.data.xtream.IptvLibrary
     @Inject lateinit var clients: OkHttpClientFactory
     private var screenReceiverRegistered = false
+    private var panelBackDown = false
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -134,6 +135,10 @@ class MainActivity : ComponentActivity() {
         }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (com.enigmacast.ui.remote.PanelBackGuard.isActive()) {
+                    com.enigmacast.ui.remote.PanelBackGuard.consume()
+                    return
+                }
                 if (appViewModel.exitPrompt) {
                     appViewModel.dismissExit()
                     return
@@ -309,6 +314,17 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_DOWN && com.enigmacast.ui.remote.PanelBackGuard.isActive()) {
+                panelBackDown = true
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_UP && panelBackDown) {
+                panelBackDown = false
+                com.enigmacast.ui.remote.PanelBackGuard.consume()
+                return true
+            }
+        }
         if (dropRepeat(event)) return true
         if (appViewModel.updatePrompt != null) {
             return super.dispatchKeyEvent(event)

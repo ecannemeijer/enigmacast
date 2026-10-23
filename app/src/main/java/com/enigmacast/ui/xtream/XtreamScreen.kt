@@ -137,6 +137,25 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     var quickBar by remember { mutableStateOf(false) }
     var recentBar by remember { mutableStateOf(false) }
     var recentToken by remember { mutableIntStateOf(0) }
+    androidx.activity.compose.BackHandler(enabled = recentBar || model.equivalentsState.open) {
+        if (model.equivalentsState.open) model.closeEquivalent() else recentBar = false
+    }
+    androidx.compose.runtime.DisposableEffect(recentBar, model.equivalentsState.open) {
+        if (recentBar || model.equivalentsState.open) {
+            com.enigmacast.ui.remote.PanelBackGuard.register {
+                if (model.equivalentsState.open) {
+                    model.closeEquivalent()
+                    true
+                } else if (recentBar) {
+                    recentBar = false
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        onDispose { com.enigmacast.ui.remote.PanelBackGuard.unregister() }
+    }
     // Films, episodes and catch-up: the Stremio-style VOD OSD (keys in VodOsdKeys).
     val vodOsd = remember { com.enigmacast.ui.player.VodOsdController() }
     fun playingVod() = model.playing?.let { it.episode != null || it.item?.section == XtreamSection.MOVIES } == true || model.catchup
@@ -332,7 +351,28 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                         code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
                     if (steer) return@onPreviewKeyEvent false
                 }
-                if (recentBar) return@onPreviewKeyEvent false
+                if (model.equivalentsState.open) {
+                    if (code == android.view.KeyEvent.KEYCODE_BACK) {
+                        if (e.type == KeyEventType.KeyUp) model.closeEquivalent()
+                        return@onPreviewKeyEvent true
+                    }
+                    return@onPreviewKeyEvent false
+                }
+                if (recentBar) {
+                    when {
+                        code == android.view.KeyEvent.KEYCODE_BACK -> {
+                            if (e.type == KeyEventType.KeyUp) recentBar = false
+                            return@onPreviewKeyEvent true
+                        }
+                        code == android.view.KeyEvent.KEYCODE_DPAD_UP && e.type == KeyEventType.KeyDown -> {
+                            recentBar = false
+                            quickBar = true
+                            quickToken++
+                            return@onPreviewKeyEvent true
+                        }
+                        else -> return@onPreviewKeyEvent false
+                    }
+                }
                 // The options row may not own focus on every remote; handle the second Down here too.
                 if (quickBar && e.type == KeyEventType.KeyDown && code == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
                     recentBar = true

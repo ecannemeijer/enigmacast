@@ -1206,6 +1206,13 @@ class RemoteDisplayViewModel @Inject constructor(
         val action = OwnTunerKeys.action(event.keyCode)
         val ui = _ui.value
         lastKey = KeyEvent.keyCodeToString(event.keyCode)
+        if (equivalents.state.open) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) equivalents.close()
+                return true
+            }
+            return false
+        }
         if (ui.recentBar) {
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_UP) closeRecentBar()
@@ -1475,6 +1482,13 @@ class RemoteDisplayViewModel @Inject constructor(
             }
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
                 closeRecentBar(backToOptions = true)
+                return true
+            }
+            return false
+        }
+        if (equivalents.state.open) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) equivalents.close()
                 return true
             }
             return false

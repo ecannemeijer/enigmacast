@@ -94,6 +94,25 @@ fun EnigmaRemoteScreen(
         onAssistantSearchConsumed()
     }
     val ui by viewModel.uiState.collectAsStateWithLifecycle()
+    androidx.activity.compose.BackHandler(enabled = ui.recentBar || viewModel.equivalentsState.open) {
+        if (viewModel.equivalentsState.open) viewModel.closeEquivalent() else viewModel.closeRecentBar()
+    }
+    androidx.compose.runtime.DisposableEffect(ui.recentBar, viewModel.equivalentsState.open) {
+        if (ui.recentBar || viewModel.equivalentsState.open) {
+            PanelBackGuard.register {
+                if (viewModel.equivalentsState.open) {
+                    viewModel.closeEquivalent()
+                    true
+                } else if (ui.recentBar) {
+                    viewModel.closeRecentBar()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        onDispose { PanelBackGuard.unregister() }
+    }
     val scrim = EnigmaColors.scrim(ui.panelTransparency)
     val player = viewModel.player()
     val quickBarActions = remember(viewModel) {

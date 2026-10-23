@@ -1,8 +1,8 @@
 {
-  "versionCode": 95,
-  "versionName": "1.0.0-beta.92",
+  "versionCode": 96,
+  "versionName": "1.0.0-beta.93",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Equivalent kanalen nu in dezelfde stijl als de kanalenlijst, met bouquet/categorie en satellietpositie (bijv. 23.5°E). Recente zenders werken nu ook met focus en D-pad in Enigma2.",
+  "notes": "Back sluit nu alleen het equivalente-kanalenpaneel of de recente-zenderstrip en laat live TV staan; Up gaat terug naar de opties. Equivalent toont bouquet/categorie en satellietpositie.",
   "companion": {
     "versionCode": 113,
     "versionName": "1.0.0-beta.14",

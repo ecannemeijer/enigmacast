@@ -46,7 +46,6 @@ import com.enigmacast.domain.channel.ChannelAlternative
 import com.enigmacast.domain.channel.ChannelSource
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
-import com.enigmacast.ui.theme.requestWhenReady
 
 /**
  * Equivalent channels in the same left-hand panel and row style as the live channel list.
@@ -64,15 +63,20 @@ fun EquivalentChannelsPanel(
     val first = remember { FocusRequester() }
     val listState = rememberLazyListState()
     LaunchedEffect(state.channels) {
-        if (state.channels.isNotEmpty()) first.requestWhenReady()
+        if (state.channels.isEmpty()) return@LaunchedEffect
+        repeat(10) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { first.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
+        }
     }
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.22f))
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key == Key.Back) {
-                    onDismiss()
+                if (event.key == Key.Back) {
+                    // Close on release and consume both events, or the KeyUp would leave live TV.
+                    if (event.type == KeyEventType.KeyUp) onDismiss()
                     true
                 } else {
                     false
