@@ -858,6 +858,16 @@ class RemoteDisplayViewModel @Inject constructor(
 
     fun closeEquivalent() = equivalents.close()
 
+    /** "Geschiedenis wissen" in the recent strip. */
+    fun clearRecent() {
+        val receiverId = settingsSnapshot.activeReceiver()?.id ?: return
+        viewModelScope.launch {
+            settingsRepository.update {
+                com.enigmacast.domain.model.ChannelMemory.clearRecent(it, receiverId)
+            }
+        }
+    }
+
     fun openPipPicker() {
         if (pip.playing()) pip.stop() else showPipPicker = true
     }

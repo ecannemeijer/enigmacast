@@ -265,6 +265,7 @@ fun EnigmaRemoteScreen(
                 currentReference = ui.own.channel?.reference ?: ui.currentService?.reference.orEmpty(),
                 focusToken = ui.recentBarToken,
                 onChoose = viewModel::zapRecent,
+                onClear = viewModel::clearRecent,
                 onBackToOptions = { viewModel.closeRecentBar(backToOptions = true) },
                 onClose = { viewModel.closeRecentBar(backToOptions = false) },
                 logo = { channel, modifier ->

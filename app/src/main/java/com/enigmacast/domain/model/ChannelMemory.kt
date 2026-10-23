@@ -60,6 +60,15 @@ object ChannelMemory {
         return emptyList()
     }
 
+    /** "Geschiedenis wissen": recent channels of this receiver, without touching the playing one. */
+    fun clearRecent(settings: AppSettings, receiverId: String): AppSettings {
+        if (receiverId.isBlank()) return settings
+        return settings.copy(
+            recentByReceiver = settings.recentByReceiver + (receiverId to emptyList()),
+            recentChannels = if (receiverId == settings.activeReceiver()?.id) emptyList() else settings.recentChannels,
+        )
+    }
+
     fun remember(settings: AppSettings, receiverId: String, last: LastChannel): AppSettings {
         if (receiverId.isBlank()) return settings
         val recent = RecentChannels.push(recentFor(settings, receiverId), last)

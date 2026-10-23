@@ -1095,6 +1095,12 @@ class XtreamViewModel @Inject constructor(
 
     fun closeEquivalent() = equivalents.close()
 
+    /** "Geschiedenis wissen" in the recent strip. */
+    fun clearRecent() {
+        recentIptv.clear(account?.key.orEmpty())
+        recentChannels = emptyList()
+    }
+
     private fun applyPendingEquivalent() {
         val request = pendingEquivalent ?: return
         val current = account ?: return

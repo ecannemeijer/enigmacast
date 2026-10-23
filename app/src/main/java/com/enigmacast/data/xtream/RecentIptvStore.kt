@@ -31,6 +31,11 @@ class RecentIptvStore @Inject constructor(
         return next
     }
 
+    fun clear(accountKey: String) {
+        if (accountKey.isBlank()) return
+        prefs.edit().remove(key(accountKey)).apply()
+    }
+
     private fun key(accountKey: String): String =
         "${profiles.state.value.activeUuid}|$accountKey"
 

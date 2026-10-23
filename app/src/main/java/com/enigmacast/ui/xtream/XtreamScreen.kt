@@ -565,6 +565,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     currentReference = model.playing?.item?.id.orEmpty(),
                     focusToken = recentToken,
                     onChoose = { channel -> model.playRecent(channel); recentBar = false },
+                    onClear = model::clearRecent,
                     onBackToOptions = { recentBar = false; quickBar = true; quickToken++ },
                     onClose = { recentBar = false },
                     logo = { channel, modifier ->
