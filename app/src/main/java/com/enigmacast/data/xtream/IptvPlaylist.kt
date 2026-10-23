@@ -304,7 +304,11 @@ class IptvPlaylistSync @Inject constructor(
     fun arm() { loadAfterCache = true }
 
     fun hasLogin(kind: IptvPlaylistKind): Boolean =
-        store.providers.value.any { it.enabled && it.configured() && it.kind == kind } || store.login.value.configured(kind)
+        if (store.providers.value.isNotEmpty()) {
+            store.providers.value.any { it.enabled && it.configured() }
+        } else {
+            store.login.value.configured(kind)
+        }
     private val _lastLoad = MutableStateFlow(0)
     /** Goes up after every finished load, so pages reading Room reload. */
     val lastLoad: StateFlow<Int> = _lastLoad

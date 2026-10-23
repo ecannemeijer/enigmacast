@@ -1,13 +1,13 @@
 {
-  "versionCode": 104,
-  "versionName": "1.0.0-beta.101",
+  "versionCode": 105,
+  "versionName": "1.0.0-beta.102",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Wizard: kies bij IPTV welke providers je meeneemt, met Alles selecteren. Zoeken en equivalente kanalen gebruiken alleen actieve providers. Provider-acties en herladen blijven bereikbaar.",
+  "notes": "Wizard laadt de gekozen IPTV-providers nu direct na afronden. IPTV-keuze in de wizard met Alles selecteren. Companion heeft providerkeuze en een Herladen-knop.",
   "companion": {
-    "versionCode": 114,
-    "versionName": "1.0.0-beta.15",
+    "versionCode": 115,
+    "versionName": "1.0.0-beta.16",
     "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-    "notes": "IPTV-providerkeuze op de telefoon, meerdere M3U/Xtream-providers en dezelfde providerstatus als de TV.",
+    "notes": "IPTV-providerkeuze en een Herladen-knop voor de gekozen playlist.",
     "sideloadFile": "enigmacast-companion.apk"
   }
 }

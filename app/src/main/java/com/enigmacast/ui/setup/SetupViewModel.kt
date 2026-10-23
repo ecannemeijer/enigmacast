@@ -279,7 +279,12 @@ class SetupViewModel @Inject constructor(
             viewModelScope.launch {
                 val result = runCatching {
                     playlistStore.replaceProviders(chosen)
-                    settings.update { it.copy(iptvSource = com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) }
+                    settings.update {
+                        it.copy(
+                            iptvSource = com.enigmacast.domain.model.IptvSourceMode.PLAYLIST,
+                            iptvPlaylistKind = chosen.first().kind,
+                        )
+                    }
                     syncEngine.publishProviders()
                 }
                 iptvBusy = false
