@@ -1230,7 +1230,10 @@ class XtreamViewModel @Inject constructor(
                     val preferred = if (section == XtreamSection.LIVE) {
                         settingsRepository.current().lastIptvChannels[account.key]?.categoryId
                     } else null
-                    val pick = list.firstOrNull { it.id == preferred } ?: list.firstOrNull()
+                    val preferredProvider = providerAccounts.entries.firstOrNull { it.value.key == account.key }?.key
+                    val pick = list.firstOrNull {
+                        it.id == preferred && (preferredProvider == null || it.providerId == preferredProvider)
+                    } ?: list.firstOrNull()
                     pick?.let { loadCategory(account, it) }
                 }
                 .onFailure { error = true }
@@ -1244,7 +1247,9 @@ class XtreamViewModel @Inject constructor(
      */
     fun selectCategory(category: XtreamCategory) {
         val account = account ?: return
-        if (category.id == this.category?.id && series == null && pendingCategory == null && items.isNotEmpty()) {
+        if (category.id == this.category?.id && category.providerId == this.category?.providerId &&
+            series == null && pendingCategory == null && items.isNotEmpty()
+        ) {
             itemsReady++
             return
         }
@@ -1266,7 +1271,7 @@ class XtreamViewModel @Inject constructor(
             }
                 .onSuccess { (list, base) ->
                     if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: ${list.size} items in ${System.currentTimeMillis() - started} ms")
-                    if (this.category?.id != category.id) gridAnchor = 0
+                    if (this.category?.id != category.id || this.category?.providerId != category.providerId) gridAnchor = 0
                     this.category = category
                     series = null; episodes = emptyList()
                     cards = base
@@ -1277,7 +1282,7 @@ class XtreamViewModel @Inject constructor(
                 }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; error = true }
         } finally {
-            if (pendingCategory?.id == category.id) pendingCategory = null
+            if (pendingCategory?.id == category.id && pendingCategory?.providerId == category.providerId) pendingCategory = null
             loading = false
         }
     }

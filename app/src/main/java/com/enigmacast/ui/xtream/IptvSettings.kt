@@ -1,7 +1,9 @@
 package com.enigmacast.ui.xtream
 
 import com.enigmacast.ui.theme.skinSurface
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -493,11 +495,19 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
     ) {
         com.enigmacast.ui.theme.NavigationSoundsForWindow()
         val sections = com.enigmacast.domain.xtream.XtreamSection.entries
-        val chipFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val providerFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val sectionFocus = remember { androidx.compose.ui.focus.FocusRequester() }
         val allFocus = remember { androidx.compose.ui.focus.FocusRequester() }
         val noneFocus = remember { androidx.compose.ui.focus.FocusRequester() }
         val listFocus = remember { androidx.compose.ui.focus.FocusRequester() }
-        androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { chipFocus.requestFocus() } }
+        val providerRow = rememberLazyListState()
+        androidx.compose.runtime.LaunchedEffect(page.providers.size, page.providerId) {
+            if (page.providers.size > 1 && page.providerId.isBlank()) {
+                runCatching { providerFocus.requestFocus() }
+            } else {
+                runCatching { sectionFocus.requestFocus() }
+            }
+        }
         val Cancel = androidx.compose.ui.focus.FocusRequester.Cancel
         androidx.compose.foundation.layout.Column(
             Modifier
@@ -511,17 +521,21 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
             if (page.providers.size > 1) {
                 Text(stringResource(R.string.iptv_provider_choose), color = EnigmaColors.Muted, fontSize = 12.sp)
                 val focusProvider = page.providerId.ifBlank { page.providers.firstOrNull()?.id.orEmpty() }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.focusGroup()) {
-                    page.providers.forEach { provider ->
+                androidx.compose.foundation.lazy.LazyRow(
+                    state = providerRow,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().focusGroup(),
+                ) {
+                    items(page.providers, key = { it.id }) { provider ->
                         com.enigmacast.ui.theme.ChoiceChip(
                             label = provider.displayName(),
                             selected = provider.id == page.providerId,
                             onClick = { model.selectCategoryProvider(provider.id) },
                             modifier = Modifier
-                                .then(if (provider.id == focusProvider) Modifier.focusRequester(chipFocus) else Modifier)
+                                .then(if (provider.id == focusProvider) Modifier.focusRequester(providerFocus) else Modifier)
                                 .focusProperties {
                                     up = Cancel
-                                    down = if (page.categories.isNotEmpty()) allFocus else Cancel
+                                    down = sectionFocus
                                 },
                         )
                     }
@@ -540,9 +554,9 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
                         selected = section == page.section,
                         onClick = { model.showCategories(section, page.providerId.ifBlank { null }) },
                         modifier = Modifier
-                            .then(if (section == page.section) Modifier.focusRequester(chipFocus) else Modifier)
+                            .then(if (section == page.section) Modifier.focusRequester(sectionFocus) else Modifier)
                             .focusProperties {
-                                up = Cancel
+                                up = if (page.providers.size > 1) providerFocus else Cancel
                                 down = if (page.categories.isNotEmpty()) allFocus else Cancel
                                 if (index == 0) left = Cancel
                                 if (index == sections.lastIndex) right = Cancel
@@ -564,13 +578,13 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
                         com.enigmacast.ui.theme.CompactButton(
                             stringResource(R.string.import_select_all),
                             model::showAllCategories,
-                            modifier = Modifier.focusRequester(allFocus).focusProperties { up = chipFocus; down = listFocus; left = Cancel; right = noneFocus },
+                            modifier = Modifier.focusRequester(allFocus).focusProperties { up = sectionFocus; down = listFocus; left = Cancel; right = noneFocus },
                             icon = androidx.compose.material.icons.Icons.Filled.Check,
                         )
                         com.enigmacast.ui.theme.CompactButton(
                             stringResource(R.string.import_select_none),
                             { model.hideAllCategories() },
-                            modifier = Modifier.focusRequester(noneFocus).focusProperties { up = chipFocus; down = listFocus; left = allFocus; right = Cancel },
+                            modifier = Modifier.focusRequester(noneFocus).focusProperties { up = sectionFocus; down = listFocus; left = allFocus; right = Cancel },
                         )
                         Text(
                             stringResource(R.string.iptv_categories_count, com.enigmacast.domain.xtream.IptvCategoryFilter.shown(page.categories, page.hidden), page.categories.size),
