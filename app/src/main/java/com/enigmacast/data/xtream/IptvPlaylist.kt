@@ -308,6 +308,9 @@ class IptvPlaylistSync @Inject constructor(
     private val _lastLoad = MutableStateFlow(0)
     /** Goes up after every finished load, so pages reading Room reload. */
     val lastLoad: StateFlow<Int> = _lastLoad
+    private val _providerFailures = MutableStateFlow<Map<String, IptvLoadResult.Failure>>(emptyMap())
+    /** Providers that failed in the latest load; one failing provider must not look like success. */
+    val providerFailures: StateFlow<Map<String, IptvLoadResult.Failure>> = _providerFailures
 
     /**
      * Fetches the playlist when a server login is waiting, or when the daily refresh is due.
@@ -331,6 +334,7 @@ class IptvPlaylistSync @Inject constructor(
         } else {
             listOfNotNull(legacyProvider(kind))
         }
+        _providerFailures.value = emptyMap()
         if (configured.isEmpty()) return@withLock IptvLoadResult.Failure.NOT_CONFIGURED
         val task = activity.start(com.enigmacast.activity.ActivityKind.IPTV)
         var failed = true
@@ -338,6 +342,7 @@ class IptvPlaylistSync @Inject constructor(
             var categories = 0
             var items = 0
             var lastFailure: IptvLoadResult.Failure? = null
+            val failures = LinkedHashMap<String, IptvLoadResult.Failure>()
             for (provider in configured) {
                 when (val result = loadProvider(provider) { progress ->
                     activity.progress(task, progress.count, null)
@@ -347,9 +352,13 @@ class IptvPlaylistSync @Inject constructor(
                         categories += result.categories
                         items += result.items
                     }
-                    is IptvLoadResult.Failure -> lastFailure = result
+                    is IptvLoadResult.Failure -> {
+                        failures[provider.id] = result
+                        lastFailure = result
+                    }
                 }
             }
+            _providerFailures.value = failures
             // Old single-provider rows are no longer used once a provider list exists.
             if (store.providers.value.isNotEmpty()) {
                 dao.clearCategories(SOURCE)

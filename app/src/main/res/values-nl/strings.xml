@@ -1564,6 +1564,8 @@
     <string name="iptv_provider_exported">Providerlijst naar het klembord gekopieerd.</string>
     <string name="iptv_provider_imported">%d providers geïmporteerd.</string>
     <string name="iptv_provider_import_failed">Geen geldige providers op het klembord gevonden.</string>
+    <string name="iptv_provider_reload">Alles herladen</string>
+    <string name="iptv_provider_failed">laadfout</string>
     <string name="iptv_provider_move_up">Omhoog</string>
     <string name="iptv_provider_move_down">Omlaag</string>
     <string name="iptv_provider_channels">%d zenders geladen</string>

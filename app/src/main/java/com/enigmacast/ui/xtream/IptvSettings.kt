@@ -178,6 +178,7 @@ class IptvSettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IptvSourceMode.XSTREAMITY to IptvPlaylistKind.M3U)
     val login: StateFlow<IptvPlaylistLogin> = store.login
     val providers: StateFlow<List<com.enigmacast.data.xtream.IptvProvider>> = store.providers
+    val providerFailures: StateFlow<Map<String, IptvLoadResult.Failure>> = sync.providerFailures
     val lastLoad: StateFlow<Int> = sync.lastLoad
 
     private val _load = MutableStateFlow<IptvLoadState?>(null)
@@ -235,6 +236,8 @@ class IptvSettingsViewModel @Inject constructor(
         refreshProviderCounts()
     }
 
+    fun reloadAll() = reload()
+
     fun providersJson(): String = store.providersJson()
 
     fun importProviders(raw: String): Int {
@@ -280,6 +283,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     val mode by model.mode.collectAsStateWithLifecycle()
     val providers by model.providers.collectAsStateWithLifecycle()
     val providerCounts by model.providerCounts.collectAsStateWithLifecycle()
+    val providerFailures by model.providerFailures.collectAsStateWithLifecycle()
     val loads by model.lastLoad.collectAsStateWithLifecycle()
     val load by model.load.collectAsStateWithLifecycle()
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -329,7 +333,8 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                         )
                         Text(
                             "${provider.kind.name} · ${if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}" +
-                                providerCounts[provider.id]?.let { " · " + stringResource(R.string.iptv_provider_channels, it) }.orEmpty(),
+                                providerCounts[provider.id]?.let { " · " + stringResource(R.string.iptv_provider_channels, it) }.orEmpty() +
+                                providerFailures[provider.id]?.let { " · " + stringResource(R.string.iptv_provider_failed) }.orEmpty(),
                             color = EnigmaColors.Muted,
                             fontSize = 11.sp,
                         )
@@ -358,7 +363,10 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                     val imported = model.importProviders(raw)
                     notice = if (imported > 0) context.getString(R.string.iptv_provider_imported, imported) else context.getString(R.string.iptv_provider_import_failed)
                 })
-                selected?.let { provider ->
+                CompactButton(stringResource(R.string.iptv_provider_reload), onClick = { notice = ""; model.reloadAll() })
+            }
+            selected?.let { provider ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CompactButton(
                         if (provider.enabled) stringResource(R.string.iptv_provider_disabled) else stringResource(R.string.iptv_provider_enabled),
                         onClick = { model.setProviderEnabled(provider.id, !provider.enabled) },
@@ -394,6 +402,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                     username = user,
                     password = pass,
                     enabled = selected?.enabled ?: true,
+                    sortOrder = selected?.sortOrder ?: 0,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TvButton(

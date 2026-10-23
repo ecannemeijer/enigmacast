@@ -1572,6 +1572,8 @@
     <string name="iptv_provider_exported">Provider list copied to the clipboard.</string>
     <string name="iptv_provider_imported">%d providers imported.</string>
     <string name="iptv_provider_import_failed">No valid providers found on the clipboard.</string>
+    <string name="iptv_provider_reload">Reload all</string>
+    <string name="iptv_provider_failed">load failed</string>
     <string name="iptv_provider_move_up">Up</string>
     <string name="iptv_provider_move_down">Down</string>
     <string name="iptv_provider_channels">%d channels loaded</string>
