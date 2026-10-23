@@ -1,8 +1,8 @@
 {
-  "versionCode": 105,
-  "versionName": "1.0.0-beta.102",
+  "versionCode": 106,
+  "versionName": "1.0.0-beta.103",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Wizard laadt de gekozen IPTV-providers nu direct na afronden. IPTV-keuze in de wizard met Alles selecteren. Companion heeft providerkeuze en een Herladen-knop.",
+  "notes": "IPTV-instellingen opnieuw ingedeeld in duidelijke kaarten: IPTV-bron, Providers, Provider bewerken, Beheer en Back-up/onderhoud. Acties staan als overzichtelijke rijen; verwijderen vraagt om bevestiging.",
   "companion": {
     "versionCode": 115,
     "versionName": "1.0.0-beta.16",

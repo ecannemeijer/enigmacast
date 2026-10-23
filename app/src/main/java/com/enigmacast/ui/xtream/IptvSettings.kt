@@ -62,6 +62,7 @@ import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvButton
+import com.enigmacast.ui.theme.ValueRow
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
@@ -289,6 +290,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     var selectedId by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<String?>(null) }
     val selected = providers.firstOrNull { it.id == selectedId }
     var name by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.displayName().orEmpty()) }
     var kind by remember(selected?.id, adding) { mutableStateOf(if (adding) IptvPlaylistKind.M3U else selected?.kind ?: IptvPlaylistKind.M3U) }
@@ -303,12 +305,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
         if (!adding && selectedId == null && providers.isNotEmpty()) selectedId = providers.first().id
     }
 
-    SettingsCard(stringResource(R.string.iptv_settings_card)) {
-        // Which categories the IPTV page shows, and which SubSource languages a film or series may use.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CompactButton(stringResource(R.string.iptv_categories_manage), model::openCategories)
-            CompactButton(stringResource(R.string.iptv_subtitles_manage), model::openSubtitles)
-        }
+    SettingsCard(stringResource(R.string.iptv_source_card)) {
         val sources = IptvSourceMode.entries
         ChoiceRow(
             title = stringResource(R.string.iptv_source),
@@ -317,8 +314,24 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
             selectedIndex = sources.indexOf(mode.first),
             onSelect = { model.setMode(sources[it]) },
         )
-        if (mode.first == IptvSourceMode.PLAYLIST) {
-            Text(stringResource(R.string.iptv_providers), color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
+        if (mode.first == IptvSourceMode.XSTREAMITY) {
+            Text(
+                stringResource(R.string.iptv_source_xstreamity_help),
+                color = EnigmaColors.Muted,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+            )
+        }
+    }
+    if (mode.first == IptvSourceMode.PLAYLIST) {
+        SettingsCard(stringResource(R.string.iptv_providers_card)) {
+            if (providers.isEmpty()) {
+                Text(
+                    stringResource(R.string.iptv_provider_empty),
+                    color = EnigmaColors.Muted,
+                    fontSize = 13.sp,
+                )
+            }
             providers.forEach { provider ->
                 CompactListRow(
                     onClick = { adding = false; selectedId = provider.id },
@@ -328,56 +341,57 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                         Text(
                             provider.displayName(),
                             color = EnigmaColors.Text,
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
+                            fontWeight = EnigmaType.Strong,
                             maxLines = 1,
                         )
+                        val status = providerCounts[provider.id]?.let {
+                            stringResource(R.string.iptv_provider_channels, it)
+                        } ?: stringResource(R.string.iptv_provider_not_loaded)
                         Text(
-                            "${provider.kind.name} · ${if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}" +
-                                providerCounts[provider.id]?.let { " · " + stringResource(R.string.iptv_provider_channels, it) }.orEmpty() +
-                                providerFailures[provider.id]?.let { " · " + stringResource(R.string.iptv_provider_failed) }.orEmpty(),
-                            color = EnigmaColors.Muted,
-                            fontSize = 11.sp,
+                            listOf(
+                                provider.kind.name,
+                                if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled),
+                                status,
+                                providerFailures[provider.id]?.let { stringResource(R.string.iptv_provider_failed) },
+                            ).filterNotNull().joinToString("  ·  "),
+                            color = if (providerFailures[provider.id] != null) EnigmaColors.Danger else EnigmaColors.Muted,
+                            fontSize = 12.sp,
                         )
                     }
+                    Text("›", color = EnigmaColors.Subtle, fontSize = 18.sp)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CompactButton(stringResource(R.string.iptv_provider_new), onClick = {
-                    adding = true
-                    selectedId = null
-                    name = ""
-                    kind = IptvPlaylistKind.M3U
-                    m3u = ""
-                    server = ""
-                    user = ""
-                    pass = ""
-                })
-                CompactButton(stringResource(R.string.iptv_provider_export), onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("EnigmaCast IPTV providers", model.providersJson()))
-                    notice = context.getString(R.string.iptv_provider_exported)
-                })
-                CompactButton(stringResource(R.string.iptv_provider_import), onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val raw = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
-                    val imported = model.importProviders(raw)
-                    notice = if (imported > 0) context.getString(R.string.iptv_provider_imported, imported) else context.getString(R.string.iptv_provider_import_failed)
-                })
-                CompactButton(stringResource(R.string.iptv_provider_reload), onClick = { notice = ""; model.reloadAll() })
+                TvButton(
+                    stringResource(R.string.iptv_provider_new),
+                    {
+                        adding = true
+                        selectedId = null
+                        name = ""
+                        kind = IptvPlaylistKind.M3U
+                        m3u = ""
+                        server = ""
+                        user = ""
+                        pass = ""
+                    },
+                    compact = true,
+                )
             }
-            selected?.let { provider ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CompactButton(
-                        if (provider.enabled) stringResource(R.string.iptv_provider_disabled) else stringResource(R.string.iptv_provider_enabled),
-                        onClick = { model.setProviderEnabled(provider.id, !provider.enabled) },
+        }
+
+        if (selected != null || adding) {
+            SettingsCard(
+                if (adding) stringResource(R.string.iptv_provider_new_title)
+                else selected?.displayName() ?: stringResource(R.string.iptv_provider_edit_title),
+            ) {
+                if (selected != null) {
+                    Text(
+                        "${selected.kind.name} · ${if (selected.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}",
+                        color = EnigmaColors.Muted,
+                        fontSize = 12.sp,
                     )
-                    CompactButton(stringResource(R.string.iptv_provider_move_up), onClick = { model.moveProvider(provider.id, -1) })
-                    CompactButton(stringResource(R.string.iptv_provider_move_down), onClick = { model.moveProvider(provider.id, 1) })
-                    CompactButton(stringResource(R.string.iptv_provider_delete), onClick = { model.deleteProvider(provider.id) })
                 }
-            }
-            if (notice.isNotBlank()) Text(notice, color = EnigmaColors.Muted, fontSize = 12.sp)
-            if (selected != null || adding) {
                 TvTextField(stringResource(R.string.iptv_provider_name), name, { name = it }, Modifier.fillMaxWidth())
                 val kinds = IptvPlaylistKind.entries
                 ChoiceRow(
@@ -406,7 +420,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TvButton(
-                        stringResource(R.string.iptv_save_load),
+                        stringResource(R.string.iptv_provider_save),
                         {
                             val saved = model.saveProvider(draft)
                             if (saved != null) {
@@ -417,15 +431,104 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                         enabled = name.isNotBlank() && draft.configured(),
                     )
                 }
+                if (selected != null) {
+                    Text(
+                        stringResource(R.string.iptv_provider_actions),
+                        color = EnigmaColors.Text,
+                        fontSize = 15.sp,
+                        fontWeight = EnigmaType.Strong,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    ValueRow(
+                        title = stringResource(if (selected.enabled) R.string.iptv_provider_disable_action else R.string.iptv_provider_enable_action),
+                        value = if (selected.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled),
+                        onClick = { model.setProviderEnabled(selected.id, !selected.enabled) },
+                    )
+                    ValueRow(
+                        title = stringResource(R.string.iptv_provider_move_up),
+                        value = "›",
+                        onClick = { model.moveProvider(selected.id, -1) },
+                    )
+                    ValueRow(
+                        title = stringResource(R.string.iptv_provider_move_down),
+                        value = "›",
+                        onClick = { model.moveProvider(selected.id, 1) },
+                    )
+                    ValueRow(
+                        title = stringResource(R.string.iptv_provider_delete),
+                        value = "›",
+                        description = stringResource(R.string.iptv_provider_delete_desc),
+                        onClick = { deleteTarget = selected.id },
+                    )
+                }
             }
-            val at = model.loadedAt
-            Text(
-                if (at == 0L || count == 0) stringResource(R.string.iptv_status_none)
-                else stringResource(R.string.iptv_status, count, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(at))),
-                color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+        }
+
+        SettingsCard(stringResource(R.string.iptv_manage_card)) {
+            ValueRow(
+                title = stringResource(R.string.iptv_categories_manage),
+                value = "›",
+                description = stringResource(R.string.iptv_categories_desc),
+                onClick = model::openCategories,
+            )
+            ValueRow(
+                title = stringResource(R.string.iptv_subtitles_manage),
+                value = "›",
+                onClick = model::openSubtitles,
             )
         }
+
+        SettingsCard(stringResource(R.string.iptv_backup_card)) {
+            ValueRow(
+                title = stringResource(R.string.iptv_provider_export),
+                value = "›",
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("EnigmaCast IPTV providers", model.providersJson()))
+                    notice = context.getString(R.string.iptv_provider_exported)
+                },
+            )
+            ValueRow(
+                title = stringResource(R.string.iptv_provider_import),
+                value = "›",
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val raw = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
+                    val imported = model.importProviders(raw)
+                    notice = if (imported > 0) context.getString(R.string.iptv_provider_imported, imported) else context.getString(R.string.iptv_provider_import_failed)
+                },
+            )
+            ValueRow(
+                title = stringResource(R.string.iptv_provider_reload),
+                value = "›",
+                onClick = { notice = ""; model.reloadAll() },
+            )
+            if (notice.isNotBlank()) {
+                Text(notice, color = EnigmaColors.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp))
+            }
+        }
+
+        Text(
+            if (model.loadedAt == 0L || count == 0) stringResource(R.string.iptv_status_none)
+            else stringResource(R.string.iptv_status, count, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(model.loadedAt))),
+            color = EnigmaColors.Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 6.dp),
+        )
+    }
+    deleteTarget?.let { id ->
+        val provider = providers.firstOrNull { it.id == id }
+        com.enigmacast.ui.theme.TvChoiceDialog(
+            title = stringResource(R.string.iptv_provider_delete_confirm),
+            message = provider?.displayName().orEmpty(),
+            choices = listOf(stringResource(R.string.iptv_provider_delete), stringResource(R.string.cancel)),
+            onChoose = { choice ->
+                if (choice == 0) model.deleteProvider(id)
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null },
+            compact = true,
+        )
     }
     load?.let { IptvLoadDialog(it, onCancel = model::cancel, onClose = model::close) }
     val categoryPage by model.categoryPage.collectAsStateWithLifecycle()
