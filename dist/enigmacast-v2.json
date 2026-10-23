@@ -1,8 +1,8 @@
 {
-  "versionCode": 106,
-  "versionName": "1.0.0-beta.103",
+  "versionCode": 107,
+  "versionName": "1.0.0-beta.104",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "IPTV-instellingen opnieuw ingedeeld in duidelijke kaarten: IPTV-bron, Providers, Provider bewerken, Beheer en Back-up/onderhoud. Acties staan als overzichtelijke rijen; verwijderen vraagt om bevestiging.",
+  "notes": "IPTV-instellingen opnieuw ingedeeld in duidelijke kaarten. De providerlijst blijft compact; bewerken opent pas na kiezen. Verwijderen vraagt om bevestiging, beheer en back-up staan apart.",
   "companion": {
     "versionCode": 115,
     "versionName": "1.0.0-beta.16",

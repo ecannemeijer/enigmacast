@@ -301,9 +301,6 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     var count by remember { mutableStateOf(0) }
     LaunchedEffect(loads) { count = model.count() }
     LaunchedEffect(providers, loads) { model.refreshProviderCounts() }
-    LaunchedEffect(providers) {
-        if (!adding && selectedId == null && providers.isNotEmpty()) selectedId = providers.first().id
-    }
 
     SettingsCard(stringResource(R.string.iptv_source_card)) {
         val sources = IptvSourceMode.entries
