@@ -1030,6 +1030,10 @@ class XtreamViewModel @Inject constructor(
                 account = null; categories = emptyList(); category = null; items = emptyList(); cards = emptyList(); series = null
             }
             if (account == null || account?.key !in accounts.map { it.key }) account = accounts.firstOrNull()
+            // We now select the first provider directly instead of going through choose(); load its
+            // categories here, otherwise the first provider would show an empty list until another
+            // category/provider was chosen.
+            if (account != null && categories.isEmpty()) selectSection(requestedSection ?: section, force = true)
             open()
             return
         }
