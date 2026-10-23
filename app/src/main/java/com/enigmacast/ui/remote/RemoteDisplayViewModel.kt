@@ -456,6 +456,8 @@ class RemoteDisplayViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 quickBar = false,
+                banner = false,
+                details = false,
                 recentBar = true,
                 recentBarToken = it.recentBarToken + 1,
             )

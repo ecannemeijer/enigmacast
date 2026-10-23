@@ -524,7 +524,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     showIcons = !bannerFromZap || quickBar,
                     onGuide = openPlayingGuide,
                     onSearch = onSearch,
-                    onRecentBar = { recentBar = true; recentToken++; quickBar = false },
+                    onRecentBar = { recentBar = true; recentToken++; quickBar = false; bannerUntil = 0L },
                 )
             }
             val upcoming = model.nextOffer()
@@ -568,18 +568,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     onClear = model::clearRecent,
                     onBackToOptions = { recentBar = false; quickBar = true; quickToken++ },
                     onClose = { recentBar = false },
-                    logo = { channel, modifier ->
-                        com.enigmacast.ui.remote.Picon(
-                            entry = com.enigmacast.domain.model.BouquetEntry(
-                                channel.name,
-                                channel.reference,
-                                picon = channel.logo,
-                            ),
-                            picon = { model.logo(it.picon) },
-                            cachedPicon = { model.cachedLogo(it.picon) },
-                            modifier = modifier,
-                        )
-                    },
+                    loadLogo = { channel -> channel.logo.takeIf { it.isNotBlank() }?.let { model.logo(it) } },
                 )
             }
             model.playerError?.let {

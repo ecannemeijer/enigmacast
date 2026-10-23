@@ -268,15 +268,9 @@ fun EnigmaRemoteScreen(
                 onClear = viewModel::clearRecent,
                 onBackToOptions = { viewModel.closeRecentBar(backToOptions = true) },
                 onClose = { viewModel.closeRecentBar(backToOptions = false) },
-                logo = { channel, modifier ->
-                    Picon(
-                        entry = com.enigmacast.domain.model.BouquetEntry(channel.name, channel.reference),
-                        picon = viewModel::picon,
-                        cachedPicon = viewModel::cachedPicon,
-                        modifier = modifier,
-                    )
-                },
-            )
+                loadLogo = { channel ->
+                    viewModel.picon(com.enigmacast.domain.model.BouquetEntry(channel.name, channel.reference))
+                },            )
         }
     }
 }

@@ -1,8 +1,8 @@
 {
-  "versionCode": 92,
-  "versionName": "1.0.0-beta.89",
+  "versionCode": 93,
+  "versionName": "1.0.0-beta.90",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Recente zenders onder de live-optiebalk: horizontaal, de laatste 8 kanalen met logo en als laatste knop 'Geschiedenis wissen'. Equivalent-kanaal en profielkeuze vóór live-start blijven behouden.",
+  "notes": "Recente zenders: compacte horizontale strip met logo's, laatste 8 kanalen, laatste knop 'Geschiedenis wissen', en automatisch verbergen na 5 seconden zonder actie. OSD wordt tijdens de strip verborgen.",
   "companion": {
     "versionCode": 113,
     "versionName": "1.0.0-beta.14",
