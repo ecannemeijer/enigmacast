@@ -1213,7 +1213,14 @@ class RemoteDisplayViewModel @Inject constructor(
         // The quick bar is plain Compose focus (Left/Right between tiles, OK opens a picker).
         if (showPipPicker) return false
         if (pip.listOpen.value) return false
-        if (ui.quickBar) return false
+        if (ui.quickBar) {
+            // Second Down on the options: recent channels, even when the row itself lost focus.
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+                openRecentBar()
+                return true
+            }
+            return false
+        }
         // Down on a banner that OK, Info or Right brought up opens the quick bar;
         // after a zap Down keeps zapping.
         val radio = playingRadio(ui)
@@ -1460,6 +1467,11 @@ class RemoteDisplayViewModel @Inject constructor(
             return false
         }
         if (_ui.value.quickBar) {
+            // Second Down on the options: recent channels, even when the row itself lost focus.
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+                openRecentBar()
+                return true
+            }
             // Following the receiver: the bar keeps the keys while it is open; Back closes it.
             if (event.keyCode == KeyEvent.KEYCODE_BACK) {
                 if (event.action == KeyEvent.ACTION_UP) closeQuickBar()

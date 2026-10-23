@@ -333,6 +333,14 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     if (steer) return@onPreviewKeyEvent false
                 }
                 if (recentBar) return@onPreviewKeyEvent false
+                // The options row may not own focus on every remote; handle the second Down here too.
+                if (quickBar && e.type == KeyEventType.KeyDown && code == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
+                    recentBar = true
+                    recentToken++
+                    quickBar = false
+                    bannerUntil = 0L
+                    return@onPreviewKeyEvent true
+                }
                 if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
                     if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
                     return@onPreviewKeyEvent true

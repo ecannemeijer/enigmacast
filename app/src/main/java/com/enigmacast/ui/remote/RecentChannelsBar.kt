@@ -49,7 +49,6 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.domain.model.LastChannel
 import com.enigmacast.ui.theme.EnigmaColors
-import com.enigmacast.ui.theme.requestWhenReady
 import kotlinx.coroutines.launch
 
 /**
@@ -79,7 +78,12 @@ fun RecentChannelsBar(
     LaunchedEffect(focusToken, visible) {
         selected = 0
         listState.scrollToItem(0)
-        focus.requestWhenReady()
+        // This is a leaf focus target, so request the box itself. requestFocus(Enter) would
+        // look for a focusable child and leave the previous player focus in place.
+        repeat(10) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { focus.requestFocus() }.getOrDefault(false)) return@LaunchedEffect
+        }
     }
     // No interaction for five seconds: put the live picture back.
     LaunchedEffect(focusToken, activity) {
@@ -93,6 +97,8 @@ fun RecentChannelsBar(
     Box(
         modifier
             .fillMaxSize()
+            .focusRequester(focus)
+            .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 activity++
@@ -111,8 +117,6 @@ fun RecentChannelsBar(
     ) {
         Column(
             Modifier
-                .focusRequester(focus)
-                .focusable()
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 6.dp)
                 .background(EnigmaColors.Scrim, RoundedCornerShape(12.dp))
@@ -123,7 +127,7 @@ fun RecentChannelsBar(
             Text(
                 "Recente zenders",
                 color = EnigmaColors.Text,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 1.dp),
             )
             if (visible.isEmpty()) {
@@ -177,7 +181,7 @@ private fun RecentChannelTile(
         Text(
             channel.name.ifBlank { channel.reference },
             color = if (selected) Color.White else EnigmaColors.Text,
-            fontSize = 9.sp,
+            fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -227,7 +231,7 @@ private fun ClearHistoryTile(selected: Boolean) {
         Text(
             "Geschiedenis wissen",
             color = if (selected) Color.White else EnigmaColors.Muted,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
