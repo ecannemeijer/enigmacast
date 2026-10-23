@@ -37,31 +37,49 @@ class ChannelAlternativesRepository @Inject constructor(
 
         // Satellite: the cached channel list is complete and cheap to read.
         if (receiver != null) {
+            val bouquets = runCatching { cache.bouquets(receiver) }.getOrDefault(emptyList())
+                .associate { it.reference to it.name }
             runCatching { cache.channels(receiver) }.getOrDefault(emptyList())
                 .asSequence()
                 .filter { BouquetChannels.isPlayableChannel(it.reference) }
                 .filter { ChannelNameMatcher.matches(name, it.name) }
                 .distinctBy { it.reference }
                 .forEach { row ->
+                    val bouquet = bouquets[row.bouquetReference]?.takeIf { it.isNotBlank() }
+                    val orbital = com.enigmacast.domain.osdinfo.ServiceOrigin.orbital(row.reference)
+                        ?.label
+                    val context = listOfNotNull(bouquet, orbital).joinToString(" · ")
+                        .ifBlank { "Satelliet" }
                     out += ChannelAlternative(
                         name = row.name,
                         source = ChannelSource.ENIGMA2,
                         subtitle = "Satelliet",
+                        context = context,
                         reference = row.reference,
                     )
                 }
         }
 
         // IPTV: playlist mode reads Room; XStreamity reads its live list from the account.
+        val categoryNames = mutableMapOf<String, Map<String, String>>()
         val items = if (fromPlaylist) {
+            runCatching {
+                playlistSync.categories(XtreamSection.LIVE).associate { it.id to it.name }
+            }.getOrNull()?.let { categoryNames[""] = it }
             runCatching { playlistSync.liveItems() }.getOrDefault(emptyList()).map { it to null }
         } else {
             val accounts = if (account != null) {
                 listOf(account)
             } else if (receiver != null) {
-                runCatching { xtream.detect(settings.current().activeReceiver()!!) }.getOrNull()?.accounts.orEmpty()
+                runCatching {
+                    current.activeReceiver()?.let { xtream.detect(it) }?.accounts.orEmpty()
+                }.getOrDefault(emptyList())
             } else {
                 emptyList()
+            }
+            accounts.forEach { login ->
+                runCatching { xtream.categories(login, XtreamSection.LIVE) }.getOrNull()
+                    ?.let { categories -> categoryNames[login.key] = categories.associate { it.id to it.name } }
             }
             accounts.flatMap { login ->
                 runCatching { xtream.liveStreams(login) }.getOrDefault(emptyList()).map { it to login }
@@ -72,10 +90,13 @@ class ChannelAlternativesRepository @Inject constructor(
             .filter { (item, _) -> ChannelNameMatcher.matches(name, item.name) }
             .distinctBy { (item, login) -> "${login?.key}:${item.id}" }
             .forEach { (item, login) ->
+                val category = categoryNames[login?.key.orEmpty()]?.get(item.categoryId)
+                val context = category?.takeIf { it.isNotBlank() }?.let { "IPTV · $it" } ?: "IPTV"
                 out += ChannelAlternative(
                     name = item.name,
                     source = ChannelSource.IPTV,
-                    subtitle = login?.name?.takeIf { it.isNotBlank() }?.let { "IPTV · $it" } ?: "IPTV",
+                    subtitle = "IPTV",
+                    context = context,
                     reference = "iptv:${login?.key.orEmpty()}:${item.id}",
                     item = item,
                     account = login,

@@ -453,6 +453,7 @@ class RemoteDisplayViewModel @Inject constructor(
     fun openRecentBar() {
         if (!_ui.value.quickBar) return
         bannerJob?.cancel()
+        equivalents.close()
         _ui.update {
             it.copy(
                 quickBar = false,
@@ -845,7 +846,7 @@ class RemoteDisplayViewModel @Inject constructor(
         val name = _ui.value.own.channel?.name?.takeIf { it.isNotBlank() }
             ?: _ui.value.currentService?.name?.takeIf { it.isNotBlank() }
             ?: return
-        _ui.update { it.copy(quickBar = false) }
+        _ui.update { it.copy(quickBar = false, banner = false, details = false) }
         equivalents.open(
             name = name,
             receiverId = settingsSnapshot.activeReceiver()?.id,
@@ -1205,6 +1206,18 @@ class RemoteDisplayViewModel @Inject constructor(
         val action = OwnTunerKeys.action(event.keyCode)
         val ui = _ui.value
         lastKey = KeyEvent.keyCodeToString(event.keyCode)
+        if (ui.recentBar) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+                if (event.action == KeyEvent.ACTION_UP) closeRecentBar()
+                return true
+            }
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
+                closeRecentBar(backToOptions = true)
+                return true
+            }
+            // Left/Right/OK belong to the strip's own Compose focus.
+            return false
+        }
         if (action == OwnKeyAction.BACK) {
             if (showPipPicker || pip.listOpen.value) return false
             if (event.action == KeyEvent.ACTION_UP) ownBack()

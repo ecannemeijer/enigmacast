@@ -256,6 +256,13 @@ fun EnigmaRemoteScreen(
         }
         EquivalentChannelsPanel(
             state = viewModel.equivalentsState,
+            loadLogo = { channel ->
+                if (channel.source == com.enigmacast.domain.channel.ChannelSource.ENIGMA2) {
+                    viewModel.picon(com.enigmacast.domain.model.BouquetEntry(channel.name, channel.reference))
+                } else {
+                    null
+                }
+            },
             onChoose = viewModel::chooseEquivalent,
             onDismiss = viewModel::closeEquivalent,
         )

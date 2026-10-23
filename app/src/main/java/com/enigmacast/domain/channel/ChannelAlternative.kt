@@ -13,6 +13,8 @@ data class ChannelAlternative(
     val name: String,
     val source: ChannelSource,
     val subtitle: String,
+    /** Bouquet/category and, for satellite, the orbital position ("Nederland · 19.2°E"). */
+    val context: String = "",
     val reference: String,
     val item: XtreamItem? = null,
     val account: XtreamAccount? = null,

@@ -1,8 +1,8 @@
 {
-  "versionCode": 94,
-  "versionName": "1.0.0-beta.91",
+  "versionCode": 95,
+  "versionName": "1.0.0-beta.92",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Recente zenders: compacte horizontale strip, grotere tekst, directe logo's, D-pad-scroll en automatisch verbergen na 5 seconden. OSD blijft verborgen zolang de strip open is.",
+  "notes": "Equivalent kanalen nu in dezelfde stijl als de kanalenlijst, met bouquet/categorie en satellietpositie (bijv. 23.5°E). Recente zenders werken nu ook met focus en D-pad in Enigma2.",
   "companion": {
     "versionCode": 113,
     "versionName": "1.0.0-beta.14",

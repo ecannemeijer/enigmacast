@@ -1,97 +1,147 @@
 package com.enigmacast.ui.remote
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Text
 import com.enigmacast.data.channel.EquivalentChannelsState
 import com.enigmacast.domain.channel.ChannelAlternative
 import com.enigmacast.domain.channel.ChannelSource
+import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.requestWhenReady
 
 /**
- * List of the same channel on the other source. Opens from the first quick-option tile and
- * replaces the former Search tile; choosing a row switches the live picture.
+ * Equivalent channels in the same left-hand panel and row style as the live channel list.
+ * The row shows source, logo, channel name and bouquet/category (plus orbital position for
+ * satellite channels). Up/Down/OK are normal channel-list focus; Back closes the panel.
  */
 @Composable
 fun EquivalentChannelsPanel(
     state: EquivalentChannelsState,
+    loadLogo: suspend (ChannelAlternative) -> ImageBitmap?,
     onChoose: (ChannelAlternative) -> Unit,
     onDismiss: () -> Unit,
 ) {
     if (!state.open) return
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true),
+    val first = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    LaunchedEffect(state.channels) {
+        if (state.channels.isNotEmpty()) first.requestWhenReady()
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.22f))
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Back) {
+                    onDismiss()
+                    true
+                } else {
+                    false
+                }
+            },
     ) {
-        val first = remember { FocusRequester() }
-        LaunchedEffect(state.channels) {
-            if (state.channels.isNotEmpty()) first.requestWhenReady()
-        }
         Column(
             Modifier
-                .widthIn(max = 780.dp)
-                .background(EnigmaColors.Card, RoundedCornerShape(16.dp))
-                .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(16.dp))
-                .padding(vertical = 18.dp, horizontal = 20.dp),
+                .fillMaxHeight()
+                .widthIn(min = 520.dp, max = 660.dp)
+                .background(EnigmaColors.Scrim, RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp))
+                .padding(vertical = 16.dp, horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Equivalent kanaal", color = EnigmaColors.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Equivalent kanaal", color = EnigmaColors.Text, fontSize = 20.sp)
             Text(
-                if (state.currentName.isBlank()) "Kies dezelfde zender op een andere bron."
-                else "Zelfde zender als ${state.currentName}",
+                state.currentName.ifBlank { "Zelfde zender op een andere bron" },
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
-            when {
-                state.loading -> Text("Kanalen zoeken…", color = EnigmaColors.Muted, fontSize = 15.sp)
-                state.message.isNotBlank() -> Text(state.message, color = EnigmaColors.Muted, fontSize = 15.sp)
-                else -> LazyColumn(Modifier.fillMaxWidth().height(420.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(state.channels, key = { "${it.source}:${it.reference}" }) { channel ->
-                        EquivalentRow(
-                            channel = channel,
-                            modifier = if (channel == state.channels.firstOrNull()) Modifier.focusRequester(first) else Modifier,
+            if (state.loading) {
+                Text("Kanalen zoeken…", color = EnigmaColors.Muted, fontSize = 14.sp)
+            } else if (state.message.isNotBlank()) {
+                Text(state.message, color = EnigmaColors.Muted, fontSize = 14.sp)
+            } else {
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                ) {
+                    itemsIndexed(state.channels, key = { _, channel -> "${channel.source}:${channel.reference}" }) { index, channel ->
+                        CompactListRow(
                             onClick = { onChoose(channel) },
-                        )
+                            modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
+                        ) { focused ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (channel.source == ChannelSource.IPTV) "IPTV" else "SAT",
+                                    color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Subtle,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.width(36.dp),
+                                )
+                                EquivalentLogo(
+                                    channel = channel,
+                                    loadLogo = loadLogo,
+                                    modifier = Modifier.width(44.dp).height(26.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        channel.name,
+                                        color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Text,
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        channel.context,
+                                        color = if (focused) EnigmaColors.OnFocus.copy(alpha = 0.75f) else EnigmaColors.Muted,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Text("›", color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, fontSize = 18.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -100,35 +150,20 @@ fun EquivalentChannelsPanel(
 }
 
 @Composable
-private fun EquivalentRow(channel: ChannelAlternative, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    Row(
-        modifier
-            .fillMaxWidth()
-            .background(if (focused) EnigmaColors.Selected else Color.Transparent, RoundedCornerShape(10.dp))
-            .border(1.dp, if (focused) EnigmaColors.Focus else Color.Transparent, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
-            .focusable(interactionSource = interaction)
-            .onKeyEvent { event ->
-                val confirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
-                if (confirm && event.type == KeyEventType.KeyUp) onClick()
-                confirm
-            }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            if (channel.source == ChannelSource.IPTV) "IPTV" else "SAT",
-            color = if (channel.source == ChannelSource.IPTV) EnigmaColors.Cyan else EnigmaColors.Accent,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Column(Modifier.weight(1f)) {
-            Text(channel.name, color = EnigmaColors.Text, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(channel.subtitle, color = EnigmaColors.Subtle, fontSize = 11.sp)
+private fun EquivalentLogo(
+    channel: ChannelAlternative,
+    loadLogo: suspend (ChannelAlternative) -> ImageBitmap?,
+    modifier: Modifier,
+) {
+    val image by produceState<ImageBitmap?>(initialValue = null, channel.reference) {
+        value = runCatching { loadLogo(channel) }.getOrNull()
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        val bitmap = image
+        if (bitmap != null) {
+            Image(bitmap, contentDescription = channel.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        } else {
+            Text(channel.name.trim().take(2).uppercase().ifBlank { "TV" }, color = EnigmaColors.Subtle, fontSize = 10.sp)
         }
-        Text("▶", color = EnigmaColors.Accent, fontSize = 12.sp)
     }
 }

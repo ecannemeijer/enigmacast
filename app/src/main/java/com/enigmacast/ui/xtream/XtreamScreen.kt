@@ -532,7 +532,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     showIcons = !bannerFromZap || quickBar,
                     onGuide = openPlayingGuide,
                     onSearch = onSearch,
-                    onRecentBar = { recentBar = true; recentToken++; quickBar = false; bannerUntil = 0L },
+                    onEquivalent = { quickBar = false; bannerUntil = 0L; model.openEquivalent() },
+                    onRecentBar = { model.closeEquivalent(); recentBar = true; recentToken++; quickBar = false; bannerUntil = 0L },
                 )
             }
             val upcoming = model.nextOffer()
@@ -564,6 +565,13 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
             com.enigmacast.ui.remote.EquivalentChannelsPanel(
                 state = model.equivalentsState,
+                loadLogo = { channel ->
+                    if (channel.source == com.enigmacast.domain.channel.ChannelSource.IPTV) {
+                        channel.item?.icon?.takeIf { it.isNotBlank() }?.let { model.logo(it) }
+                    } else {
+                        null
+                    }
+                },
                 onChoose = model::chooseEquivalent,
                 onDismiss = model::closeEquivalent,
             )
@@ -1093,6 +1101,7 @@ private fun IptvOsd(
     showIcons: Boolean = true,
     onGuide: () -> Unit,
     onSearch: () -> Unit,
+    onEquivalent: () -> Unit,
     onRecentBar: () -> Unit,
 ) {
     val look by model.osdLook.collectAsStateWithLifecycle()
@@ -1157,7 +1166,7 @@ private fun IptvOsd(
                         model.stop()
                         onSearch()
                     },
-                    onEquivalent = model::openEquivalent,
+                    onEquivalent = onEquivalent,
                     onRecentBar = onRecentBar,
                     onPip = model::openPipPicker,
                 ),

@@ -212,7 +212,7 @@ private fun RecentLogo(channel: LastChannel, loadLogo: suspend (LastChannel) -> 
 private fun ClearHistoryTile(selected: Boolean) {
     Column(
         Modifier
-            .width(112.dp)
+            .width(144.dp)
             .height(66.dp)
             .background(
                 if (selected) EnigmaColors.Selected else EnigmaColors.Card,
@@ -232,7 +232,7 @@ private fun ClearHistoryTile(selected: Boolean) {
             "Geschiedenis wissen",
             color = if (selected) Color.White else EnigmaColors.Muted,
             fontSize = 10.sp,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
