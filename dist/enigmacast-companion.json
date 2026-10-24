@@ -1,7 +1,7 @@
 {
-  "versionCode": 115,
-  "versionName": "1.0.0-beta.16",
+  "versionCode": 116,
+  "versionName": "1.0.0-beta.17",
   "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-  "notes": "IPTV-providerkeuze en een Herladen-knop voor de gekozen playlist.",
+  "notes": "Automatisch het nieuwe IP-adres van de TV vinden via mDNS wanneer DHCP is gewijzigd; handmatig Herladen zoekt ook opnieuw.",
   "sideloadFile": "enigmacast-companion.apk"
 }
