@@ -1,8 +1,8 @@
 {
-  "versionCode": 108,
-  "versionName": "1.0.0-beta.105",
+  "versionCode": 110,
+  "versionName": "1.0.0-beta.107",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Nieuwe professionele lijniconen in de linker navigatie. TV/Enigma en IPTV hebben nu elk een eigen icoon: een tv met antenne en een cloud met play.",
+  "notes": "SAT-TV in de navigatie, met subtiel geanimeerde iconen: SAT-TV wiebelt, IPTV zweeft, Sport draait en de overige iconen pulsen of bounce. De klassieke iconenset blijft bewaard.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",

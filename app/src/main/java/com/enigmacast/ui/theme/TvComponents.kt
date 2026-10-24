@@ -5,8 +5,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import kotlin.math.PI
+import kotlin.math.sin
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -103,6 +111,8 @@ fun NavItem(
     showSelectedDot: Boolean = true,
     /** A second, smaller line under the label (e.g. the chosen sub-page). */
     subtitle: String? = null,
+    /** A short, subtle motion while this row has focus. */
+    iconMotion: NavIconMotion = NavIconMotion.NONE,
 ) {
     val spec = com.enigmacast.ui.animation.LocalMotionSpec.current
     val cursor = com.enigmacast.ui.components.LocalNavCursor.current
@@ -144,14 +154,54 @@ fun NavItem(
             animationSpec = spec.focusTween(),
             label = "navLabelScale",
         )
+        val glyphWave by rememberInfiniteTransition(label = "navGlyph").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = when (iconMotion) {
+                        NavIconMotion.SPIN -> 7000
+                        else -> 1500
+                    },
+                    easing = when (iconMotion) {
+                        NavIconMotion.SPIN -> LinearEasing
+                        else -> FastOutSlowInEasing
+                    },
+                ),
+                repeatMode = if (iconMotion == NavIconMotion.SPIN) RepeatMode.Restart else RepeatMode.Reverse,
+            ),
+            label = "navGlyphWave",
+        )
+        val glyphAnimated = focused && spec.animate && iconMotion != NavIconMotion.NONE
+        val glyphScale = if (!glyphAnimated) 1f else when (iconMotion) {
+            NavIconMotion.PULSE -> 1f + 0.035f * glyphWave
+            NavIconMotion.BOUNCE -> 1f + 0.05f * sin(glyphWave * PI.toFloat())
+            NavIconMotion.WOBBLE -> 1f + 0.015f * sin(glyphWave * PI.toFloat())
+            else -> 1f
+        }
+        val glyphRotation = if (!glyphAnimated) 0f else when (iconMotion) {
+            NavIconMotion.SPIN -> glyphWave * 360f
+            NavIconMotion.WOBBLE -> (glyphWave - 0.5f) * 8f
+            else -> 0f
+        }
         Icon(
             icon,
             contentDescription = if (showLabel) null else label,
             modifier = Modifier
                 .size(18.dp)
                 .graphicsLayer {
-                    scaleX = iconScale
-                    scaleY = iconScale
+                    scaleX = iconScale * glyphScale
+                    scaleY = iconScale * glyphScale
+                    rotationZ = glyphRotation
+                    translationY = if (glyphAnimated) {
+                        when (iconMotion) {
+                            NavIconMotion.FLOAT -> (-1.4f * glyphWave).dp.toPx()
+                            NavIconMotion.BOUNCE -> (-2.2f * sin(glyphWave * PI.toFloat())).dp.toPx()
+                            else -> 0f
+                        }
+                    } else {
+                        0f
+                    }
                 },
         )
         if (labelAlpha > 0.02f) {

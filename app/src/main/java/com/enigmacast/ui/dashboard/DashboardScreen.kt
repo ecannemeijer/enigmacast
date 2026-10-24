@@ -35,7 +35,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.foundation.focusGroup
 import com.enigmacast.ui.theme.ValueRow
-import com.enigmacast.ui.theme.NavIcons
+import com.enigmacast.ui.theme.NavIconStyle
+import com.enigmacast.ui.theme.NavIconMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -213,7 +214,7 @@ fun DashboardScreen(
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
     searchModel: SearchViewModel = hiltViewModel(),
 ) {
-    // After a language change the activity is recreated; reopen Settings › Language then.
+    // After a language change the activity is recreated; reopen Settings â€º Language then.
     // Back from a recording opens My Items on that row.
     var sectionEnter by remember { mutableIntStateOf(0) }
     // Back from an IPTV film/series started on Home or in My items: reopen that page (the panel focuses the card).
@@ -527,11 +528,12 @@ fun DashboardScreen(
                     Modifier.focusProperties { right = FocusRequester.Cancel; up = FocusRequester.Cancel },
                 )
                 NavItem(
-                    icon = NavIcons.Home,
+                    icon = NavIconStyle.Home,
                     label = stringResource(R.string.nav_home),
                     selected = section == DashSection.Home,
                     showLabel = drawerExpanded,
                     staggerIndex = 0,
+                    iconMotion = NavIconMotion.PULSE,
                     modifier = Modifier
                         .focusRequester(homeFocus)
                         .onFocusChanged {
@@ -543,12 +545,13 @@ fun DashboardScreen(
                 )
                 // TV expands in this column: Live TV, Guide, Movies, Series, Radio.
                 NavItem(
-                    icon = NavIcons.Enigma,
+                    icon = NavIconStyle.Enigma,
                     label = stringResource(R.string.nav_tv),
                     subtitle = if (flyout == DashGroup.TV) null else DashGroups.current(DashGroup.TV, section, tabMemory.last(DashGroup.TV))?.let { stringResource(DashGroups.label(it)) },
                     selected = DashGroups.groupOf(section) == DashGroup.TV,
                     showLabel = drawerExpanded,
                     staggerIndex = 1,
+                    iconMotion = NavIconMotion.WOBBLE,
                     modifier = Modifier
                         .focusRequester(tvMenuFocus)
                         .focusRequester(streamFocus).focusRequester(guideFocus).focusRequester(moviesFocus)
@@ -593,13 +596,14 @@ fun DashboardScreen(
                 }
                 if (xtreamAvailable) {
                     NavItem(
-                        icon = NavIcons.Iptv,
+                        icon = NavIconStyle.Iptv,
                         label = stringResource(R.string.nav_iptv),
                         subtitle = if (flyout == DashGroup.IPTV) null else if (xtreamModel.categories.isNotEmpty()) stringResource(xtreamSectionLabel(xtreamModel.section)) else null,
                         selected = DashGroups.groupOf(section) == DashGroup.IPTV,
                         showLabel = drawerExpanded,
                         locked = !premium,
                         staggerIndex = 2,
+                        iconMotion = NavIconMotion.FLOAT,
                         modifier = Modifier
                             .focusRequester(iptvMenuFocus)
                             .focusProperties {
@@ -639,14 +643,15 @@ fun DashboardScreen(
                         )
                     }
                 }
-                // Torrent: only with a valid addon URL (Settings › Torrent); a page in the dashboard like IPTV Films.
+                // Torrent: only with a valid addon URL (Settings â€º Torrent); a page in the dashboard like IPTV Films.
                 if (torrentAvailable) NavItem(
-                    icon = NavIcons.Torrent,
+                    icon = NavIconStyle.Torrent,
                     label = stringResource(R.string.nav_torrent),
                     selected = section == DashSection.Torrent,
                     showLabel = drawerExpanded,
                     locked = lockedFeature(DashSection.Torrent) != null,
                     staggerIndex = 3,
+                    iconMotion = NavIconMotion.BOUNCE,
                     modifier = Modifier
                         .focusRequester(torrentFocus)
                         .onFocusChanged { if (it.isFocused) flyout = null }
@@ -654,12 +659,13 @@ fun DashboardScreen(
                     onClick = { enterSection(DashSection.Torrent) },
                 )
                 NavItem(
-                    icon = NavIcons.Sport,
+                    icon = NavIconStyle.Sport,
                     label = stringResource(R.string.nav_sport),
                     selected = section == DashSection.Soccer,
                     showLabel = drawerExpanded,
                     locked = lockedFeature(DashSection.Soccer) != null,
                     staggerIndex = 3,
+                    iconMotion = NavIconMotion.SPIN,
                     modifier = Modifier
                         .focusRequester(soccerFocus)
                         .onFocusChanged { if (it.isFocused) flyout = null }
@@ -668,11 +674,12 @@ fun DashboardScreen(
                 )
                 // Search and My items: own items again (no flyout for a single page).
                 NavItem(
-                    icon = NavIcons.Search,
+                    icon = NavIconStyle.Search,
                     label = stringResource(R.string.nav_search),
                     selected = section == DashSection.Search,
                     showLabel = drawerExpanded,
                     staggerIndex = 4,
+                    iconMotion = NavIconMotion.WOBBLE,
                     modifier = Modifier
                         .focusRequester(searchMenuFocus)
                         .onFocusChanged { if (it.isFocused) { searchActive = false; flyout = null } }
@@ -687,11 +694,12 @@ fun DashboardScreen(
                     onClick = { enterSection(DashSection.Search) },
                 )
                 NavItem(
-                    icon = NavIcons.MyItems,
+                    icon = NavIconStyle.MyItems,
                     label = stringResource(R.string.nav_my_items),
                     selected = section == DashSection.MyItems,
                     showLabel = drawerExpanded,
                     staggerIndex = 5,
+                    iconMotion = NavIconMotion.BOUNCE,
                     modifier = Modifier
                         .focusRequester(myItemsMenuFocus)
                         .onFocusChanged {
@@ -712,11 +720,12 @@ fun DashboardScreen(
                 )
                 Spacer(Modifier.weight(1f))
                 NavItem(
-                    icon = NavIcons.Settings,
+                    icon = NavIconStyle.Settings,
                     label = stringResource(R.string.nav_settings),
                     selected = section == DashSection.Settings,
                     showLabel = drawerExpanded,
                     staggerIndex = 5,
+                    iconMotion = NavIconMotion.PULSE,
                     modifier = Modifier
                         .focusRequester(settingsMenuFocus)
                         .onFocusChanged { if (it.isFocused) flyout = null }
@@ -1432,7 +1441,7 @@ private fun SettingsHub(
             }
         },
     ) {
-        PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
+        PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  Â·  ${it.host}" }.orEmpty())
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
             Column(
@@ -1447,14 +1456,14 @@ private fun SettingsHub(
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_account), page == SettingPage.Account, navFocus.getValue(SettingPage.Account), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Account) }) { enterPage(SettingPage.Account) }
                 SettingNav(Icons.Filled.Person, stringResource(R.string.settings_profiles), page == SettingPage.Profiles, navFocus.getValue(SettingPage.Profiles), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Profiles) }) { enterPage(SettingPage.Profiles) }
                 SettingNav(EnigmaIcons.Sync, stringResource(R.string.settings_companion), page == SettingPage.Companion, navFocus.getValue(SettingPage.Companion), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Companion) }) { enterPage(SettingPage.Companion) }
-                SettingNav(NavIcons.Enigma, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
+                SettingNav(NavIconStyle.Enigma, stringResource(R.string.settings_receivers), page == SettingPage.Receivers, navFocus.getValue(SettingPage.Receivers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receivers) }) { enterPage(SettingPage.Receivers) }
                 SettingNav(EnigmaIcons.Power, stringResource(R.string.nav_receiver), page == SettingPage.Receiver, navFocus.getValue(SettingPage.Receiver), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Receiver) }) { enterPage(SettingPage.Receiver) }
                 SettingNav(Icons.Filled.PlayArrow, stringResource(R.string.settings_playback), page == SettingPage.Playback, navFocus.getValue(SettingPage.Playback), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Playback) }) { enterPage(SettingPage.Playback) }
                 SettingNav(EnigmaIcons.Layers, stringResource(R.string.settings_viewing), page == SettingPage.Viewing, navFocus.getValue(SettingPage.Viewing), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Viewing) }) { enterPage(SettingPage.Viewing) }
                 SettingNav(Icons.Filled.Settings, stringResource(R.string.settings_keys), page == SettingPage.Keys, navFocus.getValue(SettingPage.Keys), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Keys) }) { enterPage(SettingPage.Keys) }
                 SettingNav(EnigmaIcons.Guide, stringResource(R.string.settings_guide_home), page == SettingPage.Guide, navFocus.getValue(SettingPage.Guide), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Guide) }) { enterPage(SettingPage.Guide) }
                 SettingNav(EnigmaIcons.Sync, stringResource(R.string.settings_sync_server), page == SettingPage.SyncServer, navFocus.getValue(SettingPage.SyncServer), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.SyncServer) }) { enterPage(SettingPage.SyncServer) }
-                SettingNav(NavIcons.Iptv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
+                SettingNav(NavIconStyle.Iptv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
                 SettingNav(Icons.Filled.Search, stringResource(R.string.settings_scrapers), page == SettingPage.Scrapers, navFocus.getValue(SettingPage.Scrapers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Scrapers) }) { enterPage(SettingPage.Scrapers) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_lock), page == SettingPage.Lock, navFocus.getValue(SettingPage.Lock), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Lock) }) { enterPage(SettingPage.Lock) }
                 SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
@@ -1823,7 +1832,7 @@ private fun AudioDelayRow(
         title = title,
         value = AudioSync.label(valueMs),
         description = AudioSync.describe(valueMs).asString(),
-        decreaseLabel = "−${AudioSync.STEP_MS}",
+        decreaseLabel = "âˆ’${AudioSync.STEP_MS}",
         increaseLabel = "+${AudioSync.STEP_MS}",
         onDecrease = { viewModel.stepAudioDelay(passthrough, -1) },
         onIncrease = { viewModel.stepAudioDelay(passthrough, 1) },
@@ -1879,7 +1888,7 @@ private fun OsdSettingsPanel(
             title = stringResource(R.string.osd_transparency),
             description = stringResource(R.string.osd_transparency_desc),
             value = "$transparencyPercent%",
-            decreaseLabel = "−10",
+            decreaseLabel = "âˆ’10",
             increaseLabel = "+10",
             decreaseModifier = Modifier.focusRequester(contentFocus),
             onDecrease = { viewModel.setOsdTransparency(transparencyPercent - 10) },
@@ -2089,7 +2098,7 @@ internal fun MiniStreamPlayer(
 
 private enum class PlaybackPart { STREAMING, VIEWING, RECORDINGS }
 
-/** Settings › Profiles: who is watching now, switch, and manage (add, edit, delete). */
+/** Settings â€º Profiles: who is watching now, switch, and manage (add, edit, delete). */
 @Composable
 private fun ProfilesSettingsPanel(contentFocus: FocusRequester, model: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -2111,7 +2120,7 @@ private fun ProfilesSettingsPanel(contentFocus: FocusRequester, model: com.enigm
     }
 }
 
-/** Settings › Syncserver: install the Enigma2 sync service or take over the single admin role. */
+/** Settings â€º Syncserver: install the Enigma2 sync service or take over the single admin role. */
 @Composable
 private fun SyncServerSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2119,7 +2128,7 @@ private fun SyncServerSettingsPanel(contentFocus: FocusRequester) {
     }
 }
 
-/** Settings › Guide & Home: Home country, Home bouquets, TMDB key, and data sync. */
+/** Settings â€º Guide & Home: Home country, Home bouquets, TMDB key, and data sync. */
 @Composable
 private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2128,7 +2137,7 @@ private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     }
 }
 
-/** Settings › Lock: PIN for Settings (on asks a new PIN twice, off and change ask the current one). */
+/** Settings â€º Lock: PIN for Settings (on asks a new PIN twice, off and change ask the current one). */
 @Composable
 private fun LockSettingsPanel(contentFocus: FocusRequester) {
     val model: com.enigmacast.ui.security.SettingsLockViewModel = hiltViewModel()
@@ -2143,7 +2152,7 @@ private fun LockSettingsPanel(contentFocus: FocusRequester) {
             )
             if (enabled) com.enigmacast.ui.theme.ValueRow(
                 title = stringResource(R.string.pin_change),
-                value = "••••",
+                value = "â€¢â€¢â€¢â€¢",
                 onClick = { model.start(com.enigmacast.ui.security.PinStep.CURRENT_TO_CHANGE) },
             )
         }
@@ -2159,7 +2168,7 @@ private fun LockSettingsPanel(contentFocus: FocusRequester) {
     }
 }
 
-/** Settings › IPTV: source (XStreamity / playlist), M3U or Xtream login, Save & load, status. */
+/** Settings â€º IPTV: source (XStreamity / playlist), M3U or Xtream login, Save & load, status. */
 @Composable
 private fun IptvSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {

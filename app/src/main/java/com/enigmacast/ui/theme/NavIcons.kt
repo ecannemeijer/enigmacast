@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.dp
  * Line icons for the main navigation. They share one 24dp grid, 1.8dp stroke and
  * rounded caps, so the rail reads as one set instead of a mix of Material styles.
  */
+enum class NavIconMotion { NONE, FLOAT, WOBBLE, SPIN, BOUNCE, PULSE }
+
 object NavIcons {
     val Home: ImageVector by lazy {
         lineIcon(
