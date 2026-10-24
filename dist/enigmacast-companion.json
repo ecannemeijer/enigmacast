@@ -1,7 +1,7 @@
 {
-  "versionCode": 117,
-  "versionName": "1.0.0-beta.18",
+  "versionCode": 118,
+  "versionName": "1.0.0-beta.19",
   "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-  "notes": "Companion in het Nederlands, Engels, Duits, Frans en Italiaans. Taal is te kiezen onder Meer › Weergave en feedback; de app volgt standaard de systeemtaal.",
+  "notes": "Volledige vaste interface in het Nederlands, Engels, Duits, Frans en Italiaans. Taal kiezen onder Meer › Weergave en feedback; Systeem volgt de telefoon.",
   "sideloadFile": "enigmacast-companion.apk"
 }
