@@ -1,8 +1,8 @@
 {
-  "versionCode": 107,
-  "versionName": "1.0.0-beta.104",
+  "versionCode": 108,
+  "versionName": "1.0.0-beta.105",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "IPTV-instellingen opnieuw ingedeeld in duidelijke kaarten. De providerlijst blijft compact; bewerken opent pas na kiezen. Verwijderen vraagt om bevestiging, beheer en back-up staan apart.",
+  "notes": "Nieuwe professionele lijniconen in de linker navigatie. TV/Enigma en IPTV hebben nu elk een eigen icoon: een tv met antenne en een cloud met play.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
