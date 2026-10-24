@@ -1,7 +1,7 @@
 {
-  "versionCode": 116,
-  "versionName": "1.0.0-beta.17",
+  "versionCode": 117,
+  "versionName": "1.0.0-beta.18",
   "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-  "notes": "Automatisch het nieuwe IP-adres van de TV vinden via mDNS wanneer DHCP is gewijzigd; handmatig Herladen zoekt ook opnieuw.",
+  "notes": "Companion in het Nederlands, Engels, Duits, Frans en Italiaans. Taal is te kiezen onder Meer › Weergave en feedback; de app volgt standaard de systeemtaal.",
   "sideloadFile": "enigmacast-companion.apk"
 }

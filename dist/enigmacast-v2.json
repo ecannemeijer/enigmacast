@@ -4,10 +4,10 @@
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
   "notes": "IPTV-instellingen opnieuw ingedeeld in duidelijke kaarten. De providerlijst blijft compact; bewerken opent pas na kiezen. Verwijderen vraagt om bevestiging, beheer en back-up staan apart.",
   "companion": {
-    "versionCode": 116,
-    "versionName": "1.0.0-beta.17",
+    "versionCode": 117,
+    "versionName": "1.0.0-beta.18",
     "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
-    "notes": "Vindt de TV na een DHCP-IP-wijziging automatisch opnieuw via mDNS.",
+    "notes": "Companion in vijf talen: Nederlands, Engels, Duits, Frans en Italiaans.",
     "sideloadFile": "enigmacast-companion.apk"
   }
 }
