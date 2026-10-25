@@ -307,6 +307,8 @@ fun DashboardScreen(
         else -> FocusRequester.Default
     }
     val dashBack = remember { DashBack() }
+    // D-pad Left at a page's left edge: into the menu on the open section's item (see drawerEdges).
+    val menuLeft = remember { com.enigmacast.ui.components.MenuLeftEntry() }
     val retreat: (FocusRequester) -> Unit = { dashBack.target = it }
     val myItemsModel: MyItemsViewModel = hiltViewModel()
     val accountModel: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
@@ -350,6 +352,7 @@ fun DashboardScreen(
         DashGroup.IPTV -> iptvMenuFocus
         null -> sectionMenuOf()
     }
+    menuLeft.target = { sectionMenu() }
     DisposableEffect(contentFocused, section, guideModel.askWake, flyout, homeMenuFocused) {
         onBindBack {
             if (flyout != null) {
@@ -445,6 +448,13 @@ fun DashboardScreen(
     /** OK on a side-menu item opens that section and moves focus to its first entry. */
     fun enterSection(target: DashSection) {
         lockedFeature(target)?.let { accountModel.gate.require(it); return }
+        // Came here with Left from the open page: OK on its item goes back to where focus was.
+        if (MenuRight.okRestores(target, section, pageVisited, menuLeft.viaLeft) &&
+            runCatching { pageFocus.restoreFocusedChild() }.getOrDefault(false)
+        ) {
+            flyout = null
+            return
+        }
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
         if (keepList || settingsFormOpen) return
         if (target == DashSection.Guide) guideModel.focusFirstInGrid()
@@ -506,13 +516,28 @@ fun DashboardScreen(
         return
     }
     if (profileModel.pickerOpen) com.enigmacast.ui.profile.ProfilePicker(profileModel)
-    Box(modifier = Modifier.fillMaxSize().skinCanvas()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .skinCanvas()
+            // Before the page: whether this Left is a held repeat (a held Left never opens the menu).
+            .onPreviewKeyEvent { event ->
+                if (event.key == Key.DirectionLeft && event.type == KeyEventType.KeyDown) {
+                    menuLeft.held = event.nativeKeyEvent.repeatCount > 0
+                }
+                false
+            },
+    ) {
         val drawerExpanded = navFocused || !contentFocused
         Row(modifier = Modifier.fillMaxSize()) {
             EnigmaNavigationDrawer(
                 expanded = drawerExpanded,
+                leftEntry = menuLeft,
                 modifier = Modifier
-                    .onFocusChanged { navFocused = it.hasFocus }
+                    .onFocusChanged {
+                        navFocused = it.hasFocus
+                        if (!it.hasFocus) menuLeft.viaLeft = false
+                    }
                     // Before any item's own handler: Right always means "into the open page".
                     .onPreviewKeyEvent { event ->
                         if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false

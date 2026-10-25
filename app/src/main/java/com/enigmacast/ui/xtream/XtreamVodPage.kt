@@ -341,7 +341,8 @@ internal fun IptvLibraryPage(
                     gridActive = false
                     onRetreatTo(menuFocus)
                 },
-                onSections = { runCatching { menuFocus.requestFocus() } },
+                // As a Left move: the menu takes it on the IPTV item (see drawerEdges).
+                onSections = { runCatching { menuFocus.requestFocus(androidx.compose.ui.focus.FocusDirection.Left) } },
                 onGridFocused = {
                     gridActive = true
                     onRetreatTo(categoryFocus)
@@ -548,7 +549,9 @@ private fun Modifier.columnKeysVod(onLeft: (() -> Unit)?, onRight: (() -> Unit)?
         Key.DirectionRight -> onRight
         else -> null
     } ?: return@onPreviewKeyEvent false
-    if (e.type == KeyEventType.KeyDown) handler()
+    // A held Left (from the grid into this column) stops here; a new press goes on to the menu.
+    val heldLeft = e.key == Key.DirectionLeft && e.nativeKeyEvent.repeatCount > 0
+    if (e.type == KeyEventType.KeyDown && !heldLeft) handler()
     true
 }
 
