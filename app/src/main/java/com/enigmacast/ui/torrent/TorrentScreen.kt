@@ -172,6 +172,7 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
     val sortFocus = remember { FocusRequester() }
     var picker by remember { mutableStateOf<FilterPicker?>(null) }
     val grid = rememberLazyGridState()
+    val history by model.history.collectAsStateWithLifecycle()
     // Closing a filter list: focus back on its chip.
     var refocus by remember { mutableStateOf<FilterPicker?>(null) }
     LaunchedEffect(refocus) {
@@ -340,6 +341,11 @@ private fun TorrentBrowser(model: TorrentViewModel, onBack: () -> Unit, dash: To
                                 },
                             onFocus = { model.onFocusedIndex(index) },
                             onClick = { model.openTitle(title) },
+                            // Films: progress bar and check mark once watched (series on their episodes).
+                            overlay = {
+                                val watch = remember(title, history) { model.filmWatch(title, history) }
+                                EpisodeProgressOverlay(watch)
+                            },
                             lines = {
                                 // Always one line, so every card has the same height.
                                 Text(title.year?.toString() ?: " ", color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1)
@@ -477,6 +483,8 @@ private fun DialogFrame(onDismiss: () -> Unit, content: @Composable androidx.com
 @Composable
 private fun TorrentInfoPage(i: TorrentInfo, model: TorrentViewModel) {
     val isSeries = i.title.kind == TorrentKind.TV
+    val history by model.history.collectAsStateWithLifecycle()
+    val watch = remember(i.title, history) { model.filmWatch(i.title, history) }
     com.enigmacast.ui.home.FilmInfoDialog(
         film = i.film,
         nowSec = System.currentTimeMillis() / 1000,
@@ -495,6 +503,7 @@ private fun TorrentInfoPage(i: TorrentInfo, model: TorrentViewModel) {
             // Library › favorites, as on the IPTV film and series pages.
             favorite = androidx.compose.runtime.remember(i.title.key, model.favoriteVersion) { model.isFavorite(i.title) },
             onFavorite = { model.toggleFavorite(i.title) },
+            watch = watch,
         ),
     )
 }

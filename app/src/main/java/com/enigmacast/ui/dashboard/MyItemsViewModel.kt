@@ -79,10 +79,14 @@ class MyItemsViewModel @Inject constructor(
 
     /** Library › Continue watching (IPTV and Torrent, newest first), IPTV favorites and Torrent favorites. */
     val iptvContinue: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
-        combine(iptv.resumes, shownSources) { rows, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.continueWatching(rows, sources) }
+        combine(iptv.resumes, iptv.resumeMap, iptv.history, shownSources) { rows, resumes, history, sources ->
+            com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(com.enigmacast.domain.xtream.IptvLibraryRows.continueWatching(rows, sources), resumes, history)
+        }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private val allFavorites =
-        combine(iptv.favorites, iptv.resumeMap, shownSources) { rows, resumes, sources -> com.enigmacast.domain.xtream.IptvLibraryRows.favorites(rows, resumes, sources) }
+        combine(iptv.favorites, iptv.resumeMap, iptv.history, shownSources) { rows, resumes, history, sources ->
+            com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(com.enigmacast.domain.xtream.IptvLibraryRows.favorites(rows, resumes, sources), resumes, history)
+        }
     val iptvFavorites: StateFlow<List<com.enigmacast.domain.xtream.IptvLibraryCard>> =
         allFavorites.map { cards -> cards.filter { it.source != torrentSource } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

@@ -746,8 +746,9 @@ class TorrentViewModel @Inject constructor(
         resumeKey?.takeIf { it.isNotBlank() && resumes.contains(it) }?.let { legacy -> resumes.edit().remove(legacy).apply() }
         // The key is the title (TMDB id, season/episode), so any stream of it resumes here.
         val target = resumeTarget ?: return
-        // The episode's own history (bars on the episode cards), kept apart from Continue watching.
-        if (target.kind == "e") library.recordHistory(target.kind, target.id, target.seriesId, pos, dur)
+        // The film's or episode's own history (bars and check marks on cards and the info page),
+        // kept apart from Continue watching (which a watched film leaves).
+        library.recordHistory(target.kind, target.id, target.seriesId, pos, dur)
         if (action == com.enigmacast.domain.torrent.ResumeSave.KEEP) {
             library.saveResume(target.copy(positionMs = pos, durationMs = dur, updatedMs = System.currentTimeMillis()))
         } else if (target.kind == "e") {
@@ -762,6 +763,16 @@ class TorrentViewModel @Inject constructor(
 
     fun historyOf(tvId: Int, season: Int?, episode: Int, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>): com.enigmacast.data.db.EpisodeHistoryRow? =
         map[com.enigmacast.data.xtream.IptvLibrary.key(com.enigmacast.domain.torrent.TorrentLibraryRows.SOURCE, "e", com.enigmacast.domain.torrent.TorrentLibraryRows.resumeId(tvId, season ?: 0, episode))]
+
+    /** A film's bar and check mark (grid card, info page): its history, else its saved place. */
+    fun filmWatch(title: TmdbTitle, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>): com.enigmacast.data.db.EpisodeHistoryRow? {
+        if (title.kind != TorrentKind.MOVIE) return null
+        val id = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeId(title.id, null, null)
+        return com.enigmacast.domain.resume.FilmWatch.row(
+            map[com.enigmacast.data.xtream.IptvLibrary.key(com.enigmacast.domain.torrent.TorrentLibraryRows.SOURCE, "m", id)],
+            library.resume("m", id),
+        )
+    }
 
     /** Seasons of the playing series (from its info page), for the next episode after a watched one. */
     private var playSeasons: List<TmdbSeason> = emptyList()

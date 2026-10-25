@@ -119,9 +119,14 @@ fun SearchPanel(
     val nowSec = System.currentTimeMillis() / 1000
     val searchable = SearchQuery.parse(viewModel.query, nowSec).isSearchable
     val sections = viewModel.results.sections()
+    val iptvResumes by viewModel.iptvResumes.collectAsStateWithLifecycle()
+    val iptvHistory by viewModel.iptvHistory.collectAsStateWithLifecycle()
+    val iptvFilms = remember(viewModel.iptv.films, iptvResumes, iptvHistory) {
+        com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(viewModel.iptv.films, iptvResumes, iptvHistory)
+    }
     val iptvRows = if (onXtream == null) emptyList() else listOf(
         R.string.search_iptv_live to viewModel.iptv.live,
-        R.string.search_iptv_films to viewModel.iptv.films,
+        R.string.search_iptv_films to iptvFilms,
         R.string.search_iptv_series to viewModel.iptv.series,
     ).filter { it.second.isNotEmpty() }
     val body = modifier

@@ -109,6 +109,7 @@ internal fun XtreamVodPage(
     onPlayed: () -> Unit,
 ) {
     val art by model.artwork.collectAsStateWithLifecycle()
+    val history by model.history.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf<HomeFilm?>(null) }
     var focusedIndex by remember(model.cards) { mutableStateOf<Int?>(null) }
     // Built once per category (off the main thread); an artwork update only changes its own card.
@@ -241,10 +242,19 @@ internal fun XtreamVodPage(
                             onFocus = { focused = film; focusedIndex = index; model.rememberGridAnchor(index) },
                             onClick = { model.openDetail(item) },
                             overlay = {
-                                val progress = remember(item, model.resumeVersion) { model.progressOf(item) }
-                                if (progress > 0f) {
-                                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.Black.copy(alpha = 0.5f)))
-                                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(progress).height(4.dp).background(com.enigmacast.ui.recording.RecordRed))
+                                // Films: the bar from the watch history (else the saved place) and the
+                                // check mark once watched, as on the episode cards.
+                                val watch = remember(item, model.resumeVersion, history) {
+                                    if (item.section == XtreamSection.MOVIES) model.filmWatch(item, history) else null
+                                }
+                                if (watch != null) {
+                                    EpisodeProgressOverlay(watch)
+                                } else {
+                                    val progress = remember(item, model.resumeVersion) { model.progressOf(item) }
+                                    if (progress > 0f) {
+                                        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.Black.copy(alpha = 0.5f)))
+                                        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(progress).height(4.dp).background(com.enigmacast.ui.recording.RecordRed))
+                                    }
                                 }
                             },
                             lines = {
@@ -375,6 +385,8 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
     val item = model.detail ?: return
     val film = model.detailFilm ?: return
     val isSeries = item.section == XtreamSection.SERIES
+    val history by model.history.collectAsState()
+    val watch = if (isSeries) null else remember(item, model.resumeVersion, history) { model.filmWatch(item, history) }
     FilmInfoDialog(
         film = film,
         nowSec = System.currentTimeMillis() / 1000,
@@ -396,6 +408,7 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
             below = if (isSeries) ({ Episodes(model, item, onPlayed) }) else null,
             favorite = remember(item, model.favoriteVersion) { model.isFavorite(item) },
             onFavorite = { model.toggleFavorite(item) },
+            watch = watch,
         ),
     )
 }
@@ -430,8 +443,8 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(list, key = { _, k -> k.key }) { index, k ->
                 val e = k.value
-                val seen = model.historyOf(e, history)
-                EpisodeCard(e, model.resumeOf(e) > 0 && seen?.watched != true, seen, Modifier.focusProperties {
+                val seen = model.historyOf(e, history, show)
+                EpisodeCard(e, model.resumeOf(e, show) > 0 && seen?.watched != true, seen, Modifier.focusProperties {
                     if (index == 0) left = FocusRequester.Cancel
                     if (index == list.lastIndex) right = FocusRequester.Cancel
                     down = FocusRequester.Cancel

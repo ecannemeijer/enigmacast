@@ -19,6 +19,8 @@ data class IptvLibraryCard(
     val open: XtreamItem,
     /** A series card on its next episode, not started yet. */
     val upNext: Boolean = false,
+    /** A film watched to the end (check mark on the card). */
+    val watched: Boolean = false,
 )
 
 object IptvLibraryRows {
@@ -62,6 +64,24 @@ object IptvLibraryRows {
         val series = rows.firstOrNull { it.source == source && it.kind == "e" && it.id == id }?.seriesId
         if (series.isNullOrBlank()) return self
         return (self + rows.filter { it.source == source && it.kind == "e" && it.seriesId == series }.map { "e" to it.id }).distinct()
+    }
+
+    /**
+     * Films' watch state on Library, Home and search cards: the check mark once watched and, with
+     * no saved place (a watched film leaves Continue watching), the bar from the watch history.
+     */
+    fun withWatch(
+        cards: List<IptvLibraryCard>,
+        resumes: Map<String, IptvResumeRow>,
+        history: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>,
+    ): List<IptvLibraryCard> = cards.map { card ->
+        if (card.kind != "m") return@map card
+        val key = "${card.source}/m/${card.id}"
+        val row = com.enigmacast.domain.resume.FilmWatch.row(history[key], resumes[key]) ?: return@map card
+        card.copy(
+            progress = card.progress.takeIf { it > 0f } ?: com.enigmacast.domain.resume.EpisodeHistory.fraction(row),
+            watched = row.watched,
+        )
     }
 
     /** IPTV favorites, newest first, with the film's progress when it has a saved place. */

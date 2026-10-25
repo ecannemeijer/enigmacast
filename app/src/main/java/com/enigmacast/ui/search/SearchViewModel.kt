@@ -36,6 +36,10 @@ class SearchViewModel @Inject constructor(
     var iptv by mutableStateOf(com.enigmacast.domain.xtream.IptvSearchResults())
         private set
 
+    /** Saved places and watch history: progress and check marks on the film results. */
+    val iptvResumes get() = iptvLibrary.resumeMap
+    val iptvHistory get() = iptvLibrary.history
+
     /** OK on an IPTV result: live plays, a film opens its info page, a series its series page. */
     fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit) {
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
