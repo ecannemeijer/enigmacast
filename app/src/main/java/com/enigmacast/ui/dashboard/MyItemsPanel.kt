@@ -586,9 +586,10 @@ internal fun IptvCard(
             com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
             if (card.progress > 0f) {
                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(androidx.compose.ui.graphics.Color(0x66000000))) {
-                    Box(Modifier.fillMaxWidth(card.progress).height(4.dp).background(EnigmaColors.Cyan))
+                    Box(Modifier.fillMaxWidth(card.progress).height(4.dp).background(if (card.watched) EnigmaColors.Success else EnigmaColors.Cyan))
                 }
             }
+            if (card.watched) com.enigmacast.ui.components.WatchedCheck(Modifier.align(Alignment.TopEnd).padding(4.dp))
         }
         Text(card.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val subtitle = if (card.upNext) listOf(stringResource(R.string.library_up_next), card.subtitle).filter { it.isNotBlank() }.joinToString(" · ") else card.subtitle

@@ -49,4 +49,19 @@ class IptvLibraryRowsTest {
         assertEquals("acc", film.source)
         assertEquals(6_000_000L, film.durationMs)
     }
+
+    @Test fun watchedFilmGetsCheckAndFullBarEpisodesUntouched() {
+        val film = IptvLibraryCard("fav/A/m/1", "A", "m", "1", "F", "", null, 0f, XtreamItem("1", "F", XtreamSection.MOVIES, "c", ""))
+        val started = film.copy(key = "fav/A/m/2", id = "2", progress = 0.25f)
+        val series = film.copy(key = "fav/A/s/1", kind = "s")
+        val history = mapOf(
+            "A/m/1" to com.enigmacast.data.db.EpisodeHistoryRow("A", "m", "1", null, 5_900_000, 6_000_000, true, 10, "p"),
+            "A/s/1" to com.enigmacast.data.db.EpisodeHistoryRow("A", "s", "1", null, 5_900_000, 6_000_000, true, 10, "p"),
+        )
+        val out = IptvLibraryRows.withWatch(listOf(film, started, series), emptyMap(), history)
+        assertTrue(out[0].watched)
+        assertEquals(1f, out[0].progress, 0f)
+        assertEquals(started, out[1])
+        assertEquals(series, out[2])
+    }
 }

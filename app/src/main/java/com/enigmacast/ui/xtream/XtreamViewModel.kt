@@ -602,7 +602,14 @@ class XtreamViewModel @Inject constructor(
 
     /** Where a film or episode was left, in ms; 0 when it was not started or watched to the end. */
     fun resumeOf(item: XtreamItem): Long = resumeRow("m", item.id, item.providerId)?.positionMs ?: 0L
-    fun resumeOf(episode: XtreamEpisode): Long = resumeRow("e", episode.id)?.positionMs ?: 0L
+    /** An episode's rows are kept under its series' provider account ([show], else the open series). */
+    fun resumeOf(episode: XtreamEpisode, show: XtreamItem? = series): Long = resumeRow("e", episode.id, show?.providerId.orEmpty())?.positionMs ?: 0L
+
+    /** A film's watch history (bar and check mark on its card and info page), else its saved place. */
+    fun filmWatch(item: XtreamItem, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>): com.enigmacast.data.db.EpisodeHistoryRow? {
+        val key = resumeKeyOf("m", item.id, item.providerId) ?: return null
+        return com.enigmacast.domain.resume.FilmWatch.row(map[key], library.resumeMap.value[key])
+    }
 
     /** 0..1 for the progress line on a card (0 when nothing to resume). */
     fun progressOf(item: XtreamItem): Float = resumeRow("m", item.id, item.providerId)?.let { row ->
@@ -635,7 +642,7 @@ class XtreamViewModel @Inject constructor(
         when (IptvResume.action(position, p.duration)) {
             com.enigmacast.domain.torrent.ResumeSave.NONE -> return
             com.enigmacast.domain.torrent.ResumeSave.CLEAR -> {
-                if (resumeRow(kind, id) != null) {
+                if (library.resumeMap.value[key] != null) {
                     library.clearResume(source, kind, id)
                     watchNext.remove(source, kind, id)
                 }
@@ -653,8 +660,8 @@ class XtreamViewModel @Inject constructor(
     /** Watch history for the episode cards (kept apart from Continue watching). */
     val history: kotlinx.coroutines.flow.StateFlow<Map<String, com.enigmacast.data.db.EpisodeHistoryRow>> get() = library.history
 
-    fun historyOf(episode: XtreamEpisode, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>): com.enigmacast.data.db.EpisodeHistoryRow? =
-        resumeKeyOf("e", episode.id)?.let { map[it] }
+    fun historyOf(episode: XtreamEpisode, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>, show: XtreamItem? = series): com.enigmacast.data.db.EpisodeHistoryRow? =
+        resumeKeyOf("e", episode.id, show?.providerId.orEmpty())?.let { map[it] }
 
     private fun recordHistory(source: String, kind: String, id: String, item: XtreamItem?, position: Long, duration: Long) {
         library.recordHistory(source, kind, id, if (kind == "e") item?.id else null, position, duration)
@@ -747,10 +754,12 @@ class XtreamViewModel @Inject constructor(
     private fun handleOpenRequest() {
         val request = library.openRequest.value ?: return
         val account = account ?: return
-        if (account.key != request.source) return
+        // Rows of another provider open with that provider's account (not left pending forever).
+        val providerKeys = providerAccounts.mapValues { it.value.key }
+        val provider = com.enigmacast.domain.xtream.IptvRequestSource.providerFor(request.source, account.key, providerKeys) ?: return
         library.openRequest.value = null
         launchOrigin = request.origin
-        val item = request.item
+        val item = if (request.item.providerId.isBlank() && provider.isNotEmpty()) request.item.copy(providerId = provider) else request.item
         val episode = request.episode
         if (item.section == XtreamSection.LIVE) {
             selectSection(XtreamSection.LIVE)
@@ -800,7 +809,7 @@ class XtreamViewModel @Inject constructor(
     fun requestEpisode(episode: XtreamEpisode, show: XtreamItem? = series, onStarted: () -> Unit) {
         if (detailEpisodes.any { it.id == episode.id }) playbackEpisodes = detailEpisodes
         else if (episodes.any { it.id == episode.id }) playbackEpisodes = episodes
-        val offer = IptvResume.offer(resumeOf(episode))
+        val offer = IptvResume.offer(resumeOf(episode, show))
         if (offer == null) { playEpisode(episode, show, fromStart = true); onStarted() }
         else resumeAsk = ResumeAsk(episode.title, offer) { fromStart -> playEpisode(episode, show, fromStart); onStarted() }
     }
@@ -1440,8 +1449,8 @@ class XtreamViewModel @Inject constructor(
             XtreamPlaying("$title · ${episode.title}".trim(' ', '·'), series, episode),
             live = false,
             account = account,
-            startMs = if (fromStart) 0L else resumeOf(episode),
-            resume = resumeKeyOf("e", episode.id),
+            startMs = if (fromStart) 0L else resumeOf(episode, show),
+            resume = resumeKeyOf("e", episode.id, show?.providerId.orEmpty()),
         )
     }
 

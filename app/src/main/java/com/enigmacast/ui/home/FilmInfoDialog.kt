@@ -177,6 +177,7 @@ fun FilmInfoDialog(
                             if (recordingSet) Badge(stringResource(R.string.home_recording_set), LiveRed)
                         }
                         if (airing && vod == null) EnigmaProgramProgress(film.event.progress(nowSec), Modifier.width(320.dp))
+                        if (vod?.watch != null) com.enigmacast.ui.components.VodWatchLine(vod.watch)
                         if (vod != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
                             if (vod.resumeLabel != null && vod.onResume != null) {
                                 EnigmaGlassButton(vod.resumeLabel, vod.onResume, Modifier.focusRequester(watchFocus))
@@ -247,6 +248,8 @@ data class VodDetail(
     /** Library › IPTV favorites: Add / Remove toggle (null hides the button). */
     val favorite: Boolean = false,
     val onFavorite: (() -> Unit)? = null,
+    /** A film's progress / watched mark (IPTV and Torrent); series show theirs on the episodes. */
+    val watch: com.enigmacast.data.db.EpisodeHistoryRow? = null,
 )
 
 /** "More": the whole plot (and tagline) in a small window; Back or OK closes it. */
