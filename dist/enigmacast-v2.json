@@ -1,8 +1,8 @@
 {
-  "versionCode": 112,
-  "versionName": "1.0.0-beta.109",
+  "versionCode": 113,
+  "versionName": "1.0.0-beta.110",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Series spelen automatisch de volgende aflevering af, met een grotere Volgende-kaart. Afleveringen tonen voortgang en een vinkje als ze bekeken zijn, en Verder kijken onthoudt alles vanaf de eerste seconde. Nieuw: ondertitelgrootte, -kleur en -achtergrond in de OSD, een Netflix-achtige titel met plot bij films en series, een duidelijke melding als de IPTV-provider geen extra verbinding toestaat, en voortgang en een vinkje bij films.",
+  "notes": "Met Links ga je vanaf het meest linkse item terug naar het menu, op het laatst gekozen menu-item. In de OSD springen de optierijen rond van het eerste naar het laatste item en andersom. Plus alles uit beta.109: automatisch volgende aflevering, voortgang en vinkjes bij series en films, ondertitelstijl en een Netflix-achtige titel met plot.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",

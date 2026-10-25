@@ -14,8 +14,8 @@ android {
         applicationId = libs.versions.applicationId.get()
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 112
-        versionName = "1.0.0-beta.109"
+        versionCode = 113
+        versionName = "1.0.0-beta.110"
         buildConfigField("String", "TMDB_API_KEY", "\"${tmdbApiKey()}\"")
         buildConfigField("String", "FOOTBALL_DATA_API_KEY", "\"${localProperty("FOOTBALL_DATA_API_KEY")}\"")
         buildConfigField("String", "PITCH_API_KEY", "\"${localProperty("PITCH_API_KEY")}\"")
