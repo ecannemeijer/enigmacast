@@ -95,6 +95,7 @@ class TorrentViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val subtitles: com.enigmacast.data.subsource.SubSourceClient,
     private val library: com.enigmacast.data.torrent.TorrentLibrary,
+    private val titleSource: com.enigmacast.data.tmdb.VodTitleSource,
 ) : ViewModel() {
     private val language = Locale.getDefault().toLanguageTag()
 
@@ -405,6 +406,10 @@ class TorrentViewModel @Inject constructor(
     /** The OSD title: "Title (year)" or "Title · S1E2 · Episode". */
     var osdTitle by mutableStateOf("")
         private set
+    /** The OSD title block (TMDB logo, episode code and name, plot). */
+    var osdInfo by mutableStateOf<com.enigmacast.domain.player.VodTitleInfo?>(null)
+        private set
+    private var osdInfoJob: Job? = null
 
     // ---- Subtitles: the IPTV player's SubSource flow (XtreamViewModel) ----
     var cues by mutableStateOf<List<androidx.media3.common.text.Cue>>(emptyList())
@@ -433,6 +438,28 @@ class TorrentViewModel @Inject constructor(
         startStream(o.title, o.subtitle, stream, o.streams, o.resumeKey)
     }
 
+    /** The title block: what the info page already knows at once, TMDB's episode plot/logo when it answers. */
+    private fun loadOsdInfo(title: TmdbTitle) {
+        osdInfoJob?.cancel()
+        val page = info?.takeIf { it.title.key == title.key }
+        val tv = title.kind == TorrentKind.TV
+        val known = page?.takeIf { tv && it.season == streamSeason }?.episodes?.firstOrNull { it.number == streamEpisode }
+        val base = com.enigmacast.domain.player.VodTitleInfo(
+            title = title.title,
+            logoUrl = streamLogo,
+            season = streamSeason,
+            episode = streamEpisode,
+            episodeName = com.enigmacast.domain.player.VodTitleCard.preferEpisodeName(known?.name, streamEpisodeName.orEmpty(), streamEpisode),
+            overview = com.enigmacast.domain.player.VodTitleCard.overview(if (tv) known?.overview else page?.film?.movie?.overview),
+        )
+        osdInfo = base
+        if (base.logoUrl != null && base.overview.isNotBlank()) return
+        osdInfoJob = viewModelScope.launch {
+            val full = titleSource.tmdb(tv, title.id, base, logoUrl = base.logoUrl)
+            if (playingTitle?.key == title.key && streamEpisode == base.episode) osdInfo = full
+        }
+    }
+
     /**
      * Plays [stream]. [streams] is the list it was picked from (null for the remembered stream:
      * when that fails, the scraper's list opens instead).
@@ -443,6 +470,7 @@ class TorrentViewModel @Inject constructor(
         playingStream = stream
         playingSubtitle = subtitle
         osdTitle = com.enigmacast.domain.player.VodOsdKeys.title(title.title, title.year, streamSeason, streamEpisode, streamEpisodeName)
+        loadOsdInfo(title)
         resumeKey = o.resumeKey
         resumeTarget = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(o.title, streamSeason, streamEpisode, streamEpisodeName, 0, 0, 0)
         val rememberKey = resumeTarget?.let { LastStream.key(it.kind, it.id) }

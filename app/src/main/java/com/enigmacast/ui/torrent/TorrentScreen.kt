@@ -721,10 +721,12 @@ private fun TorrentPlayer(model: TorrentViewModel) {
             modifier = Modifier.fillMaxSize(),
         )
         if (ps.playbackState == "BUFFERING") EnigmaLoadingIndicator(Modifier.align(Alignment.Center))
+        com.enigmacast.ui.player.VodTitleOverlay(osd, model.osdInfo, startKey = model.osdTitle.ifBlank { null }, modifier = Modifier.align(Alignment.TopStart))
         com.enigmacast.ui.player.VodPlayerOsd(
             controller = osd,
             model = com.enigmacast.ui.player.VodOsdModel(
                 title = model.osdTitle.ifBlank { model.playing.orEmpty() },
+                titleOnTop = model.osdInfo != null,
                 player = ps,
                 tracks = model.tracks,
                 pictureMode = model.pictureMode,

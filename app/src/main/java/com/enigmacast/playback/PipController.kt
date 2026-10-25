@@ -86,6 +86,9 @@ class PipController @Inject constructor(
 
     fun playing(): Boolean = _active.value
 
+    /** Address the inset is playing (to compare providers; never logged), or null when it is off. */
+    fun currentUrl(): String? = if (_active.value) entries.getOrNull(index)?.url?.takeIf { it.isNotBlank() } else null
+
     suspend fun categories(source: PipSource): List<PipChoice> = when (source) {
         PipSource.SAT -> {
             val receiver = settings.current().activeReceiver() ?: return emptyList()

@@ -82,6 +82,9 @@ class LiveLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(8) {
         // A refused login or an unknown service does not get better by asking again.
         val code = (loadErrorInfo.exception as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         if (code == 401 || code == 403 || code == 404) return C.TIME_UNSET
+        // "Maximum connections reached" (458, 429, 509): asking again at once only hammers the
+        // provider and hides the error behind a spinner; the caller backs off instead.
+        if (com.enigmacast.domain.xtream.ProviderLimit.isLimit(code)) return C.TIME_UNSET
         // An unreadable format (e.g. an HLS playlist opened as TS) stays unreadable; let the
         // controller decide instead of retrying the same load forever.
         if (loadErrorInfo.exception is ParserException) return C.TIME_UNSET

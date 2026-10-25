@@ -67,6 +67,8 @@ data class XtreamEpisode(
     val title: String,
     val extension: String,
     val cover: String = "",
+    /** The playlist's episode plot (get_series_info `info.plot`); "" when it has none. */
+    val plot: String = "",
 )
 
 data class XtreamVodInfo(
@@ -259,7 +261,9 @@ object XtreamJson {
             val cover = listOf(info?.str("movie_image"), info?.str("cover"), o.str("movie_image"), o.str("cover"))
                 .firstOrNull { !it.isNullOrBlank() && it.startsWith("http", true) }
                 .orEmpty()
-            XtreamEpisode(id, o.str("season")?.toIntOrNull() ?: 0, o.str("episode_num")?.toIntOrNull() ?: 0, o.str("title") ?: id, o.str("container_extension").orEmpty(), cover)
+            val plot = listOf(info?.str("plot"), info?.str("overview"), info?.str("description"), o.str("plot"))
+                .firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
+            XtreamEpisode(id, o.str("season")?.toIntOrNull() ?: 0, o.str("episode_num")?.toIntOrNull() ?: 0, o.str("title") ?: id, o.str("container_extension").orEmpty(), cover, plot)
         }.sortedWith(compareBy({ it.season }, { it.episode }))
     }
 
