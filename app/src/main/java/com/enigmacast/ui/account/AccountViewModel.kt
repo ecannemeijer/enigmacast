@@ -20,7 +20,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** The account form (wizard and Settings â€º Account) and the account status. */
+/** The account form (wizard and Settings › Account) and the account status. */
 @HiltViewModel
 class AccountViewModel @Inject constructor(
     private val repository: AccountRepository,

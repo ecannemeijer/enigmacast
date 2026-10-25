@@ -214,7 +214,7 @@ fun DashboardScreen(
     powerModel: ReceiverPowerViewModel = hiltViewModel(),
     searchModel: SearchViewModel = hiltViewModel(),
 ) {
-    // After a language change the activity is recreated; reopen Settings â€º Language then.
+    // After a language change the activity is recreated; reopen Settings › Language then.
     // Back from a recording opens My Items on that row.
     var sectionEnter by remember { mutableIntStateOf(0) }
     // Back from an IPTV film/series started on Home or in My items: reopen that page (the panel focuses the card).
@@ -643,7 +643,7 @@ fun DashboardScreen(
                         )
                     }
                 }
-                // Torrent: only with a valid addon URL (Settings â€º Torrent); a page in the dashboard like IPTV Films.
+                // Torrent: only with a valid addon URL (Settings › Torrent); a page in the dashboard like IPTV Films.
                 if (torrentAvailable) NavItem(
                     icon = NavIconStyle.Torrent,
                     label = stringResource(R.string.nav_torrent),
@@ -1441,7 +1441,7 @@ private fun SettingsHub(
             }
         },
     ) {
-        PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  Â·  ${it.host}" }.orEmpty())
+        PanelHeader(stringResource(R.string.settings_title), settings.activeReceiver()?.let { "${it.name}  ·  ${it.host}" }.orEmpty())
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
             Column(
@@ -1832,7 +1832,7 @@ private fun AudioDelayRow(
         title = title,
         value = AudioSync.label(valueMs),
         description = AudioSync.describe(valueMs).asString(),
-        decreaseLabel = "âˆ’${AudioSync.STEP_MS}",
+        decreaseLabel = "−${AudioSync.STEP_MS}",
         increaseLabel = "+${AudioSync.STEP_MS}",
         onDecrease = { viewModel.stepAudioDelay(passthrough, -1) },
         onIncrease = { viewModel.stepAudioDelay(passthrough, 1) },
@@ -1888,7 +1888,7 @@ private fun OsdSettingsPanel(
             title = stringResource(R.string.osd_transparency),
             description = stringResource(R.string.osd_transparency_desc),
             value = "$transparencyPercent%",
-            decreaseLabel = "âˆ’10",
+            decreaseLabel = "−10",
             increaseLabel = "+10",
             decreaseModifier = Modifier.focusRequester(contentFocus),
             onDecrease = { viewModel.setOsdTransparency(transparencyPercent - 10) },
@@ -2098,7 +2098,7 @@ internal fun MiniStreamPlayer(
 
 private enum class PlaybackPart { STREAMING, VIEWING, RECORDINGS }
 
-/** Settings â€º Profiles: who is watching now, switch, and manage (add, edit, delete). */
+/** Settings › Profiles: who is watching now, switch, and manage (add, edit, delete). */
 @Composable
 private fun ProfilesSettingsPanel(contentFocus: FocusRequester, model: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -2120,7 +2120,7 @@ private fun ProfilesSettingsPanel(contentFocus: FocusRequester, model: com.enigm
     }
 }
 
-/** Settings â€º Syncserver: install the Enigma2 sync service or take over the single admin role. */
+/** Settings › Syncserver: install the Enigma2 sync service or take over the single admin role. */
 @Composable
 private fun SyncServerSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2128,7 +2128,7 @@ private fun SyncServerSettingsPanel(contentFocus: FocusRequester) {
     }
 }
 
-/** Settings â€º Guide & Home: Home country, Home bouquets, TMDB key, and data sync. */
+/** Settings › Guide & Home: Home country, Home bouquets, TMDB key, and data sync. */
 @Composable
 private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2137,7 +2137,7 @@ private fun GuideHomeSettingsPanel(contentFocus: FocusRequester) {
     }
 }
 
-/** Settings â€º Lock: PIN for Settings (on asks a new PIN twice, off and change ask the current one). */
+/** Settings › Lock: PIN for Settings (on asks a new PIN twice, off and change ask the current one). */
 @Composable
 private fun LockSettingsPanel(contentFocus: FocusRequester) {
     val model: com.enigmacast.ui.security.SettingsLockViewModel = hiltViewModel()
@@ -2152,7 +2152,7 @@ private fun LockSettingsPanel(contentFocus: FocusRequester) {
             )
             if (enabled) com.enigmacast.ui.theme.ValueRow(
                 title = stringResource(R.string.pin_change),
-                value = "â€¢â€¢â€¢â€¢",
+                value = "••••",
                 onClick = { model.start(com.enigmacast.ui.security.PinStep.CURRENT_TO_CHANGE) },
             )
         }
@@ -2168,7 +2168,7 @@ private fun LockSettingsPanel(contentFocus: FocusRequester) {
     }
 }
 
-/** Settings â€º IPTV: source (XStreamity / playlist), M3U or Xtream login, Save & load, status. */
+/** Settings › IPTV: source (XStreamity / playlist), M3U or Xtream login, Save & load, status. */
 @Composable
 private fun IptvSettingsPanel(contentFocus: FocusRequester) {
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
