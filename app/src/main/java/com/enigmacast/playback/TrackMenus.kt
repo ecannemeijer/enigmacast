@@ -50,6 +50,41 @@ internal object TrackMenus {
         return TrackMenu(audio, subtitles, subtitlesOn && subtitles.any { it.selected })
     }
 
+    /** The supported text tracks, described for [com.enigmacast.domain.player.LiveSubtitles]; [skip] leaves some out. */
+    fun textTracks(tracks: Tracks, skip: (Format) -> Boolean = { false }): List<com.enigmacast.domain.player.LiveSubtitles.Track> {
+        val out = mutableListOf<com.enigmacast.domain.player.LiveSubtitles.Track>()
+        tracks.groups.forEachIndexed { groupIndex, group ->
+            if (group.type != C.TRACK_TYPE_TEXT) return@forEachIndexed
+            for (track in 0 until group.length) {
+                if (!group.isTrackSupported(track)) continue
+                val format = group.getTrackFormat(track)
+                if (skip(format)) continue
+                out += describe("$groupIndex:$track", format)
+            }
+        }
+        return out
+    }
+
+    fun describe(id: String, format: Format) = com.enigmacast.domain.player.LiveSubtitles.Track(
+        id = id,
+        language = format.language.orEmpty(),
+        label = format.label.orEmpty(),
+        mime = (format.sampleMimeType ?: format.codecs).orEmpty(),
+        hearing = format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND != 0,
+    )
+
+    /** The text track the viewer picked as [id], for remembering the choice. */
+    fun textTrack(tracks: Tracks, id: String): com.enigmacast.domain.player.LiveSubtitles.Track? {
+        val (group, track) = find(tracks, id, C.TRACK_TYPE_TEXT) ?: return null
+        return describe(id, group.getTrackFormat(track))
+    }
+
+    /** Is [id] the text track that is selected now. */
+    fun textSelected(tracks: Tracks, id: String): Boolean {
+        val (group, track) = find(tracks, id, C.TRACK_TYPE_TEXT) ?: return false
+        return group.isTrackSelected(track)
+    }
+
     /** The group and track behind [id], when it still exists and has [type]. */
     fun find(tracks: Tracks, id: String, type: Int): Pair<Tracks.Group, Int>? {
         val parts = id.split(':')

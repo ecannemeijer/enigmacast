@@ -315,6 +315,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 settingsSnapshot = settings
                 DebugFlags.verbose = settings.debug.verboseLogging
                 playback.updateSettings(settings.playback)
+                playback.setLiveSubtitles(settings.liveSubtitles)
                 _ui.update {
                     it.copy(
                         debugOverlayEnabled = settings.debug.overlay,
@@ -544,9 +545,17 @@ class RemoteDisplayViewModel @Inject constructor(
     }
 
     fun chooseSubtitles(id: String?) {
+        // A live channel remembers the choice by language and kind (not the track number), for
+        // every channel after it; synced with the profile settings. Recordings keep the old switch.
+        val live = if (playback.isFilePlayback()) null
+        else com.enigmacast.domain.player.LiveSubtitles.of(id?.let { playback.textTrack(it) ?: return })
+        if (live != null) playback.setLiveSubtitles(live)
         playback.chooseSubtitles(id)
         viewModelScope.launch {
-            settingsRepository.update { it.copy(playback = it.playback.copy(subtitlesEnabled = id != null)) }
+            settingsRepository.update {
+                val next = it.copy(playback = it.playback.copy(subtitlesEnabled = id != null))
+                if (live != null) next.copy(liveSubtitles = live) else next
+            }
         }
     }
 
@@ -878,8 +887,9 @@ class RemoteDisplayViewModel @Inject constructor(
 
     fun zapTo(entry: BouquetEntry) {
         fallbackLatched = false
-        closeChannelList()
+        // Started before the list closes: a channel from a bouquet that was only shown makes it the zap list.
         ownSession.start(entry)
+        closeChannelList()
     }
 
     /** First quick-bar tile: the same channel on the other source. */
@@ -932,7 +942,12 @@ class RemoteDisplayViewModel @Inject constructor(
                 listFocusToken = if (focusList) it.listFocusToken + 1 else it.listFocusToken,
             )
         }
-        if (pane == ListPane.CLOSED) nowEpgJob?.cancel()
+        if (pane == ListPane.CLOSED) {
+            nowEpgJob?.cancel()
+            // Closed without a channel chosen: a bouquet that was only looked at is not the zap list.
+            bouquetJob?.cancel()
+            ownSession.restoreBouquet()
+        }
         if (pane != ListPane.EPG) epgJob?.cancel()
     }
 

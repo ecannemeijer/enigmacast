@@ -47,6 +47,8 @@ data class ProfileScope(
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.ALWAYS)
     val skinDefaults: Int = com.enigmacast.domain.model.SkinDefaults.CURRENT,
+    /** Live TV subtitle choice; missing in documents from older versions (see [ProfileCloud.keepLiveSubtitlesWhenMissing]). */
+    val liveSubtitles: com.enigmacast.domain.player.LiveSubtitles = com.enigmacast.domain.player.LiveSubtitles(),
 ) {
     fun applyTo(settings: AppSettings): AppSettings = settings.copy(
         lastChannels = lastChannels,
@@ -59,13 +61,14 @@ data class ProfileScope(
         navigationSounds = navigationSounds,
         motionQuality = motionQuality,
         startupLive = startupLive,
+        liveSubtitles = liveSubtitles,
     )
 
     companion object {
         fun of(settings: AppSettings) = ProfileScope(
             settings.lastChannels, settings.recentByReceiver, settings.lastLiveSource, settings.lastIptvChannels,
             settings.pictureModes, settings.osdSkin, settings.osdInfo, settings.navigationSounds, settings.motionQuality,
-            settings.startupLive,
+            settings.startupLive, liveSubtitles = settings.liveSubtitles,
         )
     }
 }

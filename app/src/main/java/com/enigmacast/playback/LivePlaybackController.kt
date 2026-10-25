@@ -126,6 +126,10 @@ class LivePlaybackController @Inject constructor(
     private var fileClock: Job? = null
     private var playbackEnabled = true
     private var settings = PlaybackSettings()
+    /** The live TV subtitle choice of the profile (synced); recordings keep [PlaybackSettings.subtitlesEnabled]. */
+    private var liveSubtitles = com.enigmacast.domain.player.LiveSubtitles()
+    /** The live choice was applied to this stream's tracks (or the viewer picked one himself). */
+    private var livePreferenceApplied = false
     private var scope: CoroutineScope? = null
     private var reconnectJob: Job? = null
     private var failures = 0
@@ -427,9 +431,13 @@ class LivePlaybackController @Inject constructor(
         if (internet) _health.value = StreamHealth.STARTING
         resetStats()
         // Track overrides belong to the previous stream; the preferred language stays.
+        livePreferenceApplied = false
+        val wanted = liveSubtitles.takeIf { !filePlayback && it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON }?.language?.takeIf { it.isNotBlank() }
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesOn())
+            .apply { if (wanted != null) setPreferredTextLanguage(wanted) }
             .build()
         val builder = MediaItem.Builder()
         val mime: String?
@@ -636,6 +644,7 @@ class LivePlaybackController @Inject constructor(
      */
     fun chooseSubtitles(id: String?) {
         settings = settings.copy(subtitlesEnabled = id != null)
+        livePreferenceApplied = true
         val exo = player ?: return
         EnigmaLog.subs("live choose ${id ?: "off"} at pos=${exo.currentPosition}ms dur=${exo.duration}ms seekable=${exo.isCurrentMediaItemSeekable}")
         if (id == null) {
@@ -865,8 +874,8 @@ class LivePlaybackController @Inject constructor(
             // Tunneled playback is broken on several Amlogic/Realtek sticks; TiviMate leaves it off too.
             .setTunnelingEnabled(false)
             .setPreferredAudioMimeTypes(*preferredAudio)
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !settings.subtitlesEnabled)
-            .setSelectUndeterminedTextLanguage(settings.subtitlesEnabled)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesOn())
+            .setSelectUndeterminedTextLanguage(subtitlesOn())
             .build()
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
@@ -940,7 +949,7 @@ class LivePlaybackController @Inject constructor(
             error = exo.playerError?.errorCodeName,
             audioLabel = TrackLabels.audio(audio),
             audioTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_AUDIO },
-            subtitleLabel = TrackLabels.subtitle(exo.currentTracks, settings.subtitlesEnabled),
+            subtitleLabel = TrackLabels.subtitle(exo.currentTracks, subtitlesOn()),
             subtitleTrackCount = exo.currentTracks.groups.count { it.type == C.TRACK_TYPE_TEXT },
             pixelRatio = exo.videoSize.pixelWidthHeightRatio,
             positionMs = exo.currentPosition.coerceAtLeast(0),
@@ -952,7 +961,7 @@ class LivePlaybackController @Inject constructor(
             streamArtist = streamArtist(exo),
             timeshiftPaused = timeshiftPaused,
         )
-        _tracks.value = TrackMenus.build(exo.currentTracks, settings.subtitlesEnabled)
+        _tracks.value = TrackMenus.build(exo.currentTracks, subtitlesOn())
     }
 
     private fun streamTitle(exo: Player): String {
@@ -1079,8 +1088,27 @@ class LivePlaybackController @Inject constructor(
         }
     }
 
+    /** The text track behind menu id [id], described for the live subtitle choice. */
+    fun textTrack(id: String): com.enigmacast.domain.player.LiveSubtitles.Track? =
+        player?.let { TrackMenus.textTrack(it.currentTracks, id) }
+
+    /** Subtitles shown: a live channel follows the live choice once one was made, else the playback setting. */
+    private fun subtitlesOn(): Boolean =
+        if (filePlayback || liveSubtitles.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.AUTO) settings.subtitlesEnabled
+        else liveSubtitles.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON
+
+    /** The profile's live subtitle choice; a new channel (and the one playing, for on/off) follows it. */
+    fun setLiveSubtitles(value: com.enigmacast.domain.player.LiveSubtitles) {
+        if (value == liveSubtitles) return
+        liveSubtitles = value
+        val exo = player ?: return
+        if (filePlayback) return
+        selectSubtitles(exo)
+        publish()
+    }
+
     private fun selectSubtitles(exo: ExoPlayer) {
-        val enabled = settings.subtitlesEnabled
+        val enabled = subtitlesOn()
         val available = exo.currentTracks.groups.any { group ->
             group.type == C.TRACK_TYPE_TEXT && group.length > 0
         }
@@ -1094,6 +1122,19 @@ class LivePlaybackController @Inject constructor(
         }
         exo.trackSelectionParameters = parameters.build()
         if (!available) return
+        if (!filePlayback && !livePreferenceApplied && liveSubtitles.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON) {
+            val decision = com.enigmacast.domain.player.LiveSubtitles.decide(liveSubtitles, TrackMenus.textTracks(exo.currentTracks))
+            if (decision is com.enigmacast.domain.player.LiveSubtitles.Decision.Show) {
+                livePreferenceApplied = true
+                if (TrackMenus.textSelected(exo.currentTracks, decision.id)) return
+                val (group, track) = TrackMenus.find(exo.currentTracks, decision.id, C.TRACK_TYPE_TEXT) ?: return
+                EnigmaLog.subs("live remembered subtitles: track ${decision.id}")
+                exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
+                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track))
+                    .build()
+                return
+            }
+        }
         val alreadySelected = exo.currentTracks.groups.any { group ->
             group.type == C.TRACK_TYPE_TEXT && group.isSelected
         }
@@ -1197,7 +1238,7 @@ class LivePlaybackController @Inject constructor(
         }
 
         override fun onCues(cueGroup: CueGroup) {
-            _cues.value = if (settings.subtitlesEnabled) cueGroup.cues else emptyList()
+            _cues.value = if (subtitlesOn()) cueGroup.cues else emptyList()
         }
     }
 }

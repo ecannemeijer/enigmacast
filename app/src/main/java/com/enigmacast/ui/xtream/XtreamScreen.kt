@@ -191,6 +191,11 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         panelOpen = false
         showBanner(fromZap = false)
     }
+    // Closing the panel (Back, a timeout, the menu) after only browsing another live category:
+    // the playing channel's category is shown again, so the next Left opens on that channel.
+    LaunchedEffect(panelOpen) {
+        if (!panelOpen && model.playingLive) model.restorePlayingCategory()
+    }
     fun openPanel() {
         val vod = model.section != XtreamSection.LIVE
         column = when {
@@ -519,10 +524,14 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         // to the playing channel / its category silently, so the panel opens there without scrolling.
         val liveShown = panelOpen && model.account != null && model.series == null && model.section == XtreamSection.LIVE &&
             (column == PanelColumn.CATEGORIES || column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)
-        val playingId = model.playing?.item?.id
-        val playingRow = remember(model.items, playingId) { model.items.indexOfFirst { it.id == playingId } }
-        val categoryId = model.category?.id
-        val categoryRow = remember(model.categories, categoryId) { model.categories.indexOfFirst { it.id == categoryId } }
+        val playingItem = model.playing?.item
+        val playingRow = remember(model.items, playingItem) {
+            model.items.indexOfFirst { playingItem != null && com.enigmacast.domain.xtream.IptvZapList.same(it, playingItem) }
+        }
+        val shownCategory = model.category
+        val categoryRow = remember(model.categories, shownCategory) {
+            model.categories.indexOfFirst { com.enigmacast.domain.xtream.IptvZapList.sameCategory(it, shownCategory) }
+        }
         liveChannelList.KeepAnchored(playingRow, model.items.size, hidden = !liveShown)
         liveCategoryList.KeepAnchored(categoryRow, model.categories.size, hidden = !(liveShown && column == PanelColumn.CATEGORIES))
         when {
@@ -861,7 +870,9 @@ private fun SidePanel(
                     }
                 }
             } else {
-                val playingIndex = model.items.indexOfFirst { it.id == model.playing?.item?.id }.coerceAtLeast(0)
+                val playingIndex = model.items.indexOfFirst { item ->
+                    model.playing?.item?.let { com.enigmacast.domain.xtream.IptvZapList.same(item, it) } == true
+                }.coerceAtLeast(0)
                 channelList.TrackRows()
                 LaunchedEffect(model.items) { channelList.ensureVisible(playingIndex, model.items.size) }
                 // Now/next for the rows on screen only; a scroll cancels the batch that was waiting.
