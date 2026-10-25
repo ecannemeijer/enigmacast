@@ -371,7 +371,7 @@ class XtreamViewModel @Inject constructor(
         val current = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return false
         val target = com.enigmacast.domain.player.PreviousChannel.iptv(previousLive, current)
             ?: recentChannels.firstOrNull { it.reference != current.id }?.let { channel ->
-                items.firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference && it.providerId == current.providerId }
+                (zapItems + items).firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference && it.providerId == current.providerId }
             }
             ?: run {
                 showNotice(context.getString(com.enigmacast.R.string.keys_no_previous_channel))
@@ -393,6 +393,12 @@ class XtreamViewModel @Inject constructor(
     private var selectedExternalId: Long? = null
     private var pendingEmbeddedId: String? = null
     private var holdAutoText = false
+    /** The profile's live TV subtitle choice (synced with its settings); films and series do not use it. */
+    private var liveSubtitles = com.enigmacast.domain.player.LiveSubtitles()
+    /** The live choice was applied to this channel's tracks, or the viewer picked one himself. */
+    private var livePreferenceApplied = false
+    private fun liveChannelPlays() = mediaLive && !catchup
+    private fun liveChoiceMade() = liveSubtitles.mode != com.enigmacast.domain.player.LiveSubtitles.Mode.AUTO
     private var subtitleJob: Job? = null
     private var downloadJob: Job? = null
 
@@ -1020,6 +1026,13 @@ class XtreamViewModel @Inject constructor(
 
     private var player: ExoPlayer? = null
     private var loadJob: Job? = null
+    /**
+     * Channel up/down walks this list: the category of the live channel that plays. A category
+     * opened in the panel is only shown until a channel in it is chosen.
+     */
+    private var zapCategory: XtreamCategory? = null
+    private var zapItems: List<XtreamItem> = emptyList()
+    private var zapJob: Job? = null
     private var epgJob: Job? = null
 
     init {
@@ -1045,6 +1058,20 @@ class XtreamViewModel @Inject constructor(
             subtitleSync.set(playback.subtitleDelayMs)
         }
         viewModelScope.launch { sleepTimer.endsAtMs.collect { sleepEndsAtMs = it } }
+        viewModelScope.launch {
+            settingsRepository.settings
+                .map { it.liveSubtitles }
+                .distinctUntilChanged()
+                .collect { choice ->
+                    liveSubtitles = choice
+                    // Changed on another TV (or here): on/off follows at once on the live channel.
+                    if (liveChannelPlays() && liveChoiceMade()) {
+                        subtitlesHidden = choice.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF
+                        if (subtitlesHidden) cues = emptyList()
+                        player?.let(::publishTracks)
+                    }
+                }
+        }
         viewModelScope.launch {
             audioSync.passthroughActive.collect { active ->
                 if (active == null) return@collect
@@ -1400,6 +1427,10 @@ class XtreamViewModel @Inject constructor(
                     cards = base
                     categoryCounts = categoryCounts + (countKey(category) to list.size)
                     items = list
+                    // The playing channel's own category read again (refresh, sync): zap follows it.
+                    if (section == XtreamSection.LIVE && com.enigmacast.domain.xtream.IptvZapList.sameCategory(category, zapCategory) &&
+                        playing?.item?.let { com.enigmacast.domain.xtream.IptvZapList.holds(list, it) } == true
+                    ) zapItems = list
                     // Only an OK-loaded category moves focus into the grid; the auto-loaded first one does not.
                     if (announce) itemsReady++
                 }
@@ -1519,9 +1550,61 @@ class XtreamViewModel @Inject constructor(
         fallbackLatched = false
         catchup = false
         val current = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return
-        val list = items.filter { it.section == XtreamSection.LIVE }
-        val index = list.indexOfFirst { it.id == current.id }.takeIf { it >= 0 } ?: return
-        list.getOrNull((index + step).mod(list.size))?.let(::play)
+        // The playing channel's category, also while another one is only browsed in the panel.
+        val next = com.enigmacast.domain.xtream.IptvZapList.step(zapItems, current, step)
+            ?: com.enigmacast.domain.xtream.IptvZapList.step(items, current, step)
+            ?: return
+        play(next)
+    }
+
+    /** A live channel started: its category becomes the zap list (fetched when not at hand). */
+    private fun commitZapList(item: XtreamItem) {
+        when (com.enigmacast.domain.xtream.IptvZapList.source(section == XtreamSection.LIVE, items, zapItems, item)) {
+            com.enigmacast.domain.xtream.IptvZapList.Source.SHOWN -> {
+                zapJob?.cancel()
+                zapCategory = category
+                zapItems = items
+            }
+            com.enigmacast.domain.xtream.IptvZapList.Source.KEPT -> Unit
+            com.enigmacast.domain.xtream.IptvZapList.Source.LOAD -> {
+                zapJob?.cancel()
+                if (item.categoryId.isBlank()) return
+                val account = accountFor(item.providerId) ?: return
+                val target = categories.firstOrNull { it.id == item.categoryId && it.providerId == item.providerId }
+                    ?: XtreamCategory(item.categoryId, "", item.providerId)
+                zapJob = viewModelScope.launch {
+                    val list = runCatching { itemsOf(account, XtreamSection.LIVE, target, false) }
+                        .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        .getOrNull() ?: return@launch
+                    val now = playing?.item ?: return@launch
+                    if (com.enigmacast.domain.xtream.IptvZapList.same(now, item) && com.enigmacast.domain.xtream.IptvZapList.holds(list, item)) {
+                        zapCategory = target
+                        zapItems = list
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The panel closed without a channel chosen: the category that was only browsed goes away and
+     * the playing channel's one is shown again (the panel reopens there, on that channel).
+     */
+    fun restorePlayingCategory() {
+        if (section != XtreamSection.LIVE || series != null) return
+        if (pendingCategory != null) {
+            loadJob?.cancel()
+            pendingCategory = null
+            loading = false
+        }
+        val playingItem = playing?.item
+        if (!com.enigmacast.domain.xtream.IptvZapList.needsRestore(category, zapCategory, zapItems, playingItem)) return
+        val target = zapCategory ?: return
+        category = categories.firstOrNull { com.enigmacast.domain.xtream.IptvZapList.sameCategory(it, target) } ?: target
+        items = zapItems
+        episodes = emptyList()
+        cards = emptyList()
+        error = false
     }
 
     @OptIn(UnstableApi::class)
@@ -1583,7 +1666,7 @@ class XtreamViewModel @Inject constructor(
                             applyEmbeddedSubtitles(p, pending)
                             holdAutoText = false
                         } else if (selectedExternalId == null && !holdAutoText) {
-                            selectFirstTextTrack(p)
+                            if (!applyLiveSubtitles(p)) selectFirstTextTrack(p)
                         }
                         publishTracks(p)
                     }
@@ -1777,7 +1860,10 @@ class XtreamViewModel @Inject constructor(
         mediaUrl = url
         mediaLive = live
         playerState = com.enigmacast.domain.model.PlayerState(filePlayback = !live)
-        subtitlesHidden = !playbackSubtitles
+        val liveChannel = live && !archive
+        livePreferenceApplied = false
+        subtitlesHidden = if (liveChannel && liveChoiceMade()) liveSubtitles.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF
+        else !playbackSubtitles
         lastDurationMs = 0L
         guardJob?.cancel()
         if (!live) player().let { pl ->
@@ -1785,6 +1871,14 @@ class XtreamViewModel @Inject constructor(
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setPreferredTextLanguages(*preferredText.toTypedArray())
+                .build()
+        } else if (liveChannel) player().let { pl ->
+            // The remembered live language is the player's first pick, so mostly no switch is needed.
+            val wanted = liveSubtitles.takeIf { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON }
+                ?.language?.takeIf { it.isNotBlank() }
+            pl.trackSelectionParameters = pl.trackSelectionParameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setPreferredTextLanguages(*(listOfNotNull(wanted) + preferredText).distinct().toTypedArray())
                 .build()
         }
         EnigmaLog.subs("iptv setMediaItem+prepare (new item) at ${startMs}ms live=$live ${what.item?.section}")
@@ -1801,6 +1895,7 @@ class XtreamViewModel @Inject constructor(
         // The new channel's level applies before its first sound, not after the collector runs.
         audioBoost.set(boostStore.level(key))
         boostKey.value = key
+        if (live && !archive && item != null && item.section == XtreamSection.LIVE) commitZapList(item)
         if (live && !archive && item != null) {
             if (currentLive?.let { com.enigmacast.domain.player.PreviousChannel.sameIptv(it, item) } != true) {
                 previousLive = currentLive
@@ -1831,6 +1926,7 @@ class XtreamViewModel @Inject constructor(
 
     fun chooseSubtitles(id: String?) {
         val p = player ?: return
+        if (liveChannelPlays() && id?.startsWith(EXTERNAL_PREFIX) != true) rememberLiveSubtitles(p, id)
         val before = snapshot(p)
         EnigmaLog.subs("iptv choose ${id ?: "off"} at ${com.enigmacast.playback.SubtitleSafety.describe(before)} live=$mediaLive")
         if (id == null) {
@@ -1989,7 +2085,7 @@ class XtreamViewModel @Inject constructor(
 
     /** Recent strip: zap back to a live channel watched earlier. */
     fun playRecent(channel: com.enigmacast.domain.model.LastChannel) {
-        val known = items.firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference }
+        val known = (zapItems + items).firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference }
         play(
             known ?: XtreamItem(
                 channel.reference,
@@ -2150,6 +2246,40 @@ class XtreamViewModel @Inject constructor(
             subtitleLabel = merged.subtitles.firstOrNull { it.selected }?.label ?: com.enigmacast.util.UiText.Empty,
             subtitleTrackCount = merged.subtitles.size,
         )
+    }
+
+    /**
+     * Live channel: off, or the remembered language/kind, for every channel after it. Saved in the
+     * profile settings, which the sync server keeps for the other TVs (last change wins).
+     */
+    private fun rememberLiveSubtitles(p: ExoPlayer, id: String?) {
+        val track = id?.let { com.enigmacast.playback.TrackMenus.textTrack(p.currentTracks, it) ?: return }
+        val choice = com.enigmacast.domain.player.LiveSubtitles.of(track)
+        liveSubtitles = choice
+        livePreferenceApplied = true
+        EnigmaLog.subs("iptv live subtitles remembered: ${if (track == null) "off" else choice.language.ifBlank { "-" }}")
+        viewModelScope.launch { settingsRepository.update { it.copy(liveSubtitles = choice) } }
+    }
+
+    /** A new live channel: its track for the remembered choice. False leaves the old automatic pick. */
+    private fun applyLiveSubtitles(p: ExoPlayer): Boolean {
+        if (!liveChannelPlays() || livePreferenceApplied || liveSubtitles.mode != com.enigmacast.domain.player.LiveSubtitles.Mode.ON) return false
+        if (p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)) return false
+        val tracks = com.enigmacast.playback.TrackMenus.textTracks(p.currentTracks) { it.id?.startsWith(EXTERNAL_PREFIX) == true }
+        val decision = com.enigmacast.domain.player.LiveSubtitles.decide(liveSubtitles, tracks)
+        if (decision !is com.enigmacast.domain.player.LiveSubtitles.Decision.Show) return false
+        livePreferenceApplied = true
+        if (com.enigmacast.playback.TrackMenus.textSelected(p.currentTracks, decision.id)) return true
+        // A late pick re-reads the stream; on an unseekable one that is a restart.
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(p.isCurrentMediaItemSeekable, p.currentPosition)) {
+            EnigmaLog.subs("iptv live subtitles: switch skipped at ${p.currentPosition}ms, not seekable")
+            return true
+        }
+        EnigmaLog.subs("iptv live subtitles: remembered track ${decision.id}")
+        holdAutoText = true
+        applyEmbeddedSubtitles(p, decision.id)
+        holdAutoText = false
+        return true
     }
 
     /** Same as the Enigma2 player: the first supported text track, when none is selected yet. */

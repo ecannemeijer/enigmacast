@@ -45,6 +45,31 @@ class ProfileCloudTest {
         assertEquals(StartupLive.OFF, merged.scope.startupLive)
     }
 
+    @Test fun liveSubtitlesTravelWithTheProfile() {
+        val choice = com.enigmacast.domain.player.LiveSubtitles(com.enigmacast.domain.player.LiveSubtitles.Mode.ON, "nl", "Nederlands", "application/x-teletext")
+        val settings = AppSettings(liveSubtitles = choice)
+        val scope = ProfileScope.of(settings)
+        assertEquals(choice, scope.liveSubtitles)
+        assertEquals(choice, scope.applyTo(AppSettings()).liveSubtitles)
+        val encoded = ProfileCloud.encode(ProfileSettingsSnapshot(scope = scope))
+        assertTrue(ProfileCloud.includesLiveSubtitles(encoded))
+        assertEquals(choice, ProfileCloud.decode(encoded).scope.liveSubtitles)
+        val off = ProfileCloud.encode(ProfileSettingsSnapshot(scope = ProfileScope(liveSubtitles = com.enigmacast.domain.player.LiveSubtitles.OFF)))
+        assertEquals(com.enigmacast.domain.player.LiveSubtitles.OFF, ProfileCloud.decode(off).scope.liveSubtitles)
+    }
+
+    @Test fun oldSnapshotWithoutLiveSubtitlesKeepsTheLocalChoice() {
+        val raw = """{"scope":{"navigationSounds":false}}"""
+        val local = com.enigmacast.domain.player.LiveSubtitles.OFF
+        assertFalse(ProfileCloud.includesLiveSubtitles(raw))
+        val kept = ProfileCloud.keepLiveSubtitlesWhenMissing(ProfileCloud.decode(raw), raw, local)
+        assertEquals(local, kept.scope.liveSubtitles)
+        assertFalse(kept.scope.navigationSounds)
+        val explicit = ProfileCloud.encode(ProfileSettingsSnapshot(scope = ProfileScope()))
+        val newer = ProfileCloud.keepLiveSubtitlesWhenMissing(ProfileCloud.decode(explicit), explicit, local)
+        assertEquals(com.enigmacast.domain.player.LiveSubtitles(), newer.scope.liveSubtitles)
+    }
+
     @Test fun iptvLoadStaysBehindSatelliteDownloads() {
         val withReceiver = CacheWorkOrder.steps(hasReceiver = true)
         assertEquals(CacheWorkOrder.Step.SATELLITE, withReceiver.first())

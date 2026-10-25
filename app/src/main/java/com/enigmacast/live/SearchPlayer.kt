@@ -51,7 +51,7 @@ class SearchPlayer @Inject constructor(
 
     private suspend fun openBouquet(hit: SearchHit): SearchOutcome {
         val bouquet = BouquetEntry(hit.bouquetName, hit.bouquetReference)
-        return if (session.selectBouquet(bouquet)) {
+        return if (session.selectBouquet(bouquet, preview = false)) {
             SearchOutcome.Bouquet(bouquet)
         } else {
             SearchOutcome.Failed(UiText.res(R.string.notice_bouquet_failed, bouquet.name))

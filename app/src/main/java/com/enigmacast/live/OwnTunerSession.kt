@@ -114,6 +114,10 @@ class OwnTunerSession @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    private data class ZapList(val name: String, val reference: String, val channels: List<BouquetEntry>)
+    /** The playing channel's bouquet while another one is only shown in the list. */
+    private val preview = com.enigmacast.domain.tuner.BouquetPreview<ZapList>()
+
     init {
         // New lists on the box (settings import): the zap list follows without a restart; the channel keeps playing.
         scope.launch { listEvents.changed.collect { id -> if (id == boundReceiverId) reloadChannelList() } }
@@ -437,6 +441,10 @@ class OwnTunerSession @Inject constructor(
         force: Boolean = false,
     ) {
         active = true
+        if (!force && preview.active) {
+            val shownHolds = _state.value.channels.any { BouquetChannels.sameService(it.reference, channel.reference) }
+            preview.onStart(listGiven = !channels.isNullOrEmpty(), shownHolds = shownHolds)?.let(::showZapList)
+        }
         if (channels != null && channels.isNotEmpty()) {
             _state.update {
                 it.copy(
@@ -484,26 +492,49 @@ class OwnTunerSession @Inject constructor(
     }
 
     /**
-     * Shows [bouquet]'s channels for zapping (list, CH+/CH−, digits) without changing the
-     * channel that plays. The choice is saved, so the list opens on it next time.
+     * Shows [bouquet]'s channels in the list without changing the channel that plays. With
+     * [preview] (the list's bouquet column) that is only a look: CH+/CH−, digits and the saved
+     * bouquet follow once a channel in it is chosen, and [restoreBouquet] puts the playing
+     * channel's list back. Without (a search result, nothing playing) it becomes the zap list.
      * Returns false when the channels could not be loaded.
      */
-    suspend fun selectBouquet(bouquet: BouquetEntry): Boolean {
+    suspend fun selectBouquet(bouquet: BouquetEntry, preview: Boolean = true): Boolean {
         val receiver = settingsRepository.current().activeReceiver() ?: return false
         val channels = runCatching { serviceSource.channelsInBouquet(receiver, bouquet.reference) }.getOrElse { error ->
             if (error is CancellationException) throw error
             EnigmaLog.service("bouquet ${bouquet.name} failed: ${error.javaClass.simpleName}")
             return false
         }
-        _state.update { it.copy(channels = channels, bouquetName = bouquet.name, bouquetReference = bouquet.reference) }
-        settingsRepository.update { settings ->
-            ChannelMemory.rememberBouquet(settings, receiver.id, bouquet.reference)
+        val current = _state.value
+        val onlyShown = preview && current.channel != null && current.channels.isNotEmpty()
+        if (onlyShown) {
+            this.preview.begin(ZapList(current.bouquetName, current.bouquetReference, current.channels))
+        } else {
+            this.preview.commit()
         }
-        EnigmaLog.service("bouquet ${bouquet.name} channels=${channels.size}")
+        _state.update { it.copy(channels = channels, bouquetName = bouquet.name, bouquetReference = bouquet.reference) }
+        if (!onlyShown) {
+            settingsRepository.update { settings ->
+                ChannelMemory.rememberBouquet(settings, receiver.id, bouquet.reference)
+            }
+        }
+        EnigmaLog.service("bouquet ${bouquet.name} channels=${channels.size}${if (onlyShown) " (shown only)" else ""}")
         return true
     }
 
+    /** The list closed without a channel chosen: the playing channel's bouquet is the list again. */
+    fun restoreBouquet() {
+        val saved = preview.restore() ?: return
+        showZapList(saved)
+        EnigmaLog.service("bouquet back to ${saved.name} channels=${saved.channels.size}")
+    }
+
+    private fun showZapList(list: ZapList) {
+        _state.update { it.copy(channels = list.channels, bouquetName = list.name, bouquetReference = list.reference) }
+    }
+
     fun zapRelative(delta: Int) {
+        restoreBouquet()
         val current = _state.value
         val next = ChannelNavigator.step(current.channels, current.channel?.reference.orEmpty(), delta) ?: return
         start(next)
@@ -511,6 +542,7 @@ class OwnTunerSession @Inject constructor(
 
     /** Returns false when the bouquet has no channel with [number]. */
     fun zapNumber(number: Int): Boolean {
+        restoreBouquet()
         val next = ChannelNavigator.byNumber(_state.value.channels, number) ?: return false
         start(next)
         return true

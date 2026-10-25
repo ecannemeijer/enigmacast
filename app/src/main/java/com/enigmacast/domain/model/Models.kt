@@ -287,6 +287,8 @@ data class AppSettings(
     val iptvSubtitleLanguages: List<String>? = null,
     /** Missing in older settings, so a dropped channel stays dropped. */
     val tvFallback: TvFallback = TvFallback.OFF,
+    /** Live TV subtitles (off, or a language/kind), for satellite and IPTV; per profile and synced. */
+    val liveSubtitles: com.enigmacast.domain.player.LiveSubtitles = com.enigmacast.domain.player.LiveSubtitles(),
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
