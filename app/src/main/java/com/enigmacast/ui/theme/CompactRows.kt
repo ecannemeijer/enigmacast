@@ -157,6 +157,31 @@ fun Modifier.wrapListEnds(
 }
 
 /**
+ * Left on the first item of a horizontal row and Right on the last jump to the other end
+ * (see [com.enigmacast.domain.ui.RowWrap]); a held key stops at the end. The caller focuses
+ * the target (scrolling it on screen first in a lazy row).
+ */
+fun Modifier.wrapRowEnds(
+    index: Int,
+    lastIndex: Int,
+    onWrapToFirst: () -> Unit,
+    onWrapToLast: () -> Unit,
+): Modifier = onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+    val forward = when (event.key) {
+        Key.DirectionRight -> true
+        Key.DirectionLeft -> false
+        else -> return@onPreviewKeyEvent false
+    }
+    when (com.enigmacast.domain.ui.RowWrap.at(index, lastIndex, forward, event.nativeKeyEvent.repeatCount > 0)) {
+        com.enigmacast.domain.ui.RowWrap.Move.NONE -> false
+        com.enigmacast.domain.ui.RowWrap.Move.HOLD -> true
+        com.enigmacast.domain.ui.RowWrap.Move.TO_FIRST -> { onWrapToFirst(); true }
+        com.enigmacast.domain.ui.RowWrap.Move.TO_LAST -> { onWrapToLast(); true }
+    }
+}
+
+/**
  * Left from the left edge of a column. Full-width rows and the first control of a row
  * read this so D-pad left returns to the menu item that opened the column, not to a
  * nearer row in the column on the left.
@@ -177,7 +202,7 @@ suspend fun FocusRequester.focusListRow(listState: LazyListState, index: Int) {
 
 /**
  * Page boundary: Up/Down that would leave this group (top or bottom edge) stay put, so focus
- * never jumps to the drawer or a header. Left/Right still leave normally (the menu refuses Left; Back returns there).
+ * never jumps to the drawer or a header. Left/Right still leave normally (Left at the page edge → the open page's menu item).
  */
 fun Modifier.trapVertical(): Modifier = this
     .focusProperties {

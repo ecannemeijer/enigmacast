@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import com.enigmacast.ui.theme.wrapRowEnds
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.foundation.focusGroup
@@ -209,6 +210,8 @@ fun VodPlayerOsd(
     val bottomRow = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val firstIcon = remember { FocusRequester() }
+    val rewindFocus = remember { FocusRequester() }
+    val nextFocus = remember { FocusRequester() }
     val iconFocus = remember { VodMenu.entries.associateWith { FocusRequester() } }
     LaunchedEffect(controller.showToken) { barFocus.requestWhenReady() }
     var reopenFocus by remember { mutableStateOf<VodMenu?>(null) }
@@ -242,7 +245,14 @@ fun VodPlayerOsd(
             )
             Spacer(Modifier.height(18.dp))
         }
-        // Play/Pause · Rewind (· Next episode).
+        // Play/Pause · Rewind (· Next episode). Left on the first / Right on the last wraps round.
+        val topLast = if (actions.onNext != null) 2 else 1
+        val topLastFocus = if (actions.onNext != null) nextFocus else rewindFocus
+        fun topWrap(index: Int) = Modifier.wrapRowEnds(
+            index, topLast,
+            onWrapToFirst = { runCatching { playFocus.requestFocus() } },
+            onWrapToLast = { runCatching { topLastFocus.requestFocus() } },
+        )
         Row(
             Modifier.focusRequester(topRow).focusRestorer(playFocus).focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -254,14 +264,14 @@ fun VodPlayerOsd(
                 label = stringResource(if (playing) R.string.osd_pause else R.string.osd_play),
                 size = 44.dp, iconSize = 24.dp,
                 onClick = { actions.onTogglePause(); controller.touch() },
-                modifier = down.focusRequester(playFocus).focusProperties { left = FocusRequester.Cancel },
+                modifier = down.focusRequester(playFocus).then(topWrap(0)).focusProperties { left = FocusRequester.Cancel },
             )
             OsdButton(
                 icon = VodIcons.Rewind,
                 label = stringResource(R.string.osd_rewind),
                 size = 44.dp, iconSize = 24.dp,
                 onClick = { actions.onSeek((model.player.positionMs - VodOsdKeys.SEEK_STEP_MS).coerceAtLeast(0)); controller.touch() },
-                modifier = down.focusProperties { if (actions.onNext == null) right = FocusRequester.Cancel },
+                modifier = down.focusRequester(rewindFocus).then(topWrap(1)).focusProperties { if (actions.onNext == null) right = FocusRequester.Cancel },
             )
             actions.onNext?.let { next ->
                 OsdButton(
@@ -269,7 +279,7 @@ fun VodPlayerOsd(
                     label = stringResource(R.string.osd_next_episode),
                     size = 44.dp, iconSize = 24.dp,
                     onClick = { next() },
-                    modifier = down.focusProperties { right = FocusRequester.Cancel },
+                    modifier = down.focusRequester(nextFocus).then(topWrap(2)).focusProperties { right = FocusRequester.Cancel },
                 )
             }
         }
@@ -308,6 +318,12 @@ fun VodPlayerOsd(
                             modifier = Modifier
                                 .then(if (i == 0) Modifier.focusRequester(firstIcon) else Modifier)
                                 .focusRequester(iconFocus.getValue(m))
+                                // Subtitles ⇄ globe: Left on the first / Right on the last wraps round.
+                                .wrapRowEnds(
+                                    i, icons.lastIndex,
+                                    onWrapToFirst = { runCatching { iconFocus.getValue(icons.first().first).requestFocus() } },
+                                    onWrapToLast = { runCatching { iconFocus.getValue(icons.last().first).requestFocus() } },
+                                )
                                 .focusProperties {
                                     up = barFocus; down = FocusRequester.Cancel
                                     if (i == 0) left = FocusRequester.Cancel

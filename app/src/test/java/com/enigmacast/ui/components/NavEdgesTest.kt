@@ -1,6 +1,7 @@
 package com.enigmacast.ui.components
 
 import androidx.compose.ui.focus.FocusDirection
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,12 +22,24 @@ class NavEdgesTest {
     }
 
     @Test
-    fun leftFromAPageNeverEntersTheMenu() {
-        assertTrue(NavEdges.blocksEnter(FocusDirection.Left))
-        // Back focuses the menu with requestFocus (Enter); other moves follow the page rules.
-        assertFalse(NavEdges.blocksEnter(FocusDirection.Enter))
-        assertFalse(NavEdges.blocksEnter(FocusDirection.Up))
-        assertFalse(NavEdges.blocksEnter(FocusDirection.Down))
-        assertFalse(NavEdges.blocksEnter(FocusDirection.Right))
+    fun leftFromAPageEntersTheMenuOnTheOpenSection() {
+        assertEquals(NavEdges.Enter.SELECTED, NavEdges.enter(FocusDirection.Left, held = false))
+    }
+
+    @Test
+    fun aHeldLeftNeverEntersTheMenu() {
+        // Holding Left in a long row stops on its first item; only a new press opens the menu.
+        assertEquals(NavEdges.Enter.CANCEL, NavEdges.enter(FocusDirection.Left, held = true))
+    }
+
+    @Test
+    fun backAndOtherMovesEnterUnchanged() {
+        // Back focuses the menu with requestFocus (Enter); held or not, it is never redirected.
+        for (held in listOf(false, true)) {
+            assertEquals(NavEdges.Enter.PASS, NavEdges.enter(FocusDirection.Enter, held))
+            assertEquals(NavEdges.Enter.PASS, NavEdges.enter(FocusDirection.Up, held))
+            assertEquals(NavEdges.Enter.PASS, NavEdges.enter(FocusDirection.Down, held))
+            assertEquals(NavEdges.Enter.PASS, NavEdges.enter(FocusDirection.Right, held))
+        }
     }
 }

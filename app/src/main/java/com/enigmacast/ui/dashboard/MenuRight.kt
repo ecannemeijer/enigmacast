@@ -12,4 +12,12 @@ internal object MenuRight {
      */
     fun mayRestore(open: DashSection, visited: DashSection?): Boolean =
         visited == open && open != DashSection.Search && open != DashSection.MyItems
+
+    /**
+     * OK on the menu item of the page that is open, after Left brought focus from that page into
+     * the menu: back to the element focused there (like Right) instead of the page's first entry.
+     * OK after Back, or on another section, keeps opening the page at its entry.
+     */
+    fun okRestores(target: DashSection, open: DashSection, visited: DashSection?, viaLeft: Boolean): Boolean =
+        viaLeft && target == open && mayRestore(open, visited)
 }

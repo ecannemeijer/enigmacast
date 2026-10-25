@@ -31,6 +31,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.graphics.Brush
@@ -71,6 +72,7 @@ val LocalNavCursor = staticCompositionLocalOf<NavCursorState?> { null }
 fun EnigmaNavigationDrawer(
     expanded: Boolean,
     modifier: Modifier = Modifier,
+    leftEntry: MenuLeftEntry? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val spec = LocalMotionSpec.current
@@ -110,7 +112,7 @@ fun EnigmaNavigationDrawer(
             Column(
                 Modifier
                     .fillMaxHeight()
-                    .drawerEdges()
+                    .drawerEdges(leftEntry)
                     .padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 content = content,
@@ -123,20 +125,46 @@ fun EnigmaNavigationDrawer(
 }
 
 /**
+ * D-pad Left from a page into the menu. The dashboard keeps one per screen: [held] is set from
+ * every Left key-down before the page sees it, [target] names the menu item of the open section.
+ */
+class MenuLeftEntry {
+    /** The Left being handled is an auto-repeat of a held key. */
+    var held: Boolean = false
+
+    /** Focus came into the menu with Left; cleared when the menu loses focus. */
+    var viaLeft: Boolean = false
+
+    /** The menu item of the section that is open (the one chosen last). */
+    var target: () -> FocusRequester? = { null }
+}
+
+/**
  * Up on the first menu item and Down on the last one stay in the menu. Without this, focus
  * search runs over the whole screen: with nothing above or below inside the column it picked
  * the nearest focusable of the page on the right. Done on the group, so it holds whichever
  * items are shown (Torrent, IPTV, the open flyout) without knowing which one is first or last.
+ *
+ * Left at a page's left edge (geometric search or an explicit `left = menu`) enters the menu
+ * on the item of the open section, not on whichever item happens to be nearest. A held Left
+ * never enters: holding Left in a long row stops on its first item; a new press opens the menu.
  */
-internal fun Modifier.drawerEdges(): Modifier = this
+internal fun Modifier.drawerEdges(leftEntry: MenuLeftEntry? = null): Modifier = this
     .focusProperties {
         onExit = {
             if (NavEdges.blocks(requestedFocusDirection)) cancelFocusChange()
         }
-        // Left at a page's left edge (geometric search or an explicit `left = menu`) no longer
-        // opens the menu: only Back returns there (requestFocus, which is not a Left move).
         onEnter = {
-            if (NavEdges.blocksEnter(requestedFocusDirection)) cancelFocusChange()
+            when (NavEdges.enter(requestedFocusDirection, held = leftEntry?.held == true)) {
+                NavEdges.Enter.PASS -> Unit
+                NavEdges.Enter.CANCEL -> cancelFocusChange()
+                NavEdges.Enter.SELECTED -> {
+                    leftEntry?.viaLeft = true
+                    // Requesting another item from onEnter redirects the move (as focusRestorer does);
+                    // without a target (or if it is not attached) the nearest item takes it.
+                    leftEntry?.target?.invoke()?.let { runCatching { it.requestFocus() } }
+                }
+            }
         }
     }
     .focusGroup()
@@ -145,6 +173,16 @@ internal object NavEdges {
     /** Only vertical moves are kept inside; Right still enters the page, Left has nothing to reach. */
     fun blocks(direction: FocusDirection): Boolean = direction == FocusDirection.Up || direction == FocusDirection.Down
 
-    /** D-pad Left from the page never enters the menu; Back (and Right from it) decide. */
-    fun blocksEnter(direction: FocusDirection): Boolean = direction == FocusDirection.Left
+    enum class Enter { PASS, CANCEL, SELECTED }
+
+    /**
+     * How focus coming into the menu is treated. Left from the page: onto the open section's
+     * item ([Enter.SELECTED]), refused while the key is held ([Enter.CANCEL]). Anything else
+     * (Back's requestFocus, a page's own request) passes unchanged.
+     */
+    fun enter(direction: FocusDirection, held: Boolean): Enter = when {
+        direction != FocusDirection.Left -> Enter.PASS
+        held -> Enter.CANCEL
+        else -> Enter.SELECTED
+    }
 }

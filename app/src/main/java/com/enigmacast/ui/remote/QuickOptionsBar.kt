@@ -24,6 +24,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.enigmacast.ui.theme.focusListRow
+import com.enigmacast.ui.theme.wrapRowEnds
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -127,6 +131,9 @@ fun QuickOptionsBar(
 ) {
     val tiles = if (iptv) QuickOptions.iptvTiles(ui.playerState.filePlayback) else QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback)
     val firstFocus = remember { FocusRequester() }
+    val lastFocus = remember { FocusRequester() }
+    val rowState = rememberLazyListState()
+    val rowScope = rememberCoroutineScope()
     var open by remember { mutableStateOf<QuickOption?>(null) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -141,6 +148,7 @@ fun QuickOptionsBar(
         firstFocus.requestWhenReady()
     }
     LazyRow(
+        state = rowState,
         modifier = modifier.onPreviewKeyEvent { event ->
             if (interactive && event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
                 actions.onRecentBar()
@@ -176,7 +184,15 @@ fun QuickOptionsBar(
                             else -> open = option
                         }
                     },
-                    modifier = if (index == 0) Modifier.focusRequester(firstFocus) else Modifier,
+                    modifier = Modifier
+                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (index == tiles.lastIndex) Modifier.focusRequester(lastFocus) else Modifier)
+                        // Left on the first icon goes to the last, Right on the last to the first.
+                        .wrapRowEnds(
+                            index, tiles.lastIndex,
+                            onWrapToFirst = { rowScope.launch { firstFocus.focusListRow(rowState, 0) } },
+                            onWrapToLast = { rowScope.launch { lastFocus.focusListRow(rowState, tiles.lastIndex) } },
+                        ),
                 )
                 if (open == option) {
                     QuickPicker(option, ui, actions, iptv, onClose = { open = null })

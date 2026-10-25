@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.domain.ui.RowWrap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -109,8 +110,9 @@ fun RecentChannelsBar(
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 activity++
                 when (event.key) {
-                    Key.DirectionLeft -> { moveTo(selected - 1); true }
-                    Key.DirectionRight -> { moveTo(selected + 1); true }
+                    // The ends wrap round (first ⇄ last, the Clear tile included); a held key stops there.
+                    Key.DirectionLeft -> { moveTo(RowWrap.step(selected, total, forward = false, repeat = event.nativeKeyEvent.repeatCount > 0)); true }
+                    Key.DirectionRight -> { moveTo(RowWrap.step(selected, total, forward = true, repeat = event.nativeKeyEvent.repeatCount > 0)); true }
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                         if (selected < visible.size) visible[selected].let(onChoose) else onClear()
                         true
