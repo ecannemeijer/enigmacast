@@ -572,10 +572,12 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay(500) } }
             if (!panelOpen && playingVod()) {
                 val ep = playing.episode
+                com.enigmacast.ui.player.VodTitleOverlay(vodOsd, model.titleInfo, startKey = playing, modifier = Modifier.align(Alignment.TopStart))
                 com.enigmacast.ui.player.VodPlayerOsd(
                     controller = vodOsd,
                     model = com.enigmacast.ui.player.VodOsdModel(
                         title = if (ep != null) com.enigmacast.domain.player.VodOsdKeys.title(playing.item?.name ?: playing.title, null, ep.season, ep.episode, ep.title) else playing.title,
+                        titleOnTop = model.titleInfo != null,
                         player = model.playerState,
                         tracks = model.tracks,
                         pictureMode = model.pictureMode,
@@ -660,7 +662,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             }
             model.playerError?.let {
                 Text(
-                    stringResource(R.string.xtream_play_error, it),
+                    if (it == com.enigmacast.domain.xtream.ProviderLimit.ERROR) stringResource(R.string.iptv_provider_limit)
+                    else stringResource(R.string.xtream_play_error, it),
                     color = EnigmaColors.Danger,
                     fontSize = 15.sp,
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 32.dp).background(EnigmaColors.Card, skinShape(8.dp)).padding(12.dp),

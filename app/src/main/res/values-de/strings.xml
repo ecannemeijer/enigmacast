@@ -1260,6 +1260,9 @@
     <string name="xtream_categories">Kategorien</string>
     <string name="xtream_load_error">Der IPTV-Server antwortet nicht. Versuche Aktualisieren.</string>
     <string name="xtream_play_error">Dieser Stream kann nicht abgespielt werden (%1$s).</string>
+    <string name="iptv_provider_limit">Der Anbieter erlaubt keine weitere Verbindung (maximale Anzahl an Verbindungen erreicht). Beende die Wiedergabe auf anderen Geräten oder versuche es später erneut.</string>
+    <string name="iptv_provider_limit_retry">Der Anbieter lehnt eine weitere Verbindung ab; neuer Versuch gleich…</string>
+    <string name="osd_episode_code">S%1$d:F%2$d</string>
     <string name="xtream_banner_hint">◀ Liste · ▲▼ Sender</string>
     <string name="iptv_settings_card">IPTV</string>
     <string name="iptv_source">IPTV-Quelle</string>

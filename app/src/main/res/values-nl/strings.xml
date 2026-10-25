@@ -1279,6 +1279,9 @@
     <string name="xtream_categories">Categorieën</string>
     <string name="xtream_load_error">De IPTV-server antwoordde niet. Probeer Vernieuwen.</string>
     <string name="xtream_play_error">Deze stream kan niet worden afgespeeld (%1$s).</string>
+    <string name="iptv_provider_limit">De provider staat geen extra verbinding toe (maximaal aantal verbindingen bereikt). Stop andere apparaten of probeer het later opnieuw.</string>
+    <string name="iptv_provider_limit_retry">De provider weigert een extra verbinding; zo opnieuw proberen…</string>
+    <string name="osd_episode_code">S%1$d:A%2$d</string>
     <string name="xtream_banner_hint">◀ lijst · ▲▼ zender</string>
     <string name="iptv_settings_card">IPTV</string>
     <string name="iptv_source">IPTV-bron</string>

@@ -25,7 +25,6 @@ import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
@@ -98,6 +97,7 @@ class XtreamViewModel @Inject constructor(
     private val subtitles: SubSourceClient,
     val pip: com.enigmacast.playback.PipController,
     private val fallbackFinder: com.enigmacast.live.TvFallbackFinder,
+    private val titleSource: com.enigmacast.data.tmdb.VodTitleSource,
     @ApplicationContext private val context: Context,
     private val equivalents: com.enigmacast.data.channel.EquivalentChannelsController,
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
@@ -241,6 +241,12 @@ class XtreamViewModel @Inject constructor(
     private var pendingEquivalent: com.enigmacast.domain.channel.ChannelSwitchRequest.Iptv? = null
     var playerError by mutableStateOf<String?>(null)
     private val iptvRetries = RestartBudget(5, 1_000L, 8_000L)
+    /** The OSD title block (TMDB logo, episode, plot) of the film or episode playing; null for live. */
+    var titleInfo by mutableStateOf<com.enigmacast.domain.player.VodTitleInfo?>(null)
+        private set
+    private var titleJob: Job? = null
+    /** "Max connections" answers (HTTP 458/429/509/403): a couple of slow retries, then the reason. */
+    private val providerLimitRetries = com.enigmacast.domain.xtream.ProviderLimit.budget()
     private var iptvRecoveryJob: Job? = null
     private var mediaAccount: XtreamAccount? = null
     private var lastIptvPosition = -1L
@@ -318,11 +324,11 @@ class XtreamViewModel @Inject constructor(
         private set
     private val audioSync = com.enigmacast.playback.AudioSyncOffsets()
     private val subtitleSync = com.enigmacast.playback.SubtitleSyncOffset()
-    private val httpFactory = DefaultHttpDataSource.Factory()
+    /** The player's own HTTP client: a retry first closes the previous request's socket. */
+    private val streamConnections = com.enigmacast.playback.StreamConnections(connectTimeoutMs = 10_000, readTimeoutMs = 20_000)
+    @OptIn(UnstableApi::class)
+    private val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(streamConnections.client)
         .setUserAgent(XtreamRepository.USER_AGENT)
-        .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(10_000)
-        .setReadTimeoutMs(20_000)
     /** Playback setting at start: unknown-language text tracks are selected when this is on. */
     private var playbackSubtitles = true
     private var mediaUrl = ""
@@ -911,6 +917,7 @@ class XtreamViewModel @Inject constructor(
                     if (iptvStableSince == 0L) iptvStableSince = now
                     if (now - iptvStableSince >= 30_000L) {
                         iptvRetries.reset()
+                        providerLimitRetries.reset()
                         iptvStableSince = now
                     }
                 } else {
@@ -1555,12 +1562,58 @@ class XtreamViewModel @Inject constructor(
         })
         iptvRecoveryJob?.cancel()
         lastIptvAdvanceAt = android.os.SystemClock.elapsedRealtime()
-        EnigmaLog.player("iptv recovery ($reason), try ${iptvRetries.attempts}/${RestartBudget.MAX_ATTEMPTS} in ${delayMs}ms")
+        EnigmaLog.player("iptv recovery ($reason), try ${iptvRetries.attempts}/${iptvRetries.maxAttempts} in ${delayMs}ms")
         iptvRecoveryJob = viewModelScope.launch {
             if (delayMs > 0) delay(delayMs)
             if (playing !== what) return@launch
             val position = if (mediaLive || catchup) 0L else player?.currentPosition ?: 0L
             playerError = null
+            releaseStream()
+            start(mediaUrl, what, mediaLive, account, position, resumeKey, catchup, automaticRetry = true)
+        }
+    }
+
+    /**
+     * Stops the player's loading and closes its open requests now. A stuck request's socket
+     * otherwise stays open until the read timeout, so the next attempt would be a second
+     * connection to the provider (and be refused on a one-connection account).
+     */
+    private fun releaseStream() {
+        player?.stop()
+        val closed = streamConnections.closeAll()
+        if (closed > 0) EnigmaLog.player("iptv closed $closed open stream request(s) before re-preparing")
+    }
+
+    /**
+     * The provider refused another connection (HTTP 458 and friends). The pending recovery is
+     * dropped, the player stops (no spinner), our own second connection (a PiP inset on the same
+     * provider) ends, and the stream is tried again after a pause, at most [ProviderLimit.RETRIES]
+     * times; then the reason is shown.
+     */
+    private fun onProviderLimit(status: Int) {
+        val what = playing ?: return
+        val account = mediaAccount ?: return
+        iptvRecoveryJob?.cancel()
+        iptvRecoveryJob = null
+        val position = if (mediaLive || catchup) 0L else player?.currentPosition ?: 0L
+        releaseStream()
+        if (com.enigmacast.domain.xtream.ProviderLimit.sameProvider(pip.currentUrl(), mediaUrl)) {
+            EnigmaLog.player("iptv provider limit: picture-in-picture plays from the same provider, stopped")
+            pip.stop()
+        }
+        playerState = playerState.copy(playbackState = "IDLE")
+        val delayMs = providerLimitRetries.next() ?: run {
+            EnigmaLog.player("iptv provider limit (HTTP $status): retries used up")
+            playerError = com.enigmacast.domain.xtream.ProviderLimit.ERROR
+            trySatelliteFallback()
+            return
+        }
+        EnigmaLog.player("iptv provider limit (HTTP $status), try ${providerLimitRetries.attempts}/${providerLimitRetries.maxAttempts} in ${delayMs}ms")
+        playerError = null
+        showNotice(context.getString(com.enigmacast.R.string.iptv_provider_limit_retry))
+        iptvRecoveryJob = viewModelScope.launch {
+            delay(delayMs)
+            if (playing !== what) return@launch
             start(mediaUrl, what, mediaLive, account, position, resumeKey, catchup, automaticRetry = true)
         }
     }
@@ -1592,7 +1645,16 @@ class XtreamViewModel @Inject constructor(
             playerState = playerState.copy(playbackState = "BUFFERING")
             return
         }
+        val status = httpStatus(error)
+        if (com.enigmacast.domain.xtream.ProviderLimit.isLimit(status)) {
+            onProviderLimit(status ?: 0)
+            return
+        }
         if (isPermanentIptvFailure(error)) {
+            // A retry scheduled earlier would re-prepare and hide this error again.
+            iptvRecoveryJob?.cancel()
+            iptvRecoveryJob = null
+            releaseStream()
             playerError = error.errorCodeName
             trySatelliteFallback()
             return
@@ -1601,10 +1663,32 @@ class XtreamViewModel @Inject constructor(
         requestIptvRecovery(error.errorCodeName)
     }
 
+    /** The OSD title block: the playlist's own data at once, TMDB's logo/episode/plot when it answers. */
+    private fun loadTitleInfo(what: XtreamPlaying, live: Boolean, account: XtreamAccount) {
+        titleJob?.cancel()
+        if (live) { titleInfo = null; return }
+        val item = what.item
+        val ep = what.episode
+        val name = item?.name?.let { com.enigmacast.data.xtream.IptvVod.title(it).first }?.ifBlank { null } ?: what.title
+        titleInfo = com.enigmacast.domain.player.VodTitleInfo(
+            title = name,
+            season = ep?.season,
+            episode = ep?.episode,
+            episodeName = com.enigmacast.domain.player.VodTitleCard.episodeName(ep?.title, name, ep?.id.orEmpty()),
+            overview = com.enigmacast.domain.player.VodTitleCard.overview(ep?.plot),
+        )
+        titleJob = viewModelScope.launch {
+            val info = if (item == null || account === M3U_ACCOUNT) null else runCatching { repository.vodInfo(account, item) }.getOrNull()
+            val card = titleSource.iptv(item, ep, info, what.title)
+            if (playing === what) titleInfo = card
+        }
+    }
+
     private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null, archive: Boolean = false, automaticRetry: Boolean = false) {
         if (!automaticRetry) {
             iptvRecoveryJob?.cancel()
             iptvRetries.reset()
+            providerLimitRetries.reset()
         }
         mediaAccount = account
         lastIptvPosition = -1L
@@ -1645,6 +1729,7 @@ class XtreamViewModel @Inject constructor(
             playWhenReady = true
         }
         if (!live && !archive) loadExternalSubtitles(what, account)
+        if (!automaticRetry) loadTitleInfo(what, live || archive, account)
         startTicker()
         val item = what.item
         if (live && !archive && item != null) {
@@ -1863,6 +1948,7 @@ class XtreamViewModel @Inject constructor(
         iptvRecoveryJob?.cancel()
         iptvRecoveryJob = null
         iptvRetries.reset()
+        providerLimitRetries.reset()
         tickJob?.cancel()
         saveResume()
         resumeKey = null
@@ -1871,6 +1957,9 @@ class XtreamViewModel @Inject constructor(
         playbackOwner.release(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         player?.stop()
         player?.clearMediaItems()
+        streamConnections.closeAll()
+        titleJob?.cancel()
+        titleInfo = null
         playing = null
     }
 
@@ -1901,6 +1990,7 @@ class XtreamViewModel @Inject constructor(
         playbackOwner.unregister(com.enigmacast.playback.PlaybackOwner.Owner.IPTV)
         player?.release()
         player = null
+        streamConnections.closeAll()
     }
 
     private fun mediaItem(url: String, live: Boolean, subtitle: MediaItem.SubtitleConfiguration? = null): MediaItem {

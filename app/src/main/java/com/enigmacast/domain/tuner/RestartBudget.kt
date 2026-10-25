@@ -7,7 +7,8 @@ package com.enigmacast.domain.tuner
  * the user. A stream that plays, or a channel the user picks, starts a fresh budget.
  */
 class RestartBudget(
-    private val maxAttempts: Int = MAX_ATTEMPTS,
+    /** Restarts this budget allows (logs show "try n/max" with it, not [MAX_ATTEMPTS]). */
+    val maxAttempts: Int = MAX_ATTEMPTS,
     private val firstDelayMs: Long = FIRST_DELAY_MS,
     private val maxDelayMs: Long = MAX_DELAY_MS,
 ) {

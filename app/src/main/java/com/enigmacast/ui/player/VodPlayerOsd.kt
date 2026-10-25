@@ -157,6 +157,8 @@ data class VodOsdModel(
     val speed: Float = 1f,
     val hdmiPassthrough: Boolean = false,
     val sleepEndsAtMs: Long = 0L,
+    /** The title sits in the top-left block ([VodTitleOverlay]) instead of above the controls. */
+    val titleOnTop: Boolean = false,
 )
 
 private enum class VodMenu { SUBTITLES, AUDIO, VIDEO, SETTINGS, SPEED, SUBTITLE_DELAY, SUBTITLE_STYLE, AUDIO_DELAY, SLEEP, SOURCES }
@@ -232,12 +234,14 @@ fun VodPlayerOsd(
             .background(vodScrim())
             .padding(start = 56.dp, end = 56.dp, top = 64.dp, bottom = 28.dp),
     ) {
-        Text(
-            model.title,
-            color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Medium,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(18.dp))
+        if (!model.titleOnTop) {
+            Text(
+                model.title,
+                color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Medium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(18.dp))
+        }
         // Play/Pause · Rewind (· Next episode).
         Row(
             Modifier.focusRequester(topRow).focusRestorer(playFocus).focusGroup(),

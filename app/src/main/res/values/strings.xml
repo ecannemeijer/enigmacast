@@ -1287,6 +1287,9 @@
     <string name="xtream_categories">Categories</string>
     <string name="xtream_load_error">The IPTV server did not answer. Try Refresh.</string>
     <string name="xtream_play_error">This stream cannot be played (%1$s).</string>
+    <string name="iptv_provider_limit">The provider does not allow another connection (maximum number of connections reached). Stop other devices or try again later.</string>
+    <string name="iptv_provider_limit_retry">The provider is refusing another connection; trying again shortly…</string>
+    <string name="osd_episode_code">S%1$d:E%2$d</string>
     <string name="xtream_banner_hint">◀ list · ▲▼ channel</string>
     <string name="iptv_settings_card">IPTV</string>
     <string name="iptv_source">IPTV source</string>
