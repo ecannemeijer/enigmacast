@@ -37,6 +37,16 @@ class QuickOptionsTest {
     }
 
     @Test
+    fun boostIsTheFifthTileOnLiveTvOnly() {
+        assertEquals(QuickOption.BOOST, QuickOptions.tiles(ownTuner = true)[4])
+        assertEquals(QuickOption.BOOST, QuickOptions.tiles(ownTuner = false)[4])
+        assertEquals(QuickOption.BOOST, QuickOptions.iptvTiles(vod = false)[4])
+        assertFalse(QuickOption.BOOST in QuickOptions.tiles(ownTuner = true, file = true))
+        assertFalse(QuickOption.BOOST in QuickOptions.iptvTiles(vod = true))
+        assertEquals(1, QuickOptions.tiles(ownTuner = true).count { it == QuickOption.BOOST })
+    }
+
+    @Test
     fun sleepMinutesRoundUpAndStopAtZero() {
         assertEquals(0, SleepTimerChoices.minutesLeft(0L, 1_000L))
         assertEquals(30, SleepTimerChoices.minutesLeft(30 * 60_000L, 0L))

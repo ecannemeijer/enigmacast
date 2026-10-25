@@ -1609,4 +1609,10 @@
     <string name="next_up_now">Wordt gestart…</string>
     <string name="next_up_play">Nu afspelen</string>
     <string name="episode_watched">Bekeken</string>
+    <string name="quick_boost">Boost</string>
+    <string name="quick_boost_off">Uit</string>
+    <string name="quick_boost_level">%1$d/%2$d · +%3$d dB</string>
+    <string name="quick_boost_passthrough">Boost werkt niet met HDMI-passthrough (de versterker decodeert het geluid)</string>
+    <string name="key_action_previous_channel">Vorige zender</string>
+    <string name="keys_no_previous_channel">Nog geen vorige zender</string>
 </resources>

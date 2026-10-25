@@ -26,7 +26,12 @@ class IptvPlayerKeysTest {
         assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true))
         assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, vod = true))
         assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_LEFT))
-        assertEquals(IptvKeyAction.Banner, a(KeyEvent.KEYCODE_DPAD_RIGHT))
+    }
+
+    @Test fun rightGoesBackToThePreviousLiveChannel() {
+        assertEquals(IptvKeyAction.PreviousChannel, a(KeyEvent.KEYCODE_DPAD_RIGHT))
+        assertEquals(IptvKeyAction.PreviousChannel, a(KeyEvent.KEYCODE_DPAD_RIGHT, banner = true, zap = true))
+        assertEquals(IptvKeyAction.None, a(KeyEvent.KEYCODE_DPAD_RIGHT, vod = true))
     }
 
     @Test fun namesMatch() {

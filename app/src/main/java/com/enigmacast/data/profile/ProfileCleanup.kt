@@ -22,12 +22,14 @@ class ProfileCleanup @Inject constructor(
     private val pins: ProfilePinLock,
     private val tombstones: com.enigmacast.data.xtream.LibraryTombstones,
     private val photos: AvatarPhotos,
+    private val boost: com.enigmacast.data.db.AudioBoostDao,
 ) {
     suspend fun purge(profile: Profile) {
         val uuid = profile.uuid.ifBlank { ProfileState.LEGACY_UUID }
         library.deleteFavoritesFor(uuid)
         library.deleteResumesFor(uuid)
         library.deleteHistoryFor(uuid)
+        boost.deleteFor(uuid)
         outbox.deleteProfile(uuid)
         if (profile.id != ProfileState.DEFAULT_ID) resume.deletePrefix("${profile.id}|")
         hidden.purge(profile.id)

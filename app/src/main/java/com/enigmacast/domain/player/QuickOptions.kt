@@ -10,6 +10,8 @@ enum class QuickOption {
     RECORD,
     SUBTITLES,
     AUDIO,
+    /** Live TV only: louder in five steps, per channel. Always the 5th tile from the left. */
+    BOOST,
     PICTURE,
     AUDIO_DELAY,
     SUBTITLE_DELAY,
@@ -52,6 +54,7 @@ object QuickOptions {
         add(QuickOption.SUBTITLES)
         add(QuickOption.AUDIO)
         add(QuickOption.PICTURE)
+        if (!vod) add(QuickOption.BOOST)
         add(QuickOption.AUDIO_DELAY)
         add(QuickOption.SUBTITLE_DELAY)
         if (!vod) {

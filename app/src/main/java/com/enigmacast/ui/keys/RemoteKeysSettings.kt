@@ -298,6 +298,7 @@ internal fun PlayerAction.label(): Int = when (this) {
     PlayerAction.SUBTITLES -> R.string.key_action_subtitles
     PlayerAction.PICTURE_MODE -> R.string.key_action_picture
     PlayerAction.SWITCH_RECEIVER -> R.string.switch_receiver
+    PlayerAction.PREVIOUS_CHANNEL -> R.string.key_action_previous_channel
 }
 
 private fun KeyMode.title(): Int = when (this) {

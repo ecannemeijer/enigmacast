@@ -112,6 +112,8 @@ data class QuickBarActions(
     val onEquivalent: () -> Unit,
     val onRecentBar: () -> Unit,
     val onPip: () -> Unit = {},
+    /** Audio boost: the next of the five levels (or off) for this channel. */
+    val onBoost: () -> Unit = {},
 )
 
 /**
@@ -173,6 +175,7 @@ fun QuickOptionsBar(
                     enabled = interactive,
                     large = interactive,
                     caption = open != option,
+                    badge = if (option == QuickOption.BOOST && ui.boostLevel > 0) ui.boostLevel.toString() else "",
                     onClick = {
                         when (option) {
                             QuickOption.EQUIVALENT -> actions.onEquivalent()
@@ -181,6 +184,8 @@ fun QuickOptionsBar(
                             QuickOption.RESTART -> actions.onRestart()
                             QuickOption.RECORD -> actions.onRecord()
                             QuickOption.PIP -> actions.onPip()
+                            // No picker: every OK is one step louder, after 5 it is off again.
+                            QuickOption.BOOST -> actions.onBoost()
                             else -> open = option
                         }
                     },
@@ -212,6 +217,8 @@ private fun QuickTile(
     caption: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** A small mark in the corner (the boost level), always visible, not only with the focus. */
+    badge: String = "",
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -240,6 +247,19 @@ private fun QuickTile(
             tint = Color.White,
             modifier = Modifier.size(iconSize),
         )
+        if (badge.isNotBlank()) {
+            Text(
+                badge,
+                color = Color.Black,
+                fontSize = if (large) 10.sp else 8.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .background(Color(0xFFFFC107), androidx.compose.foundation.shape.CircleShape)
+                    .padding(horizontal = 4.dp),
+            )
+        }
         if (focused) {
             Box(
                 Modifier
@@ -378,7 +398,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }
-        QuickOption.SEARCH, QuickOption.EQUIVALENT, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP -> emptyList()
+        QuickOption.SEARCH, QuickOption.EQUIVALENT, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP, QuickOption.BOOST -> emptyList()
     }
 }
 
@@ -529,6 +549,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     QuickOption.EQUIVALENT -> ""
     QuickOption.RESTART -> ""
     QuickOption.PIP -> ""
+    QuickOption.BOOST -> boostValue(ui.boostLevel)
     QuickOption.RECORD -> if (ui.recordingTitle.isNotBlank()) ui.recordingTitle else {
         val nowSec = nowMs / 1000
         val reference = ui.own.channel?.reference ?: ui.currentService?.reference.orEmpty()
@@ -556,6 +577,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.EQUIVALENT -> R.string.quick_equivalent
         QuickOption.RECORD -> R.string.epg_record
         QuickOption.PIP -> R.string.pip
+        QuickOption.BOOST -> R.string.quick_boost
     },
 )
 
@@ -575,6 +597,7 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.EQUIVALENT -> EnigmaIcons.Sync
     QuickOption.RECORD -> EnigmaIcons.Record
     QuickOption.PIP -> EnigmaIcons.Tv
+    QuickOption.BOOST -> EnigmaIcons.VolumeUp
 }
 
 @Composable
@@ -611,3 +634,9 @@ private class AboveAnchor(private val gapPx: Int, private val marginPx: Int) : P
         return IntOffset(x, y)
     }
 }
+
+/** "Off", or "3/5 · +9 dB". */
+@Composable
+private fun boostValue(level: Int): String =
+    if (level <= 0) stringResource(R.string.quick_boost_off)
+    else stringResource(R.string.quick_boost_level, level, com.enigmacast.domain.player.AudioBoost.MAX, com.enigmacast.domain.player.AudioBoost.db(level))

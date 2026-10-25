@@ -1618,4 +1618,10 @@
     <string name="iptv_provider_move_up">Su</string>
     <string name="iptv_provider_move_down">Giù</string>
     <string name="iptv_provider_channels">%d canali caricati</string>
+    <string name="quick_boost">Boost</string>
+    <string name="quick_boost_off">Off</string>
+    <string name="quick_boost_level">%1$d/%2$d · +%3$d dB</string>
+    <string name="quick_boost_passthrough">Il boost non funziona con il passthrough HDMI (l\'amplificatore decodifica l\'audio)</string>
+    <string name="key_action_previous_channel">Canale precedente</string>
+    <string name="keys_no_previous_channel">Nessun canale precedente</string>
 </resources>

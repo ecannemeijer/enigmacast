@@ -56,6 +56,8 @@ object EnigmaIcons {
             "c0.08,-0.66 0.14,-1.32 0.14,-2 0,-0.68 -0.06,-1.34 -0.14,-2h3.38c0.16,0.64 0.26,1.31 0.26,2s-0.1,1.36 -0.26,2h-3.38z"
     internal const val SUBTITLES_PATH =
         "M20,4H4c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2zM4,12h4v2H4v-2zM14,18H4v-2h10v2zM20,18h-4v-2h4v2zM20,14H10v-2h10v2z"
+    internal const val VOLUME_UP_PATH =
+        "M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z"
     internal const val AUDIOTRACK_PATH =
         "M12,3v9.28c-0.47,-0.17 -0.97,-0.28 -1.5,-0.28C8.01,12 6,14.01 6,16.5S8.01,21 10.5,21c2.31,0 4.2,-1.75 4.45,-4H15V6h4V3h-7z"
     internal const val ASPECT_RATIO_PATH =
@@ -90,6 +92,7 @@ object EnigmaIcons {
     val Language: ImageVector by lazy { icon("Language", LANGUAGE_PATH) }
     val Subtitles: ImageVector by lazy { icon("Subtitles", SUBTITLES_PATH) }
     val Audiotrack: ImageVector by lazy { icon("Audiotrack", AUDIOTRACK_PATH) }
+    val VolumeUp: ImageVector by lazy { icon("VolumeUp", VOLUME_UP_PATH) }
     val AspectRatio: ImageVector by lazy { icon("AspectRatio", ASPECT_RATIO_PATH) }
     val Sync: ImageVector by lazy { icon("Sync", SYNC_PATH) }
     val Guide: ImageVector by lazy { icon("Guide", GUIDE_PATH) }

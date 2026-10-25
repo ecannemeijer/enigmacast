@@ -438,6 +438,9 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     }
                     IptvKeyAction.Banner -> if (repeat == 0 && model.pip.playing() && !panelOpen) model.pip.swap()
                     else if (repeat == 0 && model.playing != null) showBanner(fromZap = false)
+                    // Right: the channel before this one (A → B → A …); with an inset it swaps, as before.
+                    IptvKeyAction.PreviousChannel -> if (repeat == 0 && model.pip.playing() && !panelOpen) model.pip.swap()
+                    else if (repeat == 0 && model.playing != null && model.zapPrevious()) showBanner(fromZap = true)
                     IptvKeyAction.Details -> if (repeat == 0 && model.playing != null) {
                         if (bannerShown && details) bannerUntil = 0L else showBanner(fromZap = false, withDetails = true)
                     }
@@ -1261,6 +1264,7 @@ private fun IptvOsd(
                 sleepEndsAtMs = model.sleepEndsAtMs,
                 recent = model.recentChannels,
                 quickBarToken = quickToken,
+                boostLevel = model.boostLevel,
             )
             com.enigmacast.ui.remote.QuickOptionsBar(
                 ui = ui,
@@ -1284,6 +1288,7 @@ private fun IptvOsd(
                     onEquivalent = onEquivalent,
                     onRecentBar = onRecentBar,
                     onPip = model::openPipPicker,
+                    onBoost = model::cycleBoost,
                 ),
                 iptv = true,
                 interactive = quickBar,

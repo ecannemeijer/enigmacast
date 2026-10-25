@@ -59,6 +59,7 @@ class EnigmaSyncEngine @Inject constructor(
     private val activity: com.enigmacast.activity.BackgroundActivityTracker,
     private val tombstones: com.enigmacast.data.xtream.LibraryTombstones,
     private val watchNext: com.enigmacast.data.xtream.WatchNextPublisher,
+    private val boost: com.enigmacast.data.player.AudioBoostStore,
 ) {
     /** Copies server profiles onto this device so the picker can show them. */
     suspend fun importProfiles() = withContext(Dispatchers.IO) {
@@ -515,6 +516,13 @@ class EnigmaSyncEngine @Inject constructor(
         }
         if (entity == LibrarySync.HISTORY) {
             applyHistory(profileId, change)
+            return
+        }
+        if (entity == com.enigmacast.domain.sync.AudioBoostSync.ENTITY) {
+            boost.applyRemote(
+                profileId, change.optString("record_key"), change.optString("payload"),
+                change.optLong("updated_ms"), change.optString("change_id"),
+            )
             return
         }
         if (entity != LibrarySync.FAVORITE && entity != LibrarySync.PROGRESS) return

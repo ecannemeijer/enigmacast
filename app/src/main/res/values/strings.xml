@@ -1617,4 +1617,10 @@
     <string name="next_up_now">Starting…</string>
     <string name="next_up_play">Play now</string>
     <string name="episode_watched">Watched</string>
+    <string name="quick_boost">Boost</string>
+    <string name="quick_boost_off">Off</string>
+    <string name="quick_boost_level">%1$d/%2$d · +%3$d dB</string>
+    <string name="quick_boost_passthrough">Boost has no effect with HDMI passthrough (the receiver/AV amplifier decodes the sound)</string>
+    <string name="key_action_previous_channel">Previous channel</string>
+    <string name="keys_no_previous_channel">No previous channel yet</string>
 </resources>

@@ -223,6 +223,9 @@ class LivePlaybackController @Inject constructor(
     private val audioSync = AudioSyncOffsets()
     private val subtitleSync = SubtitleSyncOffset()
 
+    /** Live audio boost of the channel that plays (0 = off); read by the audio thread. */
+    val audioBoost = AudioBoostGain()
+
     /** Whether the current audio goes out undecoded over HDMI; null before the first track. */
     val audioPassthroughActive: StateFlow<Boolean?> = audioSync.passthroughActive
 
@@ -849,7 +852,7 @@ class LivePlaybackController @Inject constructor(
             val byName = infos.associateBy { it.name }
             VideoOutput.order(decoderMode, infos.map { it.name to it.hardwareAccelerated }).mapNotNull { byName[it] }
         }
-        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync, subtitleSync)
+        val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync, subtitleSync, audioBoost)
             .setEnableDecoderFallback(true)
             .setMediaCodecSelector(selector)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
@@ -1218,6 +1221,7 @@ private class LiveRenderersFactory(
     private val passthrough: Boolean,
     private val audioSync: AudioSyncOffsets,
     private val subtitleSync: SubtitleSyncOffset,
+    private val boost: AudioBoostGain,
 ) : DefaultRenderersFactory(context) {
     override fun buildTextRenderers(
         context: Context,
@@ -1269,6 +1273,7 @@ private class LiveRenderersFactory(
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
             .setAudioOutputProvider(output)
+            .setAudioProcessors(arrayOf(BoostAudioProcessor(boost)))
             .build()
         return AudioSyncSink(sink, audioSync)
     }

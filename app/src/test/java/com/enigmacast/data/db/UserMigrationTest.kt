@@ -62,4 +62,21 @@ class UserMigrationTest {
             UserMigrations.v4ToV5 { sql -> exec.executeUpdate(sql) }
         }
     }
+
+    @Test fun v6AddsTheAudioBoostTable() {
+        DriverManager.getConnection("jdbc:sqlite::memory:").use { db ->
+            val exec = db.createStatement()
+            UserMigrations.v5ToV6 { sql -> exec.executeUpdate(sql) }
+            exec.executeUpdate("INSERT INTO audio_boost VALUES ('p1','e2:1:0:19:1b1f:802:2:11a0000:0:0:0:',3,5,'c1')")
+            exec.executeUpdate("INSERT OR REPLACE INTO audio_boost VALUES ('p1','e2:1:0:19:1b1f:802:2:11a0000:0:0:0:',4,6,'c2')")
+            exec.executeUpdate("INSERT INTO audio_boost VALUES ('p2','e2:1:0:19:1b1f:802:2:11a0000:0:0:0:',1,5,'c3')")
+            val rows = exec.executeQuery("SELECT level, changeId FROM audio_boost WHERE profileId = 'p1'")
+            rows.next()
+            assertEquals(4, rows.getInt(1))
+            assertEquals("c2", rows.getString(2))
+            assertEquals(false, rows.next())
+            // Runs again without harm.
+            UserMigrations.v5ToV6 { sql -> exec.executeUpdate(sql) }
+        }
+    }
 }
