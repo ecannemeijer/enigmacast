@@ -69,6 +69,10 @@ class IptvLibrary @Inject constructor(
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
     val resumeMap: StateFlow<Map<String, IptvResumeRow>> = resumes.map { list -> list.associateBy { key(it.source, it.kind, it.id) } }
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+    /** Watch history of the active viewer by "<source>/<kind>/<id>" (episode bars, watched marks). */
+    val history: StateFlow<Map<String, com.enigmacast.data.db.EpisodeHistoryRow>> = combine(dao.histories(), profiles.state) { rows, state ->
+        rows.filter { it.profileId == state.activeUuid }.associateBy { key(it.source, it.kind, it.id) }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
     val favoriteKeys: StateFlow<Set<String>> = favorites.map { list -> list.map { key(it.source, it.kind, it.id) }.toSet() }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
@@ -158,6 +162,24 @@ class IptvLibrary @Inject constructor(
     suspend fun findResume(source: String, kind: String, id: String): com.enigmacast.data.db.IptvResumeRow? {
         val profileId = profiles.state.value.activeUuid
         return dao.resume(profileId, source, kind, id)
+    }
+
+    /**
+     * Adds a play to the watch history (any position from the first second, or watched). History
+     * is separate from Continue watching: removing a card or its tombstones never touches it.
+     */
+    fun recordHistory(source: String, kind: String, id: String, seriesId: String?, positionMs: Long, durationMs: Long) {
+        if (!com.enigmacast.domain.resume.EpisodeHistory.worthKeeping(positionMs, durationMs)) return
+        val profileId = profiles.state.value.activeUuid
+        val entry = com.enigmacast.domain.resume.EpisodeHistory.entry(source, kind, id, seriesId, positionMs, durationMs, System.currentTimeMillis(), profileId)
+        scope.launch {
+            val current = dao.history(profileId, source, kind, id)
+            val merged = com.enigmacast.domain.resume.EpisodeHistory.merge(current, entry)
+            if (merged == current) return@launch
+            dao.putHistory(merged)
+            enqueue(profileId, LibrarySync.HISTORY, "upsert", merged.updatedMs, LibrarySync.historyPayload(merged))
+            trigger.nudge()
+        }
     }
 
     fun clearResume(source: String, kind: String, id: String) {

@@ -77,6 +77,7 @@ import com.enigmacast.ui.theme.TvChoiceDialog
 import com.enigmacast.ui.theme.focusListRow
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.player.NextUpCard
 import com.enigmacast.ui.theme.wrapListEnds
 import com.enigmacast.ui.theme.skinShape
 import java.time.Instant
@@ -144,6 +145,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     val guideFocus = remember { FocusRequester() }
     val gridFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
+    // "Next episode" card: Play has the focus while the card is up.
+    val nextFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
     var quickBar by remember { mutableStateOf(false) }
     var recentBar by remember { mutableStateOf(false) }
@@ -258,7 +261,12 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
     }
     LaunchedEffect(panelOpen, openRequest, column) {
         if (model.detail != null) return@LaunchedEffect
-        if (!panelOpen) { rootFocus.requestWhenReady(); return@LaunchedEffect }
+        if (!panelOpen) {
+            // The OSD closing must not take the focus from the Next card (OK then paused instead).
+            if (model.nextOffer() != null && !vodOsd.visible && nextFocus.requestWhenReady(4)) return@LaunchedEffect
+            rootFocus.requestWhenReady()
+            return@LaunchedEffect
+        }
         when (column) {
             PanelColumn.GUIDE -> guideFocus.requestWhenReady()
             PanelColumn.CHANNELS -> if (!itemFocus.requestWhenReady(4)) { column = PanelColumn.CATEGORIES }
@@ -317,7 +325,7 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             return@BackHandler
         }
         when {
-            !panelOpen && model.nextOffer() != null -> model.dismissUpcoming()
+            !panelOpen && model.nextOffer() != null -> { model.dismissUpcoming(); openRequest++ }
             quickBar -> { quickBar = false; openRequest++ }
             vodOsd.visible -> vodOsd.hide()
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
@@ -391,6 +399,22 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     quickBar = false
                     bannerUntil = 0L
                     return@onPreviewKeyEvent true
+                }
+                // The card is up but lost the focus (OSD closed, back from a menu): OK plays the
+                // next episode, the arrows go to the card.
+                if (!nextCardFocused && !panelOpen && !quickBar && !vodOsd.visible && e.type == KeyEventType.KeyDown &&
+                    e.nativeKeyEvent.repeatCount == 0 && model.nextOffer() != null
+                ) {
+                    when (code) {
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            model.playUpcoming(); openRequest++
+                            return@onPreviewKeyEvent true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+                        android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (runCatching { nextFocus.requestFocus() }.isSuccess) return@onPreviewKeyEvent true
+                        }
+                    }
                 }
                 if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
                     if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
@@ -587,30 +611,26 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                     onRecentBar = { model.closeEquivalent(); recentBar = true; recentToken++; quickBar = false; bannerUntil = 0L },
                 )
             }
+            // Next episode: the countdown is the episode's own time left (pausing pauses it);
+            // the end of the episode starts the next one (XtreamViewModel.advanceAtEnd).
             val upcoming = model.nextOffer()
-            val episodeId = playing.episode?.id
-            var secondsLeft by remember(episodeId) { mutableIntStateOf(60) }
-            LaunchedEffect(episodeId, upcoming?.id) {
-                if (upcoming == null) return@LaunchedEffect
-                secondsLeft = 60
-                var left = 60
-                while (left > 0) {
-                    delay(1000)
-                    left -= 1
-                    secondsLeft = left
-                }
-                model.playUpcoming()
-            }
             if (upcoming != null && !panelOpen) {
-                NextEpisodeCard(
-                    episode = upcoming,
-                    seconds = secondsLeft,
-                    onPlay = model::playUpcoming,
-                    onCancel = model::dismissUpcoming,
+                NextUpCard(
+                    title = upcoming.title.ifBlank { stringResource(R.string.iptv_next) },
+                    subtitle = listOfNotNull(
+                        playing.item?.name,
+                        if (upcoming.season > 0) "S${upcoming.season}E${upcoming.episode}" else "E${upcoming.episode}",
+                    ).joinToString(" · "),
+                    image = upcoming.cover.ifBlank { null },
+                    seconds = model.nextSeconds() ?: 0,
+                    onPlay = { model.playUpcoming(); openRequest++ },
+                    onCancel = { model.dismissUpcoming(); openRequest++ },
+                    playFocus = nextFocus,
+                    takeFocus = !vodOsd.visible,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .onFocusChanged { nextCardFocused = it.hasFocus }
-                        .padding(end = 28.dp, bottom = if (vodOsd.visible) 230.dp else 36.dp),
+                        .padding(end = 32.dp, bottom = if (vodOsd.visible) 230.dp else 40.dp),
                 )
             }
             if (model.buffering) EnigmaLoadingIndicator(Modifier.align(Alignment.Center))

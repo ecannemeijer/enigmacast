@@ -39,6 +39,15 @@ class TorrentLibrary @Inject constructor(private val library: IptvLibrary) {
 
     fun saveResume(row: IptvResumeRow) = library.saveResume(row)
 
+    /** Watch history (progress bars and watched marks on the episode cards). */
+    val history: StateFlow<Map<String, com.enigmacast.data.db.EpisodeHistoryRow>> get() = library.history
+
+    fun historyOf(kind: String, id: String): com.enigmacast.data.db.EpisodeHistoryRow? =
+        library.history.value[IptvLibrary.key(TorrentLibraryRows.SOURCE, kind, id)]
+
+    fun recordHistory(kind: String, id: String, seriesId: String?, positionMs: Long, durationMs: Long) =
+        library.recordHistory(TorrentLibraryRows.SOURCE, kind, id, seriesId, positionMs, durationMs)
+
     fun clearResume(kind: String, id: String) = library.clearResume(TorrentLibraryRows.SOURCE, kind, id)
 
     /** Every saved episode of the series of this row (the series left Continue watching). */

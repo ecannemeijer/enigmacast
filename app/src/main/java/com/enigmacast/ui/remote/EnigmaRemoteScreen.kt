@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -326,6 +327,7 @@ private fun videoView(context: android.content.Context, surface: Boolean): View 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Modifier) {
+    val subtitleStyle by com.enigmacast.playback.SubtitleStyleStore.style.collectAsState()
     val surface = VideoOutput.surfaceView
     key(surface) {
         AndroidView(
@@ -347,6 +349,7 @@ fun EnigmaVideoTexture(player: Player, cues: List<Cue>, modifier: Modifier = Mod
                     layer.boundPlayer = player
                 }
                 layer.subtitles.cues = cues
+                layer.subtitles.style = subtitleStyle
             },
             onRelease = { layout ->
                 val layer = layout.tag as MiniVideoLayer
@@ -371,6 +374,7 @@ internal fun EnigmaVideoPlayer(
     // Compose draws into the parent canvas. Android child views are composited above that
     // canvas, so the OSD is an ImageView in the same FrameLayout, above the video.
     // Subtitles sit above the video and under the tuner OSD.
+    val subtitleStyle by com.enigmacast.playback.SubtitleStyleStore.style.collectAsState()
     val surface = VideoOutput.surfaceView
     key(surface) {
     AndroidView(
@@ -402,6 +406,7 @@ internal fun EnigmaVideoPlayer(
                 layer.boundPlayer = player
             }
             layer.subtitles.cues = cues
+            layer.subtitles.style = subtitleStyle
             if (layer.picture != picture) {
                 layer.picture = picture
                 layer.applyPicture()
@@ -489,12 +494,27 @@ private class CueOverlayView(context: android.content.Context) : View(context) {
             invalidate()
         }
 
+    /** Size, colour and background of text cues (embedded and external alike): only a redraw. */
+    var style: com.enigmacast.domain.player.SubtitleStyle = com.enigmacast.domain.player.SubtitleStyle.DEFAULT
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        textSize = 42f
         textAlign = Paint.Align.CENTER
-        setShadowLayer(6f, 0f, 2f, android.graphics.Color.BLACK)
     }
+    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        this.style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        color = com.enigmacast.domain.player.SubtitleStyle.OUTLINE_ARGB
+    }
+    private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = com.enigmacast.domain.player.SubtitleStyle.BOX_ARGB
+    }
+    private val boxRect = RectF()
 
     init {
         isFocusable = false
@@ -506,13 +526,48 @@ private class CueOverlayView(context: android.content.Context) : View(context) {
         val viewWidth = width.toFloat()
         val viewHeight = height.toFloat()
         if (viewWidth <= 0f || viewHeight <= 0f) return
+        val texts = ArrayList<CharSequence>()
         for (cue in cues) {
             val bitmap = cue.bitmap
             if (bitmap != null && !bitmap.isRecycled) {
                 drawBitmapCue(canvas, cue, bitmap, viewWidth, viewHeight)
             } else if (!cue.text.isNullOrEmpty()) {
-                canvas.drawText(cue.text.toString(), viewWidth / 2f, viewHeight - 48f, textPaint)
+                texts += cue.text!!
             }
+        }
+        if (texts.isNotEmpty()) drawTextCues(canvas, texts, viewWidth, viewHeight)
+    }
+
+    /** Text cues stacked above the bottom edge, wrapped to the picture, in the chosen style. */
+    private fun drawTextCues(canvas: Canvas, texts: List<CharSequence>, viewWidth: Float, viewHeight: Float) {
+        val s = style
+        val size = s.textSizePx(viewHeight)
+        textPaint.textSize = size
+        textPaint.color = s.color.argb
+        outlinePaint.textSize = size
+        outlinePaint.strokeWidth = size * 0.14f
+        val boxed = s.background == com.enigmacast.domain.player.SubtitleBackground.BOX
+        if (boxed) textPaint.clearShadowLayer()
+        else textPaint.setShadowLayer(size * 0.12f, 0f, size * 0.05f, com.enigmacast.domain.player.SubtitleStyle.OUTLINE_ARGB)
+        val lines = texts.flatMap { text ->
+            com.enigmacast.domain.player.SubtitleStyle.wrap(text.toString(), viewWidth * 0.86f) { textPaint.measureText(it) }
+        }
+        if (lines.isEmpty()) return
+        val metrics = textPaint.fontMetrics
+        val lineHeight = size * 1.28f
+        val centre = viewWidth / 2f
+        var baseline = viewHeight - maxOf(48f, viewHeight * 0.06f) - (lines.size - 1) * lineHeight
+        for (line in lines) {
+            if (boxed) {
+                val half = textPaint.measureText(line) / 2f
+                val pad = size * 0.3f
+                boxRect.set(centre - half - pad, baseline + metrics.ascent - size * 0.06f, centre + half + pad, baseline + metrics.descent + size * 0.06f)
+                canvas.drawRoundRect(boxRect, size * 0.12f, size * 0.12f, boxPaint)
+            } else {
+                canvas.drawText(line, centre, baseline, outlinePaint)
+            }
+            canvas.drawText(line, centre, baseline, textPaint)
+            baseline += lineHeight
         }
     }
 

@@ -60,7 +60,10 @@ class TorrentLibraryRowsTest {
         // A new stream still buffering at 0:00 must not wipe the saved place.
         assertEquals(ResumeSave.NONE, TorrentLibraryRows.saveAction(offered = false, asking = false, positionMs = 0, durationMs = 0))
         assertEquals(ResumeSave.NONE, TorrentLibraryRows.saveAction(offered = true, asking = true, positionMs = 0, durationMs = hour))
-        assertEquals(ResumeSave.NONE, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = 10_000, durationMs = hour))
+        // From the first second on the title is kept (Continue watching); a stop at 0 leaves it alone.
+        assertEquals(ResumeSave.KEEP, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = 10_000, durationMs = hour))
+        assertEquals(ResumeSave.KEEP, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = 1_000, durationMs = hour))
+        assertEquals(ResumeSave.NONE, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = 300, durationMs = hour))
         assertEquals(ResumeSave.KEEP, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = 20 * 60_000L, durationMs = hour))
         assertEquals(ResumeSave.KEEP, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = 20 * 60_000L, durationMs = 0))
         assertEquals(ResumeSave.CLEAR, TorrentLibraryRows.saveAction(offered = true, asking = false, positionMs = hour - 1_000, durationMs = hour))

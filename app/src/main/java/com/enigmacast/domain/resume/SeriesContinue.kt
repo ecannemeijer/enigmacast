@@ -38,5 +38,5 @@ object SeriesContinue {
     fun keepNext(existing: Any?): Boolean = existing != null
 
     /** A Continue watching row that stands for an episode not started yet. */
-    fun isUpNext(kind: String, positionMs: Long): Boolean = kind == "e" && positionMs < ResumePolicy.MIN_RESUME_MS
+    fun isUpNext(kind: String, positionMs: Long): Boolean = kind == "e" && positionMs < ResumePolicy.MIN_KEEP_MS
 }

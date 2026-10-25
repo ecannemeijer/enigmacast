@@ -38,6 +38,8 @@ class SeriesContinueTest {
     fun theNextEpisodeCardShowsItsNextState() {
         assertTrue(SeriesContinue.isUpNext("e", 0))
         assertFalse(SeriesContinue.isUpNext("e", 600_000))
+        // Watched for a few seconds: that episode itself, not "up next".
+        assertFalse(SeriesContinue.isUpNext("e", 5_000))
         assertFalse(SeriesContinue.isUpNext("m", 0))
         assertTrue(SeriesContinue.keepNext(Any()))
         assertFalse(SeriesContinue.keepNext(null))

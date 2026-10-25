@@ -5,8 +5,13 @@ data class ResumePoint(val key: String, val positionMs: Long, val durationMs: Lo
 
 /** When to save, offer and forget a resume position. */
 object ResumePolicy {
-    /** Shorter than this is not worth resuming. */
+    /** Shorter than this is not worth asking "Resume from …?" about (playback simply starts over). */
     const val MIN_RESUME_MS = 60_000L
+    /**
+     * Films and episodes: played at least this long, the title is in Continue watching (even
+     * one second). Shorter (a start that was stopped at once) leaves any saved row alone.
+     */
+    const val MIN_KEEP_MS = 500L
     /** Within this of the end (or past [WATCHED_FRACTION]) the recording counts as watched. */
     const val END_MARGIN_MS = 120_000L
     const val WATCHED_FRACTION = 0.95
@@ -29,7 +34,7 @@ object ResumePolicy {
     fun fraction(point: ResumePoint?, fallbackDurationMs: Long): Float {
         point ?: return 0f
         val duration = point.durationMs.takeIf { it > 0 } ?: fallbackDurationMs
-        if (duration <= 0 || point.positionMs < MIN_RESUME_MS) return 0f
+        if (duration <= 0 || point.positionMs <= 0) return 0f
         return (point.positionMs.toFloat() / duration).coerceIn(0f, 1f)
     }
 

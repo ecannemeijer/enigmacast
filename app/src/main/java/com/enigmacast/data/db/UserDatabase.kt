@@ -52,9 +52,9 @@ interface ResumeDao {
 @Database(
     entities = [
         ResumeRow::class, SeriesRuleRow::class, IptvLibraryRow::class, IptvResumeRow::class,
-        SyncOutboxRow::class, SyncCursorRow::class,
+        SyncOutboxRow::class, SyncCursorRow::class, EpisodeHistoryRow::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class UserDatabase : RoomDatabase() {
@@ -75,7 +75,7 @@ object UserDatabaseModule {
     @Singleton
     fun userDatabase(@ApplicationContext context: Context): UserDatabase =
         Room.databaseBuilder(context, UserDatabase::class.java, UserDatabase.NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
 
     private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
@@ -108,6 +108,13 @@ object UserDatabaseModule {
     internal val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
         override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
             UserMigrations.v3ToV4 { db.execSQL(it) }
+        }
+    }
+
+    /** Additive: the watch history of films and episodes (progress per episode on the info page). */
+    internal val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            UserMigrations.v4ToV5 { db.execSQL(it) }
         }
     }
 
@@ -229,7 +236,37 @@ interface IptvLibraryDao {
 
     @Query("DELETE FROM iptv_resume WHERE profileId = :profileId")
     suspend fun deleteResumesFor(profileId: String)
+
+    @Query("SELECT * FROM episode_history")
+    fun histories(): Flow<List<EpisodeHistoryRow>>
+
+    @Query("SELECT * FROM episode_history WHERE profileId = :profileId AND source = :source AND kind = :kind AND id = :id")
+    suspend fun history(profileId: String, source: String, kind: String, id: String): EpisodeHistoryRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putHistory(row: EpisodeHistoryRow)
+
+    @Query("DELETE FROM episode_history WHERE profileId = :profileId")
+    suspend fun deleteHistoryFor(profileId: String)
 }
+
+/**
+ * How far a film ("m") or episode ("e") was ever played, for the progress bars and watched
+ * marks on the info page's episode cards. Unlike [IptvResumeRow] this is history: removing a
+ * Continue watching card (and its tombstones) leaves it alone, and [watched] never goes back.
+ */
+@Entity(tableName = "episode_history", primaryKeys = ["source", "kind", "id", "profileId"])
+data class EpisodeHistoryRow(
+    val source: String,
+    val kind: String,
+    val id: String,
+    val seriesId: String?,
+    val positionMs: Long,
+    val durationMs: Long,
+    val watched: Boolean,
+    val updatedMs: Long,
+    val profileId: String = com.enigmacast.domain.profile.ProfileState.LEGACY_UUID,
+)
 
 /** A local change waiting for the EnigmaCast sync server. [op] is "upsert" or "delete". */
 @Entity(tableName = "sync_outbox")

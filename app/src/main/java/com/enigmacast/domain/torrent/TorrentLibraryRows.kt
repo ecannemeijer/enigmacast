@@ -75,13 +75,14 @@ object TorrentLibraryRows {
 
     /**
      * Nothing is written before the saved place was offered (the new stream is still buffering at
-     * 0:00 and would wipe it) or while the question is open. Then a place past the first minute
-     * is kept; one at the end (watched) is cleared; an early stop leaves the saved place alone.
+     * 0:00 and would wipe it) or while the question is open. Then any place from the first second
+     * on is kept (the title is in Continue watching); one at the end (watched) is cleared; a stop
+     * within the first second leaves the saved place alone.
      */
     fun saveAction(offered: Boolean, asking: Boolean, positionMs: Long, durationMs: Long): ResumeSave = when {
         !offered || asking -> ResumeSave.NONE
         durationMs > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(positionMs, durationMs) -> ResumeSave.CLEAR
-        positionMs >= com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS -> ResumeSave.KEEP
+        positionMs >= com.enigmacast.domain.resume.ResumePolicy.MIN_KEEP_MS -> ResumeSave.KEEP
         else -> ResumeSave.NONE
     }
 

@@ -27,6 +27,7 @@ class ProfileCleanup @Inject constructor(
         val uuid = profile.uuid.ifBlank { ProfileState.LEGACY_UUID }
         library.deleteFavoritesFor(uuid)
         library.deleteResumesFor(uuid)
+        library.deleteHistoryFor(uuid)
         outbox.deleteProfile(uuid)
         if (profile.id != ProfileState.DEFAULT_ID) resume.deletePrefix("${profile.id}|")
         hidden.purge(profile.id)
