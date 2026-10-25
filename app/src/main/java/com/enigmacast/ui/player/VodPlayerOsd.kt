@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -158,9 +159,9 @@ data class VodOsdModel(
     val sleepEndsAtMs: Long = 0L,
 )
 
-private enum class VodMenu { SUBTITLES, AUDIO, VIDEO, SETTINGS, SPEED, SUBTITLE_DELAY, AUDIO_DELAY, SLEEP, SOURCES }
+private enum class VodMenu { SUBTITLES, AUDIO, VIDEO, SETTINGS, SPEED, SUBTITLE_DELAY, SUBTITLE_STYLE, AUDIO_DELAY, SLEEP, SOURCES }
 
-private val SettingsSubmenus = setOf(VodMenu.SPEED, VodMenu.SUBTITLE_DELAY, VodMenu.AUDIO_DELAY, VodMenu.SLEEP)
+private val SettingsSubmenus = setOf(VodMenu.SPEED, VodMenu.SUBTITLE_DELAY, VodMenu.SUBTITLE_STYLE, VodMenu.AUDIO_DELAY, VodMenu.SLEEP)
 
 private val Scrim = Brush.verticalGradient(listOf(Color.Transparent, Color(0x99000000), Color(0xE0000000)))
 private val MenuBackground = Color(0xF2141418)
@@ -476,7 +477,12 @@ private fun VodMenuPopup(
 ) {
     val density = LocalDensity.current
     val anchor = remember(density) { with(density) { AboveAnchor(gapPx = 12.dp.roundToPx(), marginPx = 24.dp.roundToPx()) } }
+    if (menu == VodMenu.SUBTITLE_STYLE) {
+        SubtitleStylePopup(anchor, vodMenuBackground(), onClose)
+        return
+    }
     fun pick(action: () -> Unit): () -> Unit = { action(); onClose() }
+    val subtitleStyle by com.enigmacast.playback.SubtitleStyleStore.style.collectAsState()
     val off = stringResource(R.string.off)
     val title: String
     val items: List<MenuItem>
@@ -509,6 +515,7 @@ private fun VodMenuPopup(
             items = buildList {
                 if (actions.onSpeed != null) add(MenuItem(stringResource(R.string.osd_speed_value, VodOsdKeys.speedLabel(model.speed))) { onOpen(VodMenu.SPEED) })
                 add(MenuItem(stringResource(R.string.osd_subtitle_delay_value, SubtitleSync.label(model.subtitleDelayMs))) { onOpen(VodMenu.SUBTITLE_DELAY) })
+                add(MenuItem(stringResource(R.string.osd_subtitle_style_value, subtitleStyleSummary(subtitleStyle))) { onOpen(VodMenu.SUBTITLE_STYLE) })
                 add(MenuItem(stringResource(R.string.osd_audio_delay_value, AudioSync.label(model.audioDelayMs))) { onOpen(VodMenu.AUDIO_DELAY) })
                 if (actions.onSleep != null) {
                     val left = com.enigmacast.domain.player.SleepTimerChoices.minutesLeft(model.sleepEndsAtMs, System.currentTimeMillis())
@@ -527,6 +534,8 @@ private fun VodMenuPopup(
             items = AudioDelayChoices.values(SubtitleSync.MIN_MS, SubtitleSync.MAX_MS, SubtitleSync.STEP_MS)
                 .map { ms -> MenuItem(SubtitleSync.label(ms), ms == model.subtitleDelayMs, pick { actions.onSubtitleDelay(ms) }) }
         }
+        // Drawn by SubtitleStylePopup (returned above).
+        VodMenu.SUBTITLE_STYLE -> { title = ""; items = emptyList() }
         VodMenu.AUDIO_DELAY -> {
             title = stringResource(R.string.quick_audio_delay)
             items = AudioDelayChoices.values(AudioSync.MIN_MS, AudioSync.MAX_MS, AudioSync.STEP_MS)

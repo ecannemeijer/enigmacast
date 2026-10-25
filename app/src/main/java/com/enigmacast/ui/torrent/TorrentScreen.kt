@@ -1,5 +1,6 @@
 package com.enigmacast.ui.torrent
 
+import com.enigmacast.ui.components.EpisodeProgressOverlay
 import com.enigmacast.ui.theme.skinCanvas
 import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -518,6 +519,7 @@ private fun TorrentEpisodes(i: TorrentInfo, model: TorrentViewModel) {
                 ) { Text(stringResource(R.string.iptv_season, s.number), fontSize = 13.sp) }
             }
         }
+        val history by model.history.collectAsStateWithLifecycle()
         when {
             i.episodes.isEmpty() && i.episodesLoading -> EnigmaLoadingIndicator()
             i.episodes.isEmpty() -> Text(stringResource(R.string.iptv_no_episodes), color = EnigmaColors.Muted, fontSize = 13.sp)
@@ -525,6 +527,7 @@ private fun TorrentEpisodes(i: TorrentInfo, model: TorrentViewModel) {
                 itemsIndexed(i.episodes, key = { _, e -> "${i.season}:${e.number}" }) { index, e ->
                     TorrentEpisodeCard(
                         e,
+                        model.historyOf(i.title.id, i.season, e.number, history),
                         Modifier.focusProperties {
                             if (index == 0) left = FocusRequester.Cancel
                             if (index == i.episodes.lastIndex) right = FocusRequester.Cancel
@@ -540,7 +543,7 @@ private fun TorrentEpisodes(i: TorrentInfo, model: TorrentViewModel) {
 private val EPISODE_WIDTH = 150.dp
 
 @Composable
-private fun TorrentEpisodeCard(e: TmdbEpisode, modifier: Modifier, onClick: () -> Unit) {
+private fun TorrentEpisodeCard(e: TmdbEpisode, seen: com.enigmacast.data.db.EpisodeHistoryRow?, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
@@ -566,6 +569,7 @@ private fun TorrentEpisodeCard(e: TmdbEpisode, modifier: Modifier, onClick: () -
             if (e.still != null) {
                 coil3.compose.AsyncImage(model = e.still, contentDescription = e.name, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
+            EpisodeProgressOverlay(seen)
         }
         Text("E${e.number}", fontSize = 11.sp, color = EnigmaColors.Accent, maxLines = 1)
         Text(e.name, fontSize = 12.sp, color = if (focused) EnigmaColors.Text else EnigmaColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -665,16 +669,45 @@ private fun LoadingPage(o: TorrentOverlay.Loading, model: TorrentViewModel) {
 private fun TorrentPlayer(model: TorrentViewModel) {
     val osd = remember { com.enigmacast.ui.player.VodOsdController() }
     val root = remember { FocusRequester() }
+    // "Next episode" card: Play has the focus while the card is up.
+    val nextFocus = remember { FocusRequester() }
+    var nextCardFocused by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { root.requestWhenReady() }
-    // Hidden again (Back or 5 s without a key): the keys come back to the player.
-    LaunchedEffect(osd.visible) { if (!osd.visible) runCatching { root.requestFocus() } }
+    // Hidden again (Back or 5 s without a key): the keys come back to the player (or the Next card).
+    LaunchedEffect(osd.visible) {
+        if (osd.visible) return@LaunchedEffect
+        if (model.nextOffer() != null && nextFocus.requestWhenReady(4)) return@LaunchedEffect
+        runCatching { root.requestFocus() }
+    }
+    // The end with a next episode starts it (TorrentViewModel.advanceAtEnd); otherwise back to the grid.
     LaunchedEffect(model.playerState.playbackState) { if (model.playerState.playbackState == "ENDED") model.stopPlayback() }
-    BackHandler { if (osd.visible) osd.hide() else model.stopPlayback() }
+    BackHandler {
+        when {
+            osd.visible -> osd.hide()
+            model.nextOffer() != null -> { model.dismissUpcoming(); runCatching { root.requestFocus() } }
+            else -> model.stopPlayback()
+        }
+    }
     Box(
         Modifier.fillMaxSize().background(Color.Black).focusRequester(root)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown || model.resumeAsk != null) return@onPreviewKeyEvent false
-                osd.onKeyDown(e.nativeKeyEvent.keyCode, e.nativeKeyEvent.repeatCount, model::togglePause)
+                val code = e.nativeKeyEvent.keyCode
+                if (!osd.visible && model.nextOffer() != null) {
+                    // Play now / Cancel have the focus: the keys are theirs (OK confirms on release).
+                    if (nextCardFocused) return@onPreviewKeyEvent false
+                    // The card lost the focus: OK plays the next episode, the arrows go to the card.
+                    if (e.nativeKeyEvent.repeatCount == 0) when (code) {
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            model.playNext(); return@onPreviewKeyEvent true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+                        android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (runCatching { nextFocus.requestFocus() }.isSuccess) return@onPreviewKeyEvent true
+                        }
+                    }
+                }
+                osd.onKeyDown(code, e.nativeKeyEvent.repeatCount, model::togglePause)
             }
             .focusable(),
     ) {
@@ -710,9 +743,27 @@ private fun TorrentPlayer(model: TorrentViewModel) {
                 onRestart = model::restart,
                 onSpeed = model::choosePlaybackSpeed,
                 onSources = { osd.hide(); model.chooseOtherSource() },
+                onNext = model.nextEpisode()?.let { { osd.hide(); model.playNext() } },
             ),
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+        // Next episode: in the last minute, counting down with the playback itself.
+        model.nextOffer()?.let { (season, episode) ->
+            com.enigmacast.ui.player.NextUpCard(
+                title = model.playingSeriesTitle(),
+                subtitle = "S${season}E$episode",
+                image = null,
+                seconds = model.nextSeconds() ?: 0,
+                onPlay = { model.playNext() },
+                onCancel = { model.dismissUpcoming(); runCatching { root.requestFocus() } },
+                playFocus = nextFocus,
+                takeFocus = !osd.visible,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .onFocusChanged { nextCardFocused = it.hasFocus }
+                    .padding(end = 32.dp, bottom = if (osd.visible) 230.dp else 40.dp),
+            )
+        }
         model.resumeAsk?.let { at ->
             TvChoiceDialog(
                 title = stringResource(R.string.resume_title),

@@ -1588,4 +1588,22 @@
     <string name="iptv_provider_move_up">Omhoog</string>
     <string name="iptv_provider_move_down">Omlaag</string>
     <string name="iptv_provider_channels">%d zenders geladen</string>
+    <string name="osd_subtitle_style">Ondertitelstijl</string>
+    <string name="osd_subtitle_style_value">Ondertitelstijl: %1$s</string>
+    <string name="subtitle_size">Grootte</string>
+    <string name="subtitle_color">Kleur</string>
+    <string name="subtitle_background">Achtergrond</string>
+    <string name="subtitle_size_small">Klein</string>
+    <string name="subtitle_size_medium">Middel</string>
+    <string name="subtitle_size_large">Groot</string>
+    <string name="subtitle_color_white">Wit</string>
+    <string name="subtitle_color_yellow">Geel</string>
+    <string name="subtitle_background_box">Zwart vlak</string>
+    <string name="subtitle_background_none">Transparant</string>
+    <string name="subtitle_sample">Zo zien de ondertitels eruit</string>
+    <string name="subtitle_style_hint">◀ ▶ wijzigt · Terug sluit</string>
+    <string name="next_up_title">Volgende aflevering</string>
+    <string name="next_up_now">Wordt gestart…</string>
+    <string name="next_up_play">Nu afspelen</string>
+    <string name="episode_watched">Bekeken</string>
 </resources>

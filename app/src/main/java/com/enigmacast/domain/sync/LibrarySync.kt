@@ -1,5 +1,6 @@
 ﻿package com.enigmacast.domain.sync
 
+import com.enigmacast.data.db.EpisodeHistoryRow
 import com.enigmacast.data.db.IptvLibraryRow
 import com.enigmacast.data.db.IptvResumeRow
 import com.enigmacast.data.db.SyncOutboxRow
@@ -26,6 +27,8 @@ import kotlinx.serialization.json.put
 object LibrarySync {
     const val FAVORITE = "favorite"
     const val PROGRESS = "progress"
+    /** Watch history (episode bars and watched marks): only upserts, merged, never deleted. */
+    const val HISTORY = "history"
     /** Most changes sent in one push request. */
     const val PUSH_CHUNK = 100
     /** Changes per pull page; the receiver caps its response at this size. */
@@ -63,6 +66,27 @@ object LibrarySync {
         put("seriesId", row.seriesId.orEmpty()); put("seriesTitle", row.seriesTitle.orEmpty())
         put("season", row.season); put("episode", row.episode)
     }.toString()
+
+    fun historyPayload(row: EpisodeHistoryRow): String = buildJsonObject {
+        put("source", row.source); put("kind", row.kind); put("id", row.id)
+        put("seriesId", row.seriesId.orEmpty())
+        put("positionMs", row.positionMs); put("durationMs", row.durationMs)
+        put("watched", row.watched); put("updatedMs", row.updatedMs)
+    }.toString()
+
+    /** A pulled history entry (to merge with EpisodeHistory.merge); null when unreadable. */
+    fun historyFrom(profileId: String, key: Triple<String, String, String>, payload: String?, updatedMs: Long): EpisodeHistoryRow? {
+        val o = obj(payload) ?: return null
+        return EpisodeHistoryRow(
+            source = key.first, kind = key.second, id = key.third,
+            seriesId = o.str("seriesId")?.takeIf { it.isNotBlank() },
+            positionMs = o.long("positionMs") ?: 0L,
+            durationMs = o.long("durationMs") ?: 0L,
+            watched = (o["watched"] as? JsonPrimitive)?.contentOrNull == "true",
+            updatedMs = updatedMs,
+            profileId = profileId,
+        )
+    }
 
     fun deletePayload(source: String, kind: String, id: String): String = buildJsonObject {
         put("source", source); put("kind", kind); put("id", id)

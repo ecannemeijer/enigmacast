@@ -47,4 +47,18 @@ object UserMigrations {
             "CREATE TABLE IF NOT EXISTS `sync_cursor` (`profileId` TEXT NOT NULL, `cursor` TEXT NOT NULL, PRIMARY KEY(`profileId`))",
         )
     }
+
+    /** The watch history table, started from the saved resume places (nothing is lost). */
+    fun v4ToV5(exec: (String) -> Unit) {
+        exec(
+            "CREATE TABLE IF NOT EXISTS `episode_history` (`source` TEXT NOT NULL, `kind` TEXT NOT NULL, `id` TEXT NOT NULL, " +
+                "`seriesId` TEXT, `positionMs` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, `watched` INTEGER NOT NULL, " +
+                "`updatedMs` INTEGER NOT NULL, `profileId` TEXT NOT NULL, PRIMARY KEY(`source`, `kind`, `id`, `profileId`))",
+        )
+        exec(
+            "INSERT OR IGNORE INTO `episode_history` (`source`, `kind`, `id`, `seriesId`, `positionMs`, `durationMs`, `watched`, " +
+                "`updatedMs`, `profileId`) SELECT `source`, `kind`, `id`, `seriesId`, `positionMs`, `durationMs`, 0, `updatedMs`, " +
+                "`profileId` FROM `iptv_resume` WHERE `positionMs` > 0",
+        )
+    }
 }

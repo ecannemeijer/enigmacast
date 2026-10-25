@@ -1596,4 +1596,22 @@
     <string name="iptv_provider_move_up">Up</string>
     <string name="iptv_provider_move_down">Down</string>
     <string name="iptv_provider_channels">%d channels loaded</string>
+    <string name="osd_subtitle_style">Subtitle style</string>
+    <string name="osd_subtitle_style_value">Subtitle style: %1$s</string>
+    <string name="subtitle_size">Size</string>
+    <string name="subtitle_color">Colour</string>
+    <string name="subtitle_background">Background</string>
+    <string name="subtitle_size_small">Small</string>
+    <string name="subtitle_size_medium">Medium</string>
+    <string name="subtitle_size_large">Large</string>
+    <string name="subtitle_color_white">White</string>
+    <string name="subtitle_color_yellow">Yellow</string>
+    <string name="subtitle_background_box">Black box</string>
+    <string name="subtitle_background_none">Transparent</string>
+    <string name="subtitle_sample">This is how subtitles look</string>
+    <string name="subtitle_style_hint">◀ ▶ changes · Back closes</string>
+    <string name="next_up_title">Next episode</string>
+    <string name="next_up_now">Starting…</string>
+    <string name="next_up_play">Play now</string>
+    <string name="episode_watched">Watched</string>
 </resources>

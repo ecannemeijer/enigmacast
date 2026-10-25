@@ -1,5 +1,6 @@
 package com.enigmacast.ui.xtream
 
+import com.enigmacast.ui.components.EpisodeProgressOverlay
 import com.enigmacast.ui.theme.skinCanvas
 import com.enigmacast.ui.theme.skinPane
 import com.enigmacast.ui.theme.trapVertical
@@ -36,6 +37,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -364,81 +366,6 @@ internal fun IptvLibraryPage(
     }
 }
 
-/** Next episode, a small half-transparent card in the bottom-right corner. */
-@Composable
-internal fun NextEpisodeCard(
-    episode: com.enigmacast.domain.xtream.XtreamEpisode,
-    seconds: Int,
-    onPlay: () -> Unit,
-    onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val playFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { playFocus.requestWhenReady() }
-    Row(
-        modifier
-            .width(240.dp)
-            .background(EnigmaColors.Selected.copy(alpha = 0.5f), skinShape(8.dp))
-            .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .width(42.dp)
-                .height(62.dp)
-                .clip(skinShape(4.dp))
-                .background(EnigmaColors.Card.copy(alpha = 0.5f)),
-        ) {
-            if (episode.cover.isNotBlank()) {
-                AsyncImage(
-                    model = episode.cover,
-                    contentDescription = episode.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                episode.title.ifBlank { stringResource(R.string.iptv_next) },
-                color = EnigmaColors.Text,
-                fontSize = 12.sp,
-                fontWeight = EnigmaType.Strong,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(stringResource(R.string.iptv_next_in, seconds), color = EnigmaColors.Text, fontSize = 11.sp)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                NextCardButton(stringResource(R.string.iptv_next), onPlay, edgeLeft = true, modifier = Modifier.focusRequester(playFocus).weight(1f))
-                NextCardButton(stringResource(R.string.iptv_next_cancel), onCancel, edgeRight = true, modifier = Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun NextCardButton(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    edgeLeft: Boolean = false,
-    edgeRight: Boolean = false,
-) {
-    CompactListRow(
-        onClick = onClick,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-        modifier = modifier.focusProperties {
-            up = FocusRequester.Cancel
-            down = FocusRequester.Cancel
-            if (edgeLeft) left = FocusRequester.Cancel
-            if (edgeRight) right = FocusRequester.Cancel
-        },
-    ) {
-        Text(label, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
 /**
  * Info page of a film or series, above the grid so Search can open it at once.
  * [onClose] is Back on the page: by default the grid (or page) under it stays.
@@ -498,10 +425,13 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
             }
         }
         val list = remember(episodes, season) { com.enigmacast.domain.xtream.LazyKeys.keyed(episodes.filter { it.season == season }, "ep") { it.id } }
+        // Kept for good (also after the Continue watching card is removed): the bars stay.
+        val history by model.history.collectAsState()
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(list, key = { _, k -> k.key }) { index, k ->
                 val e = k.value
-                EpisodeCard(e, model.resumeOf(e) > 0, Modifier.focusProperties {
+                val seen = model.historyOf(e, history)
+                EpisodeCard(e, model.resumeOf(e) > 0 && seen?.watched != true, seen, Modifier.focusProperties {
                     if (index == 0) left = FocusRequester.Cancel
                     if (index == list.lastIndex) right = FocusRequester.Cancel
                     down = FocusRequester.Cancel
@@ -518,7 +448,7 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
 private val EPISODE_WIDTH = 88.dp
 
 @Composable
-private fun EpisodeCard(e: XtreamEpisode, started: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun EpisodeCard(e: XtreamEpisode, started: Boolean, seen: com.enigmacast.data.db.EpisodeHistoryRow?, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val shape = RoundedCornerShape(8.dp)
@@ -563,9 +493,10 @@ private fun EpisodeCard(e: XtreamEpisode, started: Boolean, modifier: Modifier, 
                     stringResource(R.string.iptv_resume_badge),
                     fontSize = 10.sp,
                     color = EnigmaColors.Accent,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(4.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
                 )
             }
+            EpisodeProgressOverlay(seen)
         }
         Text(
             if (e.season > 0) "S${e.season}E${e.episode}" else "${e.episode}",

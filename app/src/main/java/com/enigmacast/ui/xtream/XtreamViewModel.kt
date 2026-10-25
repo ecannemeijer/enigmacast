@@ -621,22 +621,37 @@ class XtreamViewModel @Inject constructor(
         val position = p.currentPosition
         val duration = p.duration.coerceAtLeast(0)
         if (episode != null && item != null && duration > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(position, duration)) {
+            recordHistory(source, kind, id, item, position, duration)
             finishEpisode(source, kind, item, episode, position, duration)
             resumeVersion++
             return
         }
-        when (val keep = IptvResume.toStore(position, p.duration)) {
-            null -> {
-                library.clearResume(source, kind, id)
-                watchNext.remove(source, kind, id)
+        when (IptvResume.action(position, p.duration)) {
+            com.enigmacast.domain.torrent.ResumeSave.NONE -> return
+            com.enigmacast.domain.torrent.ResumeSave.CLEAR -> {
+                if (resumeRow(kind, id) != null) {
+                    library.clearResume(source, kind, id)
+                    watchNext.remove(source, kind, id)
+                }
             }
-            else -> {
-                val row = resumeRow(source, kind, id, item, episode, what?.title.orEmpty(), keep, duration)
+            com.enigmacast.domain.torrent.ResumeSave.KEEP -> {
+                val row = resumeRow(source, kind, id, item, episode, what?.title.orEmpty(), position, duration)
                 library.saveResume(row)
                 watchNext.publish(row)
             }
         }
+        recordHistory(source, kind, id, item, position, duration)
         resumeVersion++
+    }
+
+    /** Watch history for the episode cards (kept apart from Continue watching). */
+    val history: kotlinx.coroutines.flow.StateFlow<Map<String, com.enigmacast.data.db.EpisodeHistoryRow>> get() = library.history
+
+    fun historyOf(episode: XtreamEpisode, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>): com.enigmacast.data.db.EpisodeHistoryRow? =
+        resumeKeyOf("e", episode.id)?.let { map[it] }
+
+    private fun recordHistory(source: String, kind: String, id: String, item: XtreamItem?, position: Long, duration: Long) {
+        library.recordHistory(source, kind, id, if (kind == "e") item?.id else null, position, duration)
     }
 
     private fun resumeRow(
@@ -784,14 +799,31 @@ class XtreamViewModel @Inject constructor(
         else resumeAsk = ResumeAsk(episode.title, offer) { fromStart -> playEpisode(episode, show, fromStart); onStarted() }
     }
 
-    /** The next episode, once this one has 30 seconds or less left and autoplay was not cancelled. */
+    /**
+     * The next episode for the card: in the last minute of this one (and at its end), unless the
+     * card was cancelled. Before, the card disappeared at 0 s left, which also cancelled its
+     * own countdown, so the next episode never started.
+     */
     fun nextOffer(): XtreamEpisode? {
         val current = playing?.episode ?: return null
-        if (nextDismissedFor == current.id) return null
-        val duration = playerState.durationMs
-        val left = duration - playerState.positionMs
-        if (duration <= 0L || left !in 1L..60_000L) return null
+        if (mediaLive || nextDismissedFor == current.id) return null
+        nextSeconds() ?: return null
         return com.enigmacast.domain.xtream.NextEpisode.after(current, playbackEpisodes)
+    }
+
+    /** Seconds until the next episode starts (the playback's own time left; 0 at the end). */
+    fun nextSeconds(): Int? = com.enigmacast.domain.player.UpNext.seconds(playerState.durationMs, playerState.positionMs, playerState.playbackState == "ENDED")
+
+    /** The episode ended (or broke off in its last seconds): start the next one, unless cancelled. */
+    private fun advanceAtEnd(): Boolean {
+        if (mediaLive) return false
+        val current = playing?.episode ?: return false
+        val hasNext = com.enigmacast.domain.xtream.NextEpisode.after(current, playbackEpisodes) != null
+        if (!com.enigmacast.domain.player.UpNext.advanceOnEnd(hasNext, nextDismissedFor == current.id)) return false
+        EnigmaLog.player("iptv episode ended: next episode")
+        // After the listener call (the player is still dispatching this state change).
+        viewModelScope.launch { kotlinx.coroutines.yield(); if (playing?.episode?.id == current.id) playUpcoming() }
+        return true
     }
 
     fun dismissUpcoming() { nextDismissedFor = playing?.episode?.id }
@@ -1450,11 +1482,14 @@ class XtreamViewModel @Inject constructor(
                         if (state == Player.STATE_ENDED && mediaLive && !catchup && playing != null) {
                             requestIptvRecovery("live stream ended")
                         }
+                        // The end of an episode starts the next one; the screen then never sees
+                        // "ENDED" (which closes the player after a start from Library or Home).
+                        val advancing = state == Player.STATE_ENDED && advanceAtEnd()
                         playerState = playerState.copy(
                             playbackState = when (state) {
                                 Player.STATE_BUFFERING -> "BUFFERING"
                                 Player.STATE_READY -> "READY"
-                                Player.STATE_ENDED -> "ENDED"
+                                Player.STATE_ENDED -> if (advancing) "BUFFERING" else "ENDED"
                                 else -> "IDLE"
                             },
                         )
@@ -1550,6 +1585,13 @@ class XtreamViewModel @Inject constructor(
     private fun onIptvPlaybackError(error: PlaybackException) {
         if (StreamFailures.isCancellation(error)) return
         EnigmaLog.networkError("Xtream playback: ${error.errorCodeName} http=${httpStatus(error) ?: "-"}")
+        // A server that drops the connection in the last seconds: the episode ended, so the next
+        // one starts instead of a recovery that would replay the final seconds.
+        if (!mediaLive && com.enigmacast.domain.player.UpNext.errorIsEnd(playerState.durationMs, playerState.positionMs) && advanceAtEnd()) {
+            playerError = null
+            playerState = playerState.copy(playbackState = "BUFFERING")
+            return
+        }
         if (isPermanentIptvFailure(error)) {
             playerError = error.errorCodeName
             trySatelliteFallback()
@@ -2038,11 +2080,16 @@ data class IptvCard(val key: String, val item: XtreamItem, val base: com.enigmac
 
 /** Resume rules of the recordings (Library), for IPTV films and episodes. */
 object IptvResume {
-    /** The position to keep, or null to forget it (too early, or watched to the end). */
-    fun toStore(positionMs: Long, durationMs: Long): Long? {
-        if (positionMs < com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS) return null
-        if (durationMs > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(positionMs, durationMs)) return null
-        return positionMs
+    /**
+     * What to do with the saved place: from the first second on it is kept, so even a title that
+     * was stopped right after it started stays in Continue watching; watched to the end clears it.
+     * A stop within the first second (or a stream that never started) leaves the saved row alone:
+     * that used to delete it, with its tombstone, and a series vanished from Continue watching.
+     */
+    fun action(positionMs: Long, durationMs: Long): com.enigmacast.domain.torrent.ResumeSave = when {
+        durationMs > 0 && com.enigmacast.domain.resume.ResumePolicy.watched(positionMs, durationMs) -> com.enigmacast.domain.torrent.ResumeSave.CLEAR
+        positionMs >= com.enigmacast.domain.resume.ResumePolicy.MIN_KEEP_MS -> com.enigmacast.domain.torrent.ResumeSave.KEEP
+        else -> com.enigmacast.domain.torrent.ResumeSave.NONE
     }
 
     fun offer(savedMs: Long): Long? = savedMs.takeIf { it >= com.enigmacast.domain.resume.ResumePolicy.MIN_RESUME_MS }

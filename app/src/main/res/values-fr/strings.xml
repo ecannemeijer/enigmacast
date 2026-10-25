@@ -1515,4 +1515,22 @@
     <string name="profile_photo_qr_expired">Le code a expiré.</string>
     <string name="profile_photo_qr_new">Nouveau code</string>
     <string name="profile_photo_qr_done">Photo de profil définie</string>
+    <string name="osd_subtitle_style">Style des sous-titres</string>
+    <string name="osd_subtitle_style_value">Style des sous-titres : %1$s</string>
+    <string name="subtitle_size">Taille</string>
+    <string name="subtitle_color">Couleur</string>
+    <string name="subtitle_background">Fond</string>
+    <string name="subtitle_size_small">Petite</string>
+    <string name="subtitle_size_medium">Moyenne</string>
+    <string name="subtitle_size_large">Grande</string>
+    <string name="subtitle_color_white">Blanc</string>
+    <string name="subtitle_color_yellow">Jaune</string>
+    <string name="subtitle_background_box">Cadre noir</string>
+    <string name="subtitle_background_none">Transparent</string>
+    <string name="subtitle_sample">Voici l\'aspect des sous-titres</string>
+    <string name="subtitle_style_hint">◀ ▶ modifie · Retour ferme</string>
+    <string name="next_up_title">Épisode suivant</string>
+    <string name="next_up_now">Démarrage…</string>
+    <string name="next_up_play">Lire maintenant</string>
+    <string name="episode_watched">Vu</string>
 </resources>

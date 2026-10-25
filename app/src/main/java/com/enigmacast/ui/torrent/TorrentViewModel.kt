@@ -440,6 +440,7 @@ class TorrentViewModel @Inject constructor(
     private fun startStream(title: TmdbTitle, subtitle: String, stream: TorrentStream, streams: List<TorrentStream>?, legacyKey: String) {
         val o = TorrentOverlay.Streams(title, subtitle, streams, false, legacyKey)
         playingTitle = title
+        playingStream = stream
         playingSubtitle = subtitle
         osdTitle = com.enigmacast.domain.player.VodOsdKeys.title(title.title, title.year, streamSeason, streamEpisode, streamEpisodeName)
         resumeKey = o.resumeKey
@@ -499,6 +500,8 @@ class TorrentViewModel @Inject constructor(
     /** Back on the loading page: cancels and removes the torrent. */
     fun cancelLoading() {
         loadJob?.cancel()
+        // The next episode's streams may still be looked up.
+        stepJob?.cancel()
         overlay = TorrentOverlay.None
         engine.stop()
         TorrentStreamingService.stop(context)
@@ -531,8 +534,12 @@ class TorrentViewModel @Inject constructor(
                                     "(to ${p.bufferedPosition / 1000}s), loading ${p.isLoading}, last wait ${engine.lastWait ?: "none"}",
                             )
                         }
+                        // The end of an episode starts the next one; the screen never sees "ENDED"
+                        // then (which closes the player).
+                        val advancing = state == Player.STATE_ENDED && advanceAtEnd()
                         playerState = playerState.copy(playbackState = when (state) {
-                            Player.STATE_BUFFERING -> "BUFFERING"; Player.STATE_READY -> "READY"; Player.STATE_ENDED -> "ENDED"; else -> "IDLE"
+                            Player.STATE_BUFFERING -> "BUFFERING"; Player.STATE_READY -> "READY"
+                            Player.STATE_ENDED -> if (advancing) "BUFFERING" else "ENDED"; else -> "IDLE"
                         })
                         if (state == Player.STATE_READY) offerResume()
                     }
@@ -569,6 +576,11 @@ class TorrentViewModel @Inject constructor(
                     }
                     override fun onPlayerError(error: PlaybackException) {
                         EnigmaLog.networkError("torrent playback: ${error.errorCodeName}")
+                        // Broken off in the last seconds: the episode ended.
+                        if (com.enigmacast.domain.player.UpNext.errorIsEnd(playerState.durationMs, playerState.positionMs) && advanceAtEnd()) {
+                            playerState = playerState.copy(playbackState = "BUFFERING")
+                            return
+                        }
                         playError = error.errorCodeName
                     }
                 })
@@ -591,6 +603,7 @@ class TorrentViewModel @Inject constructor(
         playError = null
         resumeOffered = false
         autoTextDone = false
+        nextDismissed = false
         playing = title
         playerState = PlayerState(filePlayback = true)
         clearExternalSubtitles()
@@ -705,6 +718,8 @@ class TorrentViewModel @Inject constructor(
         resumeKey?.takeIf { it.isNotBlank() && resumes.contains(it) }?.let { legacy -> resumes.edit().remove(legacy).apply() }
         // The key is the title (TMDB id, season/episode), so any stream of it resumes here.
         val target = resumeTarget ?: return
+        // The episode's own history (bars on the episode cards), kept apart from Continue watching.
+        if (target.kind == "e") library.recordHistory(target.kind, target.id, target.seriesId, pos, dur)
         if (action == com.enigmacast.domain.torrent.ResumeSave.KEEP) {
             library.saveResume(target.copy(positionMs = pos, durationMs = dur, updatedMs = System.currentTimeMillis()))
         } else if (target.kind == "e") {
@@ -713,6 +728,12 @@ class TorrentViewModel @Inject constructor(
             library.clearResume(target.kind, target.id)
         }
     }
+
+    /** Watch history per episode (key: source/kind/id), for the bars on the episode cards. */
+    val history: kotlinx.coroutines.flow.StateFlow<Map<String, com.enigmacast.data.db.EpisodeHistoryRow>> get() = library.history
+
+    fun historyOf(tvId: Int, season: Int?, episode: Int, map: Map<String, com.enigmacast.data.db.EpisodeHistoryRow>): com.enigmacast.data.db.EpisodeHistoryRow? =
+        map[com.enigmacast.data.xtream.IptvLibrary.key(com.enigmacast.domain.torrent.TorrentLibraryRows.SOURCE, "e", com.enigmacast.domain.torrent.TorrentLibraryRows.resumeId(tvId, season ?: 0, episode))]
 
     /** Seasons of the playing series (from its info page), for the next episode after a watched one. */
     private var playSeasons: List<TmdbSeason> = emptyList()
@@ -1035,6 +1056,83 @@ class TorrentViewModel @Inject constructor(
             if (origin != null) leaveTo = origin else restoreToken++
         }
         releasePlayback()
+    }
+
+    // ---- Next episode (card in the last minute, autoplay at the end) ----
+
+    private var playingStream: TorrentStream? = null
+    private var nextDismissed by mutableStateOf(false)
+
+    /** The episode after the playing one (season, episode), when the series' seasons are known. */
+    fun nextEpisode(): Pair<Int, Int>? {
+        if (playingTitle?.kind != TorrentKind.TV || playing == null) return null
+        val s = streamSeason ?: return null
+        val e = streamEpisode ?: return null
+        val done = com.enigmacast.domain.resume.SeriesContinue.afterTorrent(playSeasons, s, e) as? com.enigmacast.domain.resume.EpisodeDone.Next ?: return null
+        return done.season to done.episode
+    }
+
+    /** The card: the next episode in the last minute (and at the end), unless cancelled. */
+    fun nextOffer(): Pair<Int, Int>? {
+        if (nextDismissed || resumeAsk != null) return null
+        nextSeconds() ?: return null
+        return nextEpisode()
+    }
+
+    fun nextSeconds(): Int? = com.enigmacast.domain.player.UpNext.seconds(playerState.durationMs, playerState.positionMs, playerState.playbackState == "ENDED")
+
+    fun dismissUpcoming() { nextDismissed = true }
+
+    /** The title shown on the card. */
+    fun playingSeriesTitle(): String = playingTitle?.title.orEmpty()
+
+    private fun advanceAtEnd(): Boolean {
+        if (!com.enigmacast.domain.player.UpNext.advanceOnEnd(nextEpisode() != null, nextDismissed)) return false
+        EnigmaLog.player("torrent episode ended: next episode")
+        val at = streamSeason to streamEpisode
+        // After the listener call (the player is still dispatching this state change).
+        viewModelScope.launch { kotlinx.coroutines.yield(); if (playing != null && (streamSeason to streamEpisode) == at) playNext() }
+        return true
+    }
+
+    /**
+     * Next (card, OSD or the end of the episode): this one is saved (watched at the end), then the
+     * next episode's streams are looked up and the same torrent (season pack) or the closest
+     * match plays. Without a match the streams list opens.
+     */
+    fun playNext() {
+        val (season, episode) = nextEpisode() ?: return
+        val title = playingTitle ?: return
+        val previous = playingStream
+        val seasons = playSeasons
+        releasePlayback()
+        playSeasons = seasons
+        streamSeason = season
+        streamEpisode = episode
+        streamEpisodeName = null
+        seekOnStart = null
+        val subtitle = "S$season E$episode"
+        overlay = TorrentOverlay.Loading(title, subtitle, streamLogo)
+        stepJob?.cancel()
+        stepJob = viewModelScope.launch {
+            val name = runCatching { TorrentTmdb.parseEpisodes(tmdb.season(title.id, season, language)) }.getOrNull()
+                ?.firstOrNull { it.number == episode }?.name?.takeIf { it.isNotBlank() }
+            streamEpisodeName = name
+            val fullSubtitle = subtitle + (name?.let { " · $it" } ?: "")
+            val imdb = runCatching { TorrentTmdb.parseImdb(tmdb.externalIds(true, title.id)) }.getOrNull()
+            if (imdb == null) { overlay = TorrentOverlay.None; message = "imdb"; restoreToken++; return@launch }
+            val key = "$imdb:$season:$episode"
+            val result = scraper.streams(imdb, season, episode)
+            if (overlay !is TorrentOverlay.Loading) return@launch
+            val streams = result.getOrNull()
+            val pick = streams?.let { com.enigmacast.domain.torrent.NextStream.pick(previous, it) }
+            if (pick == null) {
+                overlay = TorrentOverlay.Streams(title, fullSubtitle, streams, result.isFailure, key)
+                return@launch
+            }
+            EnigmaLog.player("torrent next episode S${season}E$episode: ${if (pick.infoHash != null && pick.infoHash == previous?.infoHash) "same torrent" else "closest stream"}")
+            startStream(title, fullSubtitle, pick, streams, key)
+        }
     }
 
     /** OSD globe: the streams of what plays; the one picked continues at the current place. */

@@ -22,6 +22,8 @@ class EnigmaCastApp : Application() {
         super.onCreate()
         // Decrypt the stored secrets off Main, before the first screen asks for settings.
         Thread({ runCatching { secrets.preload() } }, "secrets-preload").start()
+        // The saved subtitle look, read off Main.
+        com.enigmacast.playback.SubtitleStyleStore.init(this)
         recordingTunerGuard.start()
         userSync.start()
         if (BuildConfig.DEBUG) {

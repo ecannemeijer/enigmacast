@@ -513,6 +513,10 @@ class EnigmaSyncEngine @Inject constructor(
             applySettings(profileId, change)
             return
         }
+        if (entity == LibrarySync.HISTORY) {
+            applyHistory(profileId, change)
+            return
+        }
         if (entity != LibrarySync.FAVORITE && entity != LibrarySync.PROGRESS) return
         val op = change.optString("op")
         val updated = change.optLong("updated_ms")
@@ -552,6 +556,17 @@ class EnigmaSyncEngine @Inject constructor(
                 }
             }
         }
+    }
+
+    /** Watch history merges (watched stays watched) and is never deleted from another device. */
+    private suspend fun applyHistory(profileId: String, change: JSONObject) {
+        if (change.optString("op") != "upsert") return
+        val payload = change.optString("payload")
+        val key = LibrarySync.keyOfChange(change.optString("record_key"), payload) ?: return
+        val incoming = LibrarySync.historyFrom(profileId, key, payload, change.optLong("updated_ms")) ?: return
+        val current = library.history(profileId, key.first, key.second, key.third)
+        val merged = com.enigmacast.domain.resume.EpisodeHistory.merge(current, incoming)
+        if (merged != current) library.putHistory(merged)
     }
 
     private fun json(value: String) = buildString {
