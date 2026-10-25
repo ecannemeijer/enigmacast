@@ -134,6 +134,7 @@ fun EnigmaRemoteScreen(
             onEquivalent = viewModel::openEquivalent,
             onRecentBar = viewModel::openRecentBar,
             onPip = viewModel::openPipPicker,
+            onBoost = viewModel::cycleBoost,
         )
     }
     val guideActions = remember(viewModel) {

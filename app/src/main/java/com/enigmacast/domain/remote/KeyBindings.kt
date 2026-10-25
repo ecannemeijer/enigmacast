@@ -23,6 +23,9 @@ enum class PlayerAction(val own: Boolean, val follow: Boolean, val menu: Boolean
     SUBTITLES(own = true, follow = true),
     PICTURE_MODE(own = true, follow = true),
     SWITCH_RECEIVER(own = true, follow = true, menu = true),
+    // Last on purpose: a key someone assigned to another action before this one existed keeps
+    // that action (lookup takes the first match in this order).
+    PREVIOUS_CHANNEL(own = true, follow = false),
     ;
 
     fun available(mode: KeyMode) = when (mode) {
@@ -89,7 +92,8 @@ object KeyBindings {
             PlayerAction.CHANNEL_DOWN to listOf(k(DPAD_DOWN), k(CHANNEL_DOWN), k(PAGE_DOWN), k(MEDIA_PREVIOUS)),
             PlayerAction.CHANNEL_LIST to listOf(k(DPAD_LEFT), k(MENU), k(TV), k(TV_CONTENTS_MENU), k(TV_MEDIA_CONTEXT_MENU)),
             PlayerAction.INFO to listOf(k(INFO), k(GUIDE)),
-            PlayerAction.BANNER to listOf(k(DPAD_RIGHT)),
+            // OK shows the banner; Right zaps back to the previous channel (A → B → A …).
+            PlayerAction.BANNER to emptyList(),
             PlayerAction.OPTIONS to listOf(k(PROG_BLUE)),
             PlayerAction.GUIDE to emptyList(),
             PlayerAction.SEARCH to listOf(k(SEARCH)),
@@ -100,6 +104,7 @@ object KeyBindings {
             PlayerAction.PICTURE_MODE to emptyList(),
             // Red is free in the own-tuner player: it opens Switch receiver, as on Home.
             PlayerAction.SWITCH_RECEIVER to listOf(k(PROG_RED)),
+            PlayerAction.PREVIOUS_CHANNEL to listOf(k(DPAD_RIGHT)),
         )
         KeyMode.FOLLOW -> mapOf(
             // Info goes to the receiver; holding it opens the app's options bar (as before).

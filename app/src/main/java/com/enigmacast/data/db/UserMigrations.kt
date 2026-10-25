@@ -61,4 +61,13 @@ object UserMigrations {
                 "`profileId` FROM `iptv_resume` WHERE `positionMs` > 0",
         )
     }
+
+    /** The live TV audio boost per channel and viewer (synced as entity "audio_boost"). */
+    fun v5ToV6(exec: (String) -> Unit) {
+        exec(
+            "CREATE TABLE IF NOT EXISTS `audio_boost` (`profileId` TEXT NOT NULL, `channelKey` TEXT NOT NULL, " +
+                "`level` INTEGER NOT NULL, `updatedMs` INTEGER NOT NULL, `changeId` TEXT NOT NULL, " +
+                "PRIMARY KEY(`profileId`, `channelKey`))",
+        )
+    }
 }

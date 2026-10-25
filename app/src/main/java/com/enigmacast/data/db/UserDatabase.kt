@@ -52,9 +52,9 @@ interface ResumeDao {
 @Database(
     entities = [
         ResumeRow::class, SeriesRuleRow::class, IptvLibraryRow::class, IptvResumeRow::class,
-        SyncOutboxRow::class, SyncCursorRow::class, EpisodeHistoryRow::class,
+        SyncOutboxRow::class, SyncCursorRow::class, EpisodeHistoryRow::class, AudioBoostRow::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class UserDatabase : RoomDatabase() {
@@ -62,6 +62,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun seriesRules(): SeriesRuleDao
     abstract fun iptvLibrary(): IptvLibraryDao
     abstract fun syncOutbox(): SyncOutboxDao
+    abstract fun audioBoost(): AudioBoostDao
 
     companion object {
         const val NAME = "enigmacast-user.db"
@@ -75,7 +76,7 @@ object UserDatabaseModule {
     @Singleton
     fun userDatabase(@ApplicationContext context: Context): UserDatabase =
         Room.databaseBuilder(context, UserDatabase::class.java, UserDatabase.NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
 
     private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
@@ -117,6 +118,16 @@ object UserDatabaseModule {
             UserMigrations.v4ToV5 { db.execSQL(it) }
         }
     }
+
+    /** Additive: the live TV audio boost per channel (synced). */
+    internal val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            UserMigrations.v5ToV6 { db.execSQL(it) }
+        }
+    }
+
+    @Provides
+    fun audioBoostDao(db: UserDatabase): AudioBoostDao = db.audioBoost()
 
     @Provides
     fun iptvLibraryDao(db: UserDatabase): IptvLibraryDao = db.iptvLibrary()
@@ -306,4 +317,33 @@ interface SyncOutboxDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putCursor(row: SyncCursorRow)
+}
+
+/**
+ * Live TV audio boost of one channel for one viewer. [channelKey] comes from
+ * AudioBoost.satelliteKey / iptvKey; [level] 0 (Off) is kept too, so switching it off syncs.
+ * [updatedMs] and [changeId] decide which change wins (last write wins).
+ */
+@Entity(tableName = "audio_boost", primaryKeys = ["profileId", "channelKey"])
+data class AudioBoostRow(
+    val profileId: String,
+    val channelKey: String,
+    val level: Int,
+    val updatedMs: Long,
+    val changeId: String,
+)
+
+@Dao
+interface AudioBoostDao {
+    @Query("SELECT * FROM audio_boost")
+    fun all(): Flow<List<AudioBoostRow>>
+
+    @Query("SELECT * FROM audio_boost WHERE profileId = :profileId AND channelKey = :channelKey")
+    suspend fun get(profileId: String, channelKey: String): AudioBoostRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(row: AudioBoostRow)
+
+    @Query("DELETE FROM audio_boost WHERE profileId = :profileId")
+    suspend fun deleteFor(profileId: String)
 }

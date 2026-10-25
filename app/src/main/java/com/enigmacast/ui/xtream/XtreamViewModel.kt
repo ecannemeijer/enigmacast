@@ -101,6 +101,7 @@ class XtreamViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val equivalents: com.enigmacast.data.channel.EquivalentChannelsController,
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
+    private val boostStore: com.enigmacast.data.player.AudioBoostStore,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
     /** Null until the active receiver was checked. The menu item shows when it has playlists. */
@@ -324,6 +325,61 @@ class XtreamViewModel @Inject constructor(
         private set
     private val audioSync = com.enigmacast.playback.AudioSyncOffsets()
     private val subtitleSync = com.enigmacast.playback.SubtitleSyncOffset()
+    /** Audio boost of the live channel that plays (quick bar button 5); read by the audio thread. */
+    private val audioBoost = com.enigmacast.playback.AudioBoostGain()
+    /** AudioBoost.iptvKey of the live channel that plays; empty for films, episodes and archive. */
+    private val boostKey = MutableStateFlow("")
+    var boostLevel by mutableStateOf(0)
+        private set
+    /** The live channel before the current one (Right on the remote zaps back to it). */
+    private var previousLive: XtreamItem? = null
+    private var currentLive: XtreamItem? = null
+
+    init {
+        // A level changed on another device (sync pull) applies to the channel that plays, too.
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(boostKey, boostStore.levels) { key, levels -> if (key.isBlank()) 0 else levels[key] ?: 0 }
+                .distinctUntilChanged()
+                .collect { level ->
+                    audioBoost.set(level)
+                    boostLevel = level
+                }
+        }
+    }
+
+    private fun boostKeyOf(item: XtreamItem, account: XtreamAccount): String =
+        com.enigmacast.domain.player.AudioBoost.iptvKey(item.providerId.ifBlank { account.key }, item.id)
+
+    /** Quick bar boost button: the next level for this channel, remembered and synced. */
+    fun cycleBoost() {
+        val key = boostKey.value
+        if (key.isBlank()) return
+        val next = com.enigmacast.domain.player.AudioBoost.next(boostLevel)
+        audioBoost.set(next)
+        boostLevel = next
+        boostStore.set(key, next)
+        if (next > 0 && audioSync.passthroughActive.value == true) {
+            showNotice(context.getString(com.enigmacast.R.string.quick_boost_passthrough))
+        }
+    }
+
+    /**
+     * Right on the remote: back to the channel watched before this one, so pressing it again
+     * toggles between the two. False when there is none (the screen shows a hint).
+     */
+    fun zapPrevious(): Boolean {
+        val current = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return false
+        val target = com.enigmacast.domain.player.PreviousChannel.iptv(previousLive, current)
+            ?: recentChannels.firstOrNull { it.reference != current.id }?.let { channel ->
+                items.firstOrNull { it.section == XtreamSection.LIVE && it.id == channel.reference && it.providerId == current.providerId }
+            }
+            ?: run {
+                showNotice(context.getString(com.enigmacast.R.string.keys_no_previous_channel))
+                return false
+            }
+        play(target)
+        return true
+    }
     /** The player's own HTTP client: a retry first closes the previous request's socket. */
     private val streamConnections = com.enigmacast.playback.StreamConnections(connectTimeoutMs = 10_000, readTimeoutMs = 20_000)
     @OptIn(UnstableApi::class)
@@ -1484,7 +1540,7 @@ class XtreamViewModel @Inject constructor(
             // Read-ahead capped to the heap (Media3's ~144 MB default does not fit many TV boxes,
             // and the picture-in-picture inset may play next to this player).
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
-            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync))
+            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync, audioBoost))
             .setTrackSelector(selector)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
@@ -1741,6 +1797,16 @@ class XtreamViewModel @Inject constructor(
         if (!automaticRetry) loadTitleInfo(what, live || archive, account)
         startTicker()
         val item = what.item
+        val key = if (live && !archive && item != null) boostKeyOf(item, account) else ""
+        // The new channel's level applies before its first sound, not after the collector runs.
+        audioBoost.set(boostStore.level(key))
+        boostKey.value = key
+        if (live && !archive && item != null) {
+            if (currentLive?.let { com.enigmacast.domain.player.PreviousChannel.sameIptv(it, item) } != true) {
+                previousLive = currentLive
+                currentLive = item
+            }
+        }
         if (live && !archive && item != null) {
             val recent = com.enigmacast.domain.model.LastChannel(item.id, item.name, item.categoryId, item.icon)
             recentChannels = recentIptv.remember(account.key, recent)
@@ -2141,6 +2207,8 @@ internal class IptvRenderersFactory(
     context: Context,
     private val offsets: com.enigmacast.playback.AudioSyncOffsets,
     private val subtitleSync: com.enigmacast.playback.SubtitleSyncOffset,
+    /** Live audio boost; null for players that never boost (torrents). */
+    private val boost: com.enigmacast.playback.AudioBoostGain? = null,
 ) : DefaultRenderersFactory(context) {
     override fun buildTextRenderers(
         context: Context,
@@ -2160,6 +2228,7 @@ internal class IptvRenderersFactory(
         val sink = DefaultAudioSink.Builder(context)
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+            .apply { boost?.let { setAudioProcessors(arrayOf(com.enigmacast.playback.BoostAudioProcessor(it))) } }
             .build()
         return com.enigmacast.playback.AudioSyncSink(sink, offsets)
     }

@@ -9,6 +9,8 @@ import com.enigmacast.domain.remote.PlayerAction
 sealed interface IptvKeyAction {
     data class Zap(val step: Int) : IptvKeyAction
     data object Banner : IptvKeyAction
+    /** Back to the live channel watched before this one (Right by default). */
+    data object PreviousChannel : IptvKeyAction
     data object Details : IptvKeyAction
     data object Options : IptvKeyAction
     data object ChannelList : IptvKeyAction
@@ -20,7 +22,7 @@ sealed interface IptvKeyAction {
  * The key state machine of the Enigma2 own-tuner player (RemoteDisplayViewModel.handleOwnKey),
  * for IPTV: the same Settings › Remote control keys (Up = next channel, Down = previous),
  * OK without a banner shows it, OK on the banner pauses (films) or opens the list (live),
- * and Down opens the options only on a banner that OK, Info or Right brought up; after a
+ * and Down opens the options only on a banner that OK or Info brought up; after a
  * zap Down keeps zapping.
  */
 object IptvPlayerKeys {
@@ -41,6 +43,7 @@ object IptvPlayerKeys {
             PlayerAction.BANNER -> IptvKeyAction.Banner
             PlayerAction.OPTIONS, PlayerAction.AUDIO_TRACK, PlayerAction.SUBTITLES, PlayerAction.PICTURE_MODE -> IptvKeyAction.Options
             PlayerAction.PAUSE -> if (vod) IptvKeyAction.Pause else IptvKeyAction.None
+            PlayerAction.PREVIOUS_CHANNEL -> if (vod) IptvKeyAction.None else IptvKeyAction.PreviousChannel
             else -> IptvKeyAction.None
         }
     }

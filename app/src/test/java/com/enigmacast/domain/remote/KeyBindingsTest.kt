@@ -14,7 +14,19 @@ class KeyBindingsTest {
         assertEquals(PlayerAction.CHANNEL_UP, KeyBindings.lookup(own, KeyBindings.CHANNEL_UP, false))
         assertEquals(PlayerAction.CHANNEL_LIST, KeyBindings.lookup(own, KeyBindings.DPAD_LEFT, false))
         assertEquals(PlayerAction.INFO, KeyBindings.lookup(own, KeyBindings.GUIDE, false))
-        assertEquals(PlayerAction.BANNER, KeyBindings.lookup(own, KeyBindings.DPAD_RIGHT, false))
+        assertEquals(PlayerAction.PREVIOUS_CHANNEL, KeyBindings.lookup(own, KeyBindings.DPAD_RIGHT, false))
+    }
+
+    @Test fun rightZapsBackUnlessSomeoneAssignedIt() {
+        val own = KeyBindings.effective(none, KeyMode.OWN)
+        assertEquals(emptyList<KeyBinding>(), own[PlayerAction.BANNER])
+        assertEquals(listOf(KeyBinding(KeyBindings.DPAD_RIGHT)), own[PlayerAction.PREVIOUS_CHANNEL])
+        assertFalse(PlayerAction.PREVIOUS_CHANNEL in KeyBindings.effective(none, KeyMode.FOLLOW))
+        // Stored before this action existed: Right was kept for the banner, or moved to the guide.
+        val banner = mapOf("OWN.BANNER" to listOf("22"))
+        assertEquals(PlayerAction.BANNER, KeyBindings.lookup(KeyBindings.effective(banner, KeyMode.OWN), KeyBindings.DPAD_RIGHT, false))
+        val guide = mapOf("OWN.BANNER" to emptyList(), "OWN.GUIDE" to listOf("22"))
+        assertEquals(PlayerAction.GUIDE, KeyBindings.lookup(KeyBindings.effective(guide, KeyMode.OWN), KeyBindings.DPAD_RIGHT, false))
     }
 
     @Test fun followHoldInfoOpensOptions() {
@@ -59,9 +71,9 @@ class KeyBindingsTest {
 
     @Test fun resetActionTakesDefaultKeyBack() {
         var stored = KeyBindings.assign(none, KeyMode.OWN, PlayerAction.GUIDE, KeyBinding(KeyBindings.DPAD_RIGHT))
-        stored = KeyBindings.resetAction(stored, KeyMode.OWN, PlayerAction.BANNER)
+        stored = KeyBindings.resetAction(stored, KeyMode.OWN, PlayerAction.PREVIOUS_CHANNEL)
         val own = KeyBindings.effective(stored, KeyMode.OWN)
-        assertEquals(PlayerAction.BANNER, KeyBindings.lookup(own, KeyBindings.DPAD_RIGHT, false))
+        assertEquals(PlayerAction.PREVIOUS_CHANNEL, KeyBindings.lookup(own, KeyBindings.DPAD_RIGHT, false))
         assertEquals(emptyList<KeyBinding>(), own[PlayerAction.GUIDE])
     }
 

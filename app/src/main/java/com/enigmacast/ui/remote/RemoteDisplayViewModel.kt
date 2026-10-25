@@ -98,6 +98,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -193,6 +195,8 @@ data class RemoteDisplayUiState(
     val osdInfoFields: OsdInfoFields = OsdInfoFields(),
     /** 0 is a solid panel, 100 is a clear one. Channel banner, channel list and receiver OSD. */
     val panelTransparency: Int = 10,
+    /** Audio boost of the channel that plays, 0 (off) to [com.enigmacast.domain.player.AudioBoost.MAX]. */
+    val boostLevel: Int = 0,
 )
 
 
@@ -226,6 +230,7 @@ class RemoteDisplayViewModel @Inject constructor(
     private val fallbackFinder: com.enigmacast.live.TvFallbackFinder,
     private val equivalents: com.enigmacast.data.channel.EquivalentChannelsController,
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
+    private val boostStore: com.enigmacast.data.player.AudioBoostStore,
 ) : ViewModel() {
     /** The receiver whose bouquets are in [RemoteDisplayUiState.bouquets]; another box loads its own. */
     private var bouquetsReceiverId: String? = null
@@ -280,6 +285,15 @@ class RemoteDisplayViewModel @Inject constructor(
         }
         playback.attach(viewModelScope)
         inputBus.handler = ::handleKey
+        viewModelScope.launch {
+            // The boost of the channel that plays: on every zap, and when another device's level arrives.
+            combine(_ui.map(::boostKeyFor).distinctUntilChanged(), boostStore.levels) { key, levels ->
+                if (key.isBlank()) 0 else levels[key] ?: 0
+            }.distinctUntilChanged().collect { level ->
+                playback.audioBoost.set(level)
+                if (_ui.value.boostLevel != level) _ui.update { it.copy(boostLevel = level) }
+            }
+        }
         viewModelScope.launch {
             playback.state.collect { state ->
                 if (!state.filePlayback && fileOsd.visible) hideFileBar()
@@ -590,6 +604,33 @@ class RemoteDisplayViewModel @Inject constructor(
         showNotice(
             if (minutes > 0) UiText.res(R.string.sleep_app_set, minutes) else UiText.res(R.string.sleep_app_off),
         )
+    }
+
+    /** Live channels only (own tuner or following the receiver); recordings never get a boost. */
+    private fun boostKeyFor(ui: RemoteDisplayUiState): String {
+        if (ui.playerState.filePlayback) return ""
+        val reference = if (ui.ownTuner) ui.own.channel?.reference else ui.currentService?.reference
+        return com.enigmacast.domain.player.AudioBoost.satelliteKey(reference)
+    }
+
+    /** Quick bar boost button (5th tile): Off → 1 … 5 → Off, remembered per channel and synced. */
+    fun cycleBoost() {
+        val key = boostKeyFor(_ui.value)
+        if (key.isBlank()) return
+        val next = com.enigmacast.domain.player.AudioBoost.next(_ui.value.boostLevel)
+        playback.audioBoost.set(next)
+        _ui.update { it.copy(boostLevel = next) }
+        boostStore.set(key, next)
+        if (next > 0 && playback.audioPassthroughActive.value == true) showNotice(UiText.res(R.string.quick_boost_passthrough))
+    }
+
+    /** Right in full-screen live TV: back to the channel before this one (A → B → A → B …). */
+    private fun zapPrevious() {
+        val ui = _ui.value
+        val target = com.enigmacast.domain.player.PreviousChannel.satellite(ui.recent, ui.own.channel?.reference)
+            ?: return showNotice(UiText.res(R.string.keys_no_previous_channel))
+        fallbackLatched = false
+        zapRecent(target)
     }
 
     fun zapRecent(channel: LastChannel) {
@@ -1323,7 +1364,7 @@ class RemoteDisplayViewModel @Inject constructor(
         when (action) {
             // Zapping keeps working while the key is held.
             PlayerAction.CHANNEL_UP, PlayerAction.CHANNEL_DOWN -> if (down && event.repeatCount % 4 == 0) perform(action)
-            PlayerAction.BANNER -> if (down && event.repeatCount == 0) perform(action)
+            PlayerAction.BANNER, PlayerAction.PREVIOUS_CHANNEL -> if (down && event.repeatCount == 0) perform(action)
             else -> if (!down) perform(action)
         }
         return true
@@ -1369,6 +1410,8 @@ class RemoteDisplayViewModel @Inject constructor(
             // The dialog stops this stream, frees the tuner and switches; the player then starts
             // the remembered (or first) channel of the new box (see restart()).
             PlayerAction.SWITCH_RECEIVER -> switcher.show()
+            // With a picture-in-picture inset Right keeps swapping the two pictures, as before.
+            PlayerAction.PREVIOUS_CHANNEL -> if (pip.playing() && !ui.channelList && !pip.listOpen.value) pip.swap() else zapPrevious()
         }
     }
 
