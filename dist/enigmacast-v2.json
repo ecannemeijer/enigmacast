@@ -1,8 +1,8 @@
 {
-  "versionCode": 115,
-  "versionName": "1.0.0-beta.112",
+  "versionCode": 116,
+  "versionName": "1.0.0-beta.113",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Nieuwe hotelmodus voor gasten: alleen tv, instellingen met pincode, welkomstscherm met wifi-gegevens en opschonen voor de volgende gast. De syncserver kun je nu koppelen en bijwerken vanuit Instellingen, met een spinner per stap; de eerste sync is veel sneller en loopt op de achtergrond. Verder: bladeren door categorieen wisselt pas bij het kiezen van een kanaal, ondertitels worden onthouden en gesynct, en geen beeld herstelt zichzelf.",
+  "notes": "Hotelmodus: gasten zien nu altijd zenders. De zenderlijst laadt meteen bij het starten, een lege kanaalselectie toont alle zenders en anders verschijnt een duidelijke melding. Plus alles uit beta.112: hotelmodus voor gasten, syncserver koppelen en bijwerken vanuit Instellingen met een spinner, en een veel snellere eerste sync.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
