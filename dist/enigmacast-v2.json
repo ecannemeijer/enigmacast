@@ -1,8 +1,8 @@
 {
-  "versionCode": 114,
-  "versionName": "1.0.0-beta.111",
+  "versionCode": 115,
+  "versionName": "1.0.0-beta.112",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Bij live tv zap je met Rechts terug naar het vorige kanaal, zodat je snel heen en weer wisselt. Nieuwe Boost-knop onder de OSD: maak zachte kanalen in 5 stappen harder; de stand wordt per kanaal onthouden en gesynct. Plus alles uit beta.110: met Links terug naar het menu en rondspringende OSD-rijen.",
+  "notes": "Nieuwe hotelmodus voor gasten: alleen tv, instellingen met pincode, welkomstscherm met wifi-gegevens en opschonen voor de volgende gast. De syncserver kun je nu koppelen en bijwerken vanuit Instellingen, met een spinner per stap; de eerste sync is veel sneller en loopt op de achtergrond. Verder: bladeren door categorieen wisselt pas bij het kiezen van een kanaal, ondertitels worden onthouden en gesynct, en geen beeld herstelt zichzelf.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
