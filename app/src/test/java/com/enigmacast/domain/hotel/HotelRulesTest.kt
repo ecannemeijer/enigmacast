@@ -166,9 +166,14 @@ class HotelFilterTest {
 
     @Test fun playlistCategoriesBySource() {
         val mixed = listOf(XtreamCategory("1", "A", providerId = "p1"), XtreamCategory("1", "A", providerId = "p2"))
-        val config = HotelFilter.withCategories(HotelConfig(enabled = true, source = HotelSource.IPTV), "provider:p1", XtreamSection.LIVE, emptySet())
-        val shown = HotelFilter.categoriesBySource(mixed, XtreamSection.LIVE, config) { "provider:${it.providerId}" }
-        assertEquals(listOf("p2"), shown.map { it.providerId })
+        val config = HotelFilter.withCategories(HotelConfig(enabled = true, source = HotelSource.IPTV), "provider:p1", XtreamSection.LIVE, setOf("9", "1"))
+            .let { HotelFilter.withCategories(it, "provider:p2", XtreamSection.LIVE, setOf("1")) }
+        val more = mixed + XtreamCategory("2", "B", providerId = "p1")
+        val shown = HotelFilter.categoriesBySource(more, XtreamSection.LIVE, config) { "provider:${it.providerId}" }
+        assertEquals(listOf("p1" to "1", "p2" to "1"), shown.map { it.providerId to it.id })
+        // An empty whitelist is "not configured": guests see that source's categories.
+        val empty = HotelFilter.withCategories(HotelConfig(enabled = true, source = HotelSource.IPTV), "provider:p1", XtreamSection.LIVE, emptySet())
+        assertEquals(mixed, HotelFilter.categoriesBySource(mixed, XtreamSection.LIVE, empty) { "provider:${it.providerId}" })
     }
 
     @Test fun bouquetWhitelist() {

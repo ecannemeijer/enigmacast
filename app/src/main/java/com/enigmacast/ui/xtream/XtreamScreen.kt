@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -535,8 +536,10 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         }
         liveChannelList.KeepAnchored(playingRow, model.items.size, hidden = !liveShown)
         liveCategoryList.KeepAnchored(categoryRow, model.categories.size, hidden = !(liveShown && column == PanelColumn.CATEGORIES))
+        val hotelGuest = com.enigmacast.domain.hotel.HotelRuntime.state.collectAsStateWithLifecycle().value.enabled
         when {
             detection == null -> Centered { EnigmaLoadingIndicator() }
+            accounts.isEmpty() && hotelGuest -> Centered { HotelNoChannels() }
             accounts.isEmpty() -> Centered { Text(stringResource(R.string.xtream_none), color = EnigmaColors.Muted, fontSize = 16.sp) }
             model.account == null -> TvChoiceDialog(
                 title = stringResource(R.string.xtream_choose_playlist),
@@ -546,6 +549,9 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 onDismiss = onBack,
                 stacked = true,
             )
+            // Hotel mode: a live section without any category is said, not a blank screen.
+            hotelGuest && model.section == XtreamSection.LIVE && !model.loading && model.categories.isEmpty() && model.playing == null ->
+                Centered { HotelNoChannels() }
             panelOpen && (column == PanelColumn.VOD_CATEGORIES || column == PanelColumn.VOD_GRID) -> XtreamVodPage(
                 model = model,
                 gridActive = column == PanelColumn.VOD_GRID,
@@ -683,6 +689,23 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HotelNoChannels() {
+    Column(
+        modifier = Modifier.widthIn(max = 520.dp).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(stringResource(R.string.hotel_no_channels), color = Color.White, fontSize = 20.sp)
+        Text(
+            stringResource(R.string.hotel_no_channels_hint),
+            color = EnigmaColors.Muted,
+            fontSize = 15.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
     }
 }
 

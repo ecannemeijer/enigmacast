@@ -38,10 +38,13 @@ class ProfileStore @Inject constructor(
     private val _state = MutableStateFlow(initial)
     val state: StateFlow<ProfileState> = _state.asStateFlow()
 
-    /** Live TV startup waits until the viewer has picked a profile. */
     /** Live TV startup waits until the viewer has picked a profile (hotel mode: until the hotel profile is in). */
     @Volatile var holdLiveStart: Boolean = ProfileRules.askOnStart(initial) || hotel.current.enabled
         private set
+
+    private val _liveHeld = MutableStateFlow(holdLiveStart)
+    /** [holdLiveStart] as a flow: a start asked for during the hold runs once it is released. */
+    val liveHeld: StateFlow<Boolean> = _liveHeld.asStateFlow()
 
     private val _switched = MutableSharedFlow<Profile>(extraBufferCapacity = 2)
     private val _entered = MutableSharedFlow<Profile>(extraBufferCapacity = 2)
@@ -112,6 +115,7 @@ class ProfileStore @Inject constructor(
 
     private fun releaseHold() {
         holdLiveStart = false
+        _liveHeld.value = false
     }
 
     fun add(name: String, avatar: Int): String {
@@ -136,7 +140,9 @@ class ProfileStore @Inject constructor(
         if (uuid.isNotBlank()) prefs.edit().putStringSet(DELETED, deletedUuids() + uuid).apply()
     }
 
-    fun seesPlaylist(uuid: String = _state.value.activeUuid): Boolean = ProfileRules.seesPlaylist(_state.value, uuid)
+    fun seesPlaylist(uuid: String = _state.value.activeUuid): Boolean =
+        ProfileRules.seesPlaylist(_state.value, uuid) ||
+            (uuid == _state.value.activeUuid && hotel.current.enabled && hotel.current.iptv)
 
     fun setPlaylistAccess(uuid: String, allowed: Boolean) = save(ProfileRules.playlistAccess(_state.value, uuid, allowed))
 

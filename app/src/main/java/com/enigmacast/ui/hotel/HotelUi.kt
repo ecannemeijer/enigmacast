@@ -368,12 +368,13 @@ fun HotelSettingsPanel(contentFocus: FocusRequester, model: HotelViewModel = hil
         SettingsCard(stringResource(R.string.hotel_visible)) {
             if (!config.iptv) ValueRow(
                 title = stringResource(R.string.hotel_bouquets),
-                value = config.allowedBouquets?.size?.toString() ?: stringResource(R.string.hotel_all),
+                // An empty selection shows everything to guests (never a TV without channels).
+                value = config.allowedBouquets?.takeIf { it.isNotEmpty() }?.size?.toString() ?: stringResource(R.string.hotel_all),
                 description = stringResource(R.string.hotel_bouquets_desc),
                 onClick = model::openBouquets,
             ) else ValueRow(
                 title = stringResource(R.string.hotel_categories),
-                value = if (config.allowedCategories.isEmpty()) stringResource(R.string.hotel_all) else config.allowedCategories.size.toString(),
+                value = if (config.allowedCategories.values.all { it.isEmpty() }) stringResource(R.string.hotel_all) else config.allowedCategories.values.count { it.isNotEmpty() }.toString(),
                 description = stringResource(R.string.hotel_categories_desc),
                 onClick = model::openCategories,
             )

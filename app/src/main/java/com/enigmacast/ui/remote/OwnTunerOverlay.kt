@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -152,6 +153,9 @@ fun OwnTunerOverlay(
                 scrim = scrim,
                 modifier = Modifier.align(Alignment.Center),
             )
+        }
+        if (own.noChannels && own.channels.isEmpty() && !own.loadingChannels && !tunerProblem) {
+            NoChannelsNotice(scrim = scrim, modifier = Modifier.align(Alignment.Center))
         }
         if (ui.playerState.timeshiftPaused && !ui.channelList && !tunerProblem) {
             Text(
@@ -873,3 +877,27 @@ private val ClockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm"
 
 private fun timeLabel(epochSec: Long): String =
     Instant.ofEpochSecond(epochSec).atZone(ZoneId.systemDefault()).format(ClockFormat)
+
+/** The channel list came back empty: say so (hotel mode: where the owner fixes it) instead of a blank screen. */
+@Composable
+private fun NoChannelsNotice(scrim: Color, modifier: Modifier = Modifier) {
+    val hotel = com.enigmacast.domain.hotel.HotelRuntime.state.collectAsState().value.enabled
+    Column(
+        modifier = modifier
+            .widthIn(max = 480.dp)
+            .background(scrim, skinShape(12.dp)).glassSheen(skinShape(12.dp))
+            .border(1.dp, EnigmaColors.GlassEdge, skinShape(12.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            stringResource(if (hotel) R.string.hotel_no_channels else R.string.tuner_no_channels),
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = EnigmaType.Strong,
+        )
+        if (hotel) {
+            Text(stringResource(R.string.hotel_no_channels_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 18.sp)
+        }
+    }
+}

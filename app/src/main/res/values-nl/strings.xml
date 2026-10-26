@@ -1650,6 +1650,8 @@
     <string name="hotel_bouquets">Zichtbare bouquets</string>
     <string name="hotel_bouquets_desc">Alleen deze bouquets verschijnen in de zenderlijst, bij zappen, zoeken en in de gids.</string>
     <string name="hotel_categories">Zichtbare IPTV-categorieën</string>
+    <string name="hotel_no_channels">Geen kanalen</string>
+    <string name="hotel_no_channels_hint">Controleer de kanaalselectie in Instellingen › Hotelstand (zichtbare bouquets of IPTV-categorieën) en de verbinding met de ontvanger of IPTV.</string>
     <string name="hotel_categories_desc">Per aanbieder en sectie. Verborgen categorieën verdwijnen uit panelen, zappen, zoeken en de gids.</string>
     <string name="hotel_all">Alle</string>
     <string name="hotel_none">Geen</string>

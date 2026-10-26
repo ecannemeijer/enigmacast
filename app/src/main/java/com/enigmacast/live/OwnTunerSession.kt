@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -82,6 +83,8 @@ data class OwnTunerState(
     val loadingLabel: UiText = UiText.Empty,
     /** Share of those steps already finished, from 0 to 1. The receiver does not report a finer figure. */
     val loadingProgress: Float = 0f,
+    /** The channel list loaded and came back empty: the screen says so instead of staying blank. */
+    val noChannels: Boolean = false,
 )
 
 /**
@@ -276,26 +279,35 @@ class OwnTunerSession @Inject constructor(
         if (streaming) playback.stopForZap()
         streaming = false
         _state.value = OwnTunerState()
+        preparedTarget = null
     }
 
     /** Starts the last watched channel of the active box, or that box's current channel. */
     fun ensureStarted() {
         active = true
-        if (startJob?.isActive == true) return
-        scope.launch {
-            val settings = settingsRepository.current()
-            if (profiles.holdLiveStart) return@launch
-            val id = settings.activeReceiver()?.id
-            // IPTV startup leaves the decoder free. Satellite startup plays the saved channel
-            // even when the last picture was IPTV. Off keeps the previous rule.
-            // Hotel mode on satellite always plays: the guest's TV is live TV.
-            val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
-            val play = settings.streamMode == StreamMode.OWN_TUNER && !otherPlays() && when {
-                hotel.enabled -> !hotel.iptv
-                settings.startupLive == StartupLive.IPTV -> false
-                settings.startupLive == StartupLive.SATELLITE -> true
-                else -> settings.lastLiveSource != LastLiveSource.IPTV
+        if (startJob?.isActive == true) {
+            // The list is still loading (hotel entry preloads it without playback): play once it is in.
+            if (_state.value.channels.isEmpty()) scope.launch {
+                if (startPlaysLive(settingsRepository.current()) && startJob?.isActive == true) startAfterLoad = true
             }
+            return
+        }
+        scope.launch {
+            if (profiles.holdLiveStart) {
+                // Profile picker or hotel entry still running: start once the profile is in,
+                // instead of dropping the start (which left live TV without any channel).
+                if (waitingForProfile) return@launch
+                waitingForProfile = true
+                try {
+                    profiles.liveHeld.first { held -> !held }
+                } finally {
+                    waitingForProfile = false
+                }
+                if (!active || startJob?.isActive == true) return@launch
+            }
+            val settings = settingsRepository.current()
+            val id = settings.activeReceiver()?.id
+            val play = startPlaysLive(settings)
             if (id != boundReceiverId) {
                 val switching = boundReceiverId != null
                 bind(id)
@@ -317,7 +329,9 @@ class OwnTunerSession @Inject constructor(
                 if (current.tuner.status == TunerStatus.IDLE) start(current.channel)
                 return@launch
             }
-            current.channels.firstOrNull()?.let(::start)
+            // A list loaded without playback (hotel entry, reload) remembers its start channel.
+            (preparedTarget?.takeIf { target -> current.channels.any { it.reference == target.reference } }
+                ?: current.channels.firstOrNull())?.let(::start)
         }
     }
 
@@ -333,6 +347,24 @@ class OwnTunerSession @Inject constructor(
     }
 
     private var channelLoadFailed = false
+    private var waitingForProfile = false
+    /** The channel the last list load picked (remembered, receiver's or first) when it did not play. */
+    private var preparedTarget: BouquetEntry? = null
+
+    /**
+     * IPTV startup leaves the decoder free. Satellite startup plays the saved channel
+     * even when the last picture was IPTV. Off keeps the previous rule.
+     * Hotel mode on satellite always plays: the guest's TV is live TV.
+     */
+    private fun startPlaysLive(settings: com.enigmacast.domain.model.AppSettings): Boolean {
+        val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+        return settings.streamMode == StreamMode.OWN_TUNER && !otherPlays() && when {
+            hotel.enabled -> !hotel.iptv
+            settings.startupLive == StartupLive.IPTV -> false
+            settings.startupLive == StartupLive.SATELLITE -> true
+            else -> settings.lastLiveSource != LastLiveSource.IPTV
+        }
+    }
 
     private fun showLoad(label: UiText, progress: Float) {
         _state.update {
@@ -407,6 +439,14 @@ class OwnTunerSession @Inject constructor(
                         channels = channels,
                         bouquetName = bouquetName,
                         bouquetReference = bouquetReference,
+                        noChannels = channels.isEmpty(),
+                    )
+                }
+                val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+                if (hotel.enabled) {
+                    com.enigmacast.domain.hotel.HotelVisibilityLog.note(
+                        "bron=SAT profiel=${com.enigmacast.domain.hotel.HotelRuntime.profileUuid.take(8).ifBlank { "-" }} " +
+                            "zenderlijst=${channels.size}" + if (channels.isEmpty()) " (leeg)" else "",
                     )
                 }
                 if (dialog && target != null) {
@@ -419,9 +459,11 @@ class OwnTunerSession @Inject constructor(
                         }
                 }
                 hideLoad()
+                preparedTarget = target
                 if (!startAfterLoad || playback.isFilePlayback()) return@launch
                 if (target == null) {
-                    _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.tuner_no_channels))) }
+                    // No channel: the empty-list notice explains it (no "stream not started" card on top).
+                    _state.update { it.copy(noChannels = true, tuner = TunerState()) }
                     return@launch
                 }
                 beginFailover(receiver.id)
@@ -585,6 +627,28 @@ class OwnTunerSession @Inject constructor(
     fun reloadChannels() {
         abandonCurrent()
         channelLoadFailed = false
+        // A screen that already started the session does not ask again: load the new list now
+        // (without playback; the next ensureStarted plays). Before, live TV stayed without channels.
+        if (active && boundReceiverId != null && !profiles.holdLiveStart) loadInitial(startPlayback = false)
+    }
+
+    /**
+     * Hotel entry: the guest's channel list is loaded for the hotel profile now, so live TV and the
+     * zap list have channels, also when no screen started the session yet.
+     */
+    fun preloadForHotel() {
+        if (startJob?.isActive == true || _state.value.channels.isNotEmpty()) return
+        scope.launch {
+            val receiver = settingsRepository.current().activeReceiver()
+            if (receiver == null) {
+                com.enigmacast.domain.hotel.HotelVisibilityLog.note("bron=SAT geen ontvanger ingesteld, geen kanalen")
+                _state.update { it.copy(noChannels = true) }
+                return@launch
+            }
+            if (startJob?.isActive == true || _state.value.channels.isNotEmpty()) return@launch
+            boundReceiverId = receiver.id
+            loadInitial(startPlayback = false)
+        }
     }
 
     /** Leaving own-tuner mode: drop the stream so the other mode starts clean. */

@@ -301,10 +301,24 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             val config = hotel.current
             profiles.enterHotel(hotelCleanup.hotelUuid(config))
+            val profile = profiles.state.value.activeUuid
+            com.enigmacast.domain.hotel.HotelRuntime.profileUuid = profile
+            val whitelist = if (config.iptv) {
+                config.allowedCategories.values.sumOf { it.size }
+            } else {
+                config.allowedBouquets?.size ?: 0
+            }
+            com.enigmacast.domain.hotel.HotelVisibilityLog.note(
+                "start bron=${if (config.iptv) "IPTV" else "SAT"} profiel=${profile.take(8).ifBlank { "-" }} whitelist=$whitelist" +
+                    if (config.iptv && !profiles.seesPlaylist()) " playlist=verborgen" else "",
+            )
             runCatching { hotelCleanup.applyStart(config) }
                 .onFailure { EnigmaLog.service("hotel start failed: ${it.javaClass.simpleName}") }
             hotelCleanup.startDaily()
+            // The channel list is read again for the hotel profile and its whitelist, now that
+            // both are in (it may have been loaded for the owner's profile before).
             ownTuner.reloadChannels()
+            if (!config.iptv) ownTuner.preloadForHotel()
             if (welcome && config.welcome.enabled) hotelWelcome = true else startHotelLive()
         }
     }
@@ -325,6 +339,8 @@ class AppViewModel @Inject constructor(
             streamRunning = false
             screen = AppScreen.Xtream
         } else {
+            // The Remote screen's session may already exist and does not start again by itself.
+            ownTuner.ensureStarted()
             openStream()
         }
     }

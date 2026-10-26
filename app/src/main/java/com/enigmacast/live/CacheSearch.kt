@@ -38,7 +38,7 @@ class CacheSearch @Inject constructor(private val dao: CacheDao) {
 
     suspend fun index(receiver: ReceiverConfig, nowMs: Long): Index = gate.withLock {
         val rk = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
-        val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+        val hotel = com.enigmacast.domain.hotel.HotelRuntime.guestConfig
         val allowed = hotel.allowedBouquets.takeIf { com.enigmacast.domain.hotel.HotelFilter.restrictsBouquets(hotel) }
         index?.takeIf { it.receiverKey == rk && nowMs - it.loadedAtMs < TTL_MS && it.allowed == allowed }?.let { return it }
         withContext(Dispatchers.IO) {
@@ -46,9 +46,9 @@ class CacheSearch @Inject constructor(private val dao: CacheDao) {
             val bouquetRows = dao.bouquets(rk)
             // Hotel mode: hidden bouquets, their channels and their programmes are not searchable.
             val bouquets = bouquetRows.map { BouquetEntry(it.name, it.reference) }
-                .filter { allowed == null || it.reference in allowed }
+                .filter { allowed == null || com.enigmacast.domain.hotel.HotelFilter.bouquetAllowed(it.reference, hotel) }
             val byRef = bouquets.associateBy { it.reference }
-            val channelRows = dao.channels(rk).let { rows -> if (allowed == null) rows else rows.filter { it.bouquetReference in allowed } }
+            val channelRows = dao.channels(rk).let { rows -> if (allowed == null) rows else rows.filter { com.enigmacast.domain.hotel.HotelFilter.bouquetAllowed(it.bouquetReference, hotel) } }
             val serviceKeys = if (allowed == null) null else channelRows.map { it.serviceKey }.toHashSet()
             val channels = channelRows.mapNotNull { row ->
                 val bouquet = byRef[row.bouquetReference] ?: return@mapNotNull null
