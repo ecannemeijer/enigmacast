@@ -77,7 +77,9 @@ class EnigmaSyncClient @Inject constructor(
         val hash = MessageDigest.getInstance("SHA-256").digest(body)
         val message = "$stamp\n$nonce\n${method.uppercase()}\n$path\n".toByteArray() + hash
         val signature = Base64.encodeToString(identity.sign(message), Base64.NO_WRAP)
-        val client = pinnedClient(config.host, config.pin)
+        val pinned = pinnedClient(config.host, config.pin)
+        // A pull page may be large on a slow receiver: more time in total, still bounded.
+        val client = if (keepOpen) streamClient(config.host, pinned) else pinned
         val builder = Request.Builder()
             .url("https://${config.host}:8740$path")
             .header("Authorization", "Bearer ${config.token}")
@@ -154,6 +156,7 @@ class EnigmaSyncClient @Inject constructor(
             .hostnameVerifier { _, _ -> true }
             .connectTimeout(connectSeconds, TimeUnit.SECONDS)
             .readTimeout(readSeconds, TimeUnit.SECONDS)
+            .callTimeout(connectSeconds + readSeconds + 2, TimeUnit.SECONDS)
             .build()
         val body = try {
             http.newCall(Request.Builder().url("https://$host:8740/api/v1/health").header("Connection", "close").get().build()).execute().use { response ->
@@ -216,6 +219,32 @@ class EnigmaSyncClient @Inject constructor(
     /** One client (thread pool, TLS context) per receiver, pin and cipher choice, instead of one per request. */
     private val clients = HashMap<String, OkHttpClient>()
 
+    /** Pull streams: same pool and pin, a longer bound for the whole page. */
+    private val streams = HashMap<OkHttpClient, OkHttpClient>()
+
+    private fun streamClient(host: String, pinned: OkHttpClient): OkHttpClient = synchronized(clients) {
+        streams.getOrPut(pinned) {
+            streams.keys.removeAll { it !in clients.values }
+            pinned.newBuilder().callTimeout(STREAM_CALL_SECONDS, TimeUnit.SECONDS).build()
+        }
+    }
+
+    /**
+     * Drops the cached clients of [host] and its cipher preference: after a sync server update the
+     * next call starts with a fresh TLS context (the pin itself is kept; the update keeps cert.pem).
+     */
+    fun forget(host: String) {
+        synchronized(clients) {
+            clients.keys.filter { it.startsWith("$host|") }.forEach { key ->
+                clients.remove(key)?.let { old ->
+                    streams.remove(old)
+                    old.connectionPool.evictAll()
+                }
+            }
+        }
+        SyncTls.forget(host)
+    }
+
     private fun buildPinnedClient(host: String, pin: String, chacha: Boolean): OkHttpClient {
         val trust = object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
@@ -232,8 +261,11 @@ class EnigmaSyncClient @Inject constructor(
             .sslSocketFactory(ssl.socketFactory, trust)
             .hostnameVerifier { hostname, _ -> hostname == host }
             .connectionSpecs(SyncTls.specs(chacha))
-            .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .connectTimeout(CONNECT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(READ_SECONDS, TimeUnit.SECONDS)
+            // Bounds the whole call (connect, TLS, request, body): nothing waits for minutes in silence.
+            .callTimeout(CALL_SECONDS, TimeUnit.SECONDS)
             .build()
     }
 
@@ -262,5 +294,10 @@ class EnigmaSyncClient @Inject constructor(
         const val TOKEN = "enigmasync.token"
         const val DEVICE = "enigmasync.device"
         const val ROLE = "enigmasync.role"
+        const val CONNECT_SECONDS = 8L
+        const val READ_SECONDS = 30L
+        const val CALL_SECONDS = 45L
+        /** A pull page of up to 500 changes from a slow receiver. */
+        const val STREAM_CALL_SECONDS = 120L
     }
 }

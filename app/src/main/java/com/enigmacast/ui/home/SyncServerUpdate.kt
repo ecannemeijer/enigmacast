@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -142,6 +143,34 @@ private fun availableMessage(check: SyncServerUpdater.Check): String {
     return if (check.running.withoutPaging) base + " " + stringResource(R.string.sync_update_paging_hint) else base
 }
 
+/** Text of an update or install step ("Backing up…", "Installing…", "Restarting…", "Checking…"). */
+fun updateStepText(step: UpdateStep): Int = when (step) {
+    UpdateStep.CONNECT -> R.string.sync_update_step_connect
+    UpdateStep.LOCATE -> R.string.sync_update_step_locate
+    UpdateStep.DOWNLOAD -> R.string.sync_update_step_download
+    UpdateStep.BACKUP -> R.string.sync_update_step_backup
+    UpdateStep.INSTALL -> R.string.sync_update_step_install
+    UpdateStep.RESTART -> R.string.sync_update_step_restart
+    UpdateStep.VERIFY -> R.string.sync_update_step_verify
+}
+
+/** A running step: spinner and its text. Not focusable, so D-pad focus stays where it was. */
+@Composable
+fun SyncBusyRow(text: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.CircularProgressIndicator(
+            color = EnigmaColors.Accent,
+            strokeWidth = 3.dp,
+            modifier = Modifier.size(22.dp),
+        )
+        Text(text, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, lineHeight = 20.sp)
+    }
+}
+
 @Composable
 fun syncUpdateStatus(state: State): String? = when (state) {
     State.Idle -> null
@@ -152,16 +181,7 @@ fun syncUpdateStatus(state: State): String? = when (state) {
         SyncServerVersions.Verdict.UNKNOWN -> stringResource(R.string.sync_update_unknown, state.check.runningText)
     }
     is State.CheckFailed -> stringResource(R.string.sync_update_check_failed)
-    is State.Updating -> stringResource(
-        when (state.step) {
-            UpdateStep.CONNECT -> R.string.sync_update_step_connect
-            UpdateStep.LOCATE -> R.string.sync_update_step_locate
-            UpdateStep.DOWNLOAD -> R.string.sync_update_step_download
-            UpdateStep.BACKUP -> R.string.sync_update_step_backup
-            UpdateStep.INSTALL -> R.string.sync_update_step_install
-            UpdateStep.VERIFY -> R.string.sync_update_step_verify
-        },
-    )
+    is State.Updating -> stringResource(updateStepText(state.step))
     is State.Done -> if (state.backup.isEmpty()) {
         stringResource(R.string.sync_update_current, state.version)
     } else {
@@ -212,7 +232,11 @@ fun SyncServerUpdateDialog(model: SyncServerUpdateViewModel) {
                 Text(availableMessage(it), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
             }
             syncUpdateStatus(state)?.takeIf { state !is State.Checked }?.let {
-                Text(it, color = if (state is State.Failed) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+                if (running || state is State.Checking) {
+                    SyncBusyRow(it)
+                } else {
+                    Text(it, color = if (state is State.Failed) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+                }
             }
             if (!finished) {
                 Text(stringResource(R.string.sync_update_login_hint), color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)

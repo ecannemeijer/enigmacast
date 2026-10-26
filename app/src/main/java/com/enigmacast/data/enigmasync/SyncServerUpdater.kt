@@ -65,6 +65,10 @@ class SyncServerUpdater @Inject constructor(
     val last: StateFlow<Check?> = _last.asStateFlow()
 
     private val busy = Mutex()
+    /** One check at a time; callers right behind it (startup, card, prompt) get the same answer. */
+    private val checking = Mutex()
+    @Volatile
+    private var lastAtMs = 0L
     private val http by lazy {
         OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
     }
@@ -73,16 +77,28 @@ class SyncServerUpdater @Inject constructor(
      * The paired server, or else a sync server answering at the receiver address ([host] when
      * given, e.g. from Settings › Sync server). Null when there is none.
      */
-    suspend fun check(host: String? = null): Check? = withContext(Dispatchers.IO) {
+    suspend fun check(host: String? = null, force: Boolean = false): Check? = withContext(Dispatchers.IO) {
+        checking.withLock { checkOnce(host, force) }
+    }
+
+    private suspend fun checkOnce(host: String?, force: Boolean): Check? {
         val config = client.config()
         val address = config?.host ?: host?.trim()?.ifBlank { null }
             ?: runCatching { settings.current().activeReceiver()?.host }.getOrNull()?.trim()?.ifBlank { null }
-            ?: return@withContext null
+            ?: return null
+        val previous = _last.value
+        if (!force && previous != null && previous.paired == (config != null) &&
+            com.enigmacast.domain.sync.SyncRunRules.reuseCheck(previous.host, lastAtMs, address, System.currentTimeMillis())
+        ) {
+            EnigmaLog.service("syncserver: versiecontrole hergebruikt (${previous.runningText})")
+            if (_state.value !is State.Updating) _state.value = State.Checked(previous)
+            return previous
+        }
         _state.value = State.Checking
         val probe = runCatching { client.probe(address, 4, 6) }.getOrNull()
         if (config == null && probe == null) {
             _state.value = State.Idle
-            return@withContext null
+            return null
         }
         // A paired server answering with another certificate is not "our" server: no version from it.
         val reported = probe?.takeIf { config == null || it.pin == config.pin }?.version
@@ -93,12 +109,10 @@ class SyncServerUpdater @Inject constructor(
         val result = Check(address, config != null, config?.pin ?: probe!!.pin, running, latest, SyncServerVersions.verdict(running, latest))
         EnigmaLog.service("syncserver: versie ${result.runningText}, laatste ${latest ?: "?"} → ${result.verdict}${if (config == null) " (niet gekoppeld)" else ""}")
         _last.value = result
-        _state.value = if (latest == null && result.verdict == Verdict.UNKNOWN) {
-            State.CheckFailed("GitHub")
-        } else {
-            State.Checked(result)
-        }
-        result
+        val failed = latest == null && result.verdict == Verdict.UNKNOWN
+        lastAtMs = if (failed) 0L else System.currentTimeMillis()
+        _state.value = if (failed) State.CheckFailed("GitHub") else State.Checked(result)
+        return result
     }
 
     /**
@@ -177,7 +191,10 @@ class SyncServerUpdater @Inject constructor(
                 return@withContext false
             }
             EnigmaLog.service("syncserver: bijgewerkt ${report.before} → $version")
+            // New server process (maybe new paging): no cached client, TLS choice, backoff or page size.
+            engine.serverChanged(host)
             _state.value = State.Done(version, report.backup)
+            lastAtMs = System.currentTimeMillis()
             _last.value = Check(
                 host,
                 _last.value?.paired ?: true,

@@ -12,7 +12,7 @@ import javax.inject.Singleton
 import com.enigmacast.domain.sync.SyncServerVersions
 
 /** What [SyncServerInstaller.update] is doing, for the progress line. */
-enum class UpdateStep { CONNECT, LOCATE, DOWNLOAD, BACKUP, INSTALL, VERIFY }
+enum class UpdateStep { CONNECT, LOCATE, DOWNLOAD, BACKUP, INSTALL, RESTART, VERIFY }
 
 enum class UpdateFailure { NOT_INSTALLED, NO_DATA, PIN_MISMATCH, NO_RELEASE, DATA_DIR_MOVES, BACKUP, VERIFY }
 
@@ -44,18 +44,21 @@ data class InstallReport(
  */
 @Singleton
 class SyncServerInstaller @Inject constructor() {
-    fun install(host: String, user: String, password: String): InstallReport {
+    fun install(host: String, user: String, password: String, onStep: (UpdateStep) -> Unit = {}): InstallReport {
         val session = JSch().getSession(user, host, 22)
         session.setPassword(password)
         session.setConfig("StrictHostKeyChecking", "no")
         session.setConfig("PreferredAuthentications", "password")
         try {
+            onStep(UpdateStep.CONNECT)
             session.connect(20_000)
             val model = exec(session, "cat /proc/stb/info/model 2>/dev/null || echo unknown").trim()
             val python = exec(session, "python3 --version").trim()
             // Data from an earlier install (maybe 0.2.4 in an unmounted /media folder) must stay in use:
             // init in another folder would start an empty server with a new certificate.
+            onStep(UpdateStep.LOCATE)
             val existing = exec(session, FIND_DATA).lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+            onStep(UpdateStep.DOWNLOAD)
             exec(session, DOWNLOAD)
             val target = SyncServerVersions.normalize(exec(session, "cat /tmp/enigmacast-sync-release/tag 2>/dev/null || true"))
                 ?: throw UpdateError(UpdateFailure.NO_RELEASE)
@@ -65,7 +68,11 @@ class SyncServerInstaller @Inject constructor() {
             if (existing.isNotEmpty() && dataDir !in existing) {
                 throw UpdateError(UpdateFailure.DATA_DIR_MOVES, "${existing.first()} → $dataDir")
             }
-            if (dataDir in existing && backupData(session, dataDir).isBlank()) throw UpdateError(UpdateFailure.BACKUP)
+            if (dataDir in existing) {
+                onStep(UpdateStep.BACKUP)
+                if (backupData(session, dataDir).isBlank()) throw UpdateError(UpdateFailure.BACKUP)
+            }
+            onStep(UpdateStep.INSTALL)
             try {
                 exec(session, INSTALL_IPK)
             } catch (error: Exception) {
@@ -78,6 +85,7 @@ class SyncServerInstaller @Inject constructor() {
             val init = if (dataDir in existing) "" else {
                 exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init 2>&1 || true")
             }
+            onStep(UpdateStep.RESTART)
             exec(session, "/etc/init.d/enigmacast-sync restart || true; /etc/init.d/enigmacast-web restart || true")
             // A reinstall keeps the dashboard password the owner chose; only a first install gets "admin".
             val firstPassword = exec(session, "[ -f '$dataDir/web-auth.json' ] && echo keep || echo new").trim() == "new"
@@ -87,6 +95,7 @@ class SyncServerInstaller @Inject constructor() {
             }
             // The service creates the certificate after startup; on a slow receiver this can take
             // a moment. Also keep the error readable when python3-sqlite3 is still missing.
+            onStep(UpdateStep.VERIFY)
             val cert = exec(session, """
                 i=0
                 while [ ! -f '$dataDir/cert.pem' ] && [ ${'$'}i -lt 20 ]; do sleep 1; i=${'$'}((i+1)); done
@@ -159,6 +168,7 @@ class SyncServerInstaller @Inject constructor() {
             try {
                 exec(session, INSTALL_IPK)
             } finally {
+                onStep(UpdateStep.RESTART)
                 // postinst restarts both services; make sure they run even when opkg stopped halfway.
                 exec(session, "/etc/init.d/enigmacast-sync restart >/dev/null 2>&1 || true; /etc/init.d/enigmacast-web restart >/dev/null 2>&1 || true")
             }

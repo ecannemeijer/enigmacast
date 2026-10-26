@@ -1707,6 +1707,12 @@
     <string name="sync_update_step_backup">Syncserver stoppen en gegevens back-uppen…</string>
     <string name="sync_update_step_install">Update installeren…</string>
     <string name="sync_update_step_verify">Nieuwe versie controleren…</string>
+    <string name="sync_update_step_restart">Sync server herstarten…</string>
+    <string name="sync_pair_step_cert">Servercertificaat controleren…</string>
+    <string name="sync_pair_step_join">Koppelen met de sync server…</string>
+    <string name="sync_pair_step_profiles">Profielen kopiëren…</string>
+    <string name="sync_server_pair_timeout">Koppelen is niet binnen 30 seconden gelukt. Controleer of de ontvanger aan staat en probeer het opnieuw.</string>
+    <string name="sync_progress">Synchroniseren… %1$d items (profiel %2$d van %3$d)</string>
     <string name="sync_update_done">Syncserver bijgewerkt naar v%1$s. Back-up van de vorige gegevens: %2$s</string>
     <string name="sync_update_failed">Bijwerken mislukt: %1$s</string>
     <string name="sync_update_err_not_installed">de syncserver is op deze ontvanger niet met opkg geïnstalleerd.</string>

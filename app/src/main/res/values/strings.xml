@@ -1715,6 +1715,12 @@
     <string name="sync_update_step_backup">Stopping the sync server and backing up its data…</string>
     <string name="sync_update_step_install">Installing the update…</string>
     <string name="sync_update_step_verify">Checking the new version…</string>
+    <string name="sync_update_step_restart">Restarting the sync server…</string>
+    <string name="sync_pair_step_cert">Checking the server certificate…</string>
+    <string name="sync_pair_step_join">Pairing with the sync server…</string>
+    <string name="sync_pair_step_profiles">Copying profiles…</string>
+    <string name="sync_server_pair_timeout">Pairing did not finish within 30 seconds. Check that the receiver is on and try again.</string>
+    <string name="sync_progress">Syncing… %1$d items (profile %2$d of %3$d)</string>
     <string name="sync_update_done">Sync server updated to v%1$s. Backup of the previous data: %2$s</string>
     <string name="sync_update_failed">Update failed: %1$s</string>
     <string name="sync_update_err_not_installed">the sync server was not installed with opkg on this receiver.</string>

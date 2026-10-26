@@ -1716,6 +1716,12 @@
     <string name="sync_update_step_backup">Arrêt du serveur et sauvegarde des données…</string>
     <string name="sync_update_step_install">Installation de la mise à jour…</string>
     <string name="sync_update_step_verify">Vérification de la nouvelle version…</string>
+    <string name="sync_update_step_restart">Redémarrage du serveur de synchronisation…</string>
+    <string name="sync_pair_step_cert">Vérification du certificat du serveur…</string>
+    <string name="sync_pair_step_join">Association avec le serveur de synchronisation…</string>
+    <string name="sync_pair_step_profiles">Copie des profils…</string>
+    <string name="sync_server_pair_timeout">L\'association n\'a pas abouti en 30 secondes. Vérifiez que le récepteur est allumé et réessayez.</string>
+    <string name="sync_progress">Synchronisation… %1$d éléments (profil %2$d sur %3$d)</string>
     <string name="sync_update_done">Serveur de synchronisation mis à jour en v%1$s. Sauvegarde des données précédentes : %2$s</string>
     <string name="sync_update_failed">Échec de la mise à jour : %1$s</string>
     <string name="sync_update_err_not_installed">le serveur de synchronisation n\'a pas été installé avec opkg sur ce récepteur.</string>
