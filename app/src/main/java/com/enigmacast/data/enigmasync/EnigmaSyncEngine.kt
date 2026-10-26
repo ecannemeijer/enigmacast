@@ -20,6 +20,8 @@ import com.enigmacast.domain.profile.ProfileCloud
 import com.enigmacast.domain.sync.SyncApply
 import com.enigmacast.domain.sync.SyncConflict
 import com.enigmacast.domain.sync.LibrarySync
+import com.enigmacast.domain.sync.SyncHealth
+import com.enigmacast.domain.sync.SyncPullPolicy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.withLock
 import com.enigmacast.sync.SyncScheduler
@@ -89,31 +91,78 @@ class EnigmaSyncEngine @Inject constructor(
     private suspend fun syncOnce() {
         val config = client.config() ?: return
         EnigmaLog.service("sync: start host=${config.host}")
+        pullFailures = 0
+        var otherFailed = false
         // Progress has priority: send the outbox before the slower profile/settings pass so
         // stopping a film or episode reaches the receiver's API immediately.
         runCatching { push(config) }
-            .onFailure { EnigmaLog.service("sync: push vooraf mislukt: ${it.message}") }
-        runCatching {
-            publishProfiles(config)
-            val current = settings.current()
-            val state = profiles.state.value
-            state.profiles.forEach { profile ->
-                val uuid = profile.uuid.ifBlank { return@forEach }
-                val sawSettings = pull(config, uuid)
-                val snapshot = snapshots.forUuid(uuid, current, state)
-                if (meta.revision(uuid) == null && !sawSettings && snapshot != null && !ProfileCloud.untouched(snapshot)) {
-                    meta.markDirty(uuid)
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: push vooraf mislukt: ${SyncPullPolicy.compactError(it)}") }
+        runCatching { publishProfiles(config) }
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: profielen publiceren mislukt: ${SyncPullPolicy.compactError(it)}") }
+        val current = settings.current()
+        val state = profiles.state.value
+        val uuids = state.profiles.map { it.uuid }.filter { it.isNotBlank() }
+        var failedProfiles = 0
+        // Each profile on its own: one that cannot be pulled does not stop the others.
+        uuids.forEach { uuid ->
+            runCatching { pull(config, uuid) }
+                .onSuccess { sawSettings ->
+                    val snapshot = snapshots.forUuid(uuid, current, state)
+                    if (meta.revision(uuid) == null && !sawSettings && snapshot != null && !ProfileCloud.untouched(snapshot)) {
+                        meta.markDirty(uuid)
+                    }
                 }
-            }
-            pushSettings(config)
-        }.onFailure { EnigmaLog.service("sync: profiel/pull mislukt: ${it.message}") }
+                .onFailure {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    failedProfiles++
+                    EnigmaLog.service("sync: pull profiel ${uuid.take(8)} mislukt: ${SyncPullPolicy.compactError(it)}")
+                }
+        }
+        // Settings go up even when a pull failed: they are this TV's own changes.
+        runCatching { pushSettings(config) }
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: instellingen push mislukt: ${SyncPullPolicy.compactError(it)}") }
         runCatching { syncPlaylist(config) }
-            .onFailure { EnigmaLog.service("sync: playlist mislukt: ${it.message}") }
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: playlist mislukt: ${SyncPullPolicy.compactError(it)}") }
         runCatching { backfill(config) }
-            .onFailure { EnigmaLog.service("sync: backfill mislukt: ${it.message}") }
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: backfill mislukt: ${SyncPullPolicy.compactError(it)}") }
         runCatching { push(config) }
-            .onFailure { EnigmaLog.service("sync: push mislukt: ${it.message}") }
-        EnigmaLog.service("sync: klaar")
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: push mislukt: ${SyncPullPolicy.compactError(it)}") }
+        val health = SyncHealth(failedProfiles, uuids.size, otherFailed, System.currentTimeMillis())
+        saveHealth(health)
+        EnigmaLog.service(
+            if (health.incomplete) "sync: onvolledig profielen=$failedProfiles/${uuids.size} overig=${if (otherFailed) "fout" else "ok"}"
+            else "sync: klaar",
+        )
+    }
+
+    /** Failed pull requests in this run; each one makes the pages smaller ([SyncPullPolicy.pageSize]). */
+    @Volatile
+    private var pullFailures = 0
+
+    private val _health = kotlinx.coroutines.flow.MutableStateFlow(SyncHealth())
+
+    /** The last run's outcome, for the Sync server card ("last sync incomplete"). */
+    val health: kotlinx.coroutines.flow.StateFlow<SyncHealth> = _health
+
+    /** Reads the stored outcome of the last run (preferences: off Main). */
+    suspend fun loadHealth() = withContext(Dispatchers.IO) {
+        if (_health.value.atMs != 0L) return@withContext
+        _health.value = SyncHealth(
+            failedProfiles = marks.getInt(HEALTH_FAILED, 0),
+            totalProfiles = marks.getInt(HEALTH_TOTAL, 0),
+            otherFailed = marks.getBoolean(HEALTH_OTHER, false),
+            atMs = marks.getLong(HEALTH_AT, 0L),
+        )
+    }
+
+    private fun saveHealth(health: SyncHealth) {
+        _health.value = health
+        marks.edit()
+            .putInt(HEALTH_FAILED, health.failedProfiles)
+            .putInt(HEALTH_TOTAL, health.totalProfiles)
+            .putBoolean(HEALTH_OTHER, health.otherFailed)
+            .putLong(HEALTH_AT, health.atMs)
+            .apply()
     }
 
     /**
@@ -193,20 +242,32 @@ class EnigmaSyncEngine @Inject constructor(
         batch.settled.forEach { outbox.delete(it) }
     }
 
-    /** One pull page, retried because the receiver's old TLS stack occasionally drops a connection. */
-    private suspend fun fetchPullPage(config: SyncServerConfig, encodedProfile: String, cursor: Int): String {
+    /**
+     * One pull page, retried because the receiver's old TLS stack occasionally drops a connection.
+     * Every failure shrinks the page (50 → 20 → 10 changes) and backs off a little longer.
+     * @return the response text and the page size it was asked with.
+     */
+    private suspend fun fetchPullPage(config: SyncServerConfig, encodedProfile: String, cursor: Int): Pair<String, Int> {
         var last: Exception? = null
-        repeat(4) { attempt ->
+        repeat(SyncPullPolicy.MAX_ATTEMPTS) { attempt ->
+            val limit = SyncPullPolicy.pageSize(pullFailures)
             try {
                 return client.request(
                     config,
                     "GET",
-                    "/api/v1/sync/pull?profileId=$encodedProfile&cursor=$cursor&limit=${LibrarySync.PULL_CHUNK}",
-                )
+                    "/api/v1/sync/pull?profileId=$encodedProfile&cursor=$cursor&limit=$limit",
+                ) to limit
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 last = error
-                EnigmaLog.service("sync: pull pagina mislukt (poging ${attempt + 1}): ${error.message}")
-                kotlinx.coroutines.delay(400)
+                pullFailures++
+                val wait = SyncPullPolicy.backoffMs(attempt)
+                EnigmaLog.service(
+                    "sync: pull pagina mislukt (poging ${attempt + 1}/${SyncPullPolicy.MAX_ATTEMPTS}, limit=$limit, " +
+                        "volgende=${SyncPullPolicy.pageSize(pullFailures)}): ${SyncPullPolicy.compactError(error)}",
+                )
+                if (attempt < SyncPullPolicy.MAX_ATTEMPTS - 1) kotlinx.coroutines.delay(wait)
             }
         }
         throw last ?: IllegalStateException("pull failed")
@@ -217,11 +278,11 @@ class EnigmaSyncEngine @Inject constructor(
         val encoded = java.net.URLEncoder.encode(profileId, "UTF-8")
         var cursor = outbox.cursor(profileId)?.cursor?.toIntOrNull() ?: 0
         var sawSettings = false
-        // The receiver returns at most 500 changes per request. Keep pulling pages until the
+        // The receiver returns at most one page per request. Keep pulling pages until the
         // cursor stops moving; the old single huge TLS response was the reason a TV pull died
         // with BrokenPipe and never reached the local database.
         while (true) {
-            val text = fetchPullPage(config, encoded, cursor)
+            val (text, limit) = fetchPullPage(config, encoded, cursor)
             val root = JSONObject(text)
             val changes = root.optJSONArray("changes")
             if (changes != null) {
@@ -233,7 +294,7 @@ class EnigmaSyncEngine @Inject constructor(
             }
             val next = root.optInt("cursor", cursor)
             outbox.putCursor(SyncCursorRow(profileId, next.toString()))
-            if (next <= cursor || changes == null || changes.length() < LibrarySync.PULL_CHUNK) break
+            if (SyncPullPolicy.lastPage(cursor, next, changes?.length(), limit)) break
             cursor = next
         }
         return sawSettings
@@ -593,6 +654,11 @@ class EnigmaSyncEngine @Inject constructor(
         }
         append('"')
     }
+
+    private companion object {
+        const val HEALTH_FAILED = "health-failed-profiles"
+        const val HEALTH_TOTAL = "health-total-profiles"
+        const val HEALTH_OTHER = "health-other-failed"
+        const val HEALTH_AT = "health-at-ms"
+    }
 }
-
-

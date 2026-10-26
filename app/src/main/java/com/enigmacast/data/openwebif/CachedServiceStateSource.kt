@@ -38,8 +38,8 @@ class CachedServiceStateSource @Inject constructor(
 
     override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList {
         val hotel = HotelRuntime.config
-        if (!HotelFilter.restrictsBouquets(hotel)) return network.currentBouquetChannels(config)
-        val current = runCatching { network.currentBouquetChannels(config) }.getOrNull()
+        if (!HotelFilter.restrictsBouquets(hotel)) return network.currentBouquetChannels(config, cache)
+        val current = runCatching { network.currentBouquetChannels(config, cache) }.getOrNull()
         if (current != null && current.bouquetReference.isNotBlank() && HotelFilter.bouquetAllowed(current.bouquetReference, hotel)) return current
         val first = televisionBouquets(config).firstOrNull() ?: radioBouquets(config).firstOrNull()
             ?: return BouquetChannelList(bouquetName = "", channels = emptyList())

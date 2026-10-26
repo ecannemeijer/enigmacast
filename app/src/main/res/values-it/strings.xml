@@ -1473,6 +1473,9 @@
     <string name="sync_server_claim">Diventa amministratore</string>
     <string name="sync_server_claimed">Questo dispositivo è ora l\'unico amministratore. Conserva il nuovo codice di ripristino: %1$s. Il codice precedente non funziona più.</string>
     <string name="sync_server_connected">Collegato a %1$s come %2$s. Scegliere un profilo lo sincronizza subito.</string>
+    <string name="sync_server_last_sync">Ultima sincronizzazione</string>
+    <string name="sync_server_incomplete_profiles">Incompleta: %1$d profili su %2$d non sono stati aggiornati. Nuovo tentativo automatico.</string>
+    <string name="sync_server_incomplete">Incompleta: non è stato possibile sincronizzare tutto. Nuovo tentativo automatico.</string>
     <string name="sync_server_disconnect">Scollega</string>
     <string name="iptv_next">Avanti</string>
     <string name="iptv_next_cancel">Annulla</string>

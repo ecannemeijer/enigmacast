@@ -210,6 +210,8 @@ class SyncEngine @Inject constructor(
         carryFrom: String?,
         report: BackgroundActivityTracker.Reporter? = null,
     ): ChannelOutcome {
+        // The channel sync reads the box itself, never lists other screens loaded moments ago.
+        api.forgetServiceLists()
         val bouquets = api.televisionBouquets(receiver)
         require(bouquets.isNotEmpty()) { "no bouquets" }
         val snapshots = ArrayList<com.enigmacast.domain.sync.BouquetSnapshot>()

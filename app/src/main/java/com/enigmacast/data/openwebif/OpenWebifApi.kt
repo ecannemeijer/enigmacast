@@ -29,6 +29,7 @@ import com.enigmacast.domain.remote.EnigmaKey
 import com.enigmacast.domain.remote.KeyAction
 import com.enigmacast.data.settingsimport.FtpReceiverClient
 import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.BouquetSearch
 import com.enigmacast.domain.service.BouquetOrder
 import com.enigmacast.domain.settingsimport.SettingsFiles
 import com.enigmacast.domain.source.OsdSource
@@ -60,6 +61,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** [uiText] is what the screen shows; app-made failures are translated, others pass the raw message. */
+/** How long a bouquet's channel list read from the box is shared before it is read again. */
+private const val SERVICES_TTL_MS = 30_000L
+
 class OpenWebifException(
     message: String,
     val statusCode: Int? = null,
@@ -130,13 +134,25 @@ class OpenWebifApi @Inject constructor(
         }
     }
 
-    override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList {
+    override suspend fun currentBouquetChannels(config: ReceiverConfig): BouquetChannelList =
+        currentBouquetChannels(config, cachedChannels = { null }, locate = { null })
+
+    /**
+     * The bouquet holding the receiver's current channel. [cachedChannels] (the synced Room
+     * lists) is asked before the box for each bouquet's channels, and [locate] names the synced
+     * bouquet that holds a channel, so the box is only swept when the cache does not know.
+     */
+    suspend fun currentBouquetChannels(
+        config: ReceiverConfig,
+        cachedChannels: suspend (String) -> List<BouquetEntry>?,
+        locate: suspend (String) -> String?,
+    ): BouquetChannelList {
         val currentBody = get(config, endpoints.current(config))
         val service = parsed { OpenWebifJson.parseService(currentBody) }
         val hinted = OpenWebifJson.bouquetReference(currentBody)
         val television = televisionBouquets(config)
         val radio = radioBouquets(config)
-        return bouquetContaining(config, television + radio, hinted, service.reference)
+        return bouquetContaining(config, television + radio, hinted, service.reference, cachedChannels, locate)
     }
 
     /**
@@ -150,25 +166,29 @@ class OpenWebifApi @Inject constructor(
         bouquets: List<BouquetEntry>,
         hinted: String?,
         serviceReference: String,
+        cachedChannels: suspend (String) -> List<BouquetEntry>?,
+        locate: suspend (String) -> String?,
     ): BouquetChannelList {
         val hintedBouquet = bouquets.firstOrNull { bouquet ->
             hinted != null && bouquetIdentity(bouquet.reference) == bouquetIdentity(hinted)
         }
-        val ordered = listOfNotNull(hintedBouquet) + bouquets.filter { it.reference != hintedBouquet?.reference }
-        var fallback: BouquetChannelList? = null
-        for (bouquet in ordered) {
-            val channels = runCatching {
+        val located = if (serviceReference.isBlank()) null else runCatching { locate(serviceReference) }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            null
+        }
+        return BouquetSearch.find(bouquets, hintedBouquet, serviceReference, located) { bouquet ->
+            val cached = runCatching { cachedChannels(bouquet.reference) }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                null
+            }
+            (cached ?: runCatching {
                 numbered(config, bouquet.reference, services(config, bouquet.reference))
             }.getOrElse { error ->
                 if (error is CancellationException) throw error
                 EnigmaLog.service("skip bouquet ${bouquet.name}: ${error.javaClass.simpleName}")
                 emptyList()
-            }.filter { BouquetChannels.isPlayableChannel(it.reference) }
-            val list = BouquetChannelList(bouquet.name, bouquet.reference, channels)
-            if (fallback == null && channels.isNotEmpty()) fallback = list
-            if (channels.any { BouquetChannels.sameService(it.reference, serviceReference) }) return list
+            }).filter { BouquetChannels.isPlayableChannel(it.reference) }
         }
-        return fallback ?: BouquetChannelList("", "", emptyList())
     }
 
     override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {
@@ -323,7 +343,22 @@ class OpenWebifApi @Inject constructor(
         return null
     }
 
-    override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
+    /**
+     * Channel lists per bouquet: callers that ask for the same bouquet at the same time share one
+     * request, and a list just read is reused for [SERVICES_TTL_MS] (app start used to sweep every
+     * bouquet twice, once for the guide and once for the player).
+     */
+    private val serviceLists = com.enigmacast.util.SingleFlight<List<BouquetEntry>>(SERVICES_TTL_MS)
+
+    /** Forgets the shared channel lists, so the next read asks the box (channel sync, settings import). */
+    suspend fun forgetServiceLists() = serviceLists.forget()
+
+    override suspend fun services(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> =
+        serviceLists.get("${config.id}|${config.useHttps}|${config.host}|${config.httpPort}|$bouquetReference") {
+            servicesFromBox(config, bouquetReference)
+        }
+
+    private suspend fun servicesFromBox(config: ReceiverConfig, bouquetReference: String): List<BouquetEntry> {
         return try {
             parsed { OpenWebifJson.parseServices(get(config, endpoints.services(config, bouquetReference))) }
         } catch (error: OpenWebifException) {

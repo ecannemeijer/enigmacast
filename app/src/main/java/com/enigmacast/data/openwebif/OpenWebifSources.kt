@@ -84,6 +84,15 @@ class OpenWebifServiceStateSource @Inject constructor(
         return api.currentBouquetChannels(config)
     }
 
+    /** As [currentBouquetChannels], asking [cache] (synced channel lists) before the box. */
+    suspend fun currentBouquetChannels(config: ReceiverConfig, cache: com.enigmacast.domain.sync.GuideCacheReader): BouquetChannelList {
+        return api.currentBouquetChannels(
+            config,
+            cachedChannels = { reference -> cache.channelsInBouquet(config, reference)?.takeIf { it.isNotEmpty() } },
+            locate = { service -> cache.bouquetOf(config, service)?.reference },
+        )
+    }
+
     override suspend fun televisionBouquets(config: ReceiverConfig): List<BouquetEntry> {
         return api.televisionBouquets(config)
     }

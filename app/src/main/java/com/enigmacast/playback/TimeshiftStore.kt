@@ -27,8 +27,10 @@ internal class TimeshiftStore(
     init {
         require(maxBytes > 0)
         require(chunkBytes > 0)
-        directory.mkdirs()
     }
+
+    /** The folder is made by the writer on its first full chunk, so constructing never touches disk. */
+    private var directoryReady = false
 
     private val lock = ReentrantLock()
     private val readable = lock.newCondition()
@@ -164,6 +166,10 @@ internal class TimeshiftStore(
     }
 
     private fun flushTail() {
+        if (!directoryReady) {
+            directory.mkdirs()
+            directoryReady = true
+        }
         val file = chunkFile(tailStart / chunkBytes)
         file.writeBytes(tail.copyOf(tailLength))
         tailStart += tailLength

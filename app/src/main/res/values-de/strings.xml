@@ -1469,6 +1469,9 @@
     <string name="sync_server_claim">Admin übernehmen</string>
     <string name="sync_server_claimed">Dieses Gerät ist jetzt der einzige Admin. Bewahre den neuen Wiederherstellungscode auf: %1$s. Der vorherige Code funktioniert nicht mehr.</string>
     <string name="sync_server_connected">Verbunden mit %1$s als %2$s. Ein Profil wählen synchronisiert es sofort.</string>
+    <string name="sync_server_last_sync">Letzte Synchronisierung</string>
+    <string name="sync_server_incomplete_profiles">Unvollständig: %1$d von %2$d Profilen konnten nicht aktualisiert werden. Wird automatisch erneut versucht.</string>
+    <string name="sync_server_incomplete">Unvollständig: Nicht alles konnte synchronisiert werden. Wird automatisch erneut versucht.</string>
     <string name="sync_server_disconnect">Trennen</string>
     <string name="iptv_next">Weiter</string>
     <string name="iptv_next_cancel">Abbrechen</string>

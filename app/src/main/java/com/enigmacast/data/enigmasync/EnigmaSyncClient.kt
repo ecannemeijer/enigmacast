@@ -67,6 +67,7 @@ class EnigmaSyncClient @Inject constructor(
             .header("Connection", "close")
         val request = if (method == "GET") builder.get().build() else builder.post(body.toRequestBody(JSON)).build()
         client.newCall(request).execute().use { response ->
+            noteCipher(config.host, response)
             val text = response.body.string()
             if (!response.isSuccessful) error("sync ${response.code}")
             return text
@@ -165,9 +166,16 @@ class EnigmaSyncClient @Inject constructor(
         return OkHttpClient.Builder()
             .sslSocketFactory(ssl.socketFactory, trust)
             .hostnameVerifier { hostname, _ -> hostname == host }
+            .connectionSpecs(SyncTls.specs(SyncTls.prefersChaCha(host)))
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .build()
+    }
+
+    /** Remembers whether [host] negotiated ChaCha20-Poly1305; logs only the suite name, once per change. */
+    private fun noteCipher(host: String, response: okhttp3.Response) {
+        val suite = response.handshake?.cipherSuite?.javaName ?: return
+        if (SyncTls.record(host, suite)) com.enigmacast.util.EnigmaLog.service("sync: tls $suite")
     }
 
     private fun json(value: String) = buildString {

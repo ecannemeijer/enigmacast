@@ -1473,6 +1473,9 @@
     <string name="sync_server_claim">Reprendre l\'administration</string>
     <string name="sync_server_claimed">Cet appareil est maintenant le seul administrateur. Conservez le nouveau code de récupération : %1$s. L\'ancien code ne fonctionne plus.</string>
     <string name="sync_server_connected">Connecté à %1$s en tant que %2$s. Choisir un profil le synchronise aussitôt.</string>
+    <string name="sync_server_last_sync">Dernière synchronisation</string>
+    <string name="sync_server_incomplete_profiles">Incomplète : %1$d profils sur %2$d n\'ont pas pu être mis à jour. Nouvel essai automatique.</string>
+    <string name="sync_server_incomplete">Incomplète : tout n\'a pas pu être synchronisé. Nouvel essai automatique.</string>
     <string name="sync_server_disconnect">Déconnecter</string>
     <string name="iptv_next">Suivant</string>
     <string name="iptv_next_cancel">Annuler</string>
