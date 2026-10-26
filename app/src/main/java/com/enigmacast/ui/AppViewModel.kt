@@ -228,6 +228,14 @@ class AppViewModel @Inject constructor(
     }
 
     /**
+     * The sync server update question may appear: no wizard, no other dialog, never in hotel mode
+     * (guests are not asked; the owner sees a notice in Settings › Sync server).
+     */
+    val syncServerPromptAllowed: Boolean
+        get() = screen != AppScreen.Setup && screen != AppScreen.Loading &&
+            updatePrompt == null && !exitPrompt && !hotelWelcome && !hotel.current.enabled
+
+    /**
      * Cancel or Back in the update dialog. Stops a running download and lets the stream
      * that was stopped for it play again.
      */

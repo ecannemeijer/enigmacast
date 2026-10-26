@@ -22,6 +22,8 @@ import com.enigmacast.data.enigmasync.SyncServerInstaller
 import com.enigmacast.data.profile.ProfileStore
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.ui.theme.InfoRow
+import com.enigmacast.data.enigmasync.SyncServerUpdater
+import com.enigmacast.domain.sync.SyncServerVersions
 import com.enigmacast.ui.theme.EnigmaColors
 import androidx.tv.material3.Text
 import androidx.compose.ui.unit.sp
@@ -89,7 +91,7 @@ class SyncServerViewModel @Inject constructor(
                         val body = """{"uuid":${json(profile.uuid)},"name":${json(profile.name)},"avatar":${profile.avatar},"updatedMs":${System.currentTimeMillis()},"changeId":${json(profile.uuid + "-import")}}"""
                         runCatching { client.request(client.config()!!, "POST", "/api/v1/profiles", body.toByteArray()) }
                     }
-                    engine.sync()
+                    engine.sync(foreground = true)
                     report
                 }
             }
@@ -141,7 +143,7 @@ class SyncServerViewModel @Inject constructor(
                         val body = """{"uuid":${json(profile.uuid)},"name":${json(profile.name)},"avatar":${profile.avatar},"updatedMs":${System.currentTimeMillis()},"changeId":${json(profile.uuid + "-claim")}}"""
                         runCatching { client.request(client.config()!!, "POST", "/api/v1/profiles", body.toByteArray()) }
                     }
-                    runCatching { engine.sync() }
+                    runCatching { engine.sync(foreground = true) }
                     newCode
                 }
             }
@@ -174,7 +176,10 @@ class SyncServerViewModel @Inject constructor(
 }
 
 @Composable
-fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
+fun SyncServerCard(
+    model: SyncServerViewModel = hiltViewModel(),
+    updates: SyncServerUpdateViewModel = hiltViewModel(),
+) {
     SettingsCard(stringResource(R.string.sync_server_title)) {
         Column(Modifier.padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             model.freshRecovery?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_claimed, it)) }
@@ -201,7 +206,22 @@ fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
                         },
                     )
                 }
-                TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() })
+                val updateState by updates.state.collectAsState()
+                val lastCheck by updates.last.collectAsState()
+                // Hotel mode: guests are never asked, so the owner sees it here behind the PIN.
+                lastCheck?.takeIf { updates.hotelMode && it.verdict == SyncServerVersions.Verdict.OUTDATED }?.let {
+                    InfoRow(stringResource(R.string.sync_update_title), stringResource(R.string.sync_update_hotel_notice, it.runningText, it.latest ?: "?"))
+                }
+                if (!updates.dialog) syncUpdateStatus(updateState)?.let { InfoRow(stringResource(R.string.sync_update_title), it) }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvButton(
+                        stringResource(R.string.sync_update_button),
+                        { updates.checkAndOffer() },
+                        enabled = updateState !is SyncServerUpdater.State.Checking && updateState !is SyncServerUpdater.State.Updating,
+                    )
+                    TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() })
+                }
+                if (updates.dialog) SyncServerUpdateDialog(updates)
                 return@Column
             }
             Text(stringResource(R.string.sync_server_install_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)

@@ -50,7 +50,24 @@ class EnigmaSyncClient @Inject constructor(
         listOf(HOST, PIN, TOKEN, DEVICE, ROLE).forEach { secrets.write(it, null) }
     }
 
-    fun request(config: SyncServerConfig, method: String, path: String, body: ByteArray = ByteArray(0)): String {
+    fun request(config: SyncServerConfig, method: String, path: String, body: ByteArray = ByteArray(0)): String =
+        call(config, method, path, body) { response -> response.body.string() }
+
+    /**
+     * GET whose body is read as it arrives, so a large pull page can be applied change by change.
+     * Closing the reader releases the connection. A non-2xx status throws before any body is read.
+     */
+    fun openStream(config: SyncServerConfig, path: String): java.io.Reader =
+        call(config, "GET", path, ByteArray(0), keepOpen = true) { response -> response.body.charStream() }
+
+    private fun <T> call(
+        config: SyncServerConfig,
+        method: String,
+        path: String,
+        body: ByteArray,
+        keepOpen: Boolean = false,
+        read: (okhttp3.Response) -> T,
+    ): T {
         if (config.pin.isBlank()) error("sync server certificate is not pinned")
         val stamp = System.currentTimeMillis().toString()
         val nonce = UUID.randomUUID().toString()
@@ -66,11 +83,29 @@ class EnigmaSyncClient @Inject constructor(
             .header("X-Signature", signature)
             .header("Connection", "close")
         val request = if (method == "GET") builder.get().build() else builder.post(body.toRequestBody(JSON)).build()
-        client.newCall(request).execute().use { response ->
+        val response = client.newCall(request).execute()
+        try {
             noteCipher(config.host, response)
-            val text = response.body.string()
             if (!response.isSuccessful) error("sync ${response.code}")
-            return text
+            val result = read(response)
+            if (!keepOpen) response.close()
+            return result
+        } catch (error: Throwable) {
+            response.close()
+            throw error
+        }
+    }
+
+    /**
+     * `version` from the pinned, unauthenticated /api/v1/health. Servers before 0.3.1 answer
+     * without it (null); a failure to connect throws.
+     */
+    fun serverVersion(config: SyncServerConfig): String? {
+        val client = pinnedClient(config.host, config.pin)
+        val request = Request.Builder().url("https://${config.host}:8740/api/v1/health").header("Connection", "close").get().build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("sync ${response.code}")
+            return org.json.JSONObject(response.body.string()).optString("version").ifBlank { null }
         }
     }
 
@@ -152,6 +187,20 @@ class EnigmaSyncClient @Inject constructor(
      * Trust is the SPKI pin only: a different key is rejected, and the hostname must be the one we pinned.
      */
     private fun pinnedClient(host: String, pin: String): OkHttpClient {
+        val chacha = SyncTls.prefersChaCha(host)
+        val key = "$host|$pin|$chacha"
+        synchronized(clients) {
+            clients[key]?.let { return it }
+            // A receiver's address, pin or cipher preference changed: drop the old clients for it.
+            clients.keys.filter { it.startsWith("$host|") }.forEach { clients.remove(it) }
+            return buildPinnedClient(host, pin, chacha).also { clients[key] = it }
+        }
+    }
+
+    /** One client (thread pool, TLS context) per receiver, pin and cipher choice, instead of one per request. */
+    private val clients = HashMap<String, OkHttpClient>()
+
+    private fun buildPinnedClient(host: String, pin: String, chacha: Boolean): OkHttpClient {
         val trust = object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
             override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
@@ -166,7 +215,7 @@ class EnigmaSyncClient @Inject constructor(
         return OkHttpClient.Builder()
             .sslSocketFactory(ssl.socketFactory, trust)
             .hostnameVerifier { hostname, _ -> hostname == host }
-            .connectionSpecs(SyncTls.specs(SyncTls.prefersChaCha(host)))
+            .connectionSpecs(SyncTls.specs(chacha))
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .build()
