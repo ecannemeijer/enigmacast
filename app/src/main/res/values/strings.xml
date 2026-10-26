@@ -1658,6 +1658,8 @@
     <string name="hotel_bouquets">Visible bouquets</string>
     <string name="hotel_bouquets_desc">Only these bouquets show in the channel list, zapping, search and the guide.</string>
     <string name="hotel_categories">Visible IPTV categories</string>
+    <string name="hotel_no_channels">No channels</string>
+    <string name="hotel_no_channels_hint">Check the channel selection in Settings › Hotel mode (visible bouquets or IPTV categories) and the receiver or IPTV connection.</string>
     <string name="hotel_categories_desc">Per provider and section. Hidden categories disappear from panels, zapping, search and the guide.</string>
     <string name="hotel_all">All</string>
     <string name="hotel_none">None</string>

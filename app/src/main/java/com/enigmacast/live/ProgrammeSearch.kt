@@ -97,7 +97,7 @@ class ProgrammeSearch @Inject constructor(
 
     private suspend fun catalog(nowMs: Long): Catalog {
         gate.withLock {
-            val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+            val hotel = com.enigmacast.domain.hotel.HotelRuntime.guestConfig
             val allowed = hotel.allowedBouquets.takeIf { com.enigmacast.domain.hotel.HotelFilter.restrictsBouquets(hotel) }
             val cached = catalog
             if (cached != null && nowMs - cached.loadedAtMs < CATALOG_TTL_MS && cached.allowed == allowed) return cached

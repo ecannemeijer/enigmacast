@@ -1655,6 +1655,8 @@
     <string name="hotel_bouquets">Sichtbare Bouquets</string>
     <string name="hotel_bouquets_desc">Nur diese Bouquets erscheinen in der Senderliste, beim Zappen, in der Suche und im Guide.</string>
     <string name="hotel_categories">Sichtbare IPTV-Kategorien</string>
+    <string name="hotel_no_channels">Keine Sender</string>
+    <string name="hotel_no_channels_hint">Prüfe die Senderauswahl unter Einstellungen › Hotelmodus (sichtbare Bouquets oder IPTV-Kategorien) und die Verbindung zum Receiver oder IPTV.</string>
     <string name="hotel_categories_desc">Pro Anbieter und Bereich. Ausgeblendete Kategorien verschwinden aus Panels, Zappen, Suche und Guide.</string>
     <string name="hotel_all">Alle</string>
     <string name="hotel_none">Keine</string>

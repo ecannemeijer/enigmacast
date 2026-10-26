@@ -27,9 +27,11 @@ data class HotelWelcome(
  * Hotel mode ("Hotelstand"): the TV in a B&B room. Device-local: it lives in this TV's own
  * preferences, is never synced and never exported, so another TV of the owner stays normal.
  *
- * [allowedBouquets] and [allowedCategories] are whitelists: null / a missing key means
- * "not configured, everything visible"; a present (even empty) set shows only those ids.
+ * [allowedBouquets] and [allowedCategories] are whitelists: null, a missing key or an empty set
+ * means "not configured, everything visible"; a non-empty set shows only those ids.
  * A whitelist keeps a category the provider adds later hidden from guests until the owner allows it.
+ * A whitelist that matches none of the current bouquets/categories (old references, another box or
+ * playlist) shows everything too, with a log line: guests never get a TV without channels.
  */
 @Serializable
 data class HotelConfig(

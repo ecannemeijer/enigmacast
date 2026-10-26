@@ -36,7 +36,31 @@ object HotelRuntime {
     fun cleaned() {
         _cleanups.value = _cleanups.value + 1
     }
+
+    /** The profile hotel mode entered (for the one-line visibility logs); blank before entry. */
+    @Volatile var profileUuid: String = ""
+
+    /**
+     * A bouquet whitelist that matched none of the receiver's bouquets (old references, another box).
+     * Guests then see every bouquet instead of nothing; a changed whitelist is checked again.
+     */
+    @Volatile private var unmatchedBouquets: Set<String>? = null
+
+    fun bouquetWhitelistUnmatched(whitelist: Set<String>?) {
+        unmatchedBouquets = whitelist
+    }
+
+    /** [config] as guests get it: a whitelist that matched nothing counts as "everything". */
+    val guestConfig: HotelConfig
+        get() {
+            val config = _state.value
+            val unmatched = unmatchedBouquets
+            return if (unmatched != null && config.allowedBouquets == unmatched) config.copy(allowedBouquets = null) else config
+        }
 }
+
+/** What a hotel filter kept: [fellBack] = the whitelist matched nothing, so everything is shown. */
+data class HotelVisible<T>(val items: List<T>, val whitelist: Int, val total: Int, val fellBack: Boolean)
 
 /** The guest's left menu. */
 enum class HotelMenuItem { SAT_TV, IPTV_LIVE, IPTV_MOVIES, IPTV_SERIES, SETTINGS }
@@ -61,19 +85,44 @@ object HotelMenu {
 object HotelFilter {
     fun categoryKey(source: String, section: XtreamSection) = "$source|${section.name}"
 
-    fun bouquetAllowed(reference: String, config: HotelConfig): Boolean {
-        if (!config.enabled) return true
-        val allowed = config.allowedBouquets ?: return true
-        return reference in allowed
+    /**
+     * The bouquet's identity for whitelist matching: the bouquet file name when the reference has
+     * one (`FROM BOUQUET "userbouquet.x.tv"`), so the receiver's and the cache's spelling of the same
+     * bouquet (quotes, spaces, case) match. Otherwise the trimmed, lower-case reference.
+     */
+    fun bouquetKey(reference: String): String {
+        val trimmed = reference.trim()
+        val file = BOUQUET_FILE.find(trimmed)?.groupValues?.get(1)
+        return (file ?: trimmed).trim().lowercase()
     }
 
-    fun bouquets(list: List<BouquetEntry>, config: HotelConfig): List<BouquetEntry> {
-        if (!config.enabled || config.allowedBouquets == null) return list
-        return list.filter { bouquetAllowed(it.reference, config) }
+    private val BOUQUET_FILE = Regex("\"([^\"]+)\"")
+
+    /** The whitelist that applies, or null: off, not configured, or empty all mean "everything". */
+    private fun bouquetWhitelist(config: HotelConfig): Set<String>? =
+        config.allowedBouquets?.takeIf { config.enabled && it.isNotEmpty() }
+
+    fun bouquetAllowed(reference: String, config: HotelConfig): Boolean {
+        val allowed = bouquetWhitelist(config) ?: return true
+        val key = bouquetKey(reference)
+        return reference in allowed || allowed.any { bouquetKey(it) == key }
+    }
+
+    fun bouquets(list: List<BouquetEntry>, config: HotelConfig): List<BouquetEntry> = visibleBouquets(list, config).items
+
+    /**
+     * The bouquets guests see. A whitelist that keeps none of [list] (stale references, another
+     * box) shows all of them instead of a TV without channels; [HotelVisible.fellBack] says so.
+     */
+    fun visibleBouquets(list: List<BouquetEntry>, config: HotelConfig): HotelVisible<BouquetEntry> {
+        val allowed = bouquetWhitelist(config) ?: return HotelVisible(list, 0, list.size, fellBack = false)
+        val kept = list.filter { bouquetAllowed(it.reference, config) }
+        if (kept.isEmpty() && list.isNotEmpty()) return HotelVisible(list, allowed.size, list.size, fellBack = true)
+        return HotelVisible(kept, allowed.size, list.size, fellBack = false)
     }
 
     /** True when hotel mode hides some bouquets (filters and search caches depend on it). */
-    fun restrictsBouquets(config: HotelConfig) = config.enabled && config.allowedBouquets != null
+    fun restrictsBouquets(config: HotelConfig) = bouquetWhitelist(config) != null
 
     fun sectionAllowed(section: XtreamSection, config: HotelConfig): Boolean = when {
         !config.enabled -> true
@@ -82,12 +131,13 @@ object HotelFilter {
         else -> config.iptvVod
     }
 
-    fun categories(list: List<XtreamCategory>, source: String, section: XtreamSection, config: HotelConfig): List<XtreamCategory> {
-        if (!config.enabled) return list
-        if (!sectionAllowed(section, config)) return emptyList()
-        val allowed = config.allowedCategories[categoryKey(source, section)] ?: return list
-        return list.filter { it.id in allowed }
-    }
+    private fun categoryWhitelist(config: HotelConfig, source: String, section: XtreamSection): Set<String>? =
+        config.allowedCategories[categoryKey(source, section)]?.takeIf { it.isNotEmpty() }
+
+    private fun sameCategory(id: String, allowed: Set<String>) = id in allowed || allowed.any { it.trim() == id.trim() }
+
+    fun categories(list: List<XtreamCategory>, source: String, section: XtreamSection, config: HotelConfig): List<XtreamCategory> =
+        visibleCategories(list, section, config) { source }.items
 
     /** Playlist categories carry their provider; [sourceOf] maps it to the source key. */
     fun categoriesBySource(
@@ -95,13 +145,39 @@ object HotelFilter {
         section: XtreamSection,
         config: HotelConfig,
         sourceOf: (XtreamCategory) -> String,
-    ): List<XtreamCategory> {
-        if (!config.enabled) return list
-        if (!sectionAllowed(section, config)) return emptyList()
-        return list.filter { category ->
-            val allowed = config.allowedCategories[categoryKey(sourceOf(category), section)]
-            allowed == null || category.id in allowed
+    ): List<XtreamCategory> = visibleCategories(list, section, config, sourceOf).items
+
+    /**
+     * The categories guests see, per source: a missing or empty whitelist shows the source's
+     * categories, and so does a whitelist that keeps none of them (ids from an old playlist).
+     */
+    fun visibleCategories(
+        list: List<XtreamCategory>,
+        section: XtreamSection,
+        config: HotelConfig,
+        sourceOf: (XtreamCategory) -> String,
+    ): HotelVisible<XtreamCategory> {
+        if (!config.enabled) return HotelVisible(list, 0, list.size, fellBack = false)
+        if (!sectionAllowed(section, config)) return HotelVisible(emptyList(), 0, list.size, fellBack = false)
+        var whitelist = 0
+        var fellBack = false
+        val keep = HashSet<XtreamCategory>()
+        list.groupBy(sourceOf).forEach { (source, categories) ->
+            val allowed = categoryWhitelist(config, source, section)
+            if (allowed == null) {
+                keep += categories
+                return@forEach
+            }
+            whitelist += allowed.size
+            val kept = categories.filter { sameCategory(it.id, allowed) }
+            if (kept.isEmpty()) {
+                fellBack = true
+                keep += categories
+            } else {
+                keep += kept
+            }
         }
+        return HotelVisible(list.filter { it in keep }, whitelist, list.size, fellBack)
     }
 
     /** Stores the owner's pick as a whitelist; every id of [all] in [shown] stays visible. */

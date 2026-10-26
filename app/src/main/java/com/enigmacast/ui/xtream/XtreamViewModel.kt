@@ -1117,7 +1117,11 @@ class XtreamViewModel @Inject constructor(
                 playlistStore.login,
                 playlistStore.providers,
                 playlistSync.lastLoad,
-                profiles.state.map { com.enigmacast.domain.profile.ProfileRules.seesPlaylist(it, it.activeUuid) },
+                // Hotel mode on IPTV: the guest's profile always sees the playlist (its audience
+                // may leave the hotel profile out, which left guests without any channel).
+                kotlinx.coroutines.flow.combine(profiles.state, com.enigmacast.domain.hotel.HotelRuntime.state) { state, hotel ->
+                    com.enigmacast.domain.profile.ProfileRules.seesPlaylist(state, state.activeUuid) || (hotel.enabled && hotel.iptv)
+                },
             ) { s, login, providers, loaded, sees ->
                 Source(s.first, s.second, s.third?.let { it.id to it.host }, login, providers, loaded, sees)
             }
@@ -1213,15 +1217,20 @@ class XtreamViewModel @Inject constructor(
                 val source = com.enigmacast.data.xtream.IptvProvider.sourceKey(category.providerId)
                 category.id !in hiddenCategories.hidden(source, section)
             }
-            // Hotel mode: only the categories the owner allowed for guests (per provider).
-            return com.enigmacast.domain.hotel.HotelFilter.categoriesBySource(visible, section, hotel) {
+            // Hotel mode: only the categories the owner allowed for guests (per provider); a
+            // whitelist that matches none of them shows them all (logged).
+            val guest = com.enigmacast.domain.hotel.HotelFilter.visibleCategories(visible, section, hotel) {
                 com.enigmacast.data.xtream.IptvProvider.sourceKey(it.providerId)
             }
+            com.enigmacast.domain.hotel.HotelVisibilityLog.categories(hotel, section.name, guest)
+            return guest.items
         }
         val all = repository.categories(account, section, force)
         val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(null, account.key)
         val visible = com.enigmacast.domain.xtream.IptvCategoryFilter.visible(all, hiddenCategories.hidden(source, section))
-        return com.enigmacast.domain.hotel.HotelFilter.categories(visible, source, section, hotel)
+        val guest = com.enigmacast.domain.hotel.HotelFilter.visibleCategories(visible, section, hotel) { source }
+        com.enigmacast.domain.hotel.HotelVisibilityLog.categories(hotel, section.name, guest)
+        return guest.items
     }
 
     private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, category: XtreamCategory, force: Boolean) =
