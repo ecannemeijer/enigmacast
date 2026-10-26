@@ -59,3 +59,23 @@ data class SyncHealth(
 ) {
     val incomplete: Boolean get() = failedProfiles > 0 || otherFailed
 }
+
+/**
+ * When background syncs may pull again after an incomplete run. Every run that fails again doubles
+ * the pause (1, 2, 4 … up to 30 minutes); a complete run or a sync the user started resets it.
+ * Pushing the local outbox is never paused.
+ */
+object SyncRunPolicy {
+    const val FIRST_PAUSE_MS = 60_000L
+    const val MAX_PAUSE_MS = 30 * 60_000L
+
+    /** Pause after [failedRuns] incomplete runs in a row (0 = none). */
+    fun pauseMs(failedRuns: Int): Long {
+        if (failedRuns <= 0) return 0L
+        val shift = (failedRuns - 1).coerceIn(0, 16)
+        return (FIRST_PAUSE_MS shl shift).coerceAtMost(MAX_PAUSE_MS)
+    }
+
+    fun pullAllowed(nowMs: Long, lastIncompleteMs: Long, failedRuns: Int, foreground: Boolean): Boolean =
+        foreground || failedRuns <= 0 || nowMs - lastIncompleteMs >= pauseMs(failedRuns)
+}

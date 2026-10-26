@@ -592,6 +592,8 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 destructive = true,
             )
         }
+        // Outdated sync server: asked once per release (Later / Update), never updated silently.
+        com.enigmacast.ui.home.SyncServerUpdatePrompt(allowed = appViewModel.syncServerPromptAllowed)
         appViewModel.updatePrompt?.let { prompt ->
             // Its own window: the screen behind keeps its focus requests to itself.
             AppUpdateDialog(

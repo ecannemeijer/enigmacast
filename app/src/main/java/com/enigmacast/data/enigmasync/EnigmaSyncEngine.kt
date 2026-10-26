@@ -80,16 +80,64 @@ class EnigmaSyncEngine @Inject constructor(
     private val running = kotlinx.coroutines.sync.Mutex()
     private val marks by lazy { context.getSharedPreferences("enigma_sync_library", Context.MODE_PRIVATE) }
 
-    suspend fun sync() = withContext(Dispatchers.IO) {
+    /** Calls to [sync] so far, and the last call number a finished run covered. */
+    private val requested = java.util.concurrent.atomic.AtomicLong()
+    @Volatile
+    private var covered = 0L
+    @Volatile
+    private var shownOnce = false
+
+    /** Incomplete runs in a row and when the last one ended; background pulls pause in between ([SyncRunPolicy]). */
+    @Volatile
+    private var failedRuns = 0
+    @Volatile
+    private var lastIncompleteMs = 0L
+
+    /**
+     * Runs one sync, or joins the next one. Every nudge that arrives while a run is busy is
+     * merged into a single rerun afterwards (instead of one full run each), and a caller only
+     * returns once a run that started after its call has finished.
+     * @param foreground the user asked for it (Sync server card): shows in the status window and
+     *   ignores the pause after incomplete runs.
+     */
+    suspend fun sync(foreground: Boolean = false) = withContext(Dispatchers.IO) {
+        val ticket = requested.incrementAndGet()
         running.withLock {
-            // Unpaired devices have nothing to do; a paired one reports to the status window (only slow syncs show).
-            if (client.config() == null) return@withLock
-            activity.track(com.enigmacast.activity.ActivityKind.SYNC_SERVER) { syncOnce() }
+            if (covered >= ticket) return@withLock
+            val upTo = requested.get()
+            // Unpaired devices have nothing to do.
+            if (client.config() == null) {
+                covered = upTo
+                return@withLock
+            }
+            val pull = com.enigmacast.domain.sync.SyncRunPolicy.pullAllowed(
+                System.currentTimeMillis(), lastIncompleteMs, failedRuns, foreground,
+            )
+            try {
+                // Only the first run of this process and user-started runs report to the status window;
+                // background reruns stay quiet, and a failing server shows as "last sync incomplete" in Settings.
+                if (foreground || !shownOnce) {
+                    shownOnce = true
+                    activity.track(com.enigmacast.activity.ActivityKind.SYNC_SERVER) { syncOnce(pull) }
+                } else {
+                    syncOnce(pull)
+                }
+            } finally {
+                covered = upTo
+            }
         }
     }
 
-    private suspend fun syncOnce() {
+    private suspend fun syncOnce(pullAllowed: Boolean) {
         val config = client.config() ?: return
+        if (!pullAllowed) {
+            // After incomplete runs only this TV's own changes go up until the pause is over.
+            runCatching { push(config) }
+                .onFailure { EnigmaLog.service("sync: push (pauze) mislukt: ${SyncPullPolicy.compactError(it)}") }
+            runCatching { pushSettings(config) }
+                .onFailure { EnigmaLog.service("sync: instellingen push (pauze) mislukt: ${SyncPullPolicy.compactError(it)}") }
+            return
+        }
         EnigmaLog.service("sync: start host=${config.host}")
         pullFailures = 0
         var otherFailed = false
@@ -129,9 +177,19 @@ class EnigmaSyncEngine @Inject constructor(
             .onFailure { otherFailed = true; EnigmaLog.service("sync: push mislukt: ${SyncPullPolicy.compactError(it)}") }
         val health = SyncHealth(failedProfiles, uuids.size, otherFailed, System.currentTimeMillis())
         saveHealth(health)
+        if (health.incomplete) {
+            failedRuns++
+            lastIncompleteMs = System.currentTimeMillis()
+        } else {
+            failedRuns = 0
+        }
         EnigmaLog.service(
-            if (health.incomplete) "sync: onvolledig profielen=$failedProfiles/${uuids.size} overig=${if (otherFailed) "fout" else "ok"}"
-            else "sync: klaar",
+            if (health.incomplete) {
+                "sync: onvolledig profielen=$failedProfiles/${uuids.size} overig=${if (otherFailed) "fout" else "ok"}, " +
+                    "volgende pull over ${com.enigmacast.domain.sync.SyncRunPolicy.pauseMs(failedRuns) / 1000}s"
+            } else {
+                "sync: klaar"
+            },
         )
     }
 
@@ -243,59 +301,63 @@ class EnigmaSyncEngine @Inject constructor(
     }
 
     /**
-     * One pull page, retried because the receiver's old TLS stack occasionally drops a connection.
-     * Every failure shrinks the page (50 → 20 → 10 changes) and backs off a little longer.
-     * @return the response text and the page size it was asked with.
+     * Whether the paired receiver answers pulls in pages: true/false after a complete page, null before.
+     * Servers before 0.2.6 do not (no `limit` in the response); [SyncServerUpdater] then offers the update.
      */
-    private suspend fun fetchPullPage(config: SyncServerConfig, encodedProfile: String, cursor: Int): Pair<String, Int> {
-        var last: Exception? = null
-        repeat(SyncPullPolicy.MAX_ATTEMPTS) { attempt ->
-            val limit = SyncPullPolicy.pageSize(pullFailures)
-            try {
-                return client.request(
-                    config,
-                    "GET",
-                    "/api/v1/sync/pull?profileId=$encodedProfile&cursor=$cursor&limit=$limit",
-                ) to limit
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                last = error
-                pullFailures++
-                val wait = SyncPullPolicy.backoffMs(attempt)
-                EnigmaLog.service(
-                    "sync: pull pagina mislukt (poging ${attempt + 1}/${SyncPullPolicy.MAX_ATTEMPTS}, limit=$limit, " +
-                        "volgende=${SyncPullPolicy.pageSize(pullFailures)}): ${SyncPullPolicy.compactError(error)}",
-                )
-                if (attempt < SyncPullPolicy.MAX_ATTEMPTS - 1) kotlinx.coroutines.delay(wait)
-            }
-        }
-        throw last ?: IllegalStateException("pull failed")
-    }
+    fun serverPages(host: String): Boolean? =
+        if (marks.contains(pagesKey(host))) marks.getBoolean(pagesKey(host), true) else null
 
-    /** @return true when this pull carried a settings document for the profile. */
+    private fun pagesKey(host: String) = "server-pages:$host"
+
+    /**
+     * Pulls every page after the saved cursor. Changes are applied while the page streams in, so
+     * a connection that breaks halfway keeps what arrived and the next try resumes after the last
+     * complete change. A failure without progress shrinks the page (50 → 20 → 10) and backs off.
+     * @return true when this pull carried a settings document for the profile.
+     */
     private suspend fun pull(config: SyncServerConfig, profileId: String): Boolean {
         val encoded = java.net.URLEncoder.encode(profileId, "UTF-8")
         var cursor = outbox.cursor(profileId)?.cursor?.toIntOrNull() ?: 0
         var sawSettings = false
-        // The receiver returns at most one page per request. Keep pulling pages until the
-        // cursor stops moving; the old single huge TLS response was the reason a TV pull died
-        // with BrokenPipe and never reached the local database.
+        var attempt = 0
         while (true) {
-            val (text, limit) = fetchPullPage(config, encoded, cursor)
-            val root = JSONObject(text)
-            val changes = root.optJSONArray("changes")
-            if (changes != null) {
-                for (i in 0 until changes.length()) {
-                    val change = changes.getJSONObject(i)
-                    if (change.optString("entity") == "settings") sawSettings = true
-                    apply(profileId, change)
+            val limit = SyncPullPolicy.pageSize(pullFailures)
+            val page = try {
+                client.openStream(config, "/api/v1/sync/pull?profileId=$encoded&cursor=$cursor&limit=$limit").use { reader ->
+                    com.enigmacast.domain.sync.SyncPullStream.read(reader) { raw ->
+                        val change = JSONObject(raw)
+                        if (change.optString("entity") == "settings") sawSettings = true
+                        apply(profileId, change)
+                    }
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                pullFailures++
+                val reached = (error as? com.enigmacast.domain.sync.SyncPullStream.TruncatedPull)?.lastRev
+                if (reached != null && reached > cursor) {
+                    // Part of the page arrived and is applied: resume after it.
+                    outbox.putCursor(SyncCursorRow(profileId, reached.toString()))
+                    cursor = reached
+                    attempt = 0
+                } else {
+                    attempt++
+                }
+                EnigmaLog.service(
+                    "sync: pull pagina mislukt (poging $attempt/${SyncPullPolicy.MAX_ATTEMPTS}, limit=$limit, " +
+                        "volgende=${SyncPullPolicy.pageSize(pullFailures)}, cursor=$cursor): ${SyncPullPolicy.compactError(error)}",
+                )
+                if (attempt >= SyncPullPolicy.MAX_ATTEMPTS) throw error
+                kotlinx.coroutines.delay(SyncPullPolicy.backoffMs((attempt - 1).coerceAtLeast(0)))
+                continue
             }
-            val next = root.optInt("cursor", cursor)
+            marks.edit().putBoolean(pagesKey(config.host), page.serverPages).apply()
+            val next = page.cursor ?: page.lastRev ?: cursor
             outbox.putCursor(SyncCursorRow(profileId, next.toString()))
-            if (SyncPullPolicy.lastPage(cursor, next, changes?.length(), limit)) break
+            val last = page.more?.not() ?: SyncPullPolicy.lastPage(cursor, next, page.received, limit)
+            if (last || next <= cursor) break
             cursor = next
+            attempt = 0
         }
         return sawSettings
     }
