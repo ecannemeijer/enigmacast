@@ -75,11 +75,14 @@ class SyncServerUpdateViewModel @Inject constructor(
         }
     }
 
-    /** "Update sync server" in Settings: check first; the dialog opens only when there is something to install. */
-    fun checkAndOffer() {
+    /**
+     * "Update sync server" in Settings: check first; the dialog opens only when there is something to install.
+     * [host]: a server found at the receiver address while this TV is not paired.
+     */
+    fun checkAndOffer(host: String? = null) {
         if (state.value is State.Checking || state.value is State.Updating) return
         viewModelScope.launch {
-            val check = runCatching { updater.check() }.getOrNull() ?: return@launch
+            val check = runCatching { updater.check(host) }.getOrNull() ?: return@launch
             if (check.verdict != SyncServerVersions.Verdict.UP_TO_DATE && check.latest != null) dialog = true
         }
     }

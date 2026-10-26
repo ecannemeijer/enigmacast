@@ -1726,4 +1726,16 @@
     <string name="sync_update_err_backup">impossible de sauvegarder les données de synchronisation. Rien n\'a été installé.</string>
     <string name="sync_update_err_verify">impossible de confirmer la nouvelle version (%1$s). La sauvegarde se trouve dans le dossier backups des données de synchronisation.</string>
     <string name="sync_update_hotel_notice">Mise à jour disponible : serveur de synchronisation %1$s → %2$s. Les invités ne sont pas sollicités ; mettez à jour ici.</string>
+    <string name="sync_server_searching">Recherche d\'un serveur de synchronisation sur %1$s…</string>
+    <string name="sync_server_found">Serveur de synchronisation trouvé sur %1$s (%2$s)</string>
+    <string name="sync_server_found_hint">Associez ce téléviseur, comme vos autres téléviseurs : il rejoint le serveur existant et reprend ses profils, favoris et progression de visionnage. Rien ne change sur le récepteur.</string>
+    <string name="sync_server_not_found">Aucun serveur de synchronisation trouvé sur %1$s (port 8740). Installez-le ci-dessous, ou vérifiez l\'adresse et relancez la recherche.</string>
+    <string name="sync_server_pair_existing">Associer au serveur existant</string>
+    <string name="sync_server_pairing">Association…</string>
+    <string name="sync_server_pair_failed">Échec de l\'association : %1$s</string>
+    <string name="sync_server_reinstall">Réinstaller…</string>
+    <string name="sync_server_reinstall_title">Réinstaller le serveur de synchronisation ?</string>
+    <string name="sync_server_reinstall_message">Un serveur de synchronisation fonctionne déjà sur %1$s. La réinstallation n\'est prévue que pour un serveur défectueux : elle installe la dernière version via SSH et redémarre le serveur. Les données, associations et le mot de passe du tableau de bord sont conservés (une sauvegarde est faite d\'abord) ; si ces données sont introuvables, l\'installation s\'arrête. Pour utiliser ce téléviseur avec le serveur, choisissez plutôt Associer. N\'utilisez le code de récupération ici que si vous voulez déconnecter tous les autres appareils.</string>
+    <string name="sync_server_reinstall_confirm">Afficher le formulaire d\'installation</string>
+    <string name="sync_server_search_again">Rechercher à nouveau</string>
 </resources>

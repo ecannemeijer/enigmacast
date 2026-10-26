@@ -1725,4 +1725,16 @@
     <string name="sync_update_err_backup">the sync data could not be backed up. Nothing was installed.</string>
     <string name="sync_update_err_verify">the new version could not be confirmed (%1$s). The backup is in the backups folder of the sync data.</string>
     <string name="sync_update_hotel_notice">Update available: sync server %1$s → %2$s. Guests are not asked; update here.</string>
+    <string name="sync_server_searching">Looking for a sync server on %1$s…</string>
+    <string name="sync_server_found">Sync server found on %1$s (%2$s)</string>
+    <string name="sync_server_found_hint">Pair this TV with it, just like your other TVs: it joins the existing server and takes over its profiles, favourites and watching progress. Nothing on the receiver changes.</string>
+    <string name="sync_server_not_found">No sync server found on %1$s (port 8740). Install it below, or check the address and search again.</string>
+    <string name="sync_server_pair_existing">Pair with existing server</string>
+    <string name="sync_server_pairing">Pairing…</string>
+    <string name="sync_server_pair_failed">Pairing failed: %1$s</string>
+    <string name="sync_server_reinstall">Reinstall…</string>
+    <string name="sync_server_reinstall_title">Reinstall the sync server?</string>
+    <string name="sync_server_reinstall_message">A sync server is already running on %1$s. Reinstalling is only meant for a broken server: it installs the latest release over SSH and restarts the server. Existing data, pairings and the dashboard password are kept (a backup is made first); if that data cannot be found, the install stops. To use this TV with the server, choose Pair instead. Do not use the recovery code here unless you want to sign out all other devices.</string>
+    <string name="sync_server_reinstall_confirm">Show install form</string>
+    <string name="sync_server_search_again">Search again</string>
 </resources>

@@ -30,9 +30,14 @@ class SyncServerUpdater @Inject constructor(
     private val client: EnigmaSyncClient,
     private val engine: EnigmaSyncEngine,
     private val installer: SyncServerInstaller,
+    private val settings: com.enigmacast.data.settings.SettingsRepository,
 ) {
     data class Check(
         val host: String,
+        /** False for a server found at the receiver address that this TV is not paired with. */
+        val paired: Boolean = true,
+        /** Certificate pin of that server (from the pairing, or as it answered the probe). */
+        val pin: String = "",
         val running: SyncServerVersions.Running,
         val latest: String?,
         val verdict: Verdict,
@@ -64,17 +69,29 @@ class SyncServerUpdater @Inject constructor(
         OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
     }
 
-    /** Null when this TV is not paired with a sync server. */
-    suspend fun check(): Check? = withContext(Dispatchers.IO) {
-        val config = client.config() ?: return@withContext null
+    /**
+     * The paired server, or else a sync server answering at the receiver address ([host] when
+     * given, e.g. from Settings › Sync server). Null when there is none.
+     */
+    suspend fun check(host: String? = null): Check? = withContext(Dispatchers.IO) {
+        val config = client.config()
+        val address = config?.host ?: host?.trim()?.ifBlank { null }
+            ?: runCatching { settings.current().activeReceiver()?.host }.getOrNull()?.trim()?.ifBlank { null }
+            ?: return@withContext null
         _state.value = State.Checking
-        val reported = runCatching { client.serverVersion(config) }.getOrNull()
-        val running = SyncServerVersions.Running(reported, prefs.getString(installedKey(config.host), null), engine.serverPages(config.host))
+        val probe = runCatching { client.probe(address, 4, 6) }.getOrNull()
+        if (config == null && probe == null) {
+            _state.value = State.Idle
+            return@withContext null
+        }
+        // A paired server answering with another certificate is not "our" server: no version from it.
+        val reported = probe?.takeIf { config == null || it.pin == config.pin }?.version
+        val running = SyncServerVersions.Running(reported, prefs.getString(installedKey(address), null), engine.serverPages(address))
         val latest = runCatching { latestRelease() }.onFailure {
             EnigmaLog.service("syncserver: release check mislukt: ${it.javaClass.simpleName}")
         }.getOrNull()
-        val result = Check(config.host, running, latest, SyncServerVersions.verdict(running, latest))
-        EnigmaLog.service("syncserver: versie ${result.runningText}, laatste ${latest ?: "?"} → ${result.verdict}")
+        val result = Check(address, config != null, config?.pin ?: probe!!.pin, running, latest, SyncServerVersions.verdict(running, latest))
+        EnigmaLog.service("syncserver: versie ${result.runningText}, laatste ${latest ?: "?"} → ${result.verdict}${if (config == null) " (niet gekoppeld)" else ""}")
         _last.value = result
         _state.value = if (latest == null && result.verdict == Verdict.UNKNOWN) {
             State.CheckFailed("GitHub")
@@ -115,10 +132,13 @@ class SyncServerUpdater @Inject constructor(
     suspend fun update(user: String, password: String): Boolean = withContext(Dispatchers.IO) {
         if (!busy.tryLock()) return@withContext false
         try {
-            val config = client.config() ?: return@withContext false
+            val target = client.config()?.let { it.host to it.pin }
+                ?: _last.value?.takeIf { !it.paired && it.pin.isNotBlank() }?.let { it.host to it.pin }
+                ?: return@withContext false
+            val (host, pin) = target
             _state.value = State.Updating(UpdateStep.CONNECT)
             val report = try {
-                installer.update(config.host, user.ifBlank { "root" }, password, config.pin) { step ->
+                installer.update(host, user.ifBlank { "root" }, password, pin) { step ->
                     _state.value = State.Updating(step)
                 }
             } catch (error: UpdateError) {
@@ -132,11 +152,11 @@ class SyncServerUpdater @Inject constructor(
                 return@withContext false
             }
             val version = report.after ?: report.before
-            prefs.edit().putString(installedKey(config.host), version).apply()
+            prefs.edit().putString(installedKey(host), version).apply()
             if (!report.changed) {
                 // Already the latest release: nothing was stopped or installed.
                 _state.value = State.Done(version, backup = "")
-                _last.value = _last.value?.copy(running = SyncServerVersions.Running(null, version, engine.serverPages(config.host)), verdict = Verdict.UP_TO_DATE)
+                _last.value = _last.value?.copy(running = SyncServerVersions.Running(null, version, engine.serverPages(host)), verdict = Verdict.UP_TO_DATE)
                 return@withContext true
             }
             // The service needs a moment after the restart; the pinned call proves the same certificate.
@@ -144,11 +164,12 @@ class SyncServerUpdater @Inject constructor(
             var reached = false
             repeat(15) {
                 if (reached) return@repeat
-                runCatching { client.serverVersion(config) }.onSuccess { answered = it; reached = true }
+                // Same certificate as before the update, or it is not the same server any more.
+                runCatching { client.probe(host, 4, 6) }.getOrNull()?.takeIf { it.pin == pin }?.let { answered = it.version; reached = true }
                 if (!reached) delay(2_000)
             }
             if (!reached) {
-                _state.value = State.Failed(UpdateFailure.VERIFY, "https://${config.host}:8740")
+                _state.value = State.Failed(UpdateFailure.VERIFY, "https://$host:8740")
                 return@withContext false
             }
             if (answered != null && SyncServerVersions.normalize(answered) != SyncServerVersions.normalize(version)) {
@@ -158,8 +179,10 @@ class SyncServerUpdater @Inject constructor(
             EnigmaLog.service("syncserver: bijgewerkt ${report.before} → $version")
             _state.value = State.Done(version, report.backup)
             _last.value = Check(
-                config.host,
-                SyncServerVersions.Running(answered, version, engine.serverPages(config.host)),
+                host,
+                _last.value?.paired ?: true,
+                pin,
+                SyncServerVersions.Running(answered, version, engine.serverPages(host)),
                 _last.value?.latest ?: version,
                 Verdict.UP_TO_DATE,
             )
