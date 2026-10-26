@@ -107,8 +107,9 @@ fun pinTitle(step: PinStep): String = stringResource(
 )
 
 /**
- * TV PIN pad: four masked dots, a 3×4 number grid (D-pad) and the remote's 0–9 keys,
- * ⌫ to erase, Cancel to leave. The fourth digit submits.
+ * TV PIN pad: masked dots, a 3×4 number grid (D-pad) and the remote's 0–9 keys,
+ * ⌫ to erase, Cancel to leave. A fixed length (four digits) submits on the last digit;
+ * a range ([lengths], e.g. the hotel PIN's 4–6) adds an OK key and submits on the longest.
  */
 @Composable
 fun PinPad(
@@ -118,14 +119,22 @@ fun PinPad(
     onSubmit: (String) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    lengths: IntRange = PinHash.FOUR,
 ) {
     var pin by remember(title, error) { mutableStateOf("") }
+    val fixed = lengths.first == lengths.last
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     fun type(d: Char) {
-        if (busy || pin.length >= 4) return
+        if (busy || pin.length >= lengths.last) return
         pin += d
-        if (pin.length == 4) { val done = pin; pin = ""; onSubmit(done) }
+        if (pin.length == lengths.last) { val done = pin; pin = ""; onSubmit(done) }
+    }
+    fun confirm() {
+        if (busy || pin.length !in lengths) return
+        val done = pin
+        pin = ""
+        onSubmit(done)
     }
     fun erase() { pin = pin.dropLast(1) }
     Box(modifier.fillMaxSize().background(EnigmaColors.Canvas.copy(alpha = 0.96f)), contentAlignment = Alignment.Center) {
@@ -150,12 +159,13 @@ fun PinPad(
         ) {
             Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                repeat(4) { i ->
+                repeat(lengths.last) { i ->
                     Box(Modifier.size(14.dp).background(if (i < pin.length) EnigmaColors.Accent else EnigmaColors.Raised, CircleShape).border(1.dp, EnigmaColors.CardBorder, CircleShape))
                 }
             }
             Text(error.orEmpty(), color = EnigmaColors.Danger, fontSize = 13.sp)
-            val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✕")
+            val keys = if (fixed) listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✕")
+            else listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK")
             keys.chunked(3).forEachIndexed { row, line ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     line.forEachIndexed { col, label ->
@@ -165,6 +175,7 @@ fun PinPad(
                                 when (label) {
                                     "⌫" -> erase()
                                     "✕" -> onCancel()
+                                    "OK" -> confirm()
                                     else -> type(label[0])
                                 }
                             },
@@ -173,13 +184,26 @@ fun PinPad(
                                 .then(if (row == 0 && col == 0) Modifier.focusRequester(first) else Modifier)
                                 .focusProperties {
                                     if (row == 0) up = FocusRequester.Cancel
-                                    if (row == 3) down = FocusRequester.Cancel
+                                    if (row == 3 && fixed) down = FocusRequester.Cancel
                                     if (col == 0) left = FocusRequester.Cancel
                                     if (col == 2) right = FocusRequester.Cancel
                                 },
                         )
                     }
                 }
+            }
+            if (!fixed) {
+                CompactButton(
+                    label = stringResource(R.string.cancel),
+                    onClick = onCancel,
+                    modifier = Modifier
+                        .width(260.dp)
+                        .focusProperties {
+                            down = FocusRequester.Cancel
+                            left = FocusRequester.Cancel
+                            right = FocusRequester.Cancel
+                        },
+                )
             }
         }
     }

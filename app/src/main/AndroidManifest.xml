@@ -77,6 +77,22 @@
                 android:name="android.app.searchable"
                 android:resource="@xml/searchable" />
         </activity>
+        <!--
+            Hotel mode: EnigmaCast as the TV's launcher (HOME). Disabled by default; HotelStore
+            enables it only while hotel mode is on, the owner asked for it and a hotel PIN exists,
+            and disables it again when hotel mode is turned off.
+        -->
+        <activity-alias
+            android:name=".HotelLauncher"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
         <service
             android:name=".live.RecordingCaptureService"
             android:exported="false"
@@ -87,6 +103,13 @@
             android:foregroundServiceType="dataSync" />
         <receiver
             android:name=".live.RecordingAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".hotel.HotelBootReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

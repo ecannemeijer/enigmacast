@@ -6,22 +6,31 @@ import java.util.Base64
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 
-/** A 4-digit PIN kept as "pbkdf2-sha256$<iterations>$<salt>$<hash>" (base64), never as the digits. */
+/**
+ * A digit PIN kept as "pbkdf2-sha256$<iterations>$<salt>$<hash>" (base64), never as the digits.
+ * Four digits unless a caller allows other [lengths] (the hotel PIN takes 4–6).
+ */
 object PinHash {
     const val ITERATIONS = 120_000
     private const val BITS = 256
+    val FOUR = 4..4
 
-    fun valid(pin: String) = pin.length == 4 && pin.all { it in '0'..'9' }
+    fun valid(pin: String, lengths: IntRange = FOUR) = pin.length in lengths && pin.all { it in '0'..'9' }
 
-    fun create(pin: String, salt: ByteArray = ByteArray(16).also { SecureRandom().nextBytes(it) }, iterations: Int = ITERATIONS): String {
-        require(valid(pin))
+    fun create(
+        pin: String,
+        salt: ByteArray = ByteArray(16).also { SecureRandom().nextBytes(it) },
+        iterations: Int = ITERATIONS,
+        lengths: IntRange = FOUR,
+    ): String {
+        require(valid(pin, lengths))
         val enc = Base64.getEncoder()
         return "pbkdf2-sha256$$iterations$${enc.encodeToString(salt)}$${enc.encodeToString(derive(pin, salt, iterations))}"
     }
 
-    fun verify(pin: String, stored: String): Boolean {
+    fun verify(pin: String, stored: String, lengths: IntRange = FOUR): Boolean {
         val parts = stored.split('$')
-        if (parts.size != 4 || parts[0] != "pbkdf2-sha256" || !valid(pin)) return false
+        if (parts.size != 4 || parts[0] != "pbkdf2-sha256" || !valid(pin, lengths)) return false
         val iterations = parts[1].toIntOrNull() ?: return false
         val dec = Base64.getDecoder()
         val salt = runCatching { dec.decode(parts[2]) }.getOrNull() ?: return false

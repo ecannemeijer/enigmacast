@@ -27,6 +27,8 @@ class CacheSearch @Inject constructor(private val dao: CacheDao) {
         val bouquets: List<BouquetEntry>,
         val channels: List<ListedChannel>,
         val events: List<Pair<EpgSearchEvent, String>>,
+        /** Hotel mode's bouquet whitelist the index was built with (null = everything). */
+        val allowed: Set<String>? = null,
     ) {
         val isEmpty get() = channels.isEmpty() && events.isEmpty()
     }
@@ -36,13 +38,18 @@ class CacheSearch @Inject constructor(private val dao: CacheDao) {
 
     suspend fun index(receiver: ReceiverConfig, nowMs: Long): Index = gate.withLock {
         val rk = CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
-        index?.takeIf { it.receiverKey == rk && nowMs - it.loadedAtMs < TTL_MS }?.let { return it }
+        val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+        val allowed = hotel.allowedBouquets.takeIf { com.enigmacast.domain.hotel.HotelFilter.restrictsBouquets(hotel) }
+        index?.takeIf { it.receiverKey == rk && nowMs - it.loadedAtMs < TTL_MS && it.allowed == allowed }?.let { return it }
         withContext(Dispatchers.IO) {
             val nowSec = nowMs / 1000
             val bouquetRows = dao.bouquets(rk)
+            // Hotel mode: hidden bouquets, their channels and their programmes are not searchable.
             val bouquets = bouquetRows.map { BouquetEntry(it.name, it.reference) }
+                .filter { allowed == null || it.reference in allowed }
             val byRef = bouquets.associateBy { it.reference }
-            val channelRows = dao.channels(rk)
+            val channelRows = dao.channels(rk).let { rows -> if (allowed == null) rows else rows.filter { it.bouquetReference in allowed } }
+            val serviceKeys = if (allowed == null) null else channelRows.map { it.serviceKey }.toHashSet()
             val channels = channelRows.mapNotNull { row ->
                 val bouquet = byRef[row.bouquetReference] ?: return@mapNotNull null
                 ListedChannel(bouquet, BouquetEntry(row.name, row.reference, row.number, row.picon))
@@ -50,12 +57,14 @@ class CacheSearch @Inject constructor(private val dao: CacheDao) {
             val names = channelRows.associate { it.serviceKey to it.name }
             val films = runCatching { dao.filmTitles(rk, nowSec) }.getOrDefault(emptyList())
                 .associate { (it.serviceKey to it.beginSec) to it.title }
-            val events = dao.events(rk, nowSec, nowSec + HORIZON_SEC).map { row ->
+            val events = dao.events(rk, nowSec, nowSec + HORIZON_SEC)
+                .filter { serviceKeys == null || it.serviceKey in serviceKeys }
+                .map { row ->
                 val aka = films[row.serviceKey to row.beginSec].orEmpty()
                 val found = EpgSearchEvent(CacheMappers.event(row), names[row.serviceKey].orEmpty(), aka)
                 found to SearchText.fold(row.title + "\u0000" + aka)
             }
-            Index(nowMs, rk, bouquets, channels, events)
+            Index(nowMs, rk, bouquets, channels, events, allowed)
         }.also { index = it }
     }
 

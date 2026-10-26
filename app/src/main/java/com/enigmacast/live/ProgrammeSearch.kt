@@ -66,7 +66,12 @@ class ProgrammeSearch @Inject constructor(
             }
         }
         val lists = catalog(nowSec * 1000)
-        return SearchGrouping.group(parsed, nowSec, programmes, recordings, lists.bouquets, lists.channels)
+        // Hotel mode: programmes of channels outside the allowed bouquets are left out.
+        val shown = if (lists.allowed == null) programmes else {
+            val refs = lists.channels.map { it.channel.reference }
+            programmes.filter { found -> refs.any { com.enigmacast.domain.service.BouquetChannels.sameService(it, found.event.reference) } }
+        }
+        return SearchGrouping.group(parsed, nowSec, shown, recordings, lists.bouquets, lists.channels)
     }
 
     /** The bouquet and its channels that contain [serviceReference], or null when none does. */
@@ -92,10 +97,12 @@ class ProgrammeSearch @Inject constructor(
 
     private suspend fun catalog(nowMs: Long): Catalog {
         gate.withLock {
+            val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+            val allowed = hotel.allowedBouquets.takeIf { com.enigmacast.domain.hotel.HotelFilter.restrictsBouquets(hotel) }
             val cached = catalog
-            if (cached != null && nowMs - cached.loadedAtMs < CATALOG_TTL_MS) return cached
+            if (cached != null && nowMs - cached.loadedAtMs < CATALOG_TTL_MS && cached.allowed == allowed) return cached
             val receiver = settings.current().activeReceiver()
-            if (receiver == null) return Catalog(nowMs, emptyList(), emptyList()).also { catalog = it }
+            if (receiver == null) return Catalog(nowMs, emptyList(), emptyList(), allowed).also { catalog = it }
             val bouquets = try {
                 services.televisionBouquets(receiver) + services.radioBouquets(receiver)
             } catch (cancelled: CancellationException) {
@@ -116,7 +123,7 @@ class ProgrammeSearch @Inject constructor(
                 }
                 list.forEach { channel -> channels += ListedChannel(bouquet, channel) }
             }
-            return Catalog(nowMs, bouquets, channels).also { catalog = it }
+            return Catalog(nowMs, bouquets, channels, allowed).also { catalog = it }
         }
     }
 
@@ -124,6 +131,7 @@ class ProgrammeSearch @Inject constructor(
         val loadedAtMs: Long,
         val bouquets: List<BouquetEntry>,
         val channels: List<ListedChannel>,
+        val allowed: Set<String>? = null,
     )
 
     private companion object {

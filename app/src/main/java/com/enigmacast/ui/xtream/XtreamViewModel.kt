@@ -1098,6 +1098,19 @@ class XtreamViewModel @Inject constructor(
         viewModelScope.launch {
             hiddenCategories.changes.drop(1).collect { if (account != null && categories.isNotEmpty()) selectSection(section, force = true) }
         }
+        // Hotel mode's category whitelist (or hotel mode itself) changed: read the section again.
+        viewModelScope.launch {
+            com.enigmacast.domain.hotel.HotelRuntime.state
+                .map { Triple(it.enabled, it.allowedCategories, it.vodAllowed) }
+                .distinctUntilChanged().drop(1)
+                .collect { if (account != null) selectSection(section, force = true) }
+        }
+        // Hotel cleanup for the next guest: the recent channels are gone.
+        viewModelScope.launch {
+            com.enigmacast.domain.hotel.HotelRuntime.cleanups.drop(1).collect {
+                recentChannels = recentIptv.load(account?.key.orEmpty())
+            }
+        }
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(
                 settingsRepository.settings.map { Triple(it.iptvSource, it.iptvPlaylistKind, it.activeReceiver()) },
@@ -1194,15 +1207,21 @@ class XtreamViewModel @Inject constructor(
 
     /** The section's categories without the ones hidden in Settings › IPTV › Categories. */
     private suspend fun categoriesOf(account: XtreamAccount, section: XtreamSection, force: Boolean = false): List<XtreamCategory> {
+        val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
         if (playlist != null) {
-            return playlistSync.categories(section).filter { category ->
+            val visible = playlistSync.categories(section).filter { category ->
                 val source = com.enigmacast.data.xtream.IptvProvider.sourceKey(category.providerId)
                 category.id !in hiddenCategories.hidden(source, section)
+            }
+            // Hotel mode: only the categories the owner allowed for guests (per provider).
+            return com.enigmacast.domain.hotel.HotelFilter.categoriesBySource(visible, section, hotel) {
+                com.enigmacast.data.xtream.IptvProvider.sourceKey(it.providerId)
             }
         }
         val all = repository.categories(account, section, force)
         val source = com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(null, account.key)
-        return com.enigmacast.domain.xtream.IptvCategoryFilter.visible(all, hiddenCategories.hidden(source, section))
+        val visible = com.enigmacast.domain.xtream.IptvCategoryFilter.visible(all, hiddenCategories.hidden(source, section))
+        return com.enigmacast.domain.hotel.HotelFilter.categories(visible, source, section, hotel)
     }
 
     private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, category: XtreamCategory, force: Boolean) =
@@ -1320,6 +1339,7 @@ class XtreamViewModel @Inject constructor(
             val startupIptv = !force && settings.startupLive == com.enigmacast.domain.model.StartupLive.IPTV
             if (settings.lastLiveSource != com.enigmacast.domain.model.LastLiveSource.IPTV && !startupIptv) return@launch
             val last = settings.lastIptvChannels[account?.key] ?: return@launch
+            if (!hotelAllows(last)) return@launch
             if (playing?.item?.id == last.streamId && playing?.item?.section == XtreamSection.LIVE) return@launch
             if (vodFromDashboard || playing?.item?.section.let { it != null && it != XtreamSection.LIVE } == true) return@launch
             play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url))
@@ -1341,7 +1361,7 @@ class XtreamViewModel @Inject constructor(
                 return@launch
             }
             val last = settings.lastIptvChannels[account?.key]
-            if (last == null || (last.streamId.isBlank() && last.url.isBlank())) {
+            if (last == null || (last.streamId.isBlank() && last.url.isBlank()) || !hotelAllows(last)) {
                 liveListNeeded = true
                 return@launch
             }
@@ -1349,6 +1369,19 @@ class XtreamViewModel @Inject constructor(
             if (playing?.item?.id != item.id || playing?.item?.section != XtreamSection.LIVE) play(item)
             if (playing != null) libraryPlayed++ else liveListNeeded = true
         }
+    }
+
+    /**
+     * Hotel mode: a remembered channel from a category guests may not see does not start (its
+     * category would become the zap list). Outside hotel mode, or without a whitelist, always true.
+     */
+    private suspend fun hotelAllows(last: com.enigmacast.domain.model.LastIptvChannel): Boolean {
+        val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+        if (!hotel.enabled) return true
+        if (hotel.allowedCategories.isEmpty()) return true
+        val account = account ?: return false
+        if (last.categoryId.isBlank()) return false
+        return runCatching { categoriesOf(account, XtreamSection.LIVE).any { it.id == last.categoryId } }.getOrDefault(false)
     }
 
     private fun applyRequested() {

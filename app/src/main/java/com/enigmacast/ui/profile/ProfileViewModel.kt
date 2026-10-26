@@ -30,7 +30,7 @@ class ProfileViewModel @Inject constructor(
     val state = store.state
 
     /** "Who's watching?" full screen: at start when [ProfileRules.askOnStart], or from the menu. */
-    var pickerOpen by mutableStateOf(ProfileRules.askOnStart(store.state.value))
+    var pickerOpen by mutableStateOf(ProfileRules.askOnStart(store.state.value) && !com.enigmacast.domain.hotel.HotelRuntime.active)
         private set
 
     init {
@@ -55,6 +55,8 @@ class ProfileViewModel @Inject constructor(
     fun closeMenu() { menuOpen = false }
     fun openPicker(manage: Boolean) {
         menuOpen = false
+        // Hotel mode: guests never switch profiles.
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
         managing = manage
         pickerOpen = true
         refreshProfiles()
@@ -71,6 +73,7 @@ class ProfileViewModel @Inject constructor(
     fun seesPlaylist(profile: Profile) = store.seesPlaylist(profile.uuid.ifBlank { com.enigmacast.domain.profile.ProfileState.LEGACY_UUID })
 
     fun choose(id: String) {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
         val profile = store.state.value.profiles.firstOrNull { it.id == id } ?: return
         if (hasPin(profile) && (managing || id != store.activeId)) {
             pinProfile = profile
@@ -220,6 +223,21 @@ class ProfileViewModel @Inject constructor(
     override fun onCleared() {
         photoServer?.stop()
         photoServer = null
+    }
+
+    // Last in the class, after every property it touches is initialised.
+    init {
+        // Hotel mode turned on while the picker was open: it closes, the hotel profile takes over.
+        viewModelScope.launch {
+            com.enigmacast.domain.hotel.HotelRuntime.state.collect { config ->
+                if (config.enabled) {
+                    pickerOpen = false
+                    menuOpen = false
+                    managing = false
+                    pinProfile = null
+                }
+            }
+        }
     }
 }
 

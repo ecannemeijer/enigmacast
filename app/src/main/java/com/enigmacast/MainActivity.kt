@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -106,6 +107,7 @@ class MainActivity : ComponentActivity() {
     private var reminderKeyDown = NO_KEY
     private var backHoldJob: Job? = null
     private var backHoldOpened = false
+    private var hotelWelcomeKey = NO_KEY
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,9 +130,10 @@ class MainActivity : ComponentActivity() {
         appViewModel.requestFinish = { finish() }
         // The Companion bridge only knows these four hooks; the UI layer stays untouched.
         companionBridge.hooks = CompanionHooks().apply {
-            openHome = { appViewModel.showDashboard() }
-            openPlayer = { appViewModel.openStream() }
-            openSettings = { appViewModel.openSettings() }
+            // Hotel mode: the phone app cannot open Home or Settings on the guest's TV.
+            openHome = { if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.showDashboard() }
+            openPlayer = { if (com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.startHotelLive() else appViewModel.openStream() }
+            openSettings = { if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.openSettings() }
             screenName = { appViewModel.screen.name.lowercase() }
         }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
@@ -148,6 +151,8 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 when (appViewModel.screen) {
+                    // Hotel menu: Back never leaves the app (the menu itself handles Back first).
+                    AppScreen.Hotel -> appViewModel.back()
                     AppScreen.Settings, AppScreen.Diagnostics, AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport, AppScreen.Xtream, AppScreen.Torrent -> appViewModel.back()
                     AppScreen.Connection -> appViewModel.askExit()
                     AppScreen.Setup -> appViewModel.leaveSetup()
@@ -187,6 +192,7 @@ class MainActivity : ComponentActivity() {
 
     /** A Watch Next card on the Android TV home resumes that film or episode. */
     private fun handleWatchNext(intent: Intent?) {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
         val data = intent?.data ?: return
         if (data.scheme != "enigmacast" || data.host != "watchnext") return
         val source = data.getQueryParameter("source") ?: return
@@ -202,6 +208,8 @@ class MainActivity : ComponentActivity() {
 
     /** Assistant and the TV search orb send SEARCH or MEDIA_PLAY_FROM_SEARCH with a query extra. */
     private fun handleSearchIntent(intent: Intent?) {
+        // Hotel mode: Assistant searches would open the dashboard; guests stay on live TV.
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
         val action = intent?.action ?: return
         if (action != Intent.ACTION_SEARCH && action != MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
         val query = intent.getStringExtra(SearchManager.QUERY)
@@ -326,6 +334,15 @@ class MainActivity : ComponentActivity() {
             }
         }
         if (dropRepeat(event)) return true
+        // Hotel welcome screen: any key closes it (its release too, so the screen behind sees nothing).
+        if (appViewModel.hotelWelcome || hotelWelcomeKey == event.keyCode) {
+            if (event.action == KeyEvent.ACTION_DOWN) hotelWelcomeKey = event.keyCode
+            if (event.action == KeyEvent.ACTION_UP) {
+                hotelWelcomeKey = NO_KEY
+                appViewModel.closeHotelWelcome()
+            }
+            return true
+        }
         if (appViewModel.updatePrompt != null) {
             return super.dispatchKeyEvent(event)
         }
@@ -385,6 +402,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun canHoldBackToStream(): Boolean {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return false
         if (!appViewModel.streamRunning || appViewModel.exitPrompt || appViewModel.updatePrompt != null) return false
         return when (appViewModel.screen) {
             AppScreen.Remote, AppScreen.Loading, AppScreen.Connection, AppScreen.Setup -> false
@@ -427,7 +445,8 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (
 @Composable
 private fun ProfileStartupGate(appViewModel: AppViewModel, content: @Composable () -> Unit) {
     val profileModel: com.enigmacast.ui.profile.ProfileViewModel = hiltViewModel()
-    val open = profileModel.pickerOpen
+    val hotelMode by appViewModel.hotelMode.collectAsState()
+    val open = profileModel.pickerOpen && !hotelMode
     LaunchedEffect(open) {
         if (open) {
             appViewModel.setForeground(false)
@@ -521,6 +540,16 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onBack = appViewModel::back,
                 onSearch = appViewModel::openDashboardSearch,
             )
+            AppScreen.Hotel -> com.enigmacast.ui.hotel.HotelScreen(
+                onLive = appViewModel::startHotelLive,
+                onPlayIptv = appViewModel::openXtream,
+            )
+        }
+        // Hotel mode: the IPTV page opens on live TV (the start or remembered channel).
+        val xtreamForHotel: com.enigmacast.ui.xtream.XtreamViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
+        DisposableEffect(xtreamForHotel) {
+            appViewModel.onHotelIptvLive = { xtreamForHotel.requestSection(com.enigmacast.domain.xtream.XtreamSection.LIVE) }
+            onDispose { appViewModel.onHotelIptvLive = null }
         }
         val connectionModel: com.enigmacast.ui.connection.ConnectionViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
         com.enigmacast.ui.receivers.ReceiverSwitchHost(onAddReceiver = {
@@ -548,6 +577,9 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 viewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel(),
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
             )
+        }
+        if (appViewModel.hotelWelcome) {
+            com.enigmacast.ui.hotel.HotelWelcomeScreen(onDone = appViewModel::closeHotelWelcome)
         }
         if (appViewModel.exitPrompt) {
             TvConfirmDialog(

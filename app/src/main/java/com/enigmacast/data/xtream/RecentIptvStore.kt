@@ -36,6 +36,14 @@ class RecentIptvStore @Inject constructor(
         prefs.edit().remove(key(accountKey)).apply()
     }
 
+    /** Hotel cleanup: every recent list of [profileUuid] (all playlists), nobody else's. */
+    fun clearProfile(profileUuid: String) {
+        if (profileUuid.isBlank()) return
+        val keys = prefs.all.keys.filter { it.startsWith("$profileUuid|") }
+        if (keys.isEmpty()) return
+        prefs.edit().apply { keys.forEach { remove(it) } }.apply()
+    }
+
     private fun key(accountKey: String): String =
         "${profiles.state.value.activeUuid}|$accountKey"
 

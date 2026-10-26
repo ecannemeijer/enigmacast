@@ -297,7 +297,8 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
      * or the Library/Home card that started the channel. Catch-up and films stop as before.
      */
     fun leaveLive() {
-        if (!model.playingLive) { leave(); return }
+        // Hotel mode has no mini player: Back on the picture opens the guest's menu.
+        if (!model.playingLive || com.enigmacast.domain.hotel.HotelRuntime.active) { leave(); return }
         model.continueInMiniPlayer()
         model.exitToOrigin()
         onBack()
