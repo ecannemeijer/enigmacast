@@ -1011,6 +1011,9 @@
     <string name="sync_server_claim">Take over admin</string>
     <string name="sync_server_claimed">This device is now the only admin. Save the new recovery code: %1$s. The previous code no longer works.</string>
     <string name="sync_server_connected">Connected to %1$s as %2$s. Choosing a profile syncs it.</string>
+    <string name="sync_server_last_sync">Last sync</string>
+    <string name="sync_server_incomplete_profiles">Incomplete: %1$d of %2$d profiles could not be updated. Retrying automatically.</string>
+    <string name="sync_server_incomplete">Incomplete: not everything could be synced. Retrying automatically.</string>
     <string name="sync_server_disconnect">Disconnect</string>
     <string name="setup_title">Setup</string>
     <string name="setup_run_again">Run setup wizard again</string>

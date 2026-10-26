@@ -1008,6 +1008,9 @@
     <string name="sync_server_claim">Beheer overnemen</string>
     <string name="sync_server_claimed">Dit toestel is nu de enige beheerder. Bewaar de nieuwe herstelcode: %1$s. De vorige code werkt niet meer.</string>
     <string name="sync_server_connected">Verbonden met %1$s als %2$s. Een profiel kiezen synchroniseert meteen.</string>
+    <string name="sync_server_last_sync">Laatste synchronisatie</string>
+    <string name="sync_server_incomplete_profiles">Onvolledig: %1$d van %2$d profielen konden niet worden bijgewerkt. Wordt automatisch opnieuw geprobeerd.</string>
+    <string name="sync_server_incomplete">Onvolledig: niet alles kon worden gesynchroniseerd. Wordt automatisch opnieuw geprobeerd.</string>
     <string name="sync_server_disconnect">Loskoppelen</string>
     <string name="setup_title">Installatie</string>
     <string name="setup_run_again">Installatiewizard opnieuw starten</string>

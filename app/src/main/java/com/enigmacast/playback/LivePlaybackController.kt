@@ -257,6 +257,8 @@ class LivePlaybackController @Inject constructor(
             return
         }
         val url = currentUrl
+        rescue = null
+        rescueWorked = false
         if (player != null) {
             releasePlayer()
             ensurePlayer()
@@ -384,6 +386,12 @@ class LivePlaybackController @Inject constructor(
         internetAttempts = 0
         hlsTried = false
         internetMime = null
+        rescueTried = false
+        if (rescue != null && !rescueWorked) {
+            // The retry did not bring a picture: the next channel gets the normal decoder and view.
+            rescue = null
+            VideoOutput.surfaceView = surfaceViewWanted()
+        }
         endFilePlayback()
         start(url, authorization, checkStart, internet)
     }
@@ -729,6 +737,7 @@ class LivePlaybackController @Inject constructor(
             failure = lastFailure,
         )
         if (health != _health.value) EnigmaLog.player("stream check $health (${bytesLoaded.get()} bytes)")
+        if (tryPictureRescue(health, hasVideo)) return true
         _health.value = health
         return when (health) {
             StreamHealth.PLAYING -> {
@@ -754,6 +763,37 @@ class LivePlaybackController @Inject constructor(
             else -> false
         }
     }
+
+    /**
+     * NO_PICTURE while the stream delivers: rebuild the player once with the next decoder or a
+     * TextureView and start the same stream again. Kept for the session only when it shows a frame.
+     */
+    private fun tryPictureRescue(health: StreamHealth, hasVideo: Boolean): Boolean {
+        if (!PictureRescue.shouldRetry(
+                health = health,
+                bytesLoaded = bytesLoaded.get(),
+                minBytes = StreamStartCheck.NO_DATA_BYTES,
+                hasVideoTrack = hasVideo,
+                scrambling = _streamFacts.value.scrambling,
+                alreadyTried = rescueTried,
+                firstFrame = firstFrame,
+            )
+        ) return false
+        rescueTried = true
+        val kind = PictureRescue.plan(videoDecoders, VideoOutput.surfaceView, VideoQuirks.thisDevice) ?: return false
+        val url = currentUrl ?: return false
+        EnigmaLog.player("no picture with data: one retry with $kind")
+        rescue = kind
+        rescueWorked = false
+        VideoOutput.surfaceView = surfaceViewWanted()
+        watchdog = null
+        // start() stops the player, which releases the codec; the next prepare picks the decoder again.
+        start(url, streamAuthorization, checkStart, internet)
+        return true
+    }
+
+    private fun surfaceViewWanted(): Boolean =
+        VideoOutput.useSurfaceView(settings.videoCompatibility) && rescue != RescueKind.TEXTURE_VIEW
 
     private fun ensurePlayer(): ExoPlayer {
         player?.let { return it }
@@ -783,7 +823,8 @@ class LivePlaybackController @Inject constructor(
     private fun beginTimeshift(url: String, authorization: String?) {
         retireTimeshift()
         val generation = timeshiftGeneration
-        val root = File(context.cacheDir, "timeshift")
+        val root = timeshiftRoot()
+        // The folder itself is created by the store on the pump's thread (first chunk), not here.
         val created = TimeshiftStore(File(root, generation.toString()))
         store = created
         diskScope.launch {
@@ -851,7 +892,8 @@ class LivePlaybackController @Inject constructor(
 
     @OptIn(ExperimentalApi::class)
     private fun buildPlayer(): ExoPlayer {
-        val surfaceView = VideoOutput.useSurfaceView(settings.videoCompatibility)
+        videoDecoders = 0
+        val surfaceView = surfaceViewWanted()
         val compatibility = VideoOutput.compatibilityActive(settings.videoCompatibility, VideoQuirks.thisDevice)
         VideoOutput.surfaceView = surfaceView
         val decoderMode = settings.videoDecoder
@@ -859,7 +901,11 @@ class LivePlaybackController @Inject constructor(
             val infos = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
             if (!MimeTypes.isVideo(mime)) return@MediaCodecSelector infos
             val byName = infos.associateBy { it.name }
-            VideoOutput.order(decoderMode, infos.map { it.name to it.hardwareAccelerated }).mapNotNull { byName[it] }
+            val ordered = VideoOutput.order(decoderMode, infos.map { it.name to it.hardwareAccelerated }).mapNotNull { byName[it] }
+            videoDecoders = maxOf(videoDecoders, ordered.size)
+            // Read on every decoder start, so a retry switches decoder without a new player
+            // (the views keep the player they were given).
+            if (rescue == RescueKind.NEXT_DECODER) PictureRescue.rotate(ordered) else ordered
         }
         val renderers = LiveRenderersFactory(context, settings.hdmiPassthrough, audioSync, subtitleSync, audioBoost)
             .setEnableDecoderFallback(true)
@@ -984,6 +1030,13 @@ class LivePlaybackController @Inject constructor(
     }
 
     private val starved = StarvedBuffer(STARVED_RECOVER_MS)
+    private val frozen = FrozenPlayback(STARVED_RECOVER_MS)
+
+    /** One NO_PICTURE retry per request; [rescue] stays for the session once it showed a frame. */
+    private var rescueTried = false
+    @Volatile private var rescue: RescueKind? = null
+    private var rescueWorked = false
+    @Volatile private var videoDecoders = 0
 
     /**
      * Buffering, not loading and nothing to play: the load control will not load again by itself.
@@ -992,8 +1045,23 @@ class LivePlaybackController @Inject constructor(
     private fun recoverIfStarved(now: Long) {
         val exo = player ?: return
         val buffering = exo.playbackState == Player.STATE_BUFFERING
-        if (!starved.update(buffering, exo.isLoading, exo.totalBufferedDuration, now)) return
-        EnigmaLog.player("buffer starved (${exo.totalBufferedDuration} ms, not loading): ${if (filePlayback) "reload at position" else "reconnect"}")
+        val ready = exo.playbackState == Player.STATE_READY
+        val counters = exo.videoDecoderCounters?.also { it.ensureUpdated() }
+        val expectVideo = exo.currentTracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+        val isFrozen = frozen.update(
+            ready = ready,
+            loading = exo.isLoading,
+            bufferedMs = exo.totalBufferedDuration,
+            positionMs = exo.currentPosition,
+            renderedFrames = counters?.renderedOutputBufferCount?.toLong() ?: 0L,
+            expectVideo = expectVideo,
+            nowMs = now,
+        )
+        val isStarved = starved.update(buffering, exo.isLoading, exo.totalBufferedDuration, now)
+        if (!isStarved && !isFrozen) return
+        frozen.reset()
+        val what = if (isStarved) "buffer starved" else "playback frozen (ready, no progress)"
+        EnigmaLog.player("$what (${exo.totalBufferedDuration} ms, not loading): ${if (filePlayback) "reload at position" else "reconnect"}")
         if (filePlayback) exo.seekTo(exo.currentPosition) else scheduleReconnect()
     }
 
@@ -1015,16 +1083,29 @@ class LivePlaybackController @Inject constructor(
                         stalls = stalls,
                         bufferMs = player?.totalBufferedDuration ?: 0L,
                     )
-                } else starved.reset()
+                } else {
+                    starved.reset()
+                    frozen.reset()
+                }
                 lastBytes = bytes
                 lastAt = now
             }
         }
     }
 
+    /** The pause-buffer root, looked up on [diskScope]; never resolved on Main. */
+    @Volatile
+    private var timeshiftRootDir: File? = null
+
     init {
         startStatsSampler()
+        // Context.getCacheDir() stats/creates the folder: resolved once here, off Main.
+        diskScope.launch { timeshiftRootDir = File(context.cacheDir, "timeshift") }
     }
+
+    /** The resolved root, or its path built without disk access when the lookup has not finished yet. */
+    private fun timeshiftRoot(): File =
+        timeshiftRootDir ?: File(File(context.applicationInfo.dataDir, "cache"), "timeshift")
 
     private val byteCounter = object : TransferListener {
         override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
@@ -1190,6 +1271,10 @@ class LivePlaybackController @Inject constructor(
 
         override fun onRenderedFirstFrame() {
             firstFrame = true
+            if (rescue != null && !rescueWorked) {
+                rescueWorked = true
+                EnigmaLog.player("picture after retry with $rescue: kept for this session")
+            }
             if (internet) _health.value = StreamHealth.PLAYING
             if (checkStart && watchdog != null) checkHealth()
         }

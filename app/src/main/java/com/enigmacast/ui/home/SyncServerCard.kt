@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -57,7 +58,11 @@ class SyncServerViewModel @Inject constructor(
     var dashboardUrl by mutableStateOf("")
     var dashboardPassword by mutableStateOf("")
 
+    /** The last sync run's outcome (shown as "sync incomplete" while profiles or parts failed). */
+    val health = engine.health
+
     init {
+        viewModelScope.launch { runCatching { engine.loadHealth() } }
         viewModelScope.launch {
             val receiver = settings.current().activeReceiver()
             if (host.isBlank()) host = receiver?.host.orEmpty()
@@ -185,6 +190,17 @@ fun SyncServerCard(model: SyncServerViewModel = hiltViewModel()) {
                     stringResource(R.string.sync_server_status),
                     stringResource(R.string.sync_server_connected, model.linkedHost, model.linkedRole),
                 )
+                val health by model.health.collectAsState()
+                if (health.incomplete) {
+                    InfoRow(
+                        stringResource(R.string.sync_server_last_sync),
+                        if (health.failedProfiles > 0) {
+                            stringResource(R.string.sync_server_incomplete_profiles, health.failedProfiles, health.totalProfiles)
+                        } else {
+                            stringResource(R.string.sync_server_incomplete)
+                        },
+                    )
+                }
                 TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() })
                 return@Column
             }

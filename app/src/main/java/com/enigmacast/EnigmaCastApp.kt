@@ -22,6 +22,8 @@ class EnigmaCastApp : Application() {
         // Hotel mode decides the first screen: its small prefs file is read off Main before it is needed.
         Thread({ runCatching { getSharedPreferences(com.enigmacast.data.hotel.HotelStore.FILE, MODE_PRIVATE).all } }, "hotel-preload").start()
         super.onCreate()
+        // Media3's DefaultLoadControl warning floods logcat during a stalled start: off in release, throttled in debug.
+        com.enigmacast.playback.Media3Logging.install(release = !BuildConfig.DEBUG)
         // Decrypt the stored secrets off Main, before the first screen asks for settings.
         Thread({ runCatching { secrets.preload() } }, "secrets-preload").start()
         // The saved subtitle look, read off Main.
