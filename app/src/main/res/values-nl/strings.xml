@@ -1717,4 +1717,16 @@
     <string name="sync_update_err_backup">de syncgegevens konden niet geback-upt worden. Er is niets geïnstalleerd.</string>
     <string name="sync_update_err_verify">de nieuwe versie kon niet bevestigd worden (%1$s). De back-up staat in de map backups van de syncgegevens.</string>
     <string name="sync_update_hotel_notice">Update beschikbaar: syncserver %1$s → %2$s. Gasten krijgen geen vraag; werk hier bij.</string>
+    <string name="sync_server_searching">Zoeken naar een syncserver op %1$s…</string>
+    <string name="sync_server_found">Syncserver gevonden op %1$s (%2$s)</string>
+    <string name="sync_server_found_hint">Koppel deze tv ermee, net als je andere tv\'s: hij sluit aan bij de bestaande server en neemt de profielen, favorieten en kijkvoortgang over. Op de ontvanger verandert niets.</string>
+    <string name="sync_server_not_found">Geen syncserver gevonden op %1$s (poort 8740). Installeer hem hieronder, of controleer het adres en zoek opnieuw.</string>
+    <string name="sync_server_pair_existing">Koppelen met bestaande server</string>
+    <string name="sync_server_pairing">Koppelen…</string>
+    <string name="sync_server_pair_failed">Koppelen mislukt: %1$s</string>
+    <string name="sync_server_reinstall">Opnieuw installeren…</string>
+    <string name="sync_server_reinstall_title">Syncserver opnieuw installeren?</string>
+    <string name="sync_server_reinstall_message">Op %1$s draait al een syncserver. Opnieuw installeren is alleen bedoeld voor een kapotte server: het installeert de nieuwste versie via SSH en herstart de server. Bestaande gegevens, koppelingen en het dashboardwachtwoord blijven behouden (eerst wordt een back-up gemaakt); worden die gegevens niet gevonden, dan stopt de installatie. Wil je deze tv met de server gebruiken, kies dan Koppelen. Gebruik de herstelcode hier alleen als je alle andere apparaten wilt afmelden.</string>
+    <string name="sync_server_reinstall_confirm">Installatieformulier tonen</string>
+    <string name="sync_server_search_again">Opnieuw zoeken</string>
 </resources>

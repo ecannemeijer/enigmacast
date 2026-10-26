@@ -24,6 +24,9 @@ data class SyncServerConfig(
     val role: String,
 )
 
+/** What port 8740 on a receiver answered without logging in. [version] is null before 0.3.1. */
+data class SyncServerProbe(val host: String, val pin: String, val version: String?)
+
 /** HTTPS client. Requests are refused when the certificate pin is missing. */
 @Singleton
 class EnigmaSyncClient @Inject constructor(
@@ -127,7 +130,15 @@ class EnigmaSyncClient @Inject constructor(
      * Reads the pin from the certificate the sync server presents on port 8740.
      * Takeover uses this so the TV does not need SSH, which often times out on Android.
      */
-    fun capturePin(host: String, connectSeconds: Long = 8, readSeconds: Long = 8): String {
+    fun capturePin(host: String, connectSeconds: Long = 8, readSeconds: Long = 8): String =
+        probe(host, connectSeconds, readSeconds).pin
+
+    /**
+     * Unauthenticated look at port 8740: the certificate pin (trust on first use, like pairing
+     * from the setup wizard) and the version from /api/v1/health. Servers before 0.3.1 answer
+     * without a version. Throws when nothing answers or it is not an EnigmaCast sync server.
+     */
+    fun probe(host: String, connectSeconds: Long = 8, readSeconds: Long = 8): SyncServerProbe {
         var captured: X509Certificate? = null
         val trust = object : X509TrustManager {
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
@@ -144,9 +155,10 @@ class EnigmaSyncClient @Inject constructor(
             .connectTimeout(connectSeconds, TimeUnit.SECONDS)
             .readTimeout(readSeconds, TimeUnit.SECONDS)
             .build()
-        try {
-            http.newCall(Request.Builder().url("https://$host:8740/api/v1/health").get().build()).execute().use { response ->
+        val body = try {
+            http.newCall(Request.Builder().url("https://$host:8740/api/v1/health").header("Connection", "close").get().build()).execute().use { response ->
                 if (!response.isSuccessful) error("Syncserver antwoordde met ${response.code}")
+                response.body.string()
             }
         } catch (error: Exception) {
             val reason = error.message.orEmpty()
@@ -155,8 +167,12 @@ class EnigmaSyncClient @Inject constructor(
             }
             throw error
         }
+        val json = runCatching { org.json.JSONObject(body) }.getOrNull()
+        val service = json?.optString("service").orEmpty()
+        if (json != null && service.isNotEmpty() && service != "enigmacast-sync") error("$host:8740 is geen EnigmaCast-syncserver")
         val cert = captured ?: error("Geen certificaat ontvangen van $host")
-        return Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(cert.publicKey.encoded), Base64.NO_WRAP)
+        val pin = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(cert.publicKey.encoded), Base64.NO_WRAP)
+        return SyncServerProbe(host, pin, json?.optString("version")?.ifBlank { null })
     }
 
     /** A TV with the app joins the server it found. No pairing code. */

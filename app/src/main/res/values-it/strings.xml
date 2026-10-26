@@ -1726,4 +1726,16 @@
     <string name="sync_update_err_backup">impossibile eseguire il backup dei dati di sincronizzazione. Non è stato installato nulla.</string>
     <string name="sync_update_err_verify">impossibile confermare la nuova versione (%1$s). Il backup si trova nella cartella backups dei dati di sincronizzazione.</string>
     <string name="sync_update_hotel_notice">Aggiornamento disponibile: server di sincronizzazione %1$s → %2$s. Agli ospiti non viene chiesto; aggiorna qui.</string>
+    <string name="sync_server_searching">Ricerca di un server di sincronizzazione su %1$s…</string>
+    <string name="sync_server_found">Server di sincronizzazione trovato su %1$s (%2$s)</string>
+    <string name="sync_server_found_hint">Associa questa TV, come le altre: si collega al server esistente e ne riprende profili, preferiti e avanzamento di visione. Sul ricevitore non cambia nulla.</string>
+    <string name="sync_server_not_found">Nessun server di sincronizzazione trovato su %1$s (porta 8740). Installalo qui sotto, oppure controlla l\'indirizzo e cerca di nuovo.</string>
+    <string name="sync_server_pair_existing">Associa al server esistente</string>
+    <string name="sync_server_pairing">Associazione…</string>
+    <string name="sync_server_pair_failed">Associazione non riuscita: %1$s</string>
+    <string name="sync_server_reinstall">Reinstalla…</string>
+    <string name="sync_server_reinstall_title">Reinstallare il server di sincronizzazione?</string>
+    <string name="sync_server_reinstall_message">Su %1$s è già in esecuzione un server di sincronizzazione. La reinstallazione serve solo per un server guasto: installa l\'ultima versione via SSH e riavvia il server. Dati esistenti, associazioni e password della dashboard vengono mantenuti (prima viene creato un backup); se quei dati non vengono trovati, l\'installazione si interrompe. Per usare questa TV con il server, scegli invece Associa. Usa qui il codice di ripristino solo se vuoi disconnettere tutti gli altri dispositivi.</string>
+    <string name="sync_server_reinstall_confirm">Mostra modulo di installazione</string>
+    <string name="sync_server_search_again">Cerca di nuovo</string>
 </resources>

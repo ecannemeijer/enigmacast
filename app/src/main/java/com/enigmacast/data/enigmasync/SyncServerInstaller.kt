@@ -53,11 +53,31 @@ class SyncServerInstaller @Inject constructor() {
             session.connect(20_000)
             val model = exec(session, "cat /proc/stb/info/model 2>/dev/null || echo unknown").trim()
             val python = exec(session, "python3 --version").trim()
-            val dataDir = exec(session, pickDataDir(requireCert = false)).trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
+            // Data from an earlier install (maybe 0.2.4 in an unmounted /media folder) must stay in use:
+            // init in another folder would start an empty server with a new certificate.
+            val existing = exec(session, FIND_DATA).lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+            exec(session, DOWNLOAD)
+            val target = SyncServerVersions.normalize(exec(session, "cat /tmp/enigmacast-sync-release/tag 2>/dev/null || true"))
+                ?: throw UpdateError(UpdateFailure.NO_RELEASE)
+            val rule = if (SyncServerVersions.older(target, SyncServerVersions.SAFE_LEGACY_UPGRADE)) PICK_030 else PICK_031
+            val dataDir = exec(session, rule).trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
             if (dataDir.isBlank()) error("No sync data directory on the receiver")
-            exec(session, FETCH)
+            if (existing.isNotEmpty() && dataDir !in existing) {
+                throw UpdateError(UpdateFailure.DATA_DIR_MOVES, "${existing.first()} → $dataDir")
+            }
+            if (dataDir in existing && backupData(session, dataDir).isBlank()) throw UpdateError(UpdateFailure.BACKUP)
+            try {
+                exec(session, INSTALL_IPK)
+            } catch (error: Exception) {
+                // The backup stopped the services; do not leave a working server switched off.
+                exec(session, "/etc/init.d/enigmacast-sync restart >/dev/null 2>&1 || true; /etc/init.d/enigmacast-web restart >/dev/null 2>&1 || true")
+                throw error
+            }
             val remote = "/usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync"
-            val init = exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init 2>&1 || true")
+            // Never init over existing data (it would answer 409 anyway): keeps pairings and recovery code.
+            val init = if (dataDir in existing) "" else {
+                exec(session, "PYTHONPATH='$remote' python3 -m enigmacast_sync.cli --data-dir '$dataDir' init 2>&1 || true")
+            }
             exec(session, "/etc/init.d/enigmacast-sync restart || true; /etc/init.d/enigmacast-web restart || true")
             // A reinstall keeps the dashboard password the owner chose; only a first install gets "admin".
             val firstPassword = exec(session, "[ -f '$dataDir/web-auth.json' ] && echo keep || echo new").trim() == "new"
@@ -133,19 +153,7 @@ class SyncServerInstaller @Inject constructor() {
             val next = exec(session, rule).trim().lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
             if (next != dataDir) throw UpdateError(UpdateFailure.DATA_DIR_MOVES, "$dataDir → ${next.ifBlank { "?" }}")
             onStep(UpdateStep.BACKUP)
-            val backup = exec(session, """
-                set -e
-                /etc/init.d/enigmacast-web stop >/dev/null 2>&1 || true
-                /etc/init.d/enigmacast-sync stop >/dev/null 2>&1 || true
-                mkdir -p '$dataDir/backups'
-                out='$dataDir/backups/pre-update-${'$'}(date +%Y%m%d-%H%M%S).tar.gz'
-                cd '$dataDir'
-                files=''
-                for f in sync.db master.key cert.pem key.pem web-auth.json; do [ -f "${'$'}f" ] && files="${'$'}files ${'$'}f"; done
-                tar czf "${'$'}out" ${'$'}files
-                chmod 600 "${'$'}out"
-                echo "${'$'}out"
-            """.trimIndent()).trim().lineSequence().lastOrNull().orEmpty()
+            val backup = backupData(session, dataDir)
             if (backup.isBlank()) throw UpdateError(UpdateFailure.BACKUP)
             onStep(UpdateStep.INSTALL)
             try {
@@ -201,6 +209,21 @@ class SyncServerInstaller @Inject constructor() {
         if (channel.exitStatus != 0 && text.isBlank()) error(String(stderr.toByteArray(), Charsets.UTF_8).ifBlank { "SSH command failed" })
         return text
     }
+
+    /** Stops both services and packs the data files into <dataDir>/backups; returns the archive path. */
+    private fun backupData(session: com.jcraft.jsch.Session, dataDir: String): String = exec(session, """
+            set -e
+            /etc/init.d/enigmacast-web stop >/dev/null 2>&1 || true
+            /etc/init.d/enigmacast-sync stop >/dev/null 2>&1 || true
+            mkdir -p '$dataDir/backups'
+            out='$dataDir/backups/pre-update-${'$'}(date +%Y%m%d-%H%M%S).tar.gz'
+            cd '$dataDir'
+            files=''
+            for f in sync.db master.key cert.pem key.pem web-auth.json; do [ -f "${'$'}f" ] && files="${'$'}files ${'$'}f"; done
+            tar czf "${'$'}out" ${'$'}files
+            chmod 600 "${'$'}out"
+            echo "${'$'}out"
+        """.trimIndent()).trim().lineSequence().lastOrNull().orEmpty()
 
     private fun setAdminPassword(dataDir: String): String = """
         python3 - '$dataDir' <<'PY'
@@ -301,8 +324,6 @@ class SyncServerInstaller @Inject constructor() {
             opkg install --force-reinstall --force-overwrite /tmp/enigmacast-sync.ipk
             test -d /usr/lib/enigma2/python/Plugins/Extensions/EnigmaCastSync/enigmacast_sync/web
         """.trimIndent()
-
-        val FETCH = DOWNLOAD + "\n" + INSTALL_IPK
 
         val IS_MOUNT = """
             is_mount() {
