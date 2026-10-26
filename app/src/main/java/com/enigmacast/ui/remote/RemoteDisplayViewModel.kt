@@ -923,6 +923,7 @@ class RemoteDisplayViewModel @Inject constructor(
     }
 
     fun openPipPicker() {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
         if (pip.playing()) pip.stop() else showPipPicker = true
     }
 
@@ -1008,6 +1009,8 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /** OK on a programme: watch the channel when it is on now, else offer AutoSwitch or Record. */
     fun chooseProgramme(channel: BouquetEntry, event: GuideEvent) {
+        // Hotel mode: a later programme offers no AutoSwitch or recording to guests.
+        if (!event.isAiring(nowSec()) && com.enigmacast.domain.hotel.HotelRuntime.active) return
         if (event.isAiring(nowSec())) {
             watchFromGuide(channel)
             return
@@ -1023,6 +1026,7 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /** AutoSwitch in the programme dialog: set it, or cancel it when it was set. */
     fun toggleAutoSwitch() {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) { _ui.update { it.copy(programmePrompt = null) }; return }
         val prompt = _ui.value.programmePrompt ?: return
         _ui.update { it.copy(programmePrompt = null) }
         val receiverId = settingsSnapshot.activeReceiver()?.id.orEmpty()
@@ -1031,6 +1035,7 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /** Record in the programme dialog: confirm the destination, then store it. */
     fun chooseRecord() {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) { _ui.update { it.copy(programmePrompt = null) }; return }
         val prompt = _ui.value.programmePrompt ?: return
         _ui.update { it.copy(programmePrompt = null) }
         viewModelScope.launch {
@@ -1053,6 +1058,7 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /** Record tile: stop a capture that is running, otherwise record the programme on now. */
     fun recordWatching() {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
         val running = recordings.items.value.filter { it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING }
         if (running.isNotEmpty()) {
             closeQuickBar()
@@ -1386,6 +1392,8 @@ class RemoteDisplayViewModel @Inject constructor(
     }
 
     private fun perform(action: PlayerAction) {
+        // Hotel mode: guests cannot record or switch to another receiver.
+        if (!com.enigmacast.domain.hotel.HotelRestrictions.actionAllowed(action, com.enigmacast.domain.hotel.HotelRuntime.config)) return
         val ui = _ui.value
         when (action) {
             PlayerAction.CHANNEL_UP -> zapLarge(1)

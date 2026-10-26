@@ -288,10 +288,13 @@ class OwnTunerSession @Inject constructor(
             val id = settings.activeReceiver()?.id
             // IPTV startup leaves the decoder free. Satellite startup plays the saved channel
             // even when the last picture was IPTV. Off keeps the previous rule.
-            val play = settings.streamMode == StreamMode.OWN_TUNER && !otherPlays() && when (settings.startupLive) {
-                StartupLive.IPTV -> false
-                StartupLive.SATELLITE -> true
-                StartupLive.OFF -> settings.lastLiveSource != LastLiveSource.IPTV
+            // Hotel mode on satellite always plays: the guest's TV is live TV.
+            val hotel = com.enigmacast.domain.hotel.HotelRuntime.config
+            val play = settings.streamMode == StreamMode.OWN_TUNER && !otherPlays() && when {
+                hotel.enabled -> !hotel.iptv
+                settings.startupLive == StartupLive.IPTV -> false
+                settings.startupLive == StartupLive.SATELLITE -> true
+                else -> settings.lastLiveSource != LastLiveSource.IPTV
             }
             if (id != boundReceiverId) {
                 val switching = boundReceiverId != null
@@ -573,6 +576,15 @@ class OwnTunerSession @Inject constructor(
             restarts.reset()
             restartAutomatically("receiver back")
         }
+    }
+
+    /**
+     * Hotel mode changed what guests may see, or a cleanup put the start channel back: drop the
+     * channel list in memory, so the next start loads an allowed bouquet and the remembered channel.
+     */
+    fun reloadChannels() {
+        abandonCurrent()
+        channelLoadFailed = false
     }
 
     /** Leaving own-tuner mode: drop the stream so the other mode starts clean. */

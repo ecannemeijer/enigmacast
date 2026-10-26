@@ -176,6 +176,7 @@ private enum class SettingPage {
     Iptv,
     Scrapers,
     Lock,
+    Hotel,
     Recordings,
     Appearance,
     Remote,
@@ -1491,6 +1492,7 @@ private fun SettingsHub(
                 SettingNav(NavIconStyle.Iptv, stringResource(R.string.settings_iptv), page == SettingPage.Iptv, navFocus.getValue(SettingPage.Iptv), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Iptv) }) { enterPage(SettingPage.Iptv) }
                 SettingNav(Icons.Filled.Search, stringResource(R.string.settings_scrapers), page == SettingPage.Scrapers, navFocus.getValue(SettingPage.Scrapers), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Scrapers) }) { enterPage(SettingPage.Scrapers) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_lock), page == SettingPage.Lock, navFocus.getValue(SettingPage.Lock), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Lock) }) { enterPage(SettingPage.Lock) }
+                SettingNav(EnigmaIcons.Bedtime, stringResource(R.string.hotel_title), page == SettingPage.Hotel, navFocus.getValue(SettingPage.Hotel), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Hotel) }) { enterPage(SettingPage.Hotel) }
                 SettingNav(EnigmaIcons.Record, stringResource(R.string.settings_recordings), page == SettingPage.Recordings, navFocus.getValue(SettingPage.Recordings), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Recordings) }) { enterPage(SettingPage.Recordings) }
                 SettingNav(EnigmaIcons.Palette, stringResource(R.string.settings_appearance), page == SettingPage.Appearance, navFocus.getValue(SettingPage.Appearance), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Appearance) }) { enterPage(SettingPage.Appearance) }
                 SettingNav(EnigmaIcons.Lock, stringResource(R.string.settings_remote), page == SettingPage.Remote, navFocus.getValue(SettingPage.Remote), pageFocus, menuFocus, pageContentFocus, opensPage = true, onFocus = { showPage(SettingPage.Remote) }) { enterPage(SettingPage.Remote) }
@@ -1593,6 +1595,7 @@ private fun SettingsHub(
                     SettingPage.SyncServer -> SyncServerSettingsPanel(pageContentFocus)
                     SettingPage.Iptv -> IptvSettingsPanel(pageContentFocus)
                     SettingPage.Lock -> LockSettingsPanel(pageContentFocus)
+                    SettingPage.Hotel -> com.enigmacast.ui.hotel.HotelSettingsPanel(pageContentFocus)
                     SettingPage.Scrapers -> com.enigmacast.ui.torrent.ScraperSettingsPanel(pageContentFocus)
                     SettingPage.Recordings -> PlaybackSettingsPanel(
                         settings.streamMode,

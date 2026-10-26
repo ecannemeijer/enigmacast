@@ -19,6 +19,8 @@ class EnigmaCastApp : Application() {
                 StrictMode.ThreadPolicy.Builder().detectDiskReads().detectDiskWrites().detectNetwork().penaltyLog().build(),
             )
         }
+        // Hotel mode decides the first screen: its small prefs file is read off Main before it is needed.
+        Thread({ runCatching { getSharedPreferences(com.enigmacast.data.hotel.HotelStore.FILE, MODE_PRIVATE).all } }, "hotel-preload").start()
         super.onCreate()
         // Decrypt the stored secrets off Main, before the first screen asks for settings.
         Thread({ runCatching { secrets.preload() } }, "secrets-preload").start()

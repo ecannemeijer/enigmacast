@@ -29,6 +29,7 @@ import javax.inject.Singleton
 class ProfileStore @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    private val hotel: com.enigmacast.data.hotel.HotelStore,
 ) {
     private val prefs = context.getSharedPreferences("profiles", Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
@@ -38,7 +39,8 @@ class ProfileStore @Inject constructor(
     val state: StateFlow<ProfileState> = _state.asStateFlow()
 
     /** Live TV startup waits until the viewer has picked a profile. */
-    @Volatile var holdLiveStart: Boolean = ProfileRules.askOnStart(initial)
+    /** Live TV startup waits until the viewer has picked a profile (hotel mode: until the hotel profile is in). */
+    @Volatile var holdLiveStart: Boolean = ProfileRules.askOnStart(initial) || hotel.current.enabled
         private set
 
     private val _switched = MutableSharedFlow<Profile>(extraBufferCapacity = 2)
@@ -76,6 +78,16 @@ class ProfileStore @Inject constructor(
         releaseHold()
         _switched.tryEmit(nextState.active)
         _entered.tryEmit(nextState.active)
+    }
+
+    /**
+     * Hotel mode: the linked hotel profile becomes active without the picker (and without its
+     * PIN — the owner linked it). A linked profile that no longer exists leaves the active one.
+     */
+    suspend fun enterHotel(uuid: String) {
+        val state = _state.value
+        val target = state.profiles.firstOrNull { uuid.isNotBlank() && (it.uuid == uuid || (it.uuid.isBlank() && uuid == ProfileState.LEGACY_UUID)) }
+        if (target != null && target.id != state.activeId) switchTo(target.id) else confirmActive()
     }
 
     /** Picker closed on the profile already active: remember that a choice was made. */

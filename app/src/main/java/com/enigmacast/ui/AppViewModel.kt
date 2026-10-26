@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -64,9 +65,27 @@ class AppViewModel @Inject constructor(
     private val recordings: com.enigmacast.live.RecordingBook,
     private val account: com.enigmacast.data.account.AccountRepository,
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
+    private val hotel: com.enigmacast.data.hotel.HotelStore,
+    private val hotelCleanup: com.enigmacast.data.hotel.HotelCleanup,
 ) : ViewModel() {
-    var screen by mutableStateOf(AppScreen.Loading)
+    private var rawScreen by mutableStateOf(AppScreen.Loading)
+
+    /** Hotel mode: every screen change goes through [forHotel], so guests stay on live TV and the hotel menu. */
+    var screen: AppScreen
+        get() = rawScreen
+        private set(value) {
+            rawScreen = value.forHotel(com.enigmacast.domain.hotel.HotelRuntime.config)
+        }
+
+    /** Hotel mode is on (the shell hides Home, the profile picker and every setting but the hotel PIN). */
+    val hotelMode: StateFlow<Boolean> = hotel.config.map { it.enabled }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, hotel.current.enabled)
+
+    /** The welcome screen is up (hotel mode, at start). */
+    var hotelWelcome by mutableStateOf(false)
         private set
+    /** Set by the activity: opens the IPTV page on live TV (the remembered or start channel). */
+    var onHotelIptvLive: (() -> Unit)? = null
 
     init {
         // Equivalent channel: the target player consumes the request; the shell switches screen.
@@ -82,6 +101,18 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.settings.map { it.osdSkin }.distinctUntilChanged()
                 .collect { com.enigmacast.ui.theme.ActiveSkin.apply(it) }
+        }
+        // Hotel mode turned on or off (by the owner, in Settings): the app follows right away.
+        viewModelScope.launch {
+            hotel.config.map { it.enabled }.distinctUntilChanged().drop(1).collect { on ->
+                if (on) startHotel(welcome = false) else leaveHotel()
+            }
+        }
+        // A finished cleanup (by hand or daily): back to the start channel.
+        viewModelScope.launch {
+            com.enigmacast.domain.hotel.HotelRuntime.cleanups.drop(1).collect {
+                if (hotel.current.enabled && !hotelWelcome && screen != AppScreen.Loading) startHotelLive()
+            }
         }
     }
 
@@ -124,7 +155,7 @@ class AppViewModel @Inject constructor(
         watchSleepTimer()
         viewModelScope.launch { recordings.ensureArmed() }
         viewModelScope.launch {
-            reminders.switches.collect { autoSwitch(it) }
+            reminders.switches.collect { if (!hotel.current.enabled) autoSwitch(it) }
         }
         viewModelScope.launch {
             runCatching { settingsRepository.migrateSecrets() }
@@ -136,6 +167,10 @@ class AppViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val settings = settingsRepository.current()
+            if (!decided && hotel.current.enabled) {
+                startHotel(welcome = true)
+                return@launch
+            }
             if (!decided) {
                 decided = true
                 val receiver = settings.activeReceiver()
@@ -174,7 +209,8 @@ class AppViewModel @Inject constructor(
                 EnigmaLog.connection("update check failed: ${error.javaClass.simpleName}")
                 null
             } ?: return@launch
-            if (isNewerRelease(BuildConfig.VERSION_CODE, remote)) {
+            // Hotel mode: never an update dialog in front of a guest (the owner updates with hotel mode off).
+            if (isNewerRelease(BuildConfig.VERSION_CODE, remote) && !hotel.current.enabled) {
                 // Never over the first-run wizard: wait until setup is behind the viewer.
                 kotlinx.coroutines.flow.combine(
                     androidx.compose.runtime.snapshotFlow { screen },
@@ -243,6 +279,60 @@ class AppViewModel @Inject constructor(
                 updatePrompt = prompt.copy(message = error.uiMessage(UiText.res(R.string.update_installer_failed)), installing = false)
             }
         }
+    }
+
+    /**
+     * Hotel mode start: the hotel profile becomes active (no picker), the start channel and volume
+     * are applied, the daily cleanup is armed, then the welcome screen (if on) or live TV.
+     */
+    private fun startHotel(welcome: Boolean) {
+        decided = true
+        exitPrompt = false
+        updatePrompt = null
+        screen = AppScreen.Hotel
+        viewModelScope.launch {
+            val config = hotel.current
+            profiles.enterHotel(hotelCleanup.hotelUuid(config))
+            runCatching { hotelCleanup.applyStart(config) }
+                .onFailure { EnigmaLog.service("hotel start failed: ${it.javaClass.simpleName}") }
+            hotelCleanup.startDaily()
+            ownTuner.reloadChannels()
+            if (welcome && config.welcome.enabled) hotelWelcome = true else startHotelLive()
+        }
+    }
+
+    /** Welcome screen over (timer or any key): live TV starts. */
+    fun closeHotelWelcome() {
+        if (!hotelWelcome) return
+        hotelWelcome = false
+        startHotelLive()
+    }
+
+    /** Live TV the way hotel mode is set: satellite full screen or IPTV live. */
+    fun startHotelLive() {
+        val config = hotel.current
+        if (!config.enabled) return
+        if (config.iptv) {
+            onHotelIptvLive?.invoke()
+            streamRunning = false
+            screen = AppScreen.Xtream
+        } else {
+            openStream()
+        }
+    }
+
+    /** The guest's menu (Back on the live picture). */
+    fun openHotelMenu() {
+        screen = AppScreen.Hotel
+    }
+
+    /** Hotel mode off: the owner's normal app again, on Home. */
+    private fun leaveHotel() {
+        hotelWelcome = false
+        hotel.relock()
+        ownTuner.reloadChannels()
+        returnToSettingsHub = true
+        openDashboard()
     }
 
     private fun applyStartupLive(settings: com.enigmacast.domain.model.AppSettings) {
@@ -433,6 +523,11 @@ class AppViewModel @Inject constructor(
     }
 
     fun back() {
+        if (hotel.current.enabled) {
+            // Hotel mode: Back never leaves the app; from live TV it opens the menu, from the menu live TV.
+            if (screen == AppScreen.Hotel) startHotelLive() else openHotelMenu()
+            return
+        }
         screen = when (screen) {
             AppScreen.Xtream, AppScreen.Torrent -> AppScreen.Dashboard
             AppScreen.SignalMeter, AppScreen.Oscam, AppScreen.SettingsImport -> {
@@ -485,6 +580,8 @@ class AppViewModel @Inject constructor(
     }
 
     fun askExit() {
+        // Hotel mode: guests cannot close the app.
+        if (hotel.current.enabled) return
         exitPrompt = true
     }
 
@@ -520,6 +617,13 @@ class AppViewModel @Inject constructor(
         stoppedInBackground = false
         EnigmaLog.player("app in foreground: playback allowed again")
         playback.allowPlayback()
+        if (hotel.current.enabled) {
+            // Hotel mode: back on screen means live TV again (HOME, or the TV switched on).
+            hotel.relock()
+            playbackLifecycle.resumed()
+            if (!hotelWelcome) startHotelLive()
+            return
+        }
         if (screen == AppScreen.Remote) screen = AppScreen.Dashboard
         playbackLifecycle.resumed()
     }

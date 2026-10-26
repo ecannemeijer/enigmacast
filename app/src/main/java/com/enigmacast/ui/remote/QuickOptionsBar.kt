@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -131,7 +132,12 @@ fun QuickOptionsBar(
     /** False while the icons only sit under the OSD; Down makes them take the focus. */
     interactive: Boolean = true,
 ) {
-    val tiles = if (iptv) QuickOptions.iptvTiles(ui.playerState.filePlayback) else QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback)
+    // Hotel mode: no recording, stream info, other bouquets' channels, sleep or picture-in-picture for guests.
+    val hotel by com.enigmacast.domain.hotel.HotelRuntime.state.collectAsState()
+    val tiles = com.enigmacast.domain.hotel.HotelRestrictions.tiles(
+        if (iptv) QuickOptions.iptvTiles(ui.playerState.filePlayback) else QuickOptions.tiles(ui.ownTuner, ui.playerState.filePlayback),
+        hotel,
+    )
     val firstFocus = remember { FocusRequester() }
     val lastFocus = remember { FocusRequester() }
     val rowState = rememberLazyListState()

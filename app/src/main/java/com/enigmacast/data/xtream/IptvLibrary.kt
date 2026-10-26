@@ -207,6 +207,20 @@ class IptvLibrary @Inject constructor(
         }
     }
 
+    /**
+     * Hotel cleanup: Continue watching of [profileUuid] goes (also on the sync server, through
+     * tombstones, so it does not come back), and its watch history is removed on this TV.
+     * Rows of any other profile are never touched.
+     */
+    suspend fun clearProfileHistory(profileUuid: String): Int {
+        val now = System.currentTimeMillis()
+        val rows = com.enigmacast.domain.hotel.HotelCleanupPlan.rowsOfHotel(dao.resumes().first(), profileUuid) { it.profileId }
+        rows.forEach { deleteResume(profileUuid, it.source, it.kind, it.id, now) }
+        if (profileUuid.isNotBlank()) dao.deleteHistoryFor(profileUuid)
+        if (rows.isNotEmpty()) trigger.nudge()
+        return rows.size
+    }
+
     private suspend fun deleteResume(profileId: String, source: String, kind: String, id: String, now: Long) {
         dao.deleteResume(profileId, source, kind, id)
         tombstones.put(profileId, LibrarySync.PROGRESS, key(source, kind, id), now)
