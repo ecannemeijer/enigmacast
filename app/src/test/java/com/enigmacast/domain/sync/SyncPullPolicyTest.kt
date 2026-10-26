@@ -17,6 +17,17 @@ class SyncPullPolicyTest {
     }
 
     @Test
+    fun fastServersStartWithLargePagesAndShrinkOnFailure() {
+        assertEquals(500, SyncPullPolicy.pageSize(0, fast = true))
+        assertEquals(200, SyncPullPolicy.pageSize(1, fast = true))
+        assertEquals(LibrarySync.PULL_CHUNK, SyncPullPolicy.pageSize(2, fast = true))
+        assertEquals(10, SyncPullPolicy.pageSize(99, fast = true))
+        // Unknown or old servers keep the small pages.
+        assertEquals(LibrarySync.PULL_CHUNK, SyncPullPolicy.pageSize(0, fast = false))
+        assertEquals(10, SyncPullPolicy.pageSize(5, fast = false))
+    }
+
+    @Test
     fun backoffDoublesUpToTheCap() {
         assertEquals(400L, SyncPullPolicy.backoffMs(0))
         assertEquals(800L, SyncPullPolicy.backoffMs(1))

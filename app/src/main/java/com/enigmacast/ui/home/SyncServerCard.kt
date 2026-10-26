@@ -44,6 +44,8 @@ import com.enigmacast.ui.theme.TvTextField
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import com.enigmacast.domain.sync.SyncRunRules
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -89,6 +91,19 @@ class SyncServerViewModel @Inject constructor(
         private set
     /** Just paired from this card: focus moves to the first button of the paired view. */
     var justPaired by mutableStateOf(false)
+    /** Text resource of the step the busy pairing or install is at (shown with a spinner). */
+    var step by mutableStateOf<Int?>(null)
+        private set
+    /** Pairing did not finish within [SyncRunRules.PAIR_TIMEOUT_MS]. */
+    var pairTimedOut by mutableStateOf(false)
+        private set
+
+    /** The sync run in progress (items so far), for the spinner in the paired view. */
+    val syncProgress = engine.progress
+
+    private fun showStep(res: Int) {
+        viewModelScope.launch { if (busy) step = res }
+    }
 
     /** The last sync run's outcome (shown as "sync incomplete" while profiles or parts failed). */
     val health = engine.health
@@ -114,7 +129,7 @@ class SyncServerViewModel @Inject constructor(
      */
     fun search(checkRelease: Boolean = true) {
         val address = host.trim()
-        if (probing || linkedHost.isNotBlank() || address.isBlank()) return
+        if (probing || busy || linkedHost.isNotBlank() || address.isBlank()) return
         probing = true
         installFailure = null
         pairError = null
@@ -140,22 +155,45 @@ class SyncServerViewModel @Inject constructor(
         busy = true
         status = ""
         pairError = null
+        pairTimedOut = false
         installFailure = null
+        step = R.string.sync_pair_step_cert
+        // Set when the card gave up waiting: a join that answers later must not save a pairing.
+        val abandoned = java.util.concurrent.atomic.AtomicBoolean(false)
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            EnigmaLog.service("sync: koppelen start host=${server.host}")
+            // Only the pairing itself is awaited (certificate, join, profiles: a few requests).
+            // The first full sync runs afterwards in the background with its own progress.
+            val work = async(Dispatchers.IO) {
                 runCatching {
-                    val pin = client.capturePin(server.host)
+                    val pin = client.capturePin(server.host, 5, 8)
                     if (pin != server.pin) error("${server.host}:8740 presenteert een ander certificaat dan bij het zoeken")
+                    EnigmaLog.service("sync: koppelen certificaat ok")
+                    showStep(R.string.sync_pair_step_join)
                     val paired = JSONObject(client.join(server.host, pin, "EnigmaCast"))
-                    client.save(server.host, pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
-                    engine.importProfiles()
-                    runCatching { engine.sync(foreground = true) }
-                    Unit
+                    val role = paired.getString("role")
+                    EnigmaLog.service("sync: koppelen join ok rol=$role")
+                    if (abandoned.get()) error("abandoned")
+                    client.save(server.host, pin, paired.getString("token"), paired.getString("deviceId"), role)
+                    showStep(R.string.sync_pair_step_profiles)
+                    val count = engine.importProfiles(strict = true)
+                    EnigmaLog.service("sync: koppelen profielen gekopieerd $count")
+                    false
                 }
             }
+            val result = kotlinx.coroutines.withTimeoutOrNull(SyncRunRules.PAIR_TIMEOUT_MS) { work.await() } ?: run {
+                abandoned.set(true)
+                work.cancel()
+                // Saved already (only the profile copy was slow): it is paired; the sync copies them.
+                if (client.config()?.host == server.host) Result.success(true) else Result.failure(PairTimeout())
+            }
             busy = false
+            step = null
+            val seconds = (System.currentTimeMillis() - started) / 1000
             result.fold(
-                onSuccess = {
+                onSuccess = { importLater ->
+                    EnigmaLog.service("sync: koppelen klaar in ${seconds}s, eerste sync op de achtergrond")
                     client.config()?.let {
                         linkedHost = it.host
                         linkedRole = it.role
@@ -163,28 +201,38 @@ class SyncServerViewModel @Inject constructor(
                     found = null
                     reinstallForm = false
                     justPaired = true
+                    engine.syncInBackground("koppelen", importFirst = importLater)
                 },
                 onFailure = {
-                    EnigmaLog.service("syncserver koppelen mislukt: ${it.javaClass.simpleName}")
-                    pairError = it.message ?: it.javaClass.simpleName
+                    EnigmaLog.service("sync: koppelen mislukt na ${seconds}s: ${it.javaClass.simpleName}")
+                    if (it is PairTimeout) pairTimedOut = true else pairError = it.message ?: it.javaClass.simpleName
                 },
             )
         }
     }
+
+    private class PairTimeout : Exception("timeout")
 
     fun install() {
         if (busy || host.isBlank() || password.isBlank()) return
         busy = true
         status = ""
         installFailure = null
+        pairError = null
+        pairTimedOut = false
+        step = R.string.sync_update_step_connect
         val typed = password
         password = ""
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val report = installer.install(host.trim(), user.trim(), typed)
+                    val report = installer.install(host.trim(), user.trim(), typed) { installStep -> showStep(updateStepText(installStep)) }
+                    // A reinstall may come with a new certificate: no cached client or paging answer survives.
+                    engine.serverChanged(host.trim())
+                    showStep(R.string.sync_pair_step_join)
                     val paired = JSONObject(client.join(host.trim(), report.pin, "EnigmaCast"))
                     client.save(host.trim(), report.pin, paired.getString("token"), paired.getString("deviceId"), paired.getString("role"))
+                    showStep(R.string.sync_pair_step_profiles)
                     if (report.pairingCode.isBlank()) {
                         // Existing data was kept: take the server's profiles, do not add this TV's.
                         engine.importProfiles()
@@ -194,11 +242,12 @@ class SyncServerViewModel @Inject constructor(
                             runCatching { client.request(client.config()!!, "POST", "/api/v1/profiles", body.toByteArray()) }
                         }
                     }
-                    engine.sync(foreground = true)
                     report
                 }
             }
             busy = false
+            step = null
+            if (result.isSuccess) engine.syncInBackground("installatie")
             val error = result.exceptionOrNull()
             installFailure = (error as? UpdateError)?.let { SyncServerUpdater.State.Failed(it.reason, it.detail) }
             status = result.fold(
@@ -249,13 +298,13 @@ class SyncServerViewModel @Inject constructor(
                         val body = """{"uuid":${json(profile.uuid)},"name":${json(profile.name)},"avatar":${profile.avatar},"updatedMs":${System.currentTimeMillis()},"changeId":${json(profile.uuid + "-claim")}}"""
                         runCatching { client.request(client.config()!!, "POST", "/api/v1/profiles", body.toByteArray()) }
                     }
-                    runCatching { engine.sync(foreground = true) }
                     newCode
                 }
             }
             busy = false
             result.fold(
                 onSuccess = {
+                    engine.syncInBackground("beheer overnemen")
                     freshRecovery = it
                     password = ""
                     recoveryCode = ""
@@ -318,7 +367,12 @@ fun SyncServerCard(
                 lastCheck?.takeIf { updates.hotelMode && it.verdict == SyncServerVersions.Verdict.OUTDATED }?.let {
                     InfoRow(stringResource(R.string.sync_update_title), stringResource(R.string.sync_update_hotel_notice, it.runningText, it.latest ?: "?"))
                 }
-                if (!updates.dialog) syncUpdateStatus(updateState)?.let { InfoRow(stringResource(R.string.sync_update_title), it) }
+                val linkedUpdating = updateState is SyncServerUpdater.State.Checking || updateState is SyncServerUpdater.State.Updating
+                if (!updates.dialog) {
+                    syncUpdateStatus(updateState)?.let { if (linkedUpdating) SyncBusyRow(it) else InfoRow(stringResource(R.string.sync_update_title), it) }
+                }
+                val progress by model.syncProgress.collectAsState()
+                progress?.let { SyncBusyRow(stringResource(R.string.sync_progress, it.items, it.profile, it.profiles)) }
                 val linkedFocus = remember { FocusRequester() }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TvButton(
@@ -327,7 +381,7 @@ fun SyncServerCard(
                         modifier = Modifier.focusRequester(linkedFocus),
                         enabled = updateState !is SyncServerUpdater.State.Checking && updateState !is SyncServerUpdater.State.Updating,
                     )
-                    TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() })
+                    TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() }, enabled = !linkedUpdating)
                 }
                 // Paired from this card: the Pair button is gone, keep D-pad focus inside the card.
                 LaunchedEffect(model.justPaired) {
@@ -361,24 +415,24 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
         dialogWasOpen = updates.dialog
     }
     when {
-        model.probing -> InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_searching, model.host.trim()))
+        model.probing -> SyncBusyRow(stringResource(R.string.sync_server_searching, model.host.trim()))
         server != null -> {
             InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_found, server.host, SyncServerOffer.label(server.version)))
             Text(stringResource(R.string.sync_server_found_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
         }
         model.searched.isNotBlank() -> InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_not_found, model.searched))
     }
-    if (model.busy && server != null && !model.reinstallForm) {
-        InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_pairing))
-    }
+    // Pairing or installing: spinner with the step it is at.
+    if (model.busy) SyncBusyRow(stringResource(model.step ?: R.string.sync_server_pairing))
+    if (model.pairTimedOut) InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_pair_timeout))
     model.pairError?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_pair_failed, it)) }
     model.installFailure?.let { failure -> syncUpdateStatus(failure)?.let { InfoRow(stringResource(R.string.sync_server_status), it) } }
     val check = lastCheck?.takeIf { server != null && it.host == server.host && !it.paired }
-    if (server != null && !updates.dialog && (updateState is SyncServerUpdater.State.Checking || check != null)) {
-        syncUpdateStatus(updateState)?.let { InfoRow(stringResource(R.string.sync_update_title), it) }
+    val updating = updateState is SyncServerUpdater.State.Checking || updateState is SyncServerUpdater.State.Updating
+    if (server != null && !updates.dialog && (updating || check != null)) {
+        syncUpdateStatus(updateState)?.let { if (updating) SyncBusyRow(it) else InfoRow(stringResource(R.string.sync_update_title), it) }
     }
     val actions = SyncServerOffer.actions(server != null, server?.version, check?.latest)
-    val updating = updateState is SyncServerUpdater.State.Checking || updateState is SyncServerUpdater.State.Updating
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         if (SyncServerOffer.Action.PAIR in actions) {
             TvButton(stringResource(R.string.sync_server_pair_existing), { model.pairExisting() }, enabled = !model.busy && !updating)
@@ -400,8 +454,8 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
         TvTextField(stringResource(R.string.sync_server_password), model.password, { model.password = it }, visualTransformation = PasswordVisualTransformation())
         TvTextField(stringResource(R.string.sync_server_recovery), model.recoveryCode, { model.recoveryCode = it })
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton(stringResource(R.string.sync_server_install), { model.install() }, enabled = !model.busy && !model.probing)
-            TvButton(stringResource(R.string.sync_server_claim), { model.claim() }, enabled = !model.busy && model.recoveryCode.isNotBlank())
+            TvButton(stringResource(R.string.sync_server_install), { model.install() }, enabled = !model.busy && !model.probing && !updating)
+            TvButton(stringResource(R.string.sync_server_claim), { model.claim() }, enabled = !model.busy && !updating && model.recoveryCode.isNotBlank())
         }
     }
     if (confirmReinstall && server != null) {

@@ -9,6 +9,13 @@ object SyncPullPolicy {
     /** Page sizes, largest first; a failure moves one step down and a run never moves back up. */
     val PAGE_SIZES = intArrayOf(LibrarySync.PULL_CHUNK, 20, 10)
 
+    /**
+     * Sizes for a server that answers in pages with a `more` flag (0.3.1 and newer, robust TLS):
+     * every request costs a new TLS handshake on the receiver (HTTP/1.0), so a first sync of a
+     * long history needs large pages. The server caps `limit` at 1000.
+     */
+    val FAST_PAGE_SIZES = intArrayOf(500, 200, LibrarySync.PULL_CHUNK, 20, 10)
+
     /** Tries per page before the profile is left for the next sync. */
     const val MAX_ATTEMPTS = 5
 
@@ -19,6 +26,12 @@ object SyncPullPolicy {
 
     /** The page size after [failures] failed requests in this run. */
     fun pageSize(failures: Int): Int = PAGE_SIZES[failures.coerceIn(0, PAGE_SIZES.size - 1)]
+
+    /** As [pageSize], with [FAST_PAGE_SIZES] once the server is known to page ([fast]). */
+    fun pageSize(failures: Int, fast: Boolean): Int {
+        val sizes = if (fast) FAST_PAGE_SIZES else PAGE_SIZES
+        return sizes[failures.coerceIn(0, sizes.size - 1)]
+    }
 
     /** The wait after failed try number [attempt] (0-based): 400 ms, 800 ms, 1.6 s, … up to [MAX_BACKOFF_MS]. */
     fun backoffMs(attempt: Int): Long {

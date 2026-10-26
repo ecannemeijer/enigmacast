@@ -44,5 +44,10 @@ object SyncTls {
         return chachaWorks.put(host, works) != works
     }
 
+    /** Forgets what is known about [host] (its sync server was updated or reinstalled). */
+    fun forget(host: String) {
+        chachaWorks.remove(host)
+    }
+
     internal fun reset() = chachaWorks.clear()
 }

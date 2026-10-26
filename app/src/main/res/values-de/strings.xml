@@ -1712,6 +1712,12 @@
     <string name="sync_update_step_backup">Sync-Server wird gestoppt und Daten gesichert…</string>
     <string name="sync_update_step_install">Update wird installiert…</string>
     <string name="sync_update_step_verify">Neue Version wird geprüft…</string>
+    <string name="sync_update_step_restart">Sync-Server wird neu gestartet…</string>
+    <string name="sync_pair_step_cert">Serverzertifikat wird geprüft…</string>
+    <string name="sync_pair_step_join">Kopplung mit dem Sync-Server…</string>
+    <string name="sync_pair_step_profiles">Profile werden kopiert…</string>
+    <string name="sync_server_pair_timeout">Die Kopplung wurde nicht innerhalb von 30 Sekunden abgeschlossen. Prüfe, ob der Receiver eingeschaltet ist, und versuche es erneut.</string>
+    <string name="sync_progress">Synchronisieren… %1$d Elemente (Profil %2$d von %3$d)</string>
     <string name="sync_update_done">Sync-Server auf v%1$s aktualisiert. Sicherung der vorherigen Daten: %2$s</string>
     <string name="sync_update_failed">Update fehlgeschlagen: %1$s</string>
     <string name="sync_update_err_not_installed">der Sync-Server wurde auf diesem Receiver nicht mit opkg installiert.</string>

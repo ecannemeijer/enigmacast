@@ -31,6 +31,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import androidx.room.withTransaction
 import org.json.JSONObject
 
 /** An M3U or Xtream login stored on the sync server, offered once in the wizard. */
@@ -62,18 +64,61 @@ class EnigmaSyncEngine @Inject constructor(
     private val tombstones: com.enigmacast.data.xtream.LibraryTombstones,
     private val watchNext: com.enigmacast.data.xtream.WatchNextPublisher,
     private val boost: com.enigmacast.data.player.AudioBoostStore,
+    private val database: com.enigmacast.data.db.UserDatabase,
 ) {
-    /** Copies server profiles onto this device so the picker can show them. */
-    suspend fun importProfiles() = withContext(Dispatchers.IO) {
-        val config = client.config() ?: return@withContext
-        val text = runCatching { client.request(config, "GET", "/api/v1/profiles") }.getOrNull() ?: return@withContext
-        val profilesJson = JSONObject(text).optJSONArray("profiles") ?: return@withContext
+    /**
+     * Copies server profiles onto this device so the picker can show them.
+     * @param strict throw when the server cannot be read (pairing shows the error); otherwise quiet.
+     * @return the number of server profiles, or -1 when nothing could be read.
+     */
+    suspend fun importProfiles(strict: Boolean = false): Int = withContext(Dispatchers.IO) {
+        val config = client.config() ?: if (strict) error("not paired") else return@withContext -1
+        val text = runCatching { client.request(config, "GET", "/api/v1/profiles") }
+            .onFailure { if (strict) throw it }
+            .getOrNull() ?: return@withContext -1
+        val profilesJson = JSONObject(text).optJSONArray("profiles") ?: return@withContext 0
+        var count = 0
         for (index in 0 until profilesJson.length()) {
             val profile = profilesJson.getJSONObject(index)
             val uuid = profile.optString("uuid")
             if (uuid.isBlank()) continue
             profiles.importRemote(uuid, profile.optString("name"), profile.optInt("avatar"))
+            count++
         }
+        count
+    }
+
+    /** Runs that outlive the screen that asked for them (pairing, Sync now). */
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+    /** What the run in progress has done so far, for the spinner on the Sync server card; null when idle. */
+    data class Progress(val profile: Int, val profiles: Int, val items: Int)
+
+    private val _progress = kotlinx.coroutines.flow.MutableStateFlow<Progress?>(null)
+    val progress: kotlinx.coroutines.flow.StateFlow<Progress?> = _progress
+
+    /**
+     * Starts a foreground sync without waiting for it (the pairing finishes right away; the card
+     * shows [progress]). Joins a run that just started instead of queueing a second full one.
+     */
+    fun syncInBackground(reason: String, importFirst: Boolean = false) {
+        scope.launch {
+            if (importFirst) runCatching { importProfiles() }
+            runCatching { sync(foreground = true, reason = reason, join = true) }
+        }
+    }
+
+    /**
+     * The receiver's sync server was updated or reinstalled: forget the cached TLS client, the
+     * paging answer and the pause after failed runs, so the next run talks to the new server fresh.
+     */
+    fun serverChanged(host: String) {
+        client.forget(host)
+        failedRuns = 0
+        lastIncompleteMs = 0L
+        fastPages.remove(host)
+        marks.edit().remove(pagesKey(host)).remove(fastKey(host)).apply()
+        EnigmaLog.service("sync: serverstatus vergeten na update host=$host")
     }
 
     /** One sync at a time: saves nudge it every few seconds during playback, and cursors must not race. */
@@ -93,6 +138,24 @@ class EnigmaSyncEngine @Inject constructor(
     @Volatile
     private var lastIncompleteMs = 0L
 
+    /** Start of the run in progress (null when idle), whether it pulls, and the last call number it covers. */
+    @Volatile
+    private var runStartedMs: Long? = null
+    @Volatile
+    private var runPulls = false
+    @Volatile
+    private var runUpTo = 0L
+
+    /** Profile list (uuid, name, avatar, language) at the end of the last run; a nudge with the same list is skipped. */
+    @Volatile
+    private var lastRunProfiles: List<List<Any?>>? = null
+
+    /** Hosts whose pull answered with a `more` flag (0.3.1+): large pages from then on. */
+    private val fastPages = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    fun profileSignature(state: com.enigmacast.domain.profile.ProfileState = profiles.state.value): List<List<Any?>> =
+        state.profiles.map { listOf(it.uuid, it.name, it.avatar, it.language) }
+
     /**
      * Runs one sync, or joins the next one. Every nudge that arrives while a run is busy is
      * merged into a single rerun afterwards (instead of one full run each), and a caller only
@@ -100,10 +163,21 @@ class EnigmaSyncEngine @Inject constructor(
      * @param foreground the user asked for it (Sync server card): shows in the status window and
      *   ignores the pause after incomplete runs.
      */
-    suspend fun sync(foreground: Boolean = false) = withContext(Dispatchers.IO) {
-        val ticket = requested.incrementAndGet()
+    suspend fun sync(
+        foreground: Boolean = false,
+        reason: String = "achtergrond",
+        join: Boolean = false,
+        onlyIfProfilesChanged: Boolean = false,
+    ) = withContext(Dispatchers.IO) {
+        // A request right after a run started (pairing: the profile import already woke one) waits
+        // for that run instead of starting a second full one afterwards.
+        val joinable = join && com.enigmacast.domain.sync.SyncRunRules.canJoin(runStartedMs, runPulls, System.currentTimeMillis())
+        val ticket = if (joinable) runUpTo else requested.incrementAndGet()
+        if (joinable) EnigmaLog.service("sync: $reason wacht op de lopende run")
         running.withLock {
             if (covered >= ticket) return@withLock
+            // The profile list changed because the last run itself imported or applied it: nothing new.
+            if (onlyIfProfilesChanged && !foreground && lastRunProfiles == profileSignature()) return@withLock
             val upTo = requested.get()
             // Unpaired devices have nothing to do.
             if (client.config() == null) {
@@ -113,22 +187,27 @@ class EnigmaSyncEngine @Inject constructor(
             val pull = com.enigmacast.domain.sync.SyncRunPolicy.pullAllowed(
                 System.currentTimeMillis(), lastIncompleteMs, failedRuns, foreground,
             )
+            runUpTo = upTo
+            runPulls = pull
+            runStartedMs = System.currentTimeMillis()
             try {
                 // Only the first run of this process and user-started runs report to the status window;
                 // background reruns stay quiet, and a failing server shows as "last sync incomplete" in Settings.
                 if (foreground || !shownOnce) {
                     shownOnce = true
-                    activity.track(com.enigmacast.activity.ActivityKind.SYNC_SERVER) { syncOnce(pull) }
+                    activity.track(com.enigmacast.activity.ActivityKind.SYNC_SERVER) { syncOnce(pull, reason) }
                 } else {
-                    syncOnce(pull)
+                    syncOnce(pull, reason)
                 }
             } finally {
+                runStartedMs = null
+                _progress.value = null
                 covered = upTo
             }
         }
     }
 
-    private suspend fun syncOnce(pullAllowed: Boolean) {
+    private suspend fun syncOnce(pullAllowed: Boolean, reason: String) {
         val config = client.config() ?: return
         if (!pullAllowed) {
             // After incomplete runs only this TV's own changes go up until the pause is over.
@@ -138,9 +217,15 @@ class EnigmaSyncEngine @Inject constructor(
                 .onFailure { EnigmaLog.service("sync: instellingen push (pauze) mislukt: ${SyncPullPolicy.compactError(it)}") }
             return
         }
-        EnigmaLog.service("sync: start host=${config.host}")
+        val started = System.currentTimeMillis()
+        EnigmaLog.service("sync: start host=${config.host} reden=$reason")
         pullFailures = 0
+        appliedThisRun = 0
         var otherFailed = false
+        // Local favorites and positions from before this pairing go up first, before the pull fills
+        // the library with the server's history (afterwards all of it would be pushed back again).
+        runCatching { backfill(config) }
+            .onFailure { otherFailed = true; EnigmaLog.service("sync: backfill mislukt: ${SyncPullPolicy.compactError(it)}") }
         // Progress has priority: send the outbox before the slower profile/settings pass so
         // stopping a film or episode reaches the receiver's API immediately.
         runCatching { push(config) }
@@ -152,8 +237,9 @@ class EnigmaSyncEngine @Inject constructor(
         val uuids = state.profiles.map { it.uuid }.filter { it.isNotBlank() }
         var failedProfiles = 0
         // Each profile on its own: one that cannot be pulled does not stop the others.
-        uuids.forEach { uuid ->
-            runCatching { pull(config, uuid) }
+        uuids.forEachIndexed { index, uuid ->
+            _progress.value = Progress(index + 1, uuids.size, appliedThisRun)
+            runCatching { pull(config, uuid, index + 1, uuids.size) }
                 .onSuccess { sawSettings ->
                     val snapshot = snapshots.forUuid(uuid, current, state)
                     if (meta.revision(uuid) == null && !sawSettings && snapshot != null && !ProfileCloud.untouched(snapshot)) {
@@ -171,8 +257,6 @@ class EnigmaSyncEngine @Inject constructor(
             .onFailure { otherFailed = true; EnigmaLog.service("sync: instellingen push mislukt: ${SyncPullPolicy.compactError(it)}") }
         runCatching { syncPlaylist(config) }
             .onFailure { otherFailed = true; EnigmaLog.service("sync: playlist mislukt: ${SyncPullPolicy.compactError(it)}") }
-        runCatching { backfill(config) }
-            .onFailure { otherFailed = true; EnigmaLog.service("sync: backfill mislukt: ${SyncPullPolicy.compactError(it)}") }
         runCatching { push(config) }
             .onFailure { otherFailed = true; EnigmaLog.service("sync: push mislukt: ${SyncPullPolicy.compactError(it)}") }
         val health = SyncHealth(failedProfiles, uuids.size, otherFailed, System.currentTimeMillis())
@@ -183,12 +267,14 @@ class EnigmaSyncEngine @Inject constructor(
         } else {
             failedRuns = 0
         }
+        lastRunProfiles = profileSignature()
+        val took = "${(System.currentTimeMillis() - started) / 1000}s, $appliedThisRun wijzigingen"
         EnigmaLog.service(
             if (health.incomplete) {
                 "sync: onvolledig profielen=$failedProfiles/${uuids.size} overig=${if (otherFailed) "fout" else "ok"}, " +
-                    "volgende pull over ${com.enigmacast.domain.sync.SyncRunPolicy.pauseMs(failedRuns) / 1000}s"
+                    "volgende pull over ${com.enigmacast.domain.sync.SyncRunPolicy.pauseMs(failedRuns) / 1000}s ($took)"
             } else {
-                "sync: klaar"
+                "sync: klaar ($took)"
             },
         )
     }
@@ -196,6 +282,10 @@ class EnigmaSyncEngine @Inject constructor(
     /** Failed pull requests in this run; each one makes the pages smaller ([SyncPullPolicy.pageSize]). */
     @Volatile
     private var pullFailures = 0
+
+    /** Changes applied by pulls in this run, for the progress line and the log. */
+    @Volatile
+    private var appliedThisRun = 0
 
     private val _health = kotlinx.coroutines.flow.MutableStateFlow(SyncHealth())
 
@@ -234,10 +324,15 @@ class EnigmaSyncEngine @Inject constructor(
         if (todo.isEmpty()) return
         val favorites = library.favorites().first()
         val resumes = library.resumes().first()
+        var queued = 0
         todo.forEach { uuid ->
-            LibrarySync.backfill(uuid, favorites, resumes) { "backfill:${java.util.UUID.randomUUID()}" }.forEach { outbox.put(it) }
+            val rows = LibrarySync.backfill(uuid, favorites, resumes) { "backfill:${java.util.UUID.randomUUID()}" }
+            // One transaction per profile instead of one per row.
+            database.withTransaction { rows.forEach { outbox.put(it) } }
+            queued += rows.size
             marks.edit().putBoolean(backfillMark(config, uuid), true).apply()
         }
+        if (queued > 0) EnigmaLog.service("sync: backfill ${todo.size} profielen, $queued items in de wachtrij")
     }
 
     private fun backfillMark(config: SyncServerConfig, uuid: String) = "library-v1:${config.deviceId}:$uuid"
@@ -250,13 +345,15 @@ class EnigmaSyncEngine @Inject constructor(
     private fun publishProfiles(config: SyncServerConfig) {
         val local = profiles.state.value.profiles.filter { it.uuid.isNotBlank() }
         val now = System.currentTimeMillis()
+        var published = 0
         local.forEach { profile ->
             val signature = "${profile.name}|${profile.avatar}|${profile.language.orEmpty()}"
             val key = "profile-published:${config.deviceId}:${profile.uuid}"
             if (marks.getString(key, null) == signature) return@forEach
             runCatching { postProfile(config, profile.uuid, profile.name, profile.avatar, profile.language, false, now) }
-                .onSuccess { marks.edit().putString(key, signature).apply() }
+                .onSuccess { marks.edit().putString(key, signature).apply(); published++ }
         }
+        if (published > 0) EnigmaLog.service("sync: profielen gepubliceerd $published")
         val removed = profiles.deletedUuids()
         if (removed.isEmpty()) return
         val text = runCatching { client.request(config, "GET", "/api/v1/profiles") }.getOrNull() ?: return
@@ -297,7 +394,8 @@ class EnigmaSyncEngine @Inject constructor(
         batch.send.chunked(LibrarySync.PUSH_CHUNK).forEach { chunk ->
             client.request(config, "POST", "/api/v1/sync/push", LibrarySync.pushBody(chunk).toByteArray())
         }
-        batch.settled.forEach { outbox.delete(it) }
+        database.withTransaction { batch.settled.forEach { outbox.delete(it) } }
+        EnigmaLog.service("sync: push klaar ${batch.send.size} items")
     }
 
     /**
@@ -315,19 +413,33 @@ class EnigmaSyncEngine @Inject constructor(
      * complete change. A failure without progress shrinks the page (50 → 20 → 10) and backs off.
      * @return true when this pull carried a settings document for the profile.
      */
-    private suspend fun pull(config: SyncServerConfig, profileId: String): Boolean {
+    private suspend fun pull(config: SyncServerConfig, profileId: String, index: Int, total: Int): Boolean {
         val encoded = java.net.URLEncoder.encode(profileId, "UTF-8")
-        var cursor = outbox.cursor(profileId)?.cursor?.toIntOrNull() ?: 0
+        val startCursor = outbox.cursor(profileId)?.cursor?.toIntOrNull() ?: 0
+        var cursor = startCursor
         var sawSettings = false
         var attempt = 0
+        var pages = 0
+        var applied = 0
+        val started = System.currentTimeMillis()
         while (true) {
-            val limit = SyncPullPolicy.pageSize(pullFailures)
+            val limit = SyncPullPolicy.pageSize(pullFailures, fast = config.host in fastPages || serverPagesFast(config.host))
+            val buffered = ArrayList<JSONObject>()
             val page = try {
-                client.openStream(config, "/api/v1/sync/pull?profileId=$encoded&cursor=$cursor&limit=$limit").use { reader ->
-                    com.enigmacast.domain.sync.SyncPullStream.read(reader) { raw ->
-                        val change = JSONObject(raw)
-                        if (change.optString("entity") == "settings") sawSettings = true
-                        apply(profileId, change)
+                try {
+                    // The page is read first and then applied in a few transactions (one per row was the
+                    // slow part of a first sync). callTimeout on the client bounds a stalled stream.
+                    client.openStream(config, "/api/v1/sync/pull?profileId=$encoded&cursor=$cursor&limit=$limit").use { reader ->
+                        com.enigmacast.domain.sync.SyncPullStream.read(reader) { raw -> buffered += JSONObject(raw) }
+                    }
+                } finally {
+                    // Also after a broken stream: what arrived is applied, and TruncatedPull.lastRev is its end.
+                    if (buffered.isNotEmpty()) {
+                        if (buffered.any { it.optString("entity") == "settings" }) sawSettings = true
+                        applyPage(profileId, buffered)
+                        applied += buffered.size
+                        appliedThisRun += buffered.size
+                        _progress.value = Progress(index, total, appliedThisRun)
                     }
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -345,21 +457,54 @@ class EnigmaSyncEngine @Inject constructor(
                 }
                 EnigmaLog.service(
                     "sync: pull pagina mislukt (poging $attempt/${SyncPullPolicy.MAX_ATTEMPTS}, limit=$limit, " +
-                        "volgende=${SyncPullPolicy.pageSize(pullFailures)}, cursor=$cursor): ${SyncPullPolicy.compactError(error)}",
+                        "volgende=${SyncPullPolicy.pageSize(pullFailures, config.host in fastPages)}, cursor=$cursor): ${SyncPullPolicy.compactError(error)}",
                 )
                 if (attempt >= SyncPullPolicy.MAX_ATTEMPTS) throw error
                 kotlinx.coroutines.delay(SyncPullPolicy.backoffMs((attempt - 1).coerceAtLeast(0)))
                 continue
             }
             marks.edit().putBoolean(pagesKey(config.host), page.serverPages).apply()
+            // Only 0.3.1+ sends `more`; it also has the TLS fixes, so it gets the large pages.
+            if (page.more != null && fastPages.add(config.host)) marks.edit().putBoolean(fastKey(config.host), true).apply()
+            pages++
             val next = page.cursor ?: page.lastRev ?: cursor
             outbox.putCursor(SyncCursorRow(profileId, next.toString()))
             val last = page.more?.not() ?: SyncPullPolicy.lastPage(cursor, next, page.received, limit)
-            if (last || next <= cursor) break
+            if (pages == 1 || pages % 10 == 0) {
+                EnigmaLog.service("sync: pull ${profileId.take(8)} pagina $pages rev $cursor→$next +${page.received} (limit=$limit)")
+            }
+            if (last || next <= cursor) {
+                cursor = next
+                break
+            }
             cursor = next
             attempt = 0
         }
+        EnigmaLog.service(
+            "sync: pull klaar profiel $index/$total ${profileId.take(8)} rev $startCursor→$cursor, $applied wijzigingen, " +
+                "$pages pagina's, ${(System.currentTimeMillis() - started) / 1000}s",
+        )
         return sawSettings
+    }
+
+    private fun fastKey(host: String) = "server-fast-pages:$host"
+
+    private fun serverPagesFast(host: String): Boolean =
+        marks.getBoolean(fastKey(host), false).also { if (it) fastPages.add(host) }
+
+    /**
+     * Applies one page in order. Favorites, positions, history and audio boost rows (Room) go in
+     * one transaction per group; settings and playlist documents touch DataStore and other stores
+     * and stay outside a transaction.
+     */
+    private suspend fun applyPage(profileId: String, changes: List<JSONObject>) {
+        com.enigmacast.domain.sync.SyncRunRules.groups(changes) { it.optString("entity") != "settings" }.forEach { (rows, group) ->
+            if (rows) {
+                database.withTransaction { group.forEach { apply(profileId, it) } }
+            } else {
+                group.forEach { apply(profileId, it) }
+            }
+        }
     }
 
     private suspend fun pushSettings(config: SyncServerConfig) {

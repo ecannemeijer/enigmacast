@@ -15,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -40,24 +41,27 @@ class UserSyncScheduler @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start() {
-        trigger.run = { scope.launch { engine.sync() } }
-        scope.launch { profiles.entered.collect { engine.sync() } }
+        trigger.run = { scope.launch { engine.sync(reason = "wijziging") } }
+        scope.launch { profiles.entered.collect { engine.sync(reason = "profiel gekozen") } }
         scope.launch {
-            profiles.state.map { state ->
-                state.profiles.map { profile -> listOf(profile.uuid, profile.name, profile.avatar, profile.language) }
-            }.distinctUntilChanged().collect { engine.sync() }
+            // The first value is the startup state (the startup run below covers it). Later changes
+            // that the last run made itself (imported or applied profiles) do not start another run.
+            profiles.state.map { state -> engine.profileSignature(state) }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { engine.sync(reason = "profielen", onlyIfProfilesChanged = true) }
         }
         watchSettings()
         watchPlaylist()
         scope.launch {
             runCatching { engine.importProfiles() }
-            engine.sync()
+            engine.sync(reason = "start")
         }
         // Favorites and Continue watching changed on another TV arrive without a restart.
         scope.launch {
             while (true) {
                 delay(PULL_EVERY_MS)
-                runCatching { engine.sync() }
+                runCatching { engine.sync(reason = "interval") }
             }
         }
     }
@@ -91,7 +95,7 @@ class UserSyncScheduler @Inject constructor(
                     lastFingerprint = fingerprint
                     if (previous != null) {
                         meta.markDirty(previous)
-                        engine.sync()
+                        engine.sync(reason = "instellingen")
                     }
                     return@collect
                 }
@@ -106,7 +110,7 @@ class UserSyncScheduler @Inject constructor(
                     if (ProfileCloud.encode(fresh) == meta.quietFingerprint) return@launch
                     meta.markDirty(uuid)
                     pendingUuid = null
-                    engine.sync()
+                    engine.sync(reason = "instellingen")
                 }
             }
         }
@@ -129,7 +133,7 @@ class UserSyncScheduler @Inject constructor(
                     if (playlist.applyingRemote) return@collect
                     if (source == IptvSourceMode.PLAYLIST && login.configured(kind)) {
                         playlist.markDirty()
-                        engine.sync()
+                        engine.sync(reason = "playlist")
                     }
                 }
         }

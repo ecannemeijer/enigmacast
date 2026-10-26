@@ -1716,6 +1716,12 @@
     <string name="sync_update_step_backup">Arresto del server e backup dei dati…</string>
     <string name="sync_update_step_install">Installazione dell\'aggiornamento…</string>
     <string name="sync_update_step_verify">Verifica della nuova versione…</string>
+    <string name="sync_update_step_restart">Riavvio del server di sincronizzazione…</string>
+    <string name="sync_pair_step_cert">Verifica del certificato del server…</string>
+    <string name="sync_pair_step_join">Associazione con il server di sincronizzazione…</string>
+    <string name="sync_pair_step_profiles">Copia dei profili…</string>
+    <string name="sync_server_pair_timeout">L\'associazione non è stata completata entro 30 secondi. Controlla che il ricevitore sia acceso e riprova.</string>
+    <string name="sync_progress">Sincronizzazione… %1$d elementi (profilo %2$d di %3$d)</string>
     <string name="sync_update_done">Server di sincronizzazione aggiornato a v%1$s. Backup dei dati precedenti: %2$s</string>
     <string name="sync_update_failed">Aggiornamento non riuscito: %1$s</string>
     <string name="sync_update_err_not_installed">il server di sincronizzazione non è stato installato con opkg su questo ricevitore.</string>
