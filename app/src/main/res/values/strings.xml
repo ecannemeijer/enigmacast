@@ -1171,6 +1171,10 @@
     <string name="afr_off">Off</string>
     <string name="afr_start">Only at start</string>
     <string name="afr_always">Always</string>
+    <string name="tvhome_favorites">EnigmaCast – Favorites</string>
+    <string name="tvhome_recordings">EnigmaCast – Recordings</string>
+    <string name="tvhome_setting">Android TV home screen rows</string>
+    <string name="tvhome_setting_desc">Shows “EnigmaCast – Favorites” (recent channels with the programme on now) and “EnigmaCast – Recordings” on the Android TV home screen. Never in hotel mode.</string>
     <string name="settings_import">Settings import</string>
     <string name="premium_feature_settings_import">Settings import</string>
     <string name="import_title">Settings import</string>

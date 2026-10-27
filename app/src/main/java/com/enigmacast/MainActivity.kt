@@ -63,6 +63,9 @@ import com.enigmacast.ui.theme.TvConfirmDialog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import com.enigmacast.ui.theme.LocalNavigationSounds
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.update.AppUpdateDialog
@@ -78,6 +81,15 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: com.enigmacast.data.settings.SettingsRepository
     @Inject lateinit var iptvLibrary: com.enigmacast.data.xtream.IptvLibrary
     @Inject lateinit var clients: OkHttpClientFactory
+    @Inject lateinit var tvHome: com.enigmacast.data.tvhome.TvHomePublisher
+    @Inject lateinit var searchPlayer: com.enigmacast.live.SearchPlayer
+    @Inject lateinit var recordingBook: com.enigmacast.live.RecordingBook
+    @Inject lateinit var iptvPlaylistSync: com.enigmacast.data.xtream.IptvPlaylistSync
+    @Inject lateinit var iptvPlaylistStore: com.enigmacast.data.xtream.IptvPlaylistStore
+    private companion object {
+        const val REQUEST_TV_HOME_CHANNEL = 4711
+    }
+
     private var screenReceiverRegistered = false
     private var panelBackDown = false
     private val screenReceiver = object : BroadcastReceiver() {
@@ -181,8 +193,33 @@ class MainActivity : ComponentActivity() {
                 menuKeys = com.enigmacast.domain.remote.KeyBindings.effective(settings.remote.keyBindings, com.enigmacast.domain.remote.KeyMode.MENU)
             }
         }
+        // Android TV home rows: rebuilt when the setting or hotel mode changes (removed in hotel mode).
+        lifecycleScope.launch {
+            kotlinx.coroutines.flow.combine(
+                settingsRepository.settings.map { it.tvHomeChannels }.distinctUntilChanged(),
+                com.enigmacast.domain.hotel.HotelRuntime.state.map { it.enabled }.distinctUntilChanged(),
+            ) { on, hotel -> on && !hotel }
+                .distinctUntilChanged()
+                .collect { on -> if (on) com.enigmacast.data.tvhome.TvHomeWorker.enqueue(applicationContext) else tvHome.removeAll() }
+        }
+        // The second row needs the user's OK once before the launcher shows it.
+        lifecycleScope.launch {
+            tvHome.browsableRequest.collect { id ->
+                if (id == null) return@collect
+                tvHome.browsableAsked()
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(
+                        Intent(androidx.tvprovider.media.tv.TvContractCompat.ACTION_REQUEST_CHANNEL_BROWSABLE)
+                            .putExtra(androidx.tvprovider.media.tv.TvContractCompat.EXTRA_CHANNEL_ID, id),
+                        REQUEST_TV_HOME_CHANNEL,
+                    )
+                }
+            }
+        }
         handleSearchIntent(intent)
         handleWatchNext(intent)
+        handleTvHome(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -190,6 +227,59 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         handleSearchIntent(intent)
         handleWatchNext(intent)
+        handleTvHome(intent)
+    }
+
+    /**
+     * A card on the "EnigmaCast – Favorieten" or "– Opnames" home row: zap to that channel or play
+     * that recording directly. Not in hotel mode (the rows do not exist there).
+     */
+    private fun handleTvHome(intent: Intent?) {
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) return
+        val data = intent?.data ?: return
+        if (data.scheme != "enigmacast" || data.host != "tvhome") return
+        val link = com.enigmacast.domain.tvhome.TvHome.parse(data.toString()) ?: return
+        // Handled once: a restart of the activity does not zap again.
+        intent.data = null
+        lifecycleScope.launch {
+            // Wait until the app has connected (or chosen its first screen).
+            kotlinx.coroutines.withTimeoutOrNull(30_000) {
+                androidx.compose.runtime.snapshotFlow { appViewModel.screen }
+                    .first { it != AppScreen.Loading && it != AppScreen.Connection }
+            } ?: return@launch
+            if (com.enigmacast.domain.hotel.HotelRuntime.active || appViewModel.screen == AppScreen.Setup) return@launch
+            when (link) {
+                is com.enigmacast.domain.tvhome.TvHome.Link.Sat -> {
+                    val hit = com.enigmacast.domain.search.SearchHit(
+                        kind = com.enigmacast.domain.search.SearchKind.CHANNEL,
+                        title = link.name,
+                        serviceReference = link.reference,
+                        channelName = link.name,
+                    )
+                    appViewModel.openStream()
+                    val outcome = searchPlayer.open(hit)
+                    if (outcome !is com.enigmacast.live.SearchOutcome.Played) EnigmaLog.service("tv home channel not started")
+                }
+                is com.enigmacast.domain.tvhome.TvHome.Link.Iptv -> {
+                    val providers = iptvPlaylistStore.providers.value.filter { it.account()?.key == link.source }.map { it.id }.toSet()
+                    val live = runCatching { iptvPlaylistSync.liveItems() }.getOrDefault(emptyList()).filter { it.id == link.id }
+                    val item = live.firstOrNull { it.providerId in providers } ?: live.firstOrNull()
+                        ?: com.enigmacast.domain.xtream.XtreamItem(link.id, link.name, com.enigmacast.domain.xtream.XtreamSection.LIVE, link.category)
+                    iptvLibrary.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(link.source, item)
+                    appViewModel.openXtream()
+                }
+                is com.enigmacast.domain.tvhome.TvHome.Link.Recording -> {
+                    val own = recordingBook.items.value.firstOrNull { it.fileName == link.file }
+                    val started = if (own != null) {
+                        recordingBook.play(own.id)
+                    } else {
+                        recordingBook.boxItems()?.movies?.firstOrNull { it.fileName == link.file }?.let { recordingBook.playBox(it) } == true
+                    }
+                    if (started) appViewModel.openStream() else EnigmaLog.service("tv home recording not found")
+                }
+                com.enigmacast.domain.tvhome.TvHome.Link.Open -> Unit
+            }
+        }
     }
 
     /** A Watch Next card on the Android TV home resumes that film or episode. */
@@ -244,6 +334,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         appViewModel.setForeground(false)
+        // The home rows show what was just watched when the user lands on the launcher.
+        if (!isChangingConfigurations) com.enigmacast.data.tvhome.TvHomeWorker.enqueue(applicationContext)
         // Not for a language restart (same activity again) or picture-in-picture (still visible).
         if (!isChangingConfigurations && !isInPictureInPictureMode) {
             appViewModel.stopForBackground()

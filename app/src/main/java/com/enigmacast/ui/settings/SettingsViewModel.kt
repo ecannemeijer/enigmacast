@@ -63,6 +63,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setStreamMode(mode: StreamMode) = update { it.copy(streamMode = mode) }
     fun setStartupLive(mode: StartupLive) = update { it.copy(startupLive = mode) }
+    fun setTvHomeChannels(enabled: Boolean) = update { it.copy(tvHomeChannels = enabled) }
     fun setRecordingTarget(target: RecordingTarget) = update { it.copy(playback = it.playback.copy(recordingTarget = target)) }
     fun setRecordingPreset(preset: TranscodePreset?) = update { it.copy(playback = it.playback.copy(recordingPreset = preset)) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }

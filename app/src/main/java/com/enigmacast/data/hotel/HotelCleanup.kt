@@ -49,6 +49,7 @@ class HotelCleanup @Inject constructor(
     private val recentIptv: RecentIptvStore,
     private val resume: ResumeDao,
     private val ownTuner: com.enigmacast.live.OwnTunerSession,
+    private val tvHome: com.enigmacast.data.tvhome.TvHomePublisher,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
@@ -76,6 +77,8 @@ class HotelCleanup @Inject constructor(
         val now = System.currentTimeMillis()
         store.update { it.copy(lastCleanupDay = HotelSchedule.epochDay(now, ZoneId.systemDefault())) }
         if (config.enabled) {
+            // The home-screen rows would show the previous guest's channels: never in hotel mode.
+            tvHome.removeAll()
             applyVolume(config)
             withContext(Dispatchers.Main) { ownTuner.reloadChannels() }
         }

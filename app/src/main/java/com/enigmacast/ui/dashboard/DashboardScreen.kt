@@ -1787,6 +1787,15 @@ private fun PlaybackSettingsPanel(
             },
         )
     }
+    val tvHomeChannels = viewModel.settings.collectAsStateWithLifecycle().value.tvHomeChannels
+    SettingsCard(stringResource(R.string.tvhome_setting)) {
+        ToggleRow(
+            title = stringResource(R.string.tvhome_setting),
+            checked = tvHomeChannels,
+            onCheckedChange = viewModel::setTvHomeChannels,
+            description = stringResource(R.string.tvhome_setting_desc),
+        )
+    }
     SettingsCard(stringResource(R.string.picture)) {
         ChoiceRow(
             title = stringResource(R.string.buffer),

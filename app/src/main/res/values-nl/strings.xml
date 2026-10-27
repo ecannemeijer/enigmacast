@@ -1168,6 +1168,10 @@
     <string name="afr_off">Uit</string>
     <string name="afr_start">Alleen bij start</string>
     <string name="afr_always">Altijd</string>
+    <string name="tvhome_favorites">EnigmaCast – Favorieten</string>
+    <string name="tvhome_recordings">EnigmaCast – Opnames</string>
+    <string name="tvhome_setting">Rijen op het Android TV-startscherm</string>
+    <string name="tvhome_setting_desc">Toont “EnigmaCast – Favorieten” (recente zenders met het programma van nu) en “EnigmaCast – Opnames” op het Android TV-startscherm. Nooit in hotelmodus.</string>
     <string name="settings_import">Settings importeren</string>
     <string name="premium_feature_settings_import">Settings importeren</string>
     <string name="import_title">Settings importeren</string>

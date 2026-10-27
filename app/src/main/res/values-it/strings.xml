@@ -1150,6 +1150,10 @@
     <string name="afr_off">Disattivata</string>
     <string name="afr_start">Solo all\'avvio</string>
     <string name="afr_always">Sempre</string>
+    <string name="tvhome_favorites">EnigmaCast – Preferiti</string>
+    <string name="tvhome_recordings">EnigmaCast – Registrazioni</string>
+    <string name="tvhome_setting">Righe nella schermata Home di Android TV</string>
+    <string name="tvhome_setting_desc">Mostra “EnigmaCast – Preferiti” (canali recenti con il programma in onda) e “EnigmaCast – Registrazioni” nella schermata Home di Android TV. Mai in modalità hotel.</string>
     <string name="settings_import">Importa impostazioni</string>
     <string name="premium_feature_settings_import">Importa impostazioni</string>
     <string name="import_title">Importa impostazioni</string>

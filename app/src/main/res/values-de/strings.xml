@@ -1146,6 +1146,10 @@
     <string name="afr_off">Aus</string>
     <string name="afr_start">Nur beim Start</string>
     <string name="afr_always">Immer</string>
+    <string name="tvhome_favorites">EnigmaCast – Favoriten</string>
+    <string name="tvhome_recordings">EnigmaCast – Aufnahmen</string>
+    <string name="tvhome_setting">Zeilen auf dem Android-TV-Startbildschirm</string>
+    <string name="tvhome_setting_desc">Zeigt „EnigmaCast – Favoriten“ (zuletzt gesehene Sender mit der laufenden Sendung) und „EnigmaCast – Aufnahmen“ auf dem Android-TV-Startbildschirm. Nie im Hotelmodus.</string>
     <string name="settings_import">Einstellungen importieren</string>
     <string name="premium_feature_settings_import">Einstellungen importieren</string>
     <string name="import_title">Einstellungen importieren</string>

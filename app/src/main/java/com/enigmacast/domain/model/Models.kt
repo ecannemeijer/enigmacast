@@ -292,6 +292,8 @@ data class AppSettings(
     val lastLiveSource: LastLiveSource = LastLiveSource.ENIGMA2,
     /** Settings › Playback: open fullscreen live TV on this source when the app starts. */
     val startupLive: StartupLive = StartupLive.OFF,
+    /** Android TV home screen: "EnigmaCast – Favorieten" and "– Opnames" rows (never in hotel mode). */
+    val tvHomeChannels: Boolean = true,
     /** Last live IPTV channel per playlist source key. */
     val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */
