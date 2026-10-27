@@ -228,6 +228,8 @@ data class LastIptvChannel(
     val streamId: String = "",
     val name: String = "",
     val url: String = "",
+    /** The IPTV provider the channel came from (playlist mode); blank for single Xtream accounts and old saves. */
+    val providerId: String = "",
 )
 
 @Serializable

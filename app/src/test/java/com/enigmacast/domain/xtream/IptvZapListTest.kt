@@ -23,6 +23,21 @@ class IptvZapListTest {
         assertNull(IptvZapList.step(sportList, live("10"), 1))
     }
 
+    @Test fun rememberedChannelWithoutProviderResolvesToItsRow() {
+        // Autostart of a channel saved before the provider was stored: zap must still find it.
+        val stub = XtreamItem("11", "ch11", XtreamSection.LIVE, "1")
+        assertNull(IptvZapList.step(newsList, stub, 1))
+        val row = IptvZapList.resolve(newsList, stub)
+        assertEquals("a", row?.providerId)
+        assertEquals("12", IptvZapList.step(newsList, row!!, 1)?.id)
+        // A known provider only matches its own row.
+        assertNull(IptvZapList.resolve(newsList, live("11", provider = "b")))
+        assertEquals(live("11"), IptvZapList.resolve(newsList, live("11")))
+        // Same id on two providers: the one with the saved address.
+        val two = listOf(live("11", provider = "a").copy(url = "u-a"), live("11", provider = "b").copy(url = "u-b"))
+        assertEquals("b", IptvZapList.resolve(two, stub.copy(url = "u-b"))?.providerId)
+    }
+
     @Test fun sameIdOnAnotherProviderIsAnotherChannel() {
         val mixed = listOf(live("10", provider = "b"), live("10"), live("11"))
         assertEquals("11", IptvZapList.step(mixed, live("10"), 1)?.id)
