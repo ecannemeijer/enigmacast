@@ -1,8 +1,8 @@
 {
-  "versionCode": 116,
-  "versionName": "1.0.0-beta.113",
+  "versionCode": 117,
+  "versionName": "1.0.0-beta.114",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Hotelmodus: gasten zien nu altijd zenders. De zenderlijst laadt meteen bij het starten, een lege kanaalselectie toont alle zenders en anders verschijnt een duidelijke melding. Plus alles uit beta.112: hotelmodus voor gasten, syncserver koppelen en bijwerken vanuit Instellingen met een spinner, en een veel snellere eerste sync.",
+  "notes": "Live TV: de Back-knop opent nu de kanalenlijst, daarna de boeketten/categorieen en daarna het menu. IPTV: zappen werkt meteen na het automatisch starten van het laatste kanaal. Sneller zappen met de nieuwe optie Snel starten (standaard aan).",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
