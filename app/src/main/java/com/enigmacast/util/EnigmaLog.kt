@@ -29,6 +29,11 @@ object EnigmaLog {
         Timber.tag("EcSubs").i(message)
     }
 
+    /** Automatic frame rate (display mode switches): `adb logcat -s EcAfr`. */
+    fun afr(message: String) {
+        Timber.tag("EcAfr").i(message)
+    }
+
     fun player(message: String) {
         Timber.tag("EnigmaPlayer").i(message)
     }

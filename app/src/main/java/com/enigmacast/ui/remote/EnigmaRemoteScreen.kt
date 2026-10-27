@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import com.enigmacast.playback.autoFrameRate
 import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.skinShape
 import android.graphics.Canvas
@@ -165,6 +166,7 @@ fun EnigmaRemoteScreen(
             picture = VideoShape(ui.pictureMode, ui.playerState.videoWidth, ui.playerState.videoHeight, ui.playerState.pixelRatio),
             osdAlpha = (100 - ui.panelTransparency.coerceIn(0, 100)) / 100f,
             modifier = Modifier.fillMaxSize(),
+            dvb = true,
         )
         if (pipOn) {
             PipInset(
@@ -375,6 +377,8 @@ internal fun EnigmaVideoPlayer(
     picture: VideoShape,
     osdAlpha: Float = 1f,
     modifier: Modifier = Modifier.fillMaxSize(),
+    /** An Enigma2 (DVB) stream: automatic frame rate assumes 50 Hz when the stream does not say. */
+    dvb: Boolean = false,
 ) {
     // Compose draws into the parent canvas. Android child views are composited above that
     // canvas, so the OSD is an ImageView in the same FrameLayout, above the video.
@@ -383,7 +387,7 @@ internal fun EnigmaVideoPlayer(
     val surface = VideoOutput.surfaceView
     key(surface) {
     AndroidView(
-        modifier = modifier.reportFullscreenVideo(),
+        modifier = modifier.reportFullscreenVideo().autoFrameRate(player, dvb),
         factory = { context ->
             val video = videoView(context, surface)
             val subtitles = CueOverlayView(context)

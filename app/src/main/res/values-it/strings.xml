@@ -1145,6 +1145,11 @@
     <string name="video_compat_auto">Automatico</string>
     <string name="video_compat_on">On</string>
     <string name="video_compat_off">Off</string>
+    <string name="afr">Frequenza automatica</string>
+    <string name="afr_desc">La TV segue il video a schermo intero: 50 Hz per la TV (25/50 fps), 24 Hz per i film, 60 Hz per 30/60 fps. Movimento più fluido, ma lo schermo diventa nero per un attimo a ogni cambio. Solo all\'avvio: una volta all\'inizio della riproduzione; Sempre: anche cambiando canale. Se la TV non ha una modalità adatta non succede nulla.</string>
+    <string name="afr_off">Disattivata</string>
+    <string name="afr_start">Solo all\'avvio</string>
+    <string name="afr_always">Sempre</string>
     <string name="settings_import">Importa impostazioni</string>
     <string name="premium_feature_settings_import">Importa impostazioni</string>
     <string name="import_title">Importa impostazioni</string>

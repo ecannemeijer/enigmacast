@@ -10,6 +10,7 @@ import com.enigmacast.domain.model.OsdSkinId
 import com.enigmacast.domain.model.RecordingTarget
 import com.enigmacast.domain.model.StartupLive
 import com.enigmacast.domain.model.TvFallback
+import com.enigmacast.domain.model.AutoFrameRateMode
 import com.enigmacast.domain.model.VideoCompatibility
 import com.enigmacast.domain.model.VideoDecoderMode
 import com.enigmacast.domain.security.PinCheck
@@ -179,6 +180,15 @@ class CompanionSettingsHost @Inject constructor(
                     Option(VideoCompatibility.OFF.name, context.getString(R.string.off)),
                 ),
                 dangerous = true,
+            ),
+            choice(
+                "playback.autoFrameRate", R.string.afr, 0, playback,
+                settings.playback.autoFrameRate.name,
+                listOf(
+                    Option(AutoFrameRateMode.OFF.name, context.getString(R.string.afr_off)),
+                    Option(AutoFrameRateMode.START.name, context.getString(R.string.afr_start)),
+                    Option(AutoFrameRateMode.ALWAYS.name, context.getString(R.string.afr_always)),
+                ),
             ),
             choice(
                 "playback.recordingTarget", R.string.record_target, R.string.record_target_desc, playback,
@@ -362,6 +372,15 @@ class CompanionSettingsHost @Inject constructor(
                         videoCompatibility = runCatching {
                             VideoCompatibility.valueOf(v.string(s.playback.videoCompatibility.name))
                         }.getOrDefault(s.playback.videoCompatibility),
+                    ),
+                )
+            },
+            "playback.autoFrameRate" to { s, v ->
+                s.copy(
+                    playback = s.playback.copy(
+                        autoFrameRate = runCatching {
+                            AutoFrameRateMode.valueOf(v.string(s.playback.autoFrameRate.name))
+                        }.getOrDefault(s.playback.autoFrameRate),
                     ),
                 )
             },

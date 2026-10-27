@@ -174,8 +174,10 @@ class MainActivity : ComponentActivity() {
                 if (language != AppLanguageStore.current(this@MainActivity) && !AppLanguageStore.choose(this@MainActivity, language)) recreate()
             }
         }
+        com.enigmacast.playback.AutoFrameRate.attach(this)
         lifecycleScope.launch {
             settingsRepository.settings.collect { settings ->
+                com.enigmacast.playback.AutoFrameRate.mode = settings.playback.autoFrameRate
                 menuKeys = com.enigmacast.domain.remote.KeyBindings.effective(settings.remote.keyBindings, com.enigmacast.domain.remote.KeyMode.MENU)
             }
         }
@@ -218,6 +220,17 @@ class MainActivity : ComponentActivity() {
         appViewModel.openAssistantSearch(query, playFirst = action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
     }
 
+    override fun onResume() {
+        super.onResume()
+        com.enigmacast.playback.AutoFrameRate.onResume()
+    }
+
+    override fun onPause() {
+        // Leaving the app (or picture-in-picture): the TV gets its own refresh rate back.
+        com.enigmacast.playback.AutoFrameRate.onPause()
+        super.onPause()
+    }
+
     override fun onStart() {
         super.onStart()
         // A standby can leave dead keep-alive sockets behind; never reuse them.
@@ -250,6 +263,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        com.enigmacast.playback.AutoFrameRate.detach(this)
         if (isFinishing) appViewModel.stopForBackground()
         if (isFinishing) companionBridge.shutdown()
         if (screenReceiverRegistered) {

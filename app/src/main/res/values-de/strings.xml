@@ -1141,6 +1141,11 @@
     <string name="video_compat_auto">Automatisch</string>
     <string name="video_compat_on">An</string>
     <string name="video_compat_off">Aus</string>
+    <string name="afr">Automatische Bildrate</string>
+    <string name="afr_desc">Der Fernseher folgt dem Vollbildvideo: 50 Hz für TV (25/50 fps), 24 Hz für Filme, 60 Hz für 30/60 fps. Flüssigere Bewegung, aber der Bildschirm wird bei jedem Wechsel kurz schwarz. Nur beim Start: einmal beim Start der Wiedergabe; Immer: auch beim Umschalten. Ohne passenden Modus passiert nichts.</string>
+    <string name="afr_off">Aus</string>
+    <string name="afr_start">Nur beim Start</string>
+    <string name="afr_always">Immer</string>
     <string name="settings_import">Einstellungen importieren</string>
     <string name="premium_feature_settings_import">Einstellungen importieren</string>
     <string name="import_title">Einstellungen importieren</string>

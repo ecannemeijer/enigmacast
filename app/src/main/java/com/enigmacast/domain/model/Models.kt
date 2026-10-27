@@ -105,7 +105,16 @@ data class PlaybackSettings(
     val videoDecoder: VideoDecoderMode = VideoDecoderMode.AUTO,
     /** Safe video output for devices that garble the picture. Automatic turns it on for known devices. */
     val videoCompatibility: VideoCompatibility = VideoCompatibility.AUTO,
+    /**
+     * Automatic frame rate: the TV's refresh rate follows the video (50 Hz for 25/50 fps, 24 Hz for
+     * films, 60 Hz for 30/60 fps) while a player fills the screen. Missing in older settings, so off.
+     */
+    val autoFrameRate: AutoFrameRateMode = AutoFrameRateMode.OFF,
 )
+
+/** Off; switch once when fullscreen playback starts; or follow every change (zaps, next episode). */
+@Serializable
+enum class AutoFrameRateMode { OFF, START, ALWAYS }
 
 @Serializable
 enum class VideoDecoderMode { AUTO, HARDWARE, SOFTWARE }

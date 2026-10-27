@@ -71,6 +71,7 @@ class SettingsViewModel @Inject constructor(
     fun setAutoReconnect(enabled: Boolean) = update { it.copy(playback = it.playback.copy(autoReconnect = enabled)) }
     fun setVideoDecoder(mode: com.enigmacast.domain.model.VideoDecoderMode) = update { it.copy(playback = it.playback.copy(videoDecoder = mode)) }
     fun setVideoCompatibility(mode: com.enigmacast.domain.model.VideoCompatibility) = update { it.copy(playback = it.playback.copy(videoCompatibility = mode)) }
+    fun setAutoFrameRate(mode: com.enigmacast.domain.model.AutoFrameRateMode) = update { it.copy(playback = it.playback.copy(autoFrameRate = mode)) }
     fun setHdmiPassthrough(enabled: Boolean) = update { it.copy(playback = it.playback.copy(hdmiPassthrough = enabled)) }
     fun stepAudioDelay(passthrough: Boolean, direction: Int) = update { current ->
         val playback = current.playback

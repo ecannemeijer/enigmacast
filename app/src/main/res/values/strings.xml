@@ -1166,6 +1166,11 @@
     <string name="video_compat_auto">Automatic</string>
     <string name="video_compat_on">On</string>
     <string name="video_compat_off">Off</string>
+    <string name="afr">Automatic frame rate</string>
+    <string name="afr_desc">The TV follows fullscreen video: 50 Hz for TV (25/50 fps), 24 Hz for films, 60 Hz for 30/60 fps. Smoother motion, but the screen goes black for a moment on each switch. Only at start: once when playback starts; Always: also when zapping. Nothing happens when the TV has no matching mode.</string>
+    <string name="afr_off">Off</string>
+    <string name="afr_start">Only at start</string>
+    <string name="afr_always">Always</string>
     <string name="settings_import">Settings import</string>
     <string name="premium_feature_settings_import">Settings import</string>
     <string name="import_title">Settings import</string>

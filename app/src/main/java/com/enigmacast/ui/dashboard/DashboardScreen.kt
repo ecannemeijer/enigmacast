@@ -2315,6 +2315,18 @@ private fun VideoDecoderCard(viewModel: SettingsViewModel) {
             selectedIndex = modes.indexOf(compat),
             onSelect = { viewModel.setVideoCompatibility(modes[it]) },
         )
+        val afrModes = com.enigmacast.domain.model.AutoFrameRateMode.entries
+        ChoiceRow(
+            title = stringResource(R.string.afr),
+            description = stringResource(R.string.afr_desc),
+            options = listOf(
+                stringResource(R.string.afr_off),
+                stringResource(R.string.afr_start),
+                stringResource(R.string.afr_always),
+            ),
+            selectedIndex = afrModes.indexOf(all.playback.autoFrameRate),
+            onSelect = { viewModel.setAutoFrameRate(afrModes[it]) },
+        )
     }
 }
 
