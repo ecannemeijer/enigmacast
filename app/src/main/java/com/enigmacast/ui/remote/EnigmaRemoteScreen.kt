@@ -64,6 +64,8 @@ import com.enigmacast.ui.theme.EnigmaColors
 fun EnigmaRemoteScreen(
     onLeaveToDashboard: () -> Unit,
     onLeaveToMyItems: (String) -> Unit,
+    /** Back on the live picture: the TV guide; false when it is not available. */
+    onLeaveToGuide: () -> Boolean = { false },
     pendingSearchQuery: String? = null,
     pendingSearchPlay: Boolean = false,
     pendingSearchToken: Int = 0,
@@ -74,12 +76,14 @@ fun EnigmaRemoteScreen(
     DisposableEffect(Unit) {
         onDispose { viewModel.pip.stop() }
     }
-    DisposableEffect(onLeaveToDashboard, onLeaveToMyItems) {
+    DisposableEffect(onLeaveToDashboard, onLeaveToMyItems, onLeaveToGuide) {
         viewModel.onLeaveToDashboard = onLeaveToDashboard
         viewModel.onLeaveToMyItems = onLeaveToMyItems
+        viewModel.onLeaveToGuide = onLeaveToGuide
         onDispose {
             viewModel.onLeaveToDashboard = null
             viewModel.onLeaveToMyItems = null
+            viewModel.onLeaveToGuide = null
         }
     }
     LaunchedEffect(pendingSearchToken) {

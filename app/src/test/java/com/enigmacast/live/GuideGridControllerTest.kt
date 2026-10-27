@@ -117,4 +117,50 @@ class GuideGridControllerTest {
         assertEquals("bouquet-b", state.bouquetReference)
         assertEquals(0, state.cursor.row)
     }
+
+    @Test
+    fun aFocusAskedBeforeTheRowsLoadLandsOnThatChannelAtNow() = runTest {
+        val grid = controller(FakeEpg(listOf(airing, next, later)))
+        // Asked while the guide is still empty (async loading): kept until the rows are shown.
+        assertFalse(grid.focusChannel(two.reference))
+        grid.show("bouquet-a", channels, "")
+        advanceUntilIdle()
+        assertEquals(1, grid.state.value.cursor.row)
+        assertEquals(airing, grid.focused()?.second?.event)
+    }
+
+    @Test
+    fun theFocusWaitsForTheBouquetOfThePlayingChannel() = runTest {
+        val grid = controller(FakeEpg(listOf(airing, next)))
+        grid.show("bouquet-a", listOf(one, three), "")
+        advanceUntilIdle()
+        assertFalse(grid.focusChannel(two.reference))
+        assertEquals(0, grid.state.value.cursor.row)
+        grid.show("bouquet-b", listOf(one, three, two), "")
+        advanceUntilIdle()
+        assertEquals(2, grid.state.value.cursor.row)
+        assertTrue(grid.focusChannel(one.reference))
+        assertEquals(0, grid.state.value.cursor.row)
+    }
+
+    @Test
+    fun focusFirstDropsAWaitingFocus() = runTest {
+        val grid = controller(FakeEpg(emptyList()))
+        grid.focusChannel(three.reference)
+        grid.focusFirst()
+        grid.show("bouquet-a", channels, "")
+        advanceUntilIdle()
+        assertEquals(0, grid.state.value.cursor.row)
+    }
+
+    @Test
+    fun putEventsMergesIntoTheShownBouquetOnly() = runTest {
+        val grid = GuideGridController(this, { _, _ -> emptyList() }, clock = { now })
+        grid.show("iptvcat:a", channels, "")
+        advanceUntilIdle()
+        grid.putEvents("iptvcat:b", listOf(airing))
+        assertTrue(grid.state.value.eventsOf(two).isEmpty())
+        grid.putEvents("iptvcat:a", listOf(airing, next))
+        assertEquals(listOf(airing, next), grid.state.value.eventsOf(two))
+    }
 }

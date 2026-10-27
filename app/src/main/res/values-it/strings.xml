@@ -402,6 +402,8 @@
     <string name="sleep_app_off">Timer di spegnimento disattivato</string>
     <string name="sleep_app_warning">Timer di spegnimento: EnigmaCast si chiude tra 1 minuto. Disattivalo da ▼ opzioni.</string>
     <string name="epg_guide_hint">OK: guarda, o AutoSwitch per un programma successivo · ◀ all\'inizio: bouquet · Indietro: menu</string>
+    <string name="epg_no_guide_info">Nessuna informazione guida</string>
+    <string name="epg_iptv_guide_hint">OK: guarda in diretta · ◀ all\'inizio: categorie · Indietro: menu</string>
     <string name="epg_panel_hint">◀ Canali · OK: guarda ora, o AutoSwitch più tardi</string>
     <string name="epg_loading">Caricamento guida…</string>
     <string name="epg_load_failed">Impossibile caricare la guida. Spostati per riprovare.</string>

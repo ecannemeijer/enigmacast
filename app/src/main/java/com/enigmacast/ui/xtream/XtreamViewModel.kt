@@ -523,6 +523,102 @@ class XtreamViewModel @Inject constructor(
         }
     }
 
+    /** The IPTV TV guide (dashboard and hotel menu): live categories as a programme grid. */
+    val iptvGuide: IptvGuide = IptvGuide(
+        scope = viewModelScope,
+        categoriesOf = { guideAccount()?.let { categoriesOf(it, XtreamSection.LIVE) } },
+        itemsOf = { category -> guideAccount()?.let { itemsOf(it, XtreamSection.LIVE, category, false) }.orEmpty() },
+        listings = ::guideListings,
+    )
+
+    /** The playlist for the guide; picks it (without starting anything) when the IPTV page was not open yet. */
+    private suspend fun guideAccount(): XtreamAccount? {
+        account?.let { return it }
+        val accounts = _detection.value?.accounts.orEmpty()
+        if (accounts.isEmpty()) return null
+        val remembered = settingsRepository.current().lastIptvChannels.keys
+        val pick = accounts.firstOrNull { it.key in remembered } ?: accounts.first()
+        choose(pick, startLive = false)
+        return account
+    }
+
+    /**
+     * Opens the IPTV guide on the live channel that plays, else the last watched one (this
+     * playlist), else the first category; highlight on the programme on air.
+     */
+    fun openIptvGuide() {
+        val playingItem = playing?.item?.takeIf { it.section == XtreamSection.LIVE && !catchup }
+        iptvGuide.open { categories ->
+            val last = account?.key?.let { settingsRepository.current().lastIptvChannels[it] }
+            IptvGuideRows.target(playingItem, last, categories)
+        }
+    }
+
+    /** OK on a programme on air in the IPTV guide: that channel, live, full screen (its category is the zap list). */
+    fun playFromGuide(item: XtreamItem): Boolean {
+        if (accountFor(item.providerId) == null) return false
+        iptvGuide.category?.let { shown ->
+            zapJob?.cancel()
+            zapCategory = shown
+            zapItems = iptvGuide.items
+        }
+        val already = playing?.item?.let { it.id == item.id && it.section == XtreamSection.LIVE } == true && !catchup
+        if (!already) play(item)
+        openLiveFullscreen = false
+        liveListNeeded = false
+        requestedSection = null
+        liveResume = playing != null
+        return playing != null
+    }
+
+    /**
+     * Listings for guide rows, the same sources as the channel list ([requestEpg]): the
+     * satellite guide matched by name, rows stored in Room, then Xtream ([RowGuide.CONCURRENCY]
+     * at a time). Every row answers once; a row without listings answers empty.
+     */
+    private suspend fun guideListings(rows: List<XtreamItem>, onRow: (XtreamItem, List<XtreamEpg>) -> Unit) {
+        val current = account ?: return
+        val nowMs = System.currentTimeMillis()
+        val now = nowMs / 1000
+        val source = current.key
+        val todo = rows.filter { it.section == XtreamSection.LIVE }.distinctBy { it.id }
+        if (todo.isEmpty()) return
+        val xtream = current.takeIf { it !== M3U_ACCOUNT }
+        val sat = try {
+            satelliteEpg.byName(todo.map { it.name }, hours = 24)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        val stored = if (xtream != null) rowEpg.stored(xtream, todo.map { it.id }) else emptyMap()
+        val network = ArrayList<XtreamItem>()
+        todo.forEach { item ->
+            val bulk = sat[item.name].orEmpty()
+            val kept = stored[item.id]
+            when {
+                kept != null -> chooseGuide(kept, bulk, now).also { publishEpg(item.id, it); onRow(item, it) }
+                xtream == null || !rowEpg.needsFetch(source, item.id, nowMs) -> (epgNow(item.id) ?: bulk).let { list ->
+                    val chosen = chooseGuide(list, bulk, now)
+                    if (chosen.isNotEmpty()) publishEpg(item.id, chosen)
+                    onRow(item, chosen)
+                }
+                else -> { if (bulk.isNotEmpty()) onRow(item, bulk); network += item }
+            }
+        }
+        if (xtream == null || network.isEmpty()) return
+        kotlinx.coroutines.coroutineScope {
+            network.forEach { item ->
+                launch {
+                    val bulk = sat[item.name].orEmpty()
+                    val list = chooseGuide(rowEpg.fetch(xtream, item.id).orEmpty(), bulk, System.currentTimeMillis() / 1000)
+                    if (list.isNotEmpty()) publishEpg(item.id, list)
+                    onRow(item, list)
+                }
+            }
+        }
+    }
+
     /** Right on a channel: its programme column. */
     fun openGuide(item: XtreamItem) {
         guideItem = item

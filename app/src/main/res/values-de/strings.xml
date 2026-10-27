@@ -402,6 +402,8 @@
     <string name="sleep_app_off">Sleep-Timer aus</string>
     <string name="sleep_app_warning">Sleep-Timer: EnigmaCast schließt in 1 Minute. Ausschalten unter ▼ Optionen.</string>
     <string name="epg_guide_hint">OK: ansehen oder AutoSwitch für eine spätere Sendung · ◀ am Anfang: Bouquets · Zurück: Menü</string>
+    <string name="epg_no_guide_info">Keine Programminformationen</string>
+    <string name="epg_iptv_guide_hint">OK: live ansehen · ◀ am Anfang: Kategorien · Zurück: Menü</string>
     <string name="epg_panel_hint">◀ Sender · OK: jetzt ansehen oder später per AutoSwitch</string>
     <string name="epg_loading">TV-Guide wird geladen…</string>
     <string name="epg_load_failed">Der TV-Guide konnte nicht geladen werden. Bewege dich, um es erneut zu versuchen.</string>

@@ -265,6 +265,12 @@ class RemoteDisplayViewModel @Inject constructor(
     private var blueTextSent = false
     private var blueJob: Job? = null
     var onLeaveToDashboard: (() -> Unit)? = null
+
+    /**
+     * Back on the live picture: the TV guide on the playing channel (dashboard, or the hotel
+     * menu). False when the guide is not available (Premium): the channel list opens then.
+     */
+    var onLeaveToGuide: (() -> Boolean)? = null
     var onLeaveToMyItems: ((String) -> Unit)? = null
     private var bannerJob: Job? = null
     /** The VOD OSD of a playing recording (shared with the IPTV and torrent players). */
@@ -1487,9 +1493,9 @@ class RemoteDisplayViewModel @Inject constructor(
                 _ui.update { it.copy(numberEntry = "") }
             }
             pip.playing() -> pip.stop()
-            // Back on the picture (banner up or not) opens the channel list on the playing
-            // channel, the same as Left.
-            else -> openChannelList()
+            // Back on the picture (banner up or not) opens the TV guide on the playing channel at
+            // the current time (Left still opens the channel list). Without the guide: the list.
+            else -> if (onLeaveToGuide?.invoke() != true) openChannelList()
         }
     }
 

@@ -111,20 +111,52 @@ private fun Modifier.closedBoundary(): Modifier = this
  * them, and Settings behind the hotel PIN. No Home, no profiles.
  */
 @Composable
-fun HotelScreen(onLive: () -> Unit, onPlayIptv: () -> Unit) {
+fun HotelScreen(
+    onLive: () -> Unit,
+    onPlayIptv: () -> Unit,
+    /** The satellite channel plays on (the guide's mini player). */
+    showMiniPlayer: Boolean = false,
+    /** OK on a programme on air in the satellite guide: that channel full screen. */
+    onStream: () -> Unit = onLive,
+    /** Back on live TV: open on the guide, highlight on the playing channel, focus in the grid. */
+    openGuide: com.enigmacast.ui.dashboard.GuideOpen? = null,
+    onGuideOpened: () -> Unit = {},
+) {
     val model: HotelViewModel = hiltViewModel()
     val config by model.config.collectAsState()
     val unlocked by model.unlocked.collectAsState()
-    val items = remember(config.source, config.iptvVod) { HotelMenu.items(config) }
-    var shown by rememberSaveable { mutableStateOf(items.first()) }
+    val accountModel: com.enigmacast.ui.account.AccountViewModel = hiltViewModel()
+    val premium = accountModel.gate.isUnlocked()
+    val items = remember(config.source, config.iptvVod, premium) { HotelMenu.items(config, guide = premium) }
+    var shown by rememberSaveable { mutableStateOf(if (openGuide != null && HotelMenuItem.GUIDE in items) HotelMenuItem.GUIDE else items.first()) }
     if (shown !in items) shown = items.first()
+    // The guide: entered with OK on its item or Back on live TV (then on the playing channel).
+    var guideEnter by remember { mutableIntStateOf(0) }
+    var guideContentFocused by remember { mutableStateOf(false) }
+    var guideRetreat by remember { mutableStateOf<FocusRequester?>(null) }
+    val guideGridFocus = remember { FocusRequester() }
+    val guideColumnFocus = remember { FocusRequester() }
     val itemFocus = remember(items) { items.associateWith { FocusRequester() } }
     val contentFocus = remember { FocusRequester() }
     var sectionEnter by remember { mutableIntStateOf(0) }
     var wantsSettings by remember { mutableStateOf(false) }
     val panelFocus = remember { FocusRequester() }
 
-    LaunchedEffect(items) { itemFocus[shown]?.requestWhenReady() }
+    LaunchedEffect(items) {
+        if (openGuide != null && shown == HotelMenuItem.GUIDE) {
+            guideEnter++
+            onGuideOpened()
+        } else {
+            if (openGuide != null) onGuideOpened()
+            itemFocus[shown]?.requestWhenReady()
+        }
+    }
+    // Back in the guide: one column back (categories/bouquets to the grid's menu item), then the
+    // menu; Back on the menu is live TV again (the app shell), never out of the app.
+    BackHandler(enabled = shown == HotelMenuItem.GUIDE && guideContentFocused) {
+        val target = guideRetreat ?: itemFocus.getValue(HotelMenuItem.GUIDE)
+        runCatching { target.requestFocus() }
+    }
     // Leaving the menu (live TV) locks the settings again: the next guest finds them closed.
     DisposableEffect(Unit) { onDispose { model.relock() } }
     LaunchedEffect(unlocked, wantsSettings) {
@@ -172,6 +204,7 @@ fun HotelScreen(onLive: () -> Unit, onPlayIptv: () -> Unit) {
                     onClick = {
                         when (item) {
                             HotelMenuItem.SAT_TV, HotelMenuItem.IPTV_LIVE -> onLive()
+                            HotelMenuItem.GUIDE -> guideEnter++
                             else -> sectionEnter++
                         }
                     },
@@ -200,9 +233,52 @@ fun HotelScreen(onLive: () -> Unit, onPlayIptv: () -> Unit) {
                 modifier = Modifier.focusRequester(itemFocus.getValue(HotelMenuItem.SETTINGS)),
             )
         }
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .onFocusChanged { guideContentFocused = it.hasFocus },
+        ) {
             when (shown) {
                 HotelMenuItem.SAT_TV, HotelMenuItem.IPTV_LIVE -> HotelLivePane(onLive)
+                HotelMenuItem.GUIDE -> {
+                    val guideMenu = itemFocus.getValue(HotelMenuItem.GUIDE)
+                    if (config.iptv) {
+                        val xtream: XtreamViewModel = hiltViewModel()
+                        com.enigmacast.ui.dashboard.IptvGuidePanel(
+                            model = xtream,
+                            // Hotel mode has no mini player for IPTV (live stops when the menu opens).
+                            showMiniPlayer = false,
+                            gridFocus = guideGridFocus,
+                            categoryFocus = guideColumnFocus,
+                            menuFocus = guideMenu,
+                            enterToken = guideEnter,
+                            onPlay = onPlayIptv,
+                            onRetreatTo = { guideRetreat = it },
+                        )
+                    } else {
+                        val guideModel: com.enigmacast.ui.dashboard.StreamGuideViewModel = hiltViewModel()
+                        LaunchedEffect(guideEnter) {
+                            if (guideEnter == 0) return@LaunchedEffect
+                            guideModel.focusPlayingInGrid()
+                            guideGridFocus.requestWhenReady(attempts = 30)
+                        }
+                        com.enigmacast.ui.dashboard.GuidePanel(
+                            showMiniPlayer = showMiniPlayer,
+                            channelFocus = guideGridFocus,
+                            bouquetFocus = guideColumnFocus,
+                            menuFocused = { false },
+                            focusPlayingChannel = false,
+                            onPlayingChannelFocused = {},
+                            settingsFocus = guideMenu,
+                            // OK on a programme on air: that channel full screen (no mini player step).
+                            onMiniPlayer = onStream,
+                            onFullscreen = onStream,
+                            guideModel = guideModel,
+                            onRetreatTo = { guideRetreat = it },
+                        )
+                    }
+                }
                 HotelMenuItem.IPTV_MOVIES, HotelMenuItem.IPTV_SERIES -> {
                     val xtream: XtreamViewModel = hiltViewModel()
                     IptvLibraryPage(
@@ -241,6 +317,7 @@ private fun hotelLabel(item: HotelMenuItem): String = stringResource(
     when (item) {
         HotelMenuItem.SAT_TV -> R.string.hotel_menu_live_sat
         HotelMenuItem.IPTV_LIVE -> R.string.hotel_menu_live_iptv
+        HotelMenuItem.GUIDE -> R.string.nav_guide
         HotelMenuItem.IPTV_MOVIES -> R.string.hotel_menu_movies
         HotelMenuItem.IPTV_SERIES -> R.string.hotel_menu_series
         HotelMenuItem.SETTINGS -> R.string.hotel_menu_settings
@@ -250,6 +327,7 @@ private fun hotelLabel(item: HotelMenuItem): String = stringResource(
 private fun hotelIcon(item: HotelMenuItem) = when (item) {
     HotelMenuItem.SAT_TV -> NavIconStyle.Enigma
     HotelMenuItem.IPTV_LIVE -> NavIconStyle.Iptv
+    HotelMenuItem.GUIDE -> EnigmaIcons.Guide
     HotelMenuItem.IPTV_MOVIES -> EnigmaIcons.Film
     HotelMenuItem.IPTV_SERIES -> EnigmaIcons.Series
     HotelMenuItem.SETTINGS -> Icons.Filled.Settings

@@ -67,6 +67,7 @@ class AppViewModel @Inject constructor(
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
     private val hotel: com.enigmacast.data.hotel.HotelStore,
     private val hotelCleanup: com.enigmacast.data.hotel.HotelCleanup,
+    private val premiumGate: com.enigmacast.live.PremiumGate,
 ) : ViewModel() {
     private var rawScreen by mutableStateOf(AppScreen.Loading)
 
@@ -348,6 +349,33 @@ class AppViewModel @Inject constructor(
     /** The guest's menu (Back on the live picture). */
     fun openHotelMenu() {
         screen = AppScreen.Hotel
+    }
+
+    /**
+     * The TV guide Back on live TV opens (dashboard page, or the hotel menu's guide), on the
+     * playing channel; null once the screen took it ([guideOpened]).
+     */
+    var openGuide by mutableStateOf<com.enigmacast.ui.dashboard.GuideOpen?>(null)
+        private set
+
+    /**
+     * Back on live TV (satellite own tuner or IPTV live): the full TV guide with the menu on the
+     * left, highlight on the playing channel at the current time. Hotel mode opens the guest
+     * menu's guide (never the dashboard). False when the guide is locked (Premium): the caller
+     * keeps its old Back (the channel list).
+     */
+    fun showGuide(kind: com.enigmacast.ui.dashboard.GuideOpen): Boolean {
+        if (!premiumGate.isUnlocked()) return false
+        decided = true
+        focusPlayingChannel = false
+        returnToMyItemsId = null
+        openGuide = kind
+        screen = if (hotel.current.enabled) AppScreen.Hotel else AppScreen.Dashboard
+        return true
+    }
+
+    fun guideOpened() {
+        openGuide = null
     }
 
     /** Hotel mode off: the owner's normal app again, on Home. */

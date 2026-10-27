@@ -126,7 +126,12 @@ private sealed interface CategoryEntry {
  * OK shows the banner, Down on that banner opens the options row.
  */
 @Composable
-fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
+fun XtreamScreen(
+    onBack: () -> Unit,
+    onSearch: () -> Unit = {},
+    /** Back on the live picture: the IPTV TV guide (dashboard or hotel menu); false when not available. */
+    onGuide: () -> Boolean = { false },
+) {
     val model: XtreamViewModel = hiltViewModel()
     val detection by model.detection.collectAsStateWithLifecycle()
     val bindings by model.keyBindings.collectAsStateWithLifecycle()
@@ -305,6 +310,17 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
         onBack()
     }
     fun playingLive() = model.playing?.item?.section == XtreamSection.LIVE
+    /**
+     * Back on the bare live picture: the TV guide on this channel. The channel plays on in the
+     * guide's mini player; hotel mode has no mini player, so it stops there (the guide still
+     * opens on it: it is the remembered channel).
+     */
+    fun leaveToGuide(): Boolean {
+        if (!model.playingLive) return false
+        if (!onGuide()) return false
+        if (com.enigmacast.domain.hotel.HotelRuntime.active) model.stop() else model.continueInMiniPlayer()
+        return true
+    }
     // Preview and BackHandler can both see one press; the second call in that window is ignored.
     val liveBackAt = remember { longArrayOf(0L) }
     fun liveBack() {
@@ -329,10 +345,11 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
                 leaveLive()
             }
             model.pip.playing() -> model.pip.stop()
-            // Back on the picture (banner up or not) opens the channel list, the same as Left.
+            // Back on the picture (banner up or not) opens the TV guide on this channel; the
+            // channel list stays on Left (and is Back's target when the guide is not available).
             else -> {
                 if (bannerShown) { bannerUntil = 0L; details = false }
-                openPanel()
+                if (!leaveToGuide()) openPanel()
             }
         }
     }
