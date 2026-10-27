@@ -1574,6 +1574,7 @@
     <string name="companion_hint">De brug draait alleen zolang EnigmaCast op het scherm staat. Er gaat niets via het internet.</string>
     <string name="iptv_providers">IPTV-providers</string>
     <string name="iptv_provider_new">Nieuwe provider</string>
+    <string name="iptv_provider_add">Provider toevoegen</string>
     <string name="iptv_provider_name">Naam</string>
     <string name="iptv_provider_enabled">Aan</string>
     <string name="iptv_provider_disabled">Uit</string>

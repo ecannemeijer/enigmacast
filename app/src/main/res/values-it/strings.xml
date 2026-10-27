@@ -1601,6 +1601,7 @@
     <string name="companion_hint">Il bridge funziona solo mentre EnigmaCast è sullo schermo. Nulla passa da internet.</string>
     <string name="iptv_providers">Provider IPTV</string>
     <string name="iptv_provider_new">Nuovo provider</string>
+    <string name="iptv_provider_add">Aggiungi provider</string>
     <string name="iptv_provider_name">Nome</string>
     <string name="iptv_provider_enabled">Attivato</string>
     <string name="iptv_provider_disabled">Disattivato</string>

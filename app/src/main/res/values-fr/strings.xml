@@ -1601,6 +1601,7 @@
     <string name="companion_hint">Le pont ne fonctionne que lorsque EnigmaCast est à l\'écran. Rien ne passe par internet.</string>
     <string name="iptv_providers">Fournisseurs IPTV</string>
     <string name="iptv_provider_new">Nouveau fournisseur</string>
+    <string name="iptv_provider_add">Ajouter un fournisseur</string>
     <string name="iptv_provider_name">Nom</string>
     <string name="iptv_provider_enabled">Activé</string>
     <string name="iptv_provider_disabled">Désactivé</string>

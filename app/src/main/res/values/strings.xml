@@ -1582,6 +1582,7 @@
     <string name="companion_hint">The bridge runs only while EnigmaCast is on screen. Nothing goes through the internet.</string>
     <string name="iptv_providers">IPTV providers</string>
     <string name="iptv_provider_new">New provider</string>
+    <string name="iptv_provider_add">Add provider</string>
     <string name="iptv_provider_name">Name</string>
     <string name="iptv_provider_enabled">Enabled</string>
     <string name="iptv_provider_disabled">Disabled</string>
