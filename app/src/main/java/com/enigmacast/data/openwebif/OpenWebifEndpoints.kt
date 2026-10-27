@@ -61,6 +61,16 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
         return api(config, "/api/epgservice?sRef=${encode(serviceReference)}")
     }
 
+    /** One channel's programmes from [startSec] for [minutes], like [epgMulti] for a single channel. */
+    fun epgService(config: ReceiverConfig, serviceReference: String, startSec: Long, minutes: Int): String {
+        return api(config, "/api/epgservice?sRef=${encode(serviceReference)}&time=$startSec&endTime=$minutes")
+    }
+
+    /** The programme on air on one channel. */
+    fun epgServiceNow(config: ReceiverConfig, serviceReference: String): String {
+        return api(config, "/api/epgservicenow?sRef=${encode(serviceReference)}")
+    }
+
     fun powerState(config: ReceiverConfig, newState: Int? = null): String {
         val query = if (newState == null) "" else "?newstate=$newState"
         return api(config, "/api/powerstate$query")

@@ -14,6 +14,8 @@ data class NowEvent(
     val eventId: Int = -1,
     /** Other service references OpenWebif listed for this same programme (`asrefs`). */
     val alternatives: List<String> = emptyList(),
+    /** The channel name OpenWebif sent with the programme (`sname`); blank when none. */
+    val serviceName: String = "",
 ) {
     val endEpochSec: Long get() = beginEpochSec + durationSec
 
@@ -56,6 +58,11 @@ object NowEvents {
             fields[2] = "0"
         }
         val base = fields.joinToString(":")
+        // Alternatives (`1:134:…:FROM BOUQUET "alternatives.x.tv" …`) all have ten zero fields:
+        // the alternatives file tells them apart.
+        if (reference.contains("FROM BOUQUET", ignoreCase = true)) {
+            return "$base|${ChannelListNavigation.bouquetIdentity(reference).lowercase()}"
+        }
         // Internet streams share their ten fields: the stream address keeps them apart.
         if (fields.firstOrNull() != "1" || reference.contains("%3a", true) || reference.contains("://")) {
             ServiceStreams.internetUrl(reference)?.let { return "$base|$it" }

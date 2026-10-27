@@ -1190,7 +1190,7 @@ class RemoteDisplayViewModel @Inject constructor(
                 val bouquet = ownSession.state.value.bouquetReference
                 val cached = nowEpg.cached(receiver, bouquet)
                 if (cached.isNotEmpty()) _ui.update { it.copy(nowEvents = cached) }
-                val events = nowEpg.load(receiver, bouquet)
+                val events = nowEpg.load(receiver, bouquet, ownSession.state.value.channels)
                 _ui.update { it.copy(nowEvents = events) }
                 delay(NOW_EPG_CHECK_MS)
             }

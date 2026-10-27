@@ -31,6 +31,7 @@ import com.enigmacast.data.settingsimport.FtpReceiverClient
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.BouquetSearch
 import com.enigmacast.domain.service.BouquetOrder
+import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.domain.settingsimport.SettingsFiles
 import com.enigmacast.domain.source.OsdSource
 import com.enigmacast.domain.source.ReceiverInfoSource
@@ -49,6 +50,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Call
@@ -65,6 +68,12 @@ import javax.inject.Singleton
 /** [uiText] is what the screen shows; app-made failures are translated, others pass the raw message. */
 /** How long a bouquet's channel list read from the box is shared before it is read again. */
 private const val SERVICES_TTL_MS = 30_000L
+
+/** Per-channel EPG requests at once when a whole-bouquet request fails: light on a small receiver. */
+private const val PER_CHANNEL_PARALLEL = 4
+
+/** The most channels of one bouquet asked one by one. */
+private const val PER_CHANNEL_MAX = 250
 
 class OpenWebifException(
     message: String,
@@ -405,8 +414,24 @@ class OpenWebifApi @Inject constructor(
         return response.bytes
     }
 
+    /**
+     * What is on air on every channel of a bouquet. When OpenWebif fails on the whole bouquet
+     * (HTTP 500 or a broken answer, typically because one channel's EPG text cannot be encoded)
+     * the channels are asked one by one, [PER_CHANNEL_PARALLEL] at a time: the same per-channel
+     * request that makes the OSD and the info panel work for those channels.
+     */
     suspend fun nowEvents(config: ReceiverConfig, bouquetReference: String): List<NowEvent> {
-        return parsed { OpenWebifJson.parseNowEvents(programmeBody(config, endpoints.epgNow(config, bouquetReference))) }
+        bouquetBody(config, endpoints.epgNow(config, bouquetReference))
+            ?.let { body -> parsed { OpenWebifJson.parseNowEventsOrNull(body) } }
+            ?.let { return it }
+        EnigmaLog.service("bouquet now/next failed, asking per channel")
+        return perChannel(config, bouquetReference) { channel ->
+            val body = programmeBody(config, endpoints.epgServiceNow(config, channel.reference))
+            parsed { OpenWebifJson.parseNowEvents(body) }.map { event ->
+                // Older images leave `sref` out of epgservicenow.
+                if (event.reference.isBlank()) event.copy(reference = channel.reference) else event
+            }
+        }
     }
 
     /** `/api/about` alone (model, image, transcoding), without the grab and stream port probes. */
@@ -436,8 +461,58 @@ class OpenWebifApi @Inject constructor(
         return parsed { OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgService(config, serviceReference)), serviceReference) }
     }
 
+    /** The programmes of a bouquet; per channel like [nowEvents] when the bouquet request fails. */
     suspend fun bouquetEvents(config: ReceiverConfig, bouquetReference: String, startSec: Long, minutes: Int): List<GuideEvent> {
-        return parsed { OpenWebifJson.parseGuideEvents(programmeBody(config, endpoints.epgMulti(config, bouquetReference, startSec, minutes))) }
+        bouquetBody(config, endpoints.epgMulti(config, bouquetReference, startSec, minutes))
+            ?.let { body -> parsed { OpenWebifJson.parseGuideEventsOrNull(body) } }
+            ?.let { return it }
+        EnigmaLog.service("bouquet guide failed, asking per channel")
+        return perChannel(config, bouquetReference) { channel ->
+            val body = programmeBody(config, endpoints.epgService(config, channel.reference, startSec, minutes))
+            parsed { OpenWebifJson.parseGuideEvents(body, channel.reference) }
+        }
+    }
+
+    /** A bouquet-wide EPG answer, null when OpenWebif failed on it (HTTP 500); 404 means no programmes. */
+    private suspend fun bouquetBody(config: ReceiverConfig, url: String): String? = try {
+        get(config, url)
+    } catch (error: OpenWebifException) {
+        when (error.statusCode) {
+            404 -> """{"events":[]}"""
+            500 -> null
+            else -> throw error
+        }
+    }
+
+    /**
+     * [block] for the tuner channels of a bouquet (at most [PER_CHANNEL_MAX]),
+     * [PER_CHANNEL_PARALLEL] at a time; a channel that fails is left out.
+     */
+    private suspend fun <T> perChannel(
+        config: ReceiverConfig,
+        bouquetReference: String,
+        block: suspend (BouquetEntry) -> List<T>,
+    ): List<T> {
+        val channels = services(config, bouquetReference)
+            .filter { BouquetChannels.isPlayableChannel(it.reference) && !ServiceStreams.isInternet(it.reference) }
+            .distinctBy { it.reference }
+            .take(PER_CHANNEL_MAX)
+        val gate = Semaphore(PER_CHANNEL_PARALLEL)
+        return coroutineScope {
+            channels.map { channel ->
+                async {
+                    gate.withPermit {
+                        try {
+                            block(channel)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            emptyList()
+                        }
+                    }
+                }
+            }.flatMap { it.await() }
+        }
     }
 
     suspend fun addTimer(config: ReceiverConfig, serviceReference: String, eventId: Int): TimerResult {

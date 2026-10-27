@@ -27,6 +27,9 @@ import com.enigmacast.domain.sync.SyncKind
 import com.enigmacast.domain.sync.SyncPolicy
 import com.enigmacast.domain.tuner.NowEvents
 import com.enigmacast.live.CountryDetector
+import com.enigmacast.domain.epg.GuideEvent
+import com.enigmacast.domain.model.BouquetEntry
+import com.enigmacast.domain.tuner.ServiceMatch
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -270,26 +273,20 @@ class SyncEngine @Inject constructor(
         step(rk, 15, R.string.sync_step_epg, 0, bouquets.size)
         report?.progress(0, bouquets.size)
         val channels = dao.channels(rk).groupBy { it.bouquetReference }
-        val minutes = ((toSec - fromSec) / 60).toInt()
-        val gate = Semaphore(3)
+        // Two bouquets at a time: each answer can be megabytes of JSON on a receiver with little memory.
+        val gate = Semaphore(2)
         var done = 0
         val perBouquet = bouquets.map { bouquet ->
             async {
                 gate.withPermit {
-                    // Per-channel requests only when the bouquet request itself failed: a bouquet whose
-                    // channels have no guide (an empty answer) would otherwise cost 40 calls every sync.
-                    val multi = runCatching { api.bouquetEvents(receiver, bouquet.reference, fromSec, minutes) }
-                        .onFailure { if (it is CancellationException) throw it }
-                    var events = multi.getOrDefault(emptyList())
-                    if (multi.isFailure) {
-                        events = channels[bouquet.reference].orEmpty().take(FALLBACK_CHANNELS).flatMap { channel ->
-                            runCatching { api.serviceEvents(receiver, channel.reference) }.getOrDefault(emptyList())
-                        }
-                    }
+                    val list = channels[bouquet.reference].orEmpty().map { BouquetEntry(it.name, it.reference) }
+                    val events = bouquetEpg(receiver, bouquet.reference, list, fromSec, toSec)
                     val finished = synchronized(this@SyncEngine) { ++done }
                     step(rk, 15 + 50 * finished / bouquets.size.coerceAtLeast(1), R.string.sync_step_epg, finished, bouquets.size)
                     report?.progress(finished, bouquets.size)
-                    events
+                    // Programmes whose reference is written differently from the bouquet's are stored
+                    // under the bouquet channel, so the list and the guide find them.
+                    ServiceMatch.guideEvents(events, list)
                 }
             }
         }.awaitAll()
@@ -303,6 +300,41 @@ class SyncEngine @Inject constructor(
         require(rows.isNotEmpty() || bouquets.isEmpty()) { "receiver sent no guide" }
         dao.replaceEvents(rk, fromSec, toSec, rows.values.toList())
         EnigmaLog.service("sync epg receiver=$rk events=${rows.size}")
+    }
+
+    /**
+     * One bouquet's guide for the sync window. The whole window in one request first; when that
+     * fails (a timeout on a large bouquet over several days) one day at a time; when that fails
+     * too, per channel for the first [FALLBACK_CHANNELS]. A bouquet whose channels simply have no
+     * guide (an empty answer) costs one request.
+     */
+    private suspend fun bouquetEpg(
+        receiver: ReceiverConfig,
+        bouquetReference: String,
+        channels: List<BouquetEntry>,
+        fromSec: Long,
+        toSec: Long,
+    ): List<GuideEvent> {
+        attempt { api.bouquetEvents(receiver, bouquetReference, fromSec, ((toSec - fromSec) / 60).toInt()) }?.let { return it }
+        EnigmaLog.service("sync epg bouquet failed, trying per day")
+        val days = generateSequence(fromSec) { it + DAY_SEC }.takeWhile { it < toSec }.toList()
+        var anyDay = false
+        val perDay = days.flatMap { start ->
+            val minutes = ((minOf(start + DAY_SEC, toSec) - start) / 60).toInt()
+            attempt { api.bouquetEvents(receiver, bouquetReference, start, minutes) }?.also { anyDay = true }.orEmpty()
+        }
+        if (anyDay) return perDay
+        return channels.take(FALLBACK_CHANNELS).flatMap { channel ->
+            attempt { api.serviceEvents(receiver, channel.reference) }.orEmpty()
+        }
+    }
+
+    private suspend fun <T> attempt(block: suspend () -> T): T? = try {
+        block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        null
     }
 
     private suspend fun syncFilms(rk: String, today: DayWindow, horizonSec: Long, zone: ZoneId, report: BackgroundActivityTracker.Reporter? = null) {
@@ -396,6 +428,7 @@ class SyncEngine @Inject constructor(
 
     private companion object {
         const val FALLBACK_CHANNELS = 40
+        const val DAY_SEC = 24 * 3600L
     }
 }
 
