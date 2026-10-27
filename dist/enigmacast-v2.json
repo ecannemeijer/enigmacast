@@ -1,8 +1,8 @@
 {
-  "versionCode": 119,
-  "versionName": "1.0.0-beta.116",
+  "versionCode": 120,
+  "versionName": "1.0.0-beta.117",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Automatische framerate (instelbaar), rijen Favorieten en Opnames op het Android TV-startscherm, en IPTV-providers bewerken in een eigen venster.",
+  "notes": "EPG in de kanalenlijst en TV-gids werkt nu voor alle satellietboeketten (bijv. 13 graden Italie), plus automatische framerate, startschermrijen en IPTV-providers in een eigen venster.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
