@@ -402,6 +402,8 @@
     <string name="sleep_app_off">Mise en veille programmée désactivée</string>
     <string name="sleep_app_warning">Mise en veille programmée : EnigmaCast se ferme dans 1 minute. Désactivez-la dans ▼ options.</string>
     <string name="epg_guide_hint">OK : regarder, ou AutoSwitch pour un programme ultérieur · ◀ au début : bouquets · Retour : menu</string>
+    <string name="epg_no_guide_info">Aucune information de programme</string>
+    <string name="epg_iptv_guide_hint">OK : regarder en direct · ◀ au début : catégories · Retour : menu</string>
     <string name="epg_panel_hint">◀ Chaînes · OK : regarder maintenant, ou AutoSwitch plus tard</string>
     <string name="epg_loading">Chargement du guide…</string>
     <string name="epg_load_failed">Impossible de charger le guide. Déplacez-vous pour réessayer.</string>

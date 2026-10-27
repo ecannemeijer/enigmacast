@@ -147,6 +147,8 @@ internal enum class DashSection {
     Soccer,
     IptvMovies,
     IptvSeries,
+    /** IPTV › TV Guide: the live channels of a category as a programme grid. */
+    IptvGuide,
     Torrent,
     Stream,
     Guide,
@@ -193,6 +195,9 @@ fun DashboardScreen(
     onBindBack: ((() -> Boolean)?) -> Unit,
     focusPlayingChannel: Boolean = false,
     onPlayingChannelFocused: () -> Unit = {},
+    /** Back on live TV: open the TV guide (Sat or IPTV) on the playing channel, focus in the grid. */
+    openGuide: GuideOpen? = null,
+    onGuideOpened: () -> Unit = {},
     returnToMyItemsId: String? = null,
     onMyItemsFocused: () -> Unit = {},
     updatePromptShown: Boolean = false,
@@ -226,6 +231,8 @@ fun DashboardScreen(
         mutableStateOf(
             when {
                 focusLanguageSetting || returnToSettingsHub -> DashSection.Settings
+                openGuide == GuideOpen.SATELLITE -> DashSection.Guide
+                openGuide == GuideOpen.IPTV -> DashSection.IptvGuide
                 returnToMyItemsId != null -> DashSection.MyItems
                 iptvReturn != null && !iptvReturn.startsWith("home/") -> DashSection.MyItems
                 xtreamModel.vodFromDashboard && xtreamModel.section == com.enigmacast.domain.xtream.XtreamSection.SERIES -> DashSection.IptvSeries
@@ -252,6 +259,12 @@ fun DashboardScreen(
     val streamFocus = remember { FocusRequester() }
     val guideFocus = remember { FocusRequester() }
     val guideGridFocus = remember { FocusRequester() }
+    val iptvGuideGridFocus = remember { FocusRequester() }
+    val iptvCategoryFocus = remember { FocusRequester() }
+    var iptvGuideOpenToken by remember { mutableIntStateOf(0) }
+    // Opened with Back from live TV: OK on a programme on air goes straight back to full screen.
+    var guideFromLive by remember { mutableStateOf(openGuide != null) }
+    LaunchedEffect(section) { if (section != DashSection.Guide && section != DashSection.IptvGuide) guideFromLive = false }
     val radioFocus = remember { FocusRequester() }
     val radioListFocus = remember { FocusRequester() }
     var streamItemFocused by remember { mutableStateOf(false) }
@@ -328,6 +341,7 @@ fun DashboardScreen(
         DashSection.Series -> com.enigmacast.domain.account.PremiumFeature.SERIES
         DashSection.Soccer -> com.enigmacast.domain.account.PremiumFeature.SOCCER
         DashSection.Torrent -> com.enigmacast.domain.account.PremiumFeature.TORRENT
+        DashSection.IptvGuide -> com.enigmacast.domain.account.PremiumFeature.XTREAM
         else -> null
     }
     // The plan ran out while a Premium section was open: back to Home.
@@ -345,7 +359,7 @@ fun DashboardScreen(
         DashSection.Search -> searchMenuFocus
         DashSection.MyItems -> myItemsMenuFocus
         DashSection.Settings -> settingsMenuFocus
-        DashSection.IptvMovies, DashSection.IptvSeries -> iptvMenuFocus
+        DashSection.IptvMovies, DashSection.IptvSeries, DashSection.IptvGuide -> iptvMenuFocus
         DashSection.Torrent -> torrentFocus
     }
     fun sectionMenu(): FocusRequester = when (DashGroups.groupOf(section)) {
@@ -387,6 +401,17 @@ fun DashboardScreen(
                 onSettingsHubShown()
             }
             focusLanguageSetting || returnToMyItemsId != null -> Unit
+            // Back on live TV: the guide on the playing channel at the current time, focus in the grid
+            // (the grid is focusable while its rows still load; the highlight follows the data).
+            openGuide == GuideOpen.SATELLITE -> {
+                guideModel.focusPlayingInGrid()
+                guideGridFocus.requestWhenReady(attempts = 30)
+                onGuideOpened()
+            }
+            openGuide == GuideOpen.IPTV -> {
+                iptvGuideOpenToken += 1
+                onGuideOpened()
+            }
             iptvReturn != null -> { if (!iptvReturn.startsWith("home/")) { myItemsListActive = true; onMyItemsFocused() } }
             // Back from the player: Live TV opens the player, so focus its menu item.
             focusPlayingChannel -> { tvMenuFocus.requestWhenReady(); onPlayingChannelFocused() }
@@ -458,7 +483,7 @@ fun DashboardScreen(
         }
         val keepList = myItemsModel.holdList && section == DashSection.MyItems && target != DashSection.MyItems
         if (keepList || settingsFormOpen) return
-        if (target == DashSection.Guide) guideModel.focusFirstInGrid()
+        if (target == DashSection.Guide) guideModel.focusPlayingInGrid()
         openSection(target)
         sectionEnter += 1
     }
@@ -644,11 +669,14 @@ fun DashboardScreen(
                         },
                     )
                     if (drawerExpanded && flyout == DashGroup.IPTV) {
+                        // Live TV, TV Guide, Films, Series: the guide is a dashboard page, the rest playlist sections.
+                        val guideLabel = stringResource(R.string.nav_guide)
+                        val sectionEntries = com.enigmacast.domain.xtream.XtreamSection.entries.map { part ->
+                            DashFlyoutEntry<Any>(part, stringResource(xtreamSectionLabel(part)), !premium)
+                        }
                         DashFlyout(
-                            entries = com.enigmacast.domain.xtream.XtreamSection.entries.map { part ->
-                                DashFlyoutEntry(part, stringResource(xtreamSectionLabel(part)), !premium)
-                            },
-                            active = xtreamModel.section.takeIf { xtreamModel.categories.isNotEmpty() },
+                            entries = sectionEntries.take(1) + DashFlyoutEntry<Any>(DashSection.IptvGuide, guideLabel, !premium) + sectionEntries.drop(1),
+                            active = if (section == DashSection.IptvGuide) DashSection.IptvGuide else xtreamModel.section.takeIf { xtreamModel.categories.isNotEmpty() },
                             entryFocus = iptvFlyoutFocus,
                             upTo = iptvMenuFocus,
                             downTo = if (torrentAvailable) torrentFocus else soccerFocus,
@@ -657,12 +685,15 @@ fun DashboardScreen(
                                 flyout = null
                                 if (!accountModel.gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) {
                                     runCatching { iptvMenuFocus.requestFocus() }
-                                } else {
-                                    xtreamModel.requestSection(entry.id)
-                                    when (entry.id) {
-                                        com.enigmacast.domain.xtream.XtreamSection.LIVE -> onXtream()
-                                        com.enigmacast.domain.xtream.XtreamSection.MOVIES -> enterSection(DashSection.IptvMovies)
-                                        com.enigmacast.domain.xtream.XtreamSection.SERIES -> enterSection(DashSection.IptvSeries)
+                                } else when (val id = entry.id) {
+                                    DashSection.IptvGuide -> enterSection(DashSection.IptvGuide)
+                                    is com.enigmacast.domain.xtream.XtreamSection -> {
+                                        xtreamModel.requestSection(id)
+                                        when (id) {
+                                            com.enigmacast.domain.xtream.XtreamSection.LIVE -> onXtream()
+                                            com.enigmacast.domain.xtream.XtreamSection.MOVIES -> enterSection(DashSection.IptvMovies)
+                                            com.enigmacast.domain.xtream.XtreamSection.SERIES -> enterSection(DashSection.IptvSeries)
+                                        }
                                     }
                                 }
                             },
@@ -936,10 +967,22 @@ fun DashboardScreen(
                             enterToken = sectionEnter,
                             onRetreatTo = retreat,
                         )
+                        DashSection.IptvGuide -> {
+                        IptvGuidePanel(
+                            model = xtreamModel,
+                            showMiniPlayer = iptvLive,
+                            gridFocus = iptvGuideGridFocus,
+                            categoryFocus = iptvCategoryFocus,
+                            menuFocus = iptvMenuFocus,
+                            enterToken = sectionEnter + iptvGuideOpenToken,
+                            onPlay = onXtream,
+                            onRetreatTo = retreat,
+                        )
+                        }
                         DashSection.Guide -> {
                         LaunchedEffect(sectionEnter) {
                             if (sectionEnter == 0) return@LaunchedEffect
-                            guideModel.focusFirstInGrid()
+                            guideModel.focusPlayingInGrid()
                             guideGridFocus.requestWhenReady()
                         }
                         GuidePanel(
@@ -950,7 +993,8 @@ fun DashboardScreen(
                             focusPlayingChannel,
                             onPlayingChannelFocused,
                             guideFocus,
-                            onMiniPlayer,
+                            // From live TV: OK on a programme on air zaps and returns to full screen.
+                            if (guideFromLive) onStream else onMiniPlayer,
                             onStream,
                             guideModel,
                             onRetreatTo = retreat,
@@ -1096,7 +1140,7 @@ fun DashboardScreen(
  * programme asks to record. Left on the programme on air opens the bouquets.
  */
 @Composable
-private fun GuidePanel(
+internal fun GuidePanel(
     showMiniPlayer: Boolean,
     channelFocus: FocusRequester,
     bouquetFocus: FocusRequester,
@@ -1312,6 +1356,8 @@ internal fun BouquetColumn(
     modifier: Modifier = Modifier,
     requestFocus: Boolean = true,
     onColumnFocus: () -> Unit = {},
+    /** The heading; null: "Bouquets". */
+    title: String? = null,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -1326,7 +1372,7 @@ internal fun BouquetColumn(
     }
     Column(modifier.onFocusChanged { if (it.hasFocus) onColumnFocus() }) {
         Text(
-            stringResource(R.string.bouquets),
+            title ?: stringResource(R.string.bouquets),
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = EnigmaType.Strong,
@@ -1681,7 +1727,7 @@ private fun PlaybackSettingsPanel(
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
     part: PlaybackPart,
-    fastStart: Boolean = true,
+    fastStart: Boolean = false,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()

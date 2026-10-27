@@ -138,8 +138,12 @@ object ChannelListNavigation {
      * are matched on the bouquet row itself. The ten-field key is only the fallback for DVB,
      * where HD and SD are the same channel.
      */
-    fun channelFocusIndex(channels: List<BouquetEntry>, currentReference: String): Int {
-        if (currentReference.isBlank() || channels.isEmpty()) return 0
+    fun channelFocusIndex(channels: List<BouquetEntry>, currentReference: String): Int =
+        channelIndexOrNull(channels, currentReference) ?: 0
+
+    /** Where [currentReference] is in [channels] (same matching as [channelFocusIndex]), or null when it is not there. */
+    fun channelIndexOrNull(channels: List<BouquetEntry>, currentReference: String): Int? {
+        if (currentReference.isBlank() || channels.isEmpty()) return null
         val exact = channels.indexOfFirst { it.reference.equals(currentReference, ignoreCase = true) }
         if (exact >= 0) return exact
         if (ServiceStreams.isInternet(currentReference)) {
@@ -147,7 +151,7 @@ object ChannelListNavigation {
             if (byUrl >= 0) return byUrl
         }
         val current = NowEvents.key(currentReference)
-        return channels.indexOfFirst { NowEvents.key(it.reference) == current }.coerceAtLeast(0)
+        return channels.indexOfFirst { NowEvents.key(it.reference) == current }.takeIf { it >= 0 }
     }
 
     /** OpenWebif writes bouquet references with `"`, `%22` or `&quot;`; compare the `FROM BOUQUET …` part. */

@@ -63,19 +63,24 @@ object HotelRuntime {
 data class HotelVisible<T>(val items: List<T>, val whitelist: Int, val total: Int, val fellBack: Boolean)
 
 /** The guest's left menu. */
-enum class HotelMenuItem { SAT_TV, IPTV_LIVE, IPTV_MOVIES, IPTV_SERIES, SETTINGS }
+enum class HotelMenuItem { SAT_TV, IPTV_LIVE, GUIDE, IPTV_MOVIES, IPTV_SERIES, SETTINGS }
 
 object HotelMenu {
-    /** Satellite or IPTV live (plus films and series when allowed); Settings always last. */
-    fun items(config: HotelConfig): List<HotelMenuItem> = buildList {
+    /**
+     * Satellite or IPTV live, its TV guide (when [guide]: not without Premium), films and
+     * series when allowed; Settings always last.
+     */
+    fun items(config: HotelConfig, guide: Boolean = true): List<HotelMenuItem> = buildList {
         if (config.iptv) {
             add(HotelMenuItem.IPTV_LIVE)
+            if (guide) add(HotelMenuItem.GUIDE)
             if (config.iptvVod) {
                 add(HotelMenuItem.IPTV_MOVIES)
                 add(HotelMenuItem.IPTV_SERIES)
             }
         } else {
             add(HotelMenuItem.SAT_TV)
+            if (guide) add(HotelMenuItem.GUIDE)
         }
         add(HotelMenuItem.SETTINGS)
     }

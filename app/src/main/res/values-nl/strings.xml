@@ -403,6 +403,8 @@
     <string name="sleep_app_off">Slaaptimer uit</string>
     <string name="sleep_app_warning">Slaaptimer: EnigmaCast sluit over 1 minuut. Zet hem uit onder ▼ opties.</string>
     <string name="epg_guide_hint">OK: kijken, of AutoSwitch voor een later programma · ◀ aan het begin: bouquets · Terug: menu</string>
+    <string name="epg_no_guide_info">Geen gidsinformatie</string>
+    <string name="epg_iptv_guide_hint">OK: live kijken · ◀ aan het begin: categorieën · Terug: menu</string>
     <string name="epg_panel_hint">◀ Zenders · OK: nu kijken, of later AutoSwitch</string>
     <string name="epg_loading">Gids laden…</string>
     <string name="epg_load_failed">Kon de gids niet laden. Beweeg om het opnieuw te proberen.</string>

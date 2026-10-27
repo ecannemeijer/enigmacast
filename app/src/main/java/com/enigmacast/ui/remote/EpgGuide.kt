@@ -125,6 +125,10 @@ fun GuideTimelineGrid(
     modifier: Modifier = Modifier,
     autoSwitchKeys: Set<String> = emptySet(),
     recordingReferences: Set<String> = emptySet(),
+    /** Text in a row's empty time (no programmes known), e.g. "no guide information"; null: blank. */
+    emptyLabel: (BouquetEntry) -> String? = { null },
+    /** The key line under the grid; null: the satellite guide's. */
+    hint: String? = null,
 ) {
     val cursor = state.cursor
     val focusSec = maxOf(cursor.focusSec, nowSec)
@@ -153,10 +157,11 @@ fun GuideTimelineGrid(
                 cachedPicon = cachedPicon,
                 autoSwitchKeys = autoSwitchKeys,
                 recordingReferences = recordingReferences,
+                emptyLabel = emptyLabel,
                 modifier = Modifier.weight(1f),
             )
             Text(
-                stringResource(R.string.epg_guide_hint),
+                hint ?: stringResource(R.string.epg_guide_hint),
                 color = EnigmaColors.Subtle,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -324,13 +329,15 @@ private fun GuideRows(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     autoSwitchKeys: Set<String>,
     recordingReferences: Set<String>,
+    emptyLabel: (BouquetEntry) -> String?,
     modifier: Modifier = Modifier,
 ) {
     val channels = state.channels
     val row = state.cursor.row
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (row - 2).coerceAtLeast(0))
-    // Keep the highlighted row on screen without jumping when it already is.
-    LaunchedEffect(row, channels.size) {
+    // Keep the highlighted row on screen without jumping when it already is (also when the
+    // list or its rows arrive after the highlight was placed: opening on the playing channel).
+    LaunchedEffect(row, channels.size, state.bouquetReference) {
         if (channels.isEmpty()) return@LaunchedEffect
         val info = listState.layoutInfo
         val visible = info.visibleItemsInfo
@@ -362,6 +369,7 @@ private fun GuideRows(
                 dpPerSec = dpPerSec,
                 picon = picon,
                 cachedPicon = cachedPicon,
+                emptyLabel = emptyLabel(entry),
             )
         }
     }
@@ -382,6 +390,7 @@ private fun GuideRow(
     dpPerSec: Float,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
+    emptyLabel: String? = null,
 ) {
     val cells = remember(events, windowStartSec) {
         GuideTimeline.cells(events, windowStartSec, windowStartSec + GuideTimeline.WINDOW_SEC)
@@ -429,6 +438,7 @@ private fun GuideRow(
                     x = ((cell.startSec - windowStartSec) * dpPerSec).dp,
                     width = ((cell.endSec - cell.startSec) * dpPerSec).dp,
                     nowSec = nowSec,
+                    emptyLabel = emptyLabel,
                 )
             }
         }
@@ -436,7 +446,7 @@ private fun GuideRow(
 }
 
 @Composable
-private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, x: Dp, width: Dp, nowSec: Long) {
+private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, x: Dp, width: Dp, nowSec: Long, emptyLabel: String? = null) {
     val event = cell.event
     val spec = LocalMotionSpec.current
     val scale by animateFloatAsState(
@@ -474,9 +484,10 @@ private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, air
             Spacer(Modifier.width(4.dp))
         }
         Text(
-            event?.title.orEmpty(),
+            event?.title ?: emptyLabel.orEmpty(),
             color = when {
                 focused -> EnigmaColors.OnFocus
+                event == null -> EnigmaColors.Subtle
                 airing -> Color.White
                 else -> EnigmaColors.Muted
             },

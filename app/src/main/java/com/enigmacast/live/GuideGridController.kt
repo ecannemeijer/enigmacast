@@ -37,10 +37,18 @@ data class GuideGridState(
  */
 class GuideGridController(
     private val scope: CoroutineScope,
-    private val repository: GuideRepository,
-    private val receiver: suspend () -> ReceiverConfig?,
+    /** One 3-hour block of the shown list's programmes; null when it failed (asked again on refresh). */
+    private val loadChunk: suspend (bouquetReference: String, chunkStartSec: Long) -> List<GuideEvent>?,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
 ) {
+    /** The receiver's bouquets (OpenWebif, cached in [GuideRepository]). */
+    constructor(
+        scope: CoroutineScope,
+        repository: GuideRepository,
+        receiver: suspend () -> ReceiverConfig?,
+        clock: () -> Long = { System.currentTimeMillis() / 1000 },
+    ) : this(scope, { bouquet, chunk -> receiver()?.let { repository.bouquetChunk(it, bouquet, chunk) } }, clock)
+
     private val _state = MutableStateFlow(GuideGridState())
     val state: StateFlow<GuideGridState> = _state.asStateFlow()
     private val loaded = mutableSetOf<Long>()
@@ -56,8 +64,15 @@ class GuideGridController(
             loaded.clear()
             pending.clear()
         }
-        val row = ChannelListNavigation.channelFocusIndex(channels, focusReference)
-        val cursor = if (sameBouquet && current.channels.isNotEmpty()) {
+        // A focus asked for before this list arrived (the playing channel in another bouquet, or
+        // a grid that was still loading) wins once its channel is in the list.
+        val pending = pendingFocus
+        val pendingRow = pending?.let { ChannelListNavigation.channelIndexOrNull(channels, it) }
+        val row = pendingRow ?: ChannelListNavigation.channelFocusIndex(channels, focusReference)
+        val cursor = if (pendingRow != null) {
+            pendingFocus = null
+            GuideCursor(row, now, GuideTimeline.slotFloor(now))
+        } else if (sameBouquet && current.channels.isNotEmpty()) {
             current.cursor.copy(row = row)
         } else {
             GuideCursor(row, now, GuideTimeline.slotFloor(now))
@@ -74,21 +89,46 @@ class GuideGridController(
         ensureData()
     }
 
+    /** Channel waiting for its bouquet (see [focusChannel]); null when none. */
+    @Volatile private var pendingFocus: String? = null
+
     /** Puts the highlight on the first channel at the current time. */
     fun focusFirst() {
+        pendingFocus = null
         val now = clock()
         val channels = _state.value.channels
         _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(0, now, GuideTimeline.slotFloor(now)), now, channels.size)) }
         ensureData()
     }
 
-    /** Puts the highlight on [reference] at the current time, e.g. after Back from the player. */
-    fun focusChannel(reference: String) {
+    /**
+     * Puts the highlight on [reference] at the current time, e.g. after Back from the player.
+     * Returns false when the shown list does not hold it (yet): the highlight then moves there
+     * as soon as a list with that channel is shown, and stays where it is until then.
+     */
+    fun focusChannel(reference: String): Boolean {
         val now = clock()
         val channels = _state.value.channels
-        val row = ChannelListNavigation.channelFocusIndex(channels, reference)
+        val row = ChannelListNavigation.channelIndexOrNull(channels, reference)
+        if (row == null) {
+            pendingFocus = reference.takeIf { it.isNotBlank() }
+            return false
+        }
+        pendingFocus = null
         _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(row, now, GuideTimeline.slotFloor(now)), now, channels.size)) }
         ensureData()
+        return true
+    }
+
+    /**
+     * Programmes that arrive per channel instead of per block (IPTV listings), merged into the
+     * list on screen; ignored when [bouquetReference] is no longer shown.
+     */
+    fun putEvents(bouquetReference: String, events: List<GuideEvent>) {
+        if (events.isEmpty()) return
+        _state.update {
+            if (it.bouquetReference != bouquetReference) it else it.copy(events = GuideTimeline.merge(it.events, events))
+        }
     }
 
     /** Loads blocks again that were not loaded yet or failed (the repository answers fresh ones from its cache). */
@@ -133,8 +173,7 @@ class GuideGridController(
             if (chunk in loaded || chunk in pending) return@forEach
             pending += chunk
             scope.launch {
-                val config = receiver()
-                val events = config?.let { repository.bouquetChunk(it, bouquet, chunk) }
+                val events = loadChunk(bouquet, chunk)
                 if (bouquet != _state.value.bouquetReference) return@launch
                 pending -= chunk
                 if (events == null) {

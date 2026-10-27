@@ -7,6 +7,7 @@ import com.enigmacast.domain.network.StreamProfile
 import com.enigmacast.domain.network.TranscodePreset
 import com.enigmacast.domain.player.PictureMode
 import com.enigmacast.util.UiText
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -71,10 +72,15 @@ data class PlaybackSettings(
     /**
      * "Snel starten": Enigma2 streams start playing after a short buffer (about 0.75 s instead
      * of 2 s) and the MPEG-TS reader may start on the first I-frame instead of waiting for an
-     * IDR frame. Only used with the stable buffer (the fast buffer starts even sooner). Missing
-     * in older settings, so it is on.
+     * IDR frame. Only used with the stable buffer (the fast buffer starts even sooner). Off
+     * unless the user turns it on.
+     *
+     * Stored as "quickStart": beta.113/114 kept it under "fastStart" with default on, so a
+     * profile copy, backup or cloud file written with defaults could hold `"fastStart":true`
+     * the user never chose. That key is no longer read, so every existing install starts off.
      */
-    val fastStart: Boolean = true,
+    @SerialName("quickStart")
+    val fastStart: Boolean = false,
     val hardwareDecoder: Boolean = true,
     val autoReconnect: Boolean = true,
     val hdmiPassthrough: Boolean = false,

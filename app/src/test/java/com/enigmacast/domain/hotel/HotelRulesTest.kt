@@ -21,20 +21,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HotelMenuTest {
-    @Test fun satelliteShowsOnlySatelliteAndSettings() {
+    @Test fun satelliteShowsOnlySatelliteGuideAndSettings() {
         val config = HotelConfig(enabled = true, source = HotelSource.SATELLITE, iptvVod = true)
-        assertEquals(listOf(HotelMenuItem.SAT_TV, HotelMenuItem.SETTINGS), HotelMenu.items(config))
+        assertEquals(listOf(HotelMenuItem.SAT_TV, HotelMenuItem.GUIDE, HotelMenuItem.SETTINGS), HotelMenu.items(config))
     }
 
-    @Test fun iptvWithoutVodShowsLiveAndSettings() {
+    @Test fun iptvWithoutVodShowsLiveGuideAndSettings() {
         val config = HotelConfig(enabled = true, source = HotelSource.IPTV)
-        assertEquals(listOf(HotelMenuItem.IPTV_LIVE, HotelMenuItem.SETTINGS), HotelMenu.items(config))
+        assertEquals(listOf(HotelMenuItem.IPTV_LIVE, HotelMenuItem.GUIDE, HotelMenuItem.SETTINGS), HotelMenu.items(config))
+    }
+
+    @Test fun guideLeftOutWhenLocked() {
+        val config = HotelConfig(enabled = true, source = HotelSource.SATELLITE)
+        assertEquals(listOf(HotelMenuItem.SAT_TV, HotelMenuItem.SETTINGS), HotelMenu.items(config, guide = false))
     }
 
     @Test fun iptvWithVodAddsFilmsAndSeriesSettingsLast() {
         val items = HotelMenu.items(HotelConfig(enabled = true, source = HotelSource.IPTV, iptvVod = true))
         assertEquals(
-            listOf(HotelMenuItem.IPTV_LIVE, HotelMenuItem.IPTV_MOVIES, HotelMenuItem.IPTV_SERIES, HotelMenuItem.SETTINGS),
+            listOf(HotelMenuItem.IPTV_LIVE, HotelMenuItem.GUIDE, HotelMenuItem.IPTV_MOVIES, HotelMenuItem.IPTV_SERIES, HotelMenuItem.SETTINGS),
             items,
         )
         assertEquals(HotelMenuItem.SETTINGS, items.last())

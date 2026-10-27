@@ -49,6 +49,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -222,8 +223,54 @@ class StreamGuideViewModel @Inject constructor(
     }
 
     /** Back from the player: the highlight on the channel that is playing, at the current time. */
-    fun focusTunedInGrid() {
-        if (tunedReference.isNotBlank()) grid.focusChannel(tunedReference)
+    fun focusTunedInGrid() = focusPlayingInGrid()
+
+    private var guideFocusJob: Job? = null
+
+    /**
+     * Every way into the TV guide (Back from live TV, the menu entry, hotel mode): the highlight on
+     * the channel playing now, else the last watched one, else the first, at the current time.
+     * When that channel is in another bouquet the guide switches to that bouquet first; the grid
+     * keeps the request until a list holding the channel is shown (it may still be loading).
+     */
+    fun focusPlayingInGrid() {
+        lastPressedReference = ""
+        guideFocusJob?.cancel()
+        val tuned = tunedReference.takeIf { it.isNotBlank() && !isRadioReference(it) }
+        if (tuned != null && grid.focusChannel(tuned)) return
+        guideFocusJob = viewModelScope.launch {
+            val settings = settingsRepository.current()
+            val target = tuned ?: settings.activeReceiver()
+                ?.let { com.enigmacast.domain.model.ChannelMemory.lastFor(settings, it.id) }
+                ?.reference?.takeIf { it.isNotBlank() && !isRadioReference(it) }
+            if (target == null) {
+                grid.focusFirst()
+                return@launch
+            }
+            if (grid.focusChannel(target)) return@launch
+            // Let the guide's own bouquet load land first, then move to the channel's bouquet.
+            kotlinx.coroutines.withTimeoutOrNull(GUIDE_FOCUS_WAIT_MS) {
+                snapshotFlow { loadingChannels || channels.isEmpty() }.first { !it }
+            }
+            if (channels.any { BouquetChannels.sameService(it.reference, target) }) {
+                grid.focusChannel(target) // or, still pending, on the grid's next list
+                return@launch
+            }
+            val aligned = runCatching { alignGuideBouquetTo(target) }.getOrNull()
+            if (aligned == null) {
+                // Not in any bouquet the guide may show: stay on the first channel of this one.
+                grid.focusFirst()
+            }
+        }
+    }
+
+    /** [alignBouquetTo] for the TV guide: only a TV bouquet the guest may see (hotel whitelist). */
+    private suspend fun alignGuideBouquetTo(reference: String): BouquetEntry? {
+        val receiver = settingsRepository.current().activeReceiver() ?: return null
+        val bouquet = guideCache.bouquetOf(receiver, reference) ?: return null
+        if (BouquetChannels.isRadioBouquet(bouquet.reference)) return null
+        if (!com.enigmacast.domain.hotel.HotelFilter.bouquetAllowed(bouquet.reference, com.enigmacast.domain.hotel.HotelRuntime.guestConfig)) return null
+        return alignBouquetTo(BouquetEntry("", reference))
     }
 
     /**
@@ -1079,6 +1126,7 @@ class StreamGuideViewModel @Inject constructor(
     private companion object {
         const val NOTICE_MS = 4_000L
         const val NOTICE_LONG_MS = 8_000L
+        const val GUIDE_FOCUS_WAIT_MS = 8_000L
     }
 }
 

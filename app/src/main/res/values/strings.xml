@@ -406,6 +406,8 @@
     <string name="sleep_app_off">Sleep timer off</string>
     <string name="sleep_app_warning">Sleep timer: EnigmaCast closes in 1 minute. Switch it off under ▼ options.</string>
     <string name="epg_guide_hint">OK: watch, or AutoSwitch for a later programme · ◀ at the start: bouquets · Back: menu</string>
+    <string name="epg_no_guide_info">No guide information</string>
+    <string name="epg_iptv_guide_hint">OK: watch live · ◀ at the start: categories · Back: menu</string>
     <string name="epg_panel_hint">◀ Channels · OK: watch now, or AutoSwitch later</string>
     <string name="epg_loading">Loading the guide…</string>
     <string name="epg_load_failed">Could not load the guide. Move to try again.</string>

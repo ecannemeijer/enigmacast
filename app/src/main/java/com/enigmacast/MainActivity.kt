@@ -497,6 +497,8 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 onBindBack = { appViewModel.onDashboardBack = it },
                 focusPlayingChannel = appViewModel.focusPlayingChannel,
                 onPlayingChannelFocused = appViewModel::playingChannelFocused,
+                openGuide = appViewModel.openGuide,
+                onGuideOpened = appViewModel::guideOpened,
                 returnToMyItemsId = appViewModel.returnToMyItemsId,
                 onMyItemsFocused = appViewModel::myItemsFocused,
                 updatePromptShown = appViewModel.updatePrompt != null,
@@ -519,6 +521,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             AppScreen.Remote -> EnigmaRemoteScreen(
                 onLeaveToDashboard = appViewModel::showDashboard,
                 onLeaveToMyItems = appViewModel::showDashboardFromRecording,
+                onLeaveToGuide = { appViewModel.showGuide(com.enigmacast.ui.dashboard.GuideOpen.SATELLITE) },
                 pendingSearchQuery = appViewModel.pendingSearchQuery,
                 pendingSearchPlay = appViewModel.pendingSearchPlay,
                 pendingSearchToken = appViewModel.pendingSearchToken,
@@ -539,10 +542,15 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
             AppScreen.Xtream -> com.enigmacast.ui.xtream.XtreamScreen(
                 onBack = appViewModel::back,
                 onSearch = appViewModel::openDashboardSearch,
+                onGuide = { appViewModel.showGuide(com.enigmacast.ui.dashboard.GuideOpen.IPTV) },
             )
             AppScreen.Hotel -> com.enigmacast.ui.hotel.HotelScreen(
                 onLive = appViewModel::startHotelLive,
                 onPlayIptv = appViewModel::openXtream,
+                showMiniPlayer = appViewModel.streamRunning,
+                onStream = appViewModel::startHotelLive,
+                openGuide = appViewModel.openGuide,
+                onGuideOpened = appViewModel::guideOpened,
             )
         }
         // Hotel mode: the IPTV page opens on live TV (the start or remembered channel).
