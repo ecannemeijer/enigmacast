@@ -1681,7 +1681,7 @@ private fun PlaybackSettingsPanel(
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
     part: PlaybackPart,
-    fastStart: Boolean = true,
+    fastStart: Boolean = false,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
