@@ -1,6 +1,6 @@
 # EnigmaCast
 
-EnigmaCast is an Android TV app for Enigma2 receivers. It plays the receiver's live TV on the TV (one stream per TV, so several TVs can watch different channels), adds its own guide, recordings, search and OSD, and brings IPTV (Xtream / M3U), a TMDB film page, a soccer page and torrent streaming (Stremio addons) into the same D-pad-driven interface.
+EnigmaCast is an Android TV app for Enigma2 receivers. It plays the receiver's live TV on the TV (one stream per TV, so several TVs can watch different channels), adds its own guide, recordings, search and OSD, and brings IPTV (Xtream / M3U), a TMDB film page, a soccer page and optional add-on streaming (your own Stremio-compatible add-on) into the same D-pad-driven interface. A [hotel mode](#hotel-mode) turns a TV into a locked guest TV for a B&B or holiday home.
 
 The first target is an Octagon SF8008 running OpenATV 7.6. Nothing is hardcoded to that model: any Enigma2 receiver (Vu+, Dreambox, Zgemma, Mutant, Gigablue, Edision, …) with OpenWebif and the standard stream port works the same way.
 
@@ -18,6 +18,7 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 
 - [Features](#features)
 - [Requirements](#requirements)
+- [Install](#install)
 - [Build](#build)
 - [Configuration](#configuration)
 - [Architecture](#architecture)
@@ -32,7 +33,11 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 
 **Enigma2 / OpenWebif live TV**
 - Two [viewing modes](#viewing-modes): *Own tuner* (default; each TV streams its own channel from the receiver's stream server, with a free-tuner check and failover to another saved receiver) and *Follow receiver* (the TV shows what the receiver shows, with the receiver's own OSD grabbed from OpenWebif).
-- App-drawn channel banner and OSD in seven [GUI skins](#gui-skins), dense channel list with picons and now/next, bouquet column, number entry, timeshift pause, [quick options](#quick-options) (audio, subtitles, picture, audio delay, quality, sleep, stream info).
+- App-drawn channel banner and OSD in seven [GUI skins](#gui-skins), dense channel list with picons and now/next, bouquet column, number entry, timeshift pause, [quick options](#quick-options) (equivalent channels, record, subtitles, audio, audio boost, picture, audio delay, quality, guide, recent channels, sleep, stream info, restart).
+- Zapping: CH+/CH−, Up/Down, number entry, and Right on the full-screen picture jumps back to the previous channel. A recent-channels strip (last eight, with logos, paging and a clear tile) and an equivalent-channel picker (another version of the same channel, satellite or IPTV).
+- Per-channel audio boost (+3 to +15 dB in five steps, PCM audio only, remembered per channel and synced), live subtitle choice remembered per channel, teletext with a long press on Blue.
+- Back ladder on live TV: dialogs, search, options bar and number entry close first; in the channel list overlay Back closes it (full screen again); only Back on the full-screen picture opens the [TV guide](#tv-guide) on the playing channel.
+- Stream recovery: limited automatic retries, recovery after a network change, and streams are released when the TV goes to standby and restored on wake. Optional *Quick start* (off by default) and an `EcZap` timing log per zap (see [Troubleshooting](#troubleshooting)).
 - [Stream type](#stream-type): Normal, Transcoded (receiver hardware encoder) or Automatic (steps quality down/up on stalls when away from home).
 - Picture-in-picture (satellite or IPTV source) and a fallback that plays the same channel from the other source (satellite ↔ IPTV) when a channel drops out.
 - Several receivers, power controls (standby, wake, reboot, GUI restart, sleep timer), signal meter and an Oscam page.
@@ -49,9 +54,10 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 - Recording vs tuners: when a recording needs the tuner this TV's stream holds, the stream moves to the recording channel shortly before the start.
 
 **IPTV / Xtream**
-- Source: the receiver's XStreamity playlists, or an own M3U / Xtream Codes playlist (Settings › IPTV), loaded into Room off the main thread.
-- Live TV with categories, a channel list with now/next per row ([row EPG](#iptv-row-epg)), a programme column, catch-up for channels with an archive, and the satellite guide matched by name for channels without their own EPG.
-- VOD Films and Series: categories, poster grids with TMDB artwork, info page, episodes, resume, Continue watching, favourites, next episode card and Android TV *Watch Next*.
+- Source: the receiver's XStreamity playlists, or own M3U / Xtream Codes playlists (Settings › IPTV), loaded into Room off the main thread. Several providers can be added; their categories are grouped per provider, empty categories are skipped, the provider list can be exported and imported (clipboard), and the setup wizard lets you pick which providers to use.
+- Playlist access per profile (which profiles may use the shared playlist) and a clear message with automatic retry when the provider's maximum number of connections is reached.
+- Live TV with categories, a channel list with now/next per row ([row EPG](#iptv-row-epg)), a programme column, a full IPTV TV guide grid, catch-up for channels with an archive, and the satellite guide matched by name for channels without their own EPG.
+- VOD Films and Series: categories, poster grids with TMDB artwork, info page, episodes, resume, watched marks and progress on info pages, Continue watching, favourites, next episode card and Android TV *Watch Next*.
 - Category hiding per source and section.
 
 **Home and film pages (TMDB)**
@@ -61,7 +67,7 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 **Soccer (Sport)**
 - football-data.org fixtures, standings and live minutes, plus PitchAPI for Eredivisie and Eerste Divisie details (events, lineups, statistics, club and player pages). TV channels are found in the cached guide. See [Soccer](#soccer).
 
-**Torrents (Stremio addons)**
+**Add-on streaming (optional)**
 - Torrent page with Movies and Series from TMDB (popular or discover), search, compact **Genre** and **Sort** (Popular, Year, TMDB score) dropdowns, and a TMDB info page.
 - Streams come from your own Stremio addon: Settings › Torrent takes its manifest URL (`https://` or `stremio://`). With a URL set the Torrent feature is on; without one it is off. EnigmaCast ships no addon and no preset. The manifest is validated when saved.
 - Streams dialog per title or episode (torrents and direct links), a Stremio-style loading page, and streaming with the built-in [jlibtorrent engine](#torrent-engine).
@@ -73,9 +79,12 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 - Audio: MediaCodec, HDMI passthrough (AC3, E-AC3, DTS) or the bundled FFmpeg decoder (nextlib); per-output audio sync.
 
 **Profiles, sync and security**
-- Up to 6 profiles ("Who's watching?") with avatars; per-profile viewing data, settings and library.
-- Sync server: a small service on the Enigma2 receiver (installed from Settings › Sync server over SSH from the public GitHub release; found on the LAN on port 8740; HTTPS with a pinned certificate; a device key in the Android Keystore). It syncs profiles, per-profile settings, IPTV/torrent favourites and resume positions, and can hand a shared IPTV login to a new TV.
-- Account and Premium plan, Settings lock (4-digit PIN), encrypted secrets (AES-256-GCM key in the Android Keystore), app backup off.
+- Up to 6 profiles ("Who's watching?") with avatars or a photo uploaded by QR code, an optional PIN per profile; per-profile viewing data, settings and library.
+- Sync server: a small service on the Enigma2 receiver (installed from Settings › Sync server over SSH from the public GitHub release; found on the LAN on port 8740; HTTPS with a pinned certificate; a device key in the Android Keystore). Running servers are found and paired with; outdated servers are updated from the app (pairings and data kept). It syncs profiles, per-profile settings, IPTV providers, favourites, Continue watching, resume positions, watched marks, live subtitle choices and audio boost, and can hand a shared IPTV login to a new TV. See [Sync server](#sync-server).
+- Optional account (the account server decides whether the app runs in Free mode or needs a login; see [Account and Premium](#account-and-premium)), Settings lock (4-digit PIN), encrypted secrets (AES-256-GCM key in the Android Keystore), app backup off, anonymous daily usage counter.
+
+**Hotel / B&B mode**
+- [Hotel mode](#hotel-mode): guests get live TV (satellite or IPTV) on a fixed profile, with a bouquet/category whitelist, start channel and volume, a welcome screen with Wi-Fi QR code, a daily next-guest cleanup, a separate hotel PIN with lock-out, and EnigmaCast as the TV home screen.
 
 **Remote access**
 - Remote profile per receiver (DynDNS name, ports, HTTPS) and an experimental built-in WireGuard tunnel (official `com.wireguard.android:tunnel` library) that comes up only when home does not answer. See [Remote access](#remote-access).
@@ -83,6 +92,8 @@ Stremio addon (your own URL) ------------> jlibtorrent engine -> 127.0.0.1 range
 **TV-first UI**
 - Compose for TV with full D-pad navigation: focus never leaves a dialog, lists wrap or stop at their ends as documented, focusing a visible row never scrolls the list, and poster grids scroll only as far as needed (no bounce).
 - Five app languages: English, Nederlands, Deutsch, Italiano, Français ([Language](#language)).
+- Animated navigation icons (the classic set stays available); the satellite group is called SAT-TV.
+- In-app updates: update check with release notes, one-click download and install.
 - Android TV launcher icon, round icon and TV banner (generated from the vector mark by `art/make_icons.py`), Assistant search ("Search for … on EnigmaCast"), first-run setup wizard.
 - Main-thread safety: network, Room, JSON parsing, image decoding and file IO run off the main thread; debug builds enable `StrictMode` (disk reads/writes and network on the main thread, log only).
 
@@ -112,6 +123,10 @@ Pinned in `gradle/libs.versions.toml`:
 | jlibtorrent (FrostWire) / NanoHTTPD | 2.0.12.9 / 2.3.1 |
 | WireGuard tunnel | 1.0.20260102 |
 | applicationId | com.enigmacast.app |
+
+## Install
+
+On an Android TV device (Android 9 or newer), install the free **Downloader** app (by AFTVnews) from the Play Store, allow it to install unknown apps (Android settings › Apps › Special app access › Install unknown apps), open Downloader and enter the code **1451275**. Downloader fetches the current EnigmaCast APK; confirm the install and open EnigmaCast. The first start runs the setup wizard (receiver, profiles, optional IPTV and sync server). Later versions are offered in the app itself (update check with release notes).
 
 ## Build
 
@@ -181,10 +196,10 @@ Direct (HTTP) links from an addon, for example debrid links, are played directly
 
 ### Menu and navigation
 
-The left menu is **Home**, **TV** (flyout: Live TV, TV Guide, Movies, TV Series, Radio), **IPTV** (flyout: Live TV, Films, Series), **Torrent**, **Sport** (Soccer), **Search**, **My Items** and **Settings**, with Exit at the bottom; the last tab per group is remembered. The active profile's avatar and name sit at the top (OK: switch profile, Manage profiles, receiver standby / on). Right enters the open page. D-pad Left moves within the page first (rows scroll back to their first item); Left on the page's leftmost item returns to the menu on the item of the open page, and Right or OK there goes back to where you were. A held Left stops at the start of a row and never opens the menu (press again). Back also returns to the menu. The player, its OSD and dialogs keep their own Left.
+The left menu is **Home**, **SAT-TV** (flyout: Live TV, TV Guide, Movies, TV Series, Radio), **IPTV** (when a playlist is available; flyout: Live TV, TV Guide, Films, Series), **Torrent** (only when a valid add-on URL is set), **Sport** (opens on a region picker, then Soccer), **Search**, **My Items** and **Settings**, with Exit at the bottom; the last tab per group is remembered. The active profile's avatar and name sit at the top (OK: switch profile, Manage profiles, receiver standby / on). Right enters the open page. D-pad Left moves within the page first (rows scroll back to their first item); Left on the page's leftmost item returns to the menu on the item of the open page, and Right or OK there goes back to where you were. A held Left stops at the start of a row and never opens the menu (press again). Back also returns to the menu. The player, its OSD and dialogs keep their own Left.
 
 - Up and Down only move the highlight; Up on the first and Down on the last item stay in the menu. Right from any item enters the open page and restores its last focus (else the page's first item). Opening a page or loading data never sends focus back to the menu.
-- Back from a page returns to the menu; Back again asks whether to stop EnigmaCast (Cancel stays, Stop closes and stops playback). A long press on Back toggles full screen.
+- Back from a page returns to the menu; Back again asks whether to stop EnigmaCast (Cancel stays, Stop closes and stops playback). While a stream runs, holding Back (or pressing Play/Pause) on any menu returns to the full-screen player. In [hotel mode](#hotel-mode) the guest menu replaces this menu.
 - Lists: focusing a visible row never scrolls the list; channel and bouquet lists wrap at their ends (not while a key is held), grids stop at their top and bottom edges. Poster grids scroll only as far as needed and keep the whole enlarged card (including its year and rating line) on screen.
 - Dialogs open in their own window: focus cannot leave them and Back closes them.
 - Text fields only highlight on focus ("Press OK to edit"); OK opens the matching keyboard, Done / OK / Back ends editing on the same field.
@@ -243,7 +258,7 @@ Settings → Playback → Viewing mode chooses how this device watches. Each dev
 - Choosing the channel that is already playing does not stop and reopen the stream. That covers the channel list, CH+/CH−, digits and search, in both viewing modes. A retry, an automatic restart, or a stream that is not actually playing still rebuilds it. OK on that channel a second time still opens the full-screen player.
 - The app draws its own OSD, because the receiver's OSD exists only on its own HDMI output. OK shows the channel banner (number, name, picon, now and next with times and progress, audio and subtitle tracks, and receiver-info pills to the left of the resolution: signal strength and quality, satellite position such as 23.5°E, 19.2°E or 13.0°E, and whether the channel is free or encrypted). The pill data is separate from the skin that draws it. Signal values are shown only when they belong to this stream's tuner. Own-tuner mode puts the box in standby, and OpenWebif `/api/tunersignal` then only describes the HDMI service, which is empty. The strength and quality pills then come from that stream's frontend (`/proc/stb/frontend/<n>/snr` and `signal`, and `snr_db` when the image has it), downloaded through OpenWebif. The tuner index is the stream client in `/api/about`. Without an index, the pills are shown only when a single frontend is locked. A reading from another tuner stays hidden. Images that refuse the file download (HTTP 403 or 404) keep the pills empty. IPTV has no signal. OK again pauses or resumes with timeshift (playback continues from that moment until the next channel; a full buffer returns to live). Left opens the channel list. Info or Guide shows the programme text. Up/Down and CH+/CH− zap this device, digits pick a channel number from the current bouquet, and Down on the banner opens the quick options bar. Back first closes an open programme dialog, search or options bar. Then: in the channel list overlay (opened with Left), Back closes the overlay, from the channel list and from the bouquet column alike, and the picture is full screen again on the channel that plays (nothing is zapped; Left inside the overlay still moves from the list to the bouquets). Only Back on the full-screen picture (with or without the banner) opens the TV guide (the full grid with the side menu, see TV guide) with the playing channel and its programme on air highlighted, in that channel's bouquet; the stream plays on in the guide's mini player and OK on a programme on air zaps there full screen, Back in the guide moves to the side menu. Without Premium (guide locked) Back on the picture returns to the dashboard with the side menu's TV item focused (in hotel mode the hotel menu, never the launcher). Back from the programme panel returns to the channel list. In follow-receiver mode Back is still sent to the receiver as EXIT and a long press leaves to the dashboard. Colour and menu keys go nowhere; nothing is sent to the receiver.
 - The full-screen channel list is dense, with about 15 rows on a 1080p screen. Each row shows the number, picon, name and the programme on air (start time, title, thin progress bar). The programmes come from one `/api/epgnow?bRef=…` request per bouquet. That request is cached and repeated after 5 minutes, or sooner once a programme has ended. Left in the list opens the bouquets with the current one focused. OK or Right shows that bouquet's channels and returns to the list, and Back from the channel list or the bouquet column closes the list (full-screen picture, same channel). Down on the last row wraps to the first, Up on the first wraps to the last. The chosen bouquet is remembered and also shown on the dashboard. Choosing a bouquet does not zap; OK on a channel does. Right on a channel opens its programme panel (see TV guide). The bouquet column lists television bouquets, or radio bouquets when the station that is playing is radio. A programme is shown on a channel when the EPG reference differs only by service type (SD, HD, H.264, HEVC) or is the parent of a linked subservice. If the receiver has no current channel, the first television bouquet that has channels is loaded.
-- Back from the full-screen player returns to the dashboard with the guide's highlight and focus on the channel that was playing, at the current time.
+- Right on the full-screen picture zaps back to the previous channel.
 - The dashboard's channel list zaps this device's stream the same way. The last channel is remembered per receiver and starts again the next time that box is in use.
 
 **Follow receiver** is the original behaviour: zapping changes the receiver's channel, the stream shows what the receiver shows, the receiver's OSD is drawn on top, and the remote controls the receiver. Use it when one TV is the only viewer and you want the receiver's menus.
@@ -266,15 +281,16 @@ Other start problems get their own message: a 401 means stream authentication is
 
 ### Quick options
 
-Down on the channel banner (own tuner), or holding Info while following the receiver, opens a row of tiles at the bottom of the player. Left/Right pick a tile, OK opens its choices, Back closes the bar.
+Down on the channel banner (own tuner), or holding Info while following the receiver, opens a row of tiles at the bottom of the player. Left/Right pick a tile, OK opens its choices, Back closes the bar. Search is not a tile: the remote's Search key opens it. Hotel mode hides record, stream info, equivalent channels, sleep and PiP.
 
-- Search: first tile; OK opens the same search overlay as the dashboard (see Search)
+- Equivalent: another version of the playing channel (HD/SD, satellite or IPTV)
 - Record: records the programme on air (see Record)
-- Subtitles and Audio: the stream's tracks by language, plus the stereo/HDMI output
+- Subtitles and Audio: the stream's tracks by language, plus the stereo/HDMI output; the live subtitle choice is remembered per channel
+- Boost (live TV, always the fifth tile): +3 to +15 dB in five steps for quiet channels, PCM audio only, remembered per channel and synced
 - Picture: Auto (fit), 16:9, 4:3, Zoom (fill, crop edges), Stretch
 - Audio delay: the audio sync value of the output in use, saved as in Settings
 - Quality: As in Settings, Normal, or a transcoded level (720p/576p/360p) for this channel (see Stream type)
-- Guide and Recent (own tuner only): back to the TV guide on the dashboard, and the last channels watched
+- Guide, Recent and PiP (own tuner and IPTV live only): back to the TV guide on the dashboard, the last eight channels watched (logos, paging, a tile to clear the list), and picture-in-picture
 - Sleep: closes EnigmaCast after 15–120 minutes, with a warning a minute before
 - Stream info: video, audio, bitrate, buffer, dropped frames, stalls, source, route and quality
 - Restart stream
@@ -320,7 +336,7 @@ These URLs are played directly with ExoPlayer: no tuner check, no ports 8001/800
 
 ### IPTV (Xtream / M3U)
 
-Settings › IPTV chooses the source: the **XStreamity** playlists of the receiver (read from `/etc/enigma2/xstreamity` over OpenWebif `/file`, FTP as fallback) or an **own playlist** (M3U URL or Xtream Codes login). An own playlist is stored in the encrypted `SecretStore` and loaded into Room in the background: everything is written under a staging source and swapped in at the end, so a failed or cancelled load leaves the old list. Categories can be hidden per source and section. IPTV is a Premium feature.
+Settings › IPTV chooses the source: the **XStreamity** playlists of the receiver (read from `/etc/enigma2/xstreamity` over OpenWebif `/file`, FTP as fallback) or an **own playlist** (M3U URL or Xtream Codes login). An own playlist is stored in the encrypted `SecretStore` and loaded into Room in the background: everything is written under a staging source and swapped in at the end, so a failed or cancelled load leaves the old list. Categories can be hidden per source and section. Several own providers can be added (their categories are grouped per provider and empty categories are skipped); the list can be exported to and imported from the clipboard, the setup wizard lets you choose providers, and access to the shared playlist can be limited per profile. When a provider refuses a stream because its maximum number of connections is in use, the player says so and retries.
 
 - **Live TV:** categories, then the channel list (number, logo, name, catch-up badge, programme on now with progress), then Right for the programme column of that channel. OK plays in the app's player with the same skin OSD, channel banner and options row as Enigma2 channels; catch-up plays past programmes on channels with an archive. A setting can start full screen on the last satellite or IPTV channel. Back in the full-screen player opens the IPTV TV guide on the playing channel (below); when the guide is locked without Premium it returns to the dashboard with the side menu's IPTV item focused (the hotel menu in hotel mode). Left opens the channel list overlay (Left again the categories); Back there, from the channel list or the categories, closes the overlay and the channel plays on full screen (a category only browsed is dropped; the programme column first returns to the list). CH+/CH− also work right after that autostart: the remembered channel's category is read from the cache (or loaded) and the channel is matched to its row, also for playlists with several providers.
 - **IPTV TV guide:** a full grid (side menu entry TV Guide in the IPTV group, and Back on IPTV live TV) of the channels of one live category: ◀ at the start of the grid opens the categories column, where moving through the categories previews their channels. The highlight opens on the playing channel at the current time (otherwise the last watched IPTV channel, otherwise the first channel), in that channel's category. Programmes come from the provider's EPG per channel (the same Xtream EPG requests as the programme column; M3U playlists use the programmes already known for the channel), cached in Room like the programme column and loaded for the rows around the highlight, refreshed every minute in the background; satellite programmes with the same channel name fill in while it loads. Channels without programmes show "No guide information". A now line, programme details above the grid; OK on a programme on air plays that channel live full screen. No catch-up from this grid. In hotel mode the guest menu has a TV Guide item (satellite or IPTV, whitelist only); Back on live TV opens it, Back in it goes to the menu and Back on the menu returns to live TV.
@@ -371,16 +387,18 @@ The "Who's watching?" picker opens on the first start and whenever there is more
 
 Settings › Sync server installs and connects a small sync service that runs on the Enigma2 receiver itself (a Python service with an Enigma2 menu entry, bundled in `app/src/main/assets/enigmacast-sync`).
 
-- **Install:** over SSH with the receiver's user and password (used for that call only, never stored), from the latest public GitHub release IPK; an upgrade keeps the data directory.
+- **Find or install:** the page first looks for a server on the receiver (port 8740, no login). When one runs, *Pair with existing server* joins it and imports its profiles (nothing is pushed); *Reinstall* is only behind a warning. When none runs, the install form appears: over SSH (port 22) with the receiver's user and password (used for that call only, never stored), from the latest public GitHub release IPK. Afterwards the web dashboard address and a one-time dashboard password are shown. The server also has an Enigma2 plugin menu entry.
+- **Update:** when the server is older than the app expects, *Update sync server* runs over SSH: backup first, then `opkg` install, verify and restart; pairings, data, certificate and dashboard password are kept, and the update stops if the data folder would change. On start the owner gets a one-time prompt (Later / Update; Later remembers that release). In [hotel mode](#hotel-mode) it is only a notice. From 0.3.1 the server reports its version in `/api/v1/health`; older servers are shown as "< 0.3.1".
+- **First sync:** pairing finishes within 30 seconds; the first full sync then runs in the background ("Synchronising… N items"). Servers from 0.3.1 send pulls in pages of 500.
 - **Connect:** TVs find the server on the home network (port 8740). Traffic is HTTPS with a pinned certificate; each TV has an ECDSA P-256 key in the Android Keystore (the server stores only the public key). The first TV is the admin; a recovery code allows *Take over admin*.
-- **What is synced:** profiles and their names, per-profile settings, IPTV and torrent favourites and resume positions (an outbox in the user database is pushed, newer rows are pulled). An M3U or Xtream login stored on the server is offered once to a new TV in the setup wizard. Without a server Room stays as it is.
+- **What is synced:** profiles and their names, per-profile settings, IPTV providers, IPTV and torrent favourites, Continue watching, resume positions, watched marks, live subtitle choices and audio boost (an outbox in the user database is pushed, newer rows are pulled). An M3U or Xtream login stored on the server is offered once to a new TV in the setup wizard. Without a server Room stays as it is.
 
 ### Account and Premium
 
-An account (e-mail + password) unlocks Premium; it is optional (the setup wizard can skip it, keeping Free) and can be created later under Settings › Account, on the account server in `BuildConfig.ACCOUNT_API_URL` (`register`, `login`, `me`, `logout` under `api/enigmacast/`).
+An account (e-mail + password) is optional and can be created under Settings › Account or in the setup wizard, on the account server in `BuildConfig.ACCOUNT_API_URL` (`register`, `login`, `me`, `logout` under `api/enigmacast/`).
 
-- **Free:** one receiver, Live TV, Radio, Search, My Items. **Premium:** also Movies, TV Series, Soccer, TV Guide/EPG, IPTV, Settings import and several receivers. GUI skins and all five languages are free.
-- A new account gets a Premium trial (14 days; 1 year during the beta). The length is decided by the account server (`premium_until`, `is_trial`), not by the app; each account has a device limit. The plan is checked on start and every 6 hours; offline, the cached answer is honoured for 14 days, never past `premium_until`. All rules are in `domain/account/Entitlements.kt`. Locked items show a lock and open the Premium dialog.
+- **Access mode** comes from the account server (`api/enigmacast/config`, see `domain/access/AccessConfig.kt` and `live/PremiumGate.kt`). In **Free** mode every feature is unlocked without an account. In login-required mode a signed-in account unlocks everything; there is no paid entitlement check. Locked items show a lock and open the sign-in dialog. GUI skins and all five languages are always available.
+- **Usage counter:** one random install id and one anonymous heartbeat per day (no account, e-mail, content or IP address is sent), used to count active installs.
 - Settings › Lock can ask for a 4-digit PIN before Settings opens (PBKDF2-SHA256 in the secret store; 5 tries, then a 30 s wait).
 
 **Update manifest.** The app reads `dist/enigmacast-v2.json` (published with the release); older builds read `dist/enigmacast.json`, which may mark a release that needs a reinstall (`reinstallRequired`, `reinstallMessage`, `reinstallMessageNl`). The update dialog then only offers OK. The same manifest can carry a `companion` object with the phone app's version and APK; the TV ignores unknown keys, so the combined file stays backwards-compatible.
@@ -402,7 +420,7 @@ One field searches live programmes, upcoming EPG, recordings, bouquet names and 
 
 Rows use the same dense style as the channel list. A programme row is `channel · title` (date and time on the second line for upcoming and recordings). A channel row is `bouquet · channel`. Choosing Now, Upcoming or a channel plays that service and switches the bouquet to the one that contains it (own tuner starts with that bouquet's list so CH+/CH− work; follow mode zaps as usual). A future programme tunes the channel that will air it. A bouquet-only row only switches the guide. A recording plays from My Items.
 
-The same panel is on the dashboard (Search in the menu) and as the first quick-options tile in the player. On the dashboard, Right from the menu enters the field; Back returns to Search. In the player, Back closes the overlay and returns to the Search tile.
+The same panel is on the dashboard (Search in the menu) and in the player (the remote's Search key). On the dashboard, Right from the menu enters the field; Back returns to Search. In the player, Back closes the overlay.
 
 **Android TV Assistant.** "Search for Formula 1 on EnigmaCast" (or BBC One, Rai 1, yesterday's recordings) opens this panel with that query, so you need not type on the remote. "Play … on EnigmaCast" (`MEDIA_PLAY_FROM_SEARCH`) does the same and then plays the first strong hit: an exact channel name, else a live programme, else the first row. In the search field a microphone (and the remote's Search key) starts on-device speech recognition. Spoken or typed "yesterday's recordings" / "opnames van gisteren" lists recordings that started the previous local calendar day.
 
@@ -471,22 +489,39 @@ Add receiver opens the same address form as the first-launch connection screen (
 
 AutoDetect leaves out a host that is already in the list, so the same box cannot be saved twice. When every receiver the scan finds is already stored, the dialog says those receivers are already added.
 
+### Hotel mode
+
+Settings › Hotel mode turns the TV into a guest TV for a B&B, holiday home or hotel room. All hotel settings are device-local: they are never synced or exported.
+
+- **Hotel PIN:** 4–6 digits, separate from the Settings lock, stored as a salted PBKDF2 hash. Hotel mode can only be turned on once a PIN is set. Five wrong tries lock entry for 1 minute, doubling each time (1, 2, 4, 8, 16, at most 30 minutes); the lock survives a restart.
+- **Source:** Satellite TV or IPTV, optionally *With films and series* (only the IPTV provider's films and series). With IPTV the app warns that most providers allow one connection.
+- **Fixed profile:** guests always use the hotel profile; the profile picker never shows.
+- **Whitelist:** choose the visible bouquets (satellite) or IPTV categories (per provider and section). Lists, zapping, search and the guide only show these. An empty or no longer matching whitelist shows everything (and logs it), so guests never get an empty list.
+- **Start channel and volume:** the last watched channel or a fixed one, and a start volume (percent, or Unchanged), applied at every start and after a cleanup.
+- **Welcome screen:** shown at start for 5–60 seconds, with the B&B name, a welcome text, the Wi-Fi name and password (the password is kept in the encrypted secret store) and a Wi-Fi QR code; any key starts watching.
+- **Next-guest cleanup:** *Clean up now*, or *Clean up daily* at a set time (default 11:00, quarter-hour steps; a missed cleanup runs when the TV comes on). It clears the hotel profile's watch history, Continue watching, film and episode history, recent channels and the live subtitle choice, and resets the start channel and volume. Audio boost and favourites stay; other profiles are not touched.
+- **TV home screen:** while hotel mode is on with a PIN, EnigmaCast can be chosen as the TV's home app, so the Home key and switching the TV on open live TV.
+- **Guest menu:** Live TV (satellite or IPTV), TV Guide (whitelist only, when unlocked), Films and Series when allowed, and Settings last. Settings asks for the hotel PIN; leaving hotel mode is Settings › hotel PIN › turn off. Back on live TV opens the TV guide, Back in the guide goes to the menu, Back on the menu returns to live TV.
+- **Hidden for guests:** recording, switching receiver, stream info, equivalent channels, sleep timer and PiP (and search for IPTV). Sync-server updates are shown as a notice only; guests are never asked.
+
 ### Settings
 
 Right from Settings opens a submenu, in this order. Each page groups its options on cards, and every switch row toggles with OK.
 
 - Account: sign in, plan and devices (see [Account and Premium](#account-and-premium)).
-- Profiles: who is watching (switch) and Manage profiles (add, rename, avatar, delete).
+- Profiles: who is watching (switch) and Manage profiles (add, rename, avatar or photo, PIN, delete).
+- Phone & remote: pair the Companion app (see [Phone remote](#phone-remote-companion-bridge)).
 - Receivers: the list of boxes. OK selects one, Edit changes its address and login, Remove deletes it, Refresh channels & bouquets. See [Several receivers](#several-receivers).
 - Receiver: power (standby, wake, restart, sleep timer) and details.
 - Playback & streaming: Video decoder and Compatibility mode, Stable or Fast buffer, stream type (Normal, Transcoded, Automatic; size and transcoding port), Stereo or HDMI, DVB subtitles, auto-reconnect, audio sync per output, satellite/IPTV fallback.
 - Viewing mode: own tuner (multi-user) or follow the receiver.
 - Remote control keys: see below.
 - Guide & Home: Home country, Home bouquets, own TMDB key, data & sync (guide days, sync frequency, Refresh now, Clear cache).
-- Sync server: install, connect, status, recovery code (see [Sync server](#sync-server)).
-- IPTV: source (XStreamity or own M3U / Xtream playlist), load, categories to hide.
-- Torrent: your own Stremio addon manifest URL (see [Torrents](#torrents)).
+- Sync server: find and pair, install, update, status, recovery code (see [Sync server](#sync-server)).
+- IPTV: source (XStreamity or own M3U / Xtream providers), load, provider import/export, playlist access per profile, categories to hide.
+- Torrent: your own add-on manifest URL (see [Torrents](#torrents)).
 - Lock: 4-digit PIN for Settings.
+- Hotel mode: guest TV setup (see [Hotel mode](#hotel-mode)).
 - Recordings: recording size of captures on this device (where to record is asked per recording).
 - Appearance: language, navigation sounds, motion quality, OSD (transparency, banner fields, receiver OSD) and GUI skins.
 - Remote access: access mode, remote profile (DynDNS name, ports, HTTPS, Test remote) and the WireGuard tunnel.
@@ -608,7 +643,7 @@ All paths are built in `OpenWebifEndpoints`.
 
 Remote commands use Linux input codes (`KEY_OK` = 352, `KEY_UP` = 103, `KEY_EXIT` = 174, and the rest in `EnigmaKey`). OpenWebif `remoteControl()` sends key-down and key-up for a normal command. `type=long` adds the long-press flag. There is no key-up or native repeat parameter, so holding a direction or channel key resends the short command (default every 120 ms). Info, menu, EPG, audio, and the color keys send `type=long` after the long-press threshold.
 
-Android Back sends Enigma2 EXIT. It does not close the app. Hold Back to open Settings or exit EnigmaCast. The Android Home key stays Home. Volume keys are left to Android, because the MPEG-TS audio is decoded on the TV and the receiver volume usually does not change that stream.
+In Follow receiver mode, Android Back sends Enigma2 EXIT (it does not close the app) and holding Back returns to the dashboard. In own-tuner mode Back is handled by the app (see [Viewing modes](#viewing-modes)). The Android Home key stays Home. Volume keys are left to Android, because the MPEG-TS audio is decoded on the TV and the receiver volume usually does not change that stream.
 
 ## Streaming and OSD
 
@@ -693,7 +728,12 @@ Settings can enable:
 
 ## Changelog
 
-Recent work on `feature/torrents` (newest first; the version stays `1.0.0-beta.58`):
+Recent work (newest first; the current sideload is `1.0.0-beta.115`):
+
+- **2026-10-27:** Back ladder on live TV (satellite and IPTV): the channel list overlay closes back to full screen, only Back on the full-screen picture opens the TV guide on the playing channel; new IPTV TV guide grid. Faster Enigma2 zaps with the `EcZap` timing log and an optional *Quick start* (off by default). IPTV zapping works right after autostart of the remembered channel.
+- **2026-10-26:** Hotel mode (guest TV with hotel PIN, TV home screen, autostart, welcome screen with Wi-Fi QR code, bouquet/category whitelist, next-guest cleanup); guests never get an empty channel list. Sync server: find and pair with a running server, update it from the app, fast first sync in the background with bounded pairing, paged pulls; sync robustness and getservices de-duplication.
+- **2026-10-25:** Right zaps to the previous channel, per-channel audio boost, live subtitles remembered and synced, a browsed category is only a preview; watched marks and film progress on info pages; D-pad Left returns to the open page's menu item.
+- **2026-10-20 – 24:** Several IPTV providers with grouped categories, provider import/export and choice in the setup wizard, playlist access per profile, connection-limit handling; equivalent channel picker, recent-channels strip, profile PIN; stream recovery and network handoff, streams released on standby; animated navigation icons and the SAT-TV name; Free mode unlocks IPTV and Sport; anonymous usage counter.
 
 - **2026-10-19:** Sport landing page: Sport now opens on a region picker (Netherlands, England, Germany, Spain, Italy, France, Portugal, Brazil & South America, Europe, World — the regions football-data.org's free plan and PitchAPI serve; `domain/soccer/SportRegions`). A hero shows the focused region (drawn backdrop in its colours, description, competition emblem from football-data.org) above a row of cards; OK opens the Soccer page for that region (it becomes the followed country), Back returns to the same card, Back again to the menu; Refresh reloads competitions and matches. Settings and Premium say "Sport" too.
 - **2026-10-19:** Background status window: a small bar at the top shows what runs in the background (channel lists, TV guide with a count, Home films and series, IPTV channels, slow sync-server syncs), a filled bar when the count is known and a moving bar when not, "N more tasks waiting", a brief "Done ✓" or plain failure; never focusable, hidden over fullscreen video. Reported through `activity/BackgroundActivityTracker`. Shown only during the first sync after the setup wizard (a persisted setup session that ends when channel lists, guide, Home, IPTV and sync server are done, after 60 s without work, or after 10 minutes at most); never for scheduled refreshes, zap syncs or later starts.
