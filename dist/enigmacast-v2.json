@@ -1,8 +1,8 @@
 {
-  "versionCode": 117,
-  "versionName": "1.0.0-beta.114",
+  "versionCode": 118,
+  "versionName": "1.0.0-beta.115",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Live TV: de Back-knop opent nu de kanalenlijst, daarna de boeketten/categorieen en daarna het menu. IPTV: zappen werkt meteen na het automatisch starten van het laatste kanaal. Sneller zappen met de nieuwe optie Snel starten (standaard aan).",
+  "notes": "Live TV: Back op volledig scherm opent nu de TV-gids met de focus op het kanaal dat speelt. Back in de kanalenlijst sluit de lijst en gaat terug naar volledig scherm. Nieuw: TV-gids voor IPTV, ook in de hotelmodus. Snel starten staat standaard uit.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
