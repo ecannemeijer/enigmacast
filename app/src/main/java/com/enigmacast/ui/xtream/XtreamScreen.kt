@@ -298,13 +298,13 @@ fun XtreamScreen(
         onBack()
     }
     /**
-     * Back on the bare live picture: the page closes and the channel plays on in the mini player
-     * (Home, Live TV, Guide) until another stream starts. Home opens with focus on its menu item,
-     * or the Library/Home card that started the channel. Catch-up and films stop as before.
+     * Back on the bare live picture when the TV guide is not available (Premium): the page
+     * closes and the channel plays on in the mini player (Home, Live TV) until another stream
+     * starts. Hotel mode has no mini player: the guest's menu opens, never the launcher.
      */
     fun leaveLive() {
-        // Hotel mode has no mini player: Back on the picture opens the guest's menu.
         if (!model.playingLive || com.enigmacast.domain.hotel.HotelRuntime.active) { leave(); return }
+        if (model.launchOrigin == null) model.markReturnToMenu()
         model.continueInMiniPlayer()
         model.exitToOrigin()
         onBack()
@@ -332,24 +332,22 @@ fun XtreamScreen(
             quickBar -> { quickBar = false; showBanner(fromZap = false); openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
             panelOpen && column == PanelColumn.CHANNELS && model.series != null -> { model.closeSeries(); openRequest++ }
-            // Back ladder: channel list -> categories (on the playing channel's one) -> leave.
-            panelOpen && column == PanelColumn.CHANNELS -> { column = PanelColumn.CATEGORIES; openRequest++ }
             panelOpen && column == PanelColumn.VOD_GRID -> { column = PanelColumn.VOD_CATEGORIES; openRequest++ }
+            // Back in the overlay (channel list or categories): it closes and the channel plays on
+            // full screen; never to the categories or out of the player (that is Back on the picture:
+            // the TV guide). A category only browsed is dropped, so Left opens on the playing one.
             panelOpen -> {
-                // A category only browsed is dropped, so the next visit opens on the playing one.
                 panelOpen = false
                 model.closeGuide()
                 model.restorePlayingCategory()
-                // Home then focuses the side menu (IPTV item), unless a Home/Library card started it.
-                if (model.launchOrigin == null) model.markReturnToMenu()
-                leaveLive()
+                openRequest++
             }
             model.pip.playing() -> model.pip.stop()
-            // Back on the picture (banner up or not) opens the TV guide on this channel; the
-            // channel list stays on Left (and is Back's target when the guide is not available).
+            // Back on the picture (banner up or not) opens the TV guide on this channel (the
+            // channel list stays on Left). Without the guide (Premium) the page closes as before.
             else -> {
                 if (bannerShown) { bannerUntil = 0L; details = false }
-                if (!leaveToGuide()) openPanel()
+                if (!leaveToGuide()) leaveLive()
             }
         }
     }

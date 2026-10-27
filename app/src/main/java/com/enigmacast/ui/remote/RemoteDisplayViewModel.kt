@@ -268,7 +268,7 @@ class RemoteDisplayViewModel @Inject constructor(
 
     /**
      * Back on the live picture: the TV guide on the playing channel (dashboard, or the hotel
-     * menu). False when the guide is not available (Premium): the channel list opens then.
+     * menu). False when the guide is not available (Premium): the player leaves to Home then.
      */
     var onLeaveToGuide: (() -> Boolean)? = null
     var onLeaveToMyItems: ((String) -> Unit)? = null
@@ -1480,11 +1480,11 @@ class RemoteDisplayViewModel @Inject constructor(
             ui.programmePrompt != null -> dismissProgramme()
             ui.searchOpen -> closeSearch()
             ui.quickBar -> closeQuickBar()
-            // Back ladder: list -> bouquets -> leave (EPG panel first goes back to the list).
+            // Back in the overlay: the list (or the bouquet column) closes, the channel plays on
+            // full screen (a channel's programme panel first goes back to the list).
             ui.channelList -> when (ChannelListNavigation.backLadder(listPane(ui))) {
                 ListPane.CHANNELS -> closeChannelEpg()
-                ListPane.BOUQUETS -> openBouquets()
-                null -> leaveFromBouquets()
+                ListPane.CLOSED -> closeChannelList()
                 else -> Unit
             }
             ui.numberEntry.isNotEmpty() -> {
@@ -1494,19 +1494,10 @@ class RemoteDisplayViewModel @Inject constructor(
             }
             pip.playing() -> pip.stop()
             // Back on the picture (banner up or not) opens the TV guide on the playing channel at
-            // the current time (Left still opens the channel list). Without the guide: the list.
-            else -> if (onLeaveToGuide?.invoke() != true) openChannelList()
+            // the current time (Left still opens the channel list). Without the guide (Premium)
+            // the player leaves to Home's side menu as before (hotel mode: the guest's menu).
+            else -> if (onLeaveToGuide?.invoke() != true) onLeaveToDashboard?.invoke()
         }
-    }
-
-    /**
-     * Last step of the Back ladder: the list closes (a bouquet only looked at is not kept) and the
-     * player leaves to Home with focus on the side menu. Hotel mode has no Home: the app shell
-     * turns that into the guest's hotel menu, never the launcher.
-     */
-    private fun leaveFromBouquets() {
-        closeChannelList()
-        onLeaveToDashboard?.invoke()
     }
 
     private fun pushDigit(digit: Int) {
