@@ -3,6 +3,7 @@ package com.enigmacast.domain.tuner
 import com.enigmacast.domain.model.BouquetEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,13 +83,16 @@ class ChannelListNavigationTest {
     }
 
     @Test
-    fun backLadderGoesPictureListBouquetsThenLeaves() {
-        assertEquals(ListPane.CHANNELS, ChannelListNavigation.backLadder(ListPane.CLOSED))
-        assertEquals(ListPane.BOUQUETS, ChannelListNavigation.backLadder(ListPane.CHANNELS))
+    fun backInTheOverlayClosesItBackToFullScreen() {
+        // The channel list and the bouquet column close straight to the picture.
+        assertEquals(ListPane.CLOSED, ChannelListNavigation.backLadder(ListPane.CHANNELS))
+        assertEquals(ListPane.CLOSED, ChannelListNavigation.backLadder(ListPane.BOUQUETS))
+        // A channel's programme panel first returns to its list.
         assertEquals(ListPane.CHANNELS, ChannelListNavigation.backLadder(ListPane.EPG))
-        assertEquals(null, ChannelListNavigation.backLadder(ListPane.BOUQUETS))
-        // Back matches Left from the list.
-        assertEquals(ChannelListNavigation.left(ListPane.CHANNELS), ChannelListNavigation.backLadder(ListPane.CHANNELS))
+        assertEquals(ListPane.CLOSED, ChannelListNavigation.backLadder(ListPane.CLOSED))
+        // Back no longer walks to the bouquets the way Left does (Left is unchanged).
+        assertEquals(ListPane.BOUQUETS, ChannelListNavigation.left(ListPane.CHANNELS))
+        ListPane.values().forEach { assertNotEquals(ListPane.BOUQUETS, ChannelListNavigation.backLadder(it)) }
     }
 
     @Test
