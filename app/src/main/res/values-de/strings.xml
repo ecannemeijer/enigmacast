@@ -276,6 +276,9 @@
     <string name="buffer">Puffer</string>
     <string name="buffer_fast_desc">Schnell: weniger Verzögerung, mehr Gefahr von Rucklern.</string>
     <string name="buffer_stable_desc">Stabil: größerer Puffer, flüssigeres Bild.</string>
+    <string name="fast_start">Schnellstart</string>
+    <string name="fast_start_on_desc">Ein: Das Bild startet nach kurzem Puffer und mit dem ersten Vollbild. Umschalten geht schneller; der erste Moment kann blockig aussehen.</string>
+    <string name="fast_start_off_desc">Aus: Vor dem Bildstart auf 2 Sekunden Puffer und ein sauberes Schlüsselbild warten.</string>
     <string name="buffer_stable">Stabil</string>
     <string name="buffer_fast">Schnell</string>
     <string name="sound">Ton</string>
@@ -1570,6 +1573,7 @@
     <string name="companion_cat_remote">Fernbedienung</string>
     <string name="companion_cat_debug">Debug</string>
     <string name="companion_setting_low_latency">Niedrige Latenz</string>
+    <string name="companion_setting_fast_start">Schnellstart</string>
     <string name="companion_setting_hw_decoder">Hardware-Decoder</string>
     <string name="companion_setting_audio_delay_pcm">Audioverzögerung (PCM)</string>
     <string name="companion_setting_audio_delay_passthrough">Audioverzögerung (HDMI)</string>

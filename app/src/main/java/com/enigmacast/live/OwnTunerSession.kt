@@ -37,6 +37,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -517,6 +519,7 @@ class OwnTunerSession @Inject constructor(
         gaveUp = false
         failoverOriginId = null
         failoverTried = emptySet()
+        com.enigmacast.playback.ZapTiming.begin(if (force) "retry" else "zap")
         startJob?.cancel()
         startJob = scope.launch {
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
@@ -711,6 +714,7 @@ class OwnTunerSession @Inject constructor(
         startJob = scope.launch {
             delay(wait)
             val receiver = settingsRepository.current().activeReceiver() ?: return@launch
+            com.enigmacast.playback.ZapTiming.begin("restart")
             beginFailover(receiver.id)
             startNow(receiver, channel)
         }
@@ -750,37 +754,54 @@ class OwnTunerSession @Inject constructor(
                 zapCount = it.zapCount + 1,
             )
         }
+        val releasedAt = System.nanoTime()
         val ticket = playback.stopForZap()
         streaming = false
-        loadGuide(channel, myToken)
         val internet = ServiceStreams.isInternet(channel.reference)
+        if (!com.enigmacast.playback.ZapTiming.running()) com.enigmacast.playback.ZapTiming.begin("start")
         if (internet) {
             // IPTV / internet: play the URL in the service reference; no tuner, no Enigma2 stream port.
             EnigmaLog.service("internet stream ${channel.name}: skipping tuner check")
             _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
             val target = streamTargets.target(receiver, channel.reference)
             if (myToken != token || playback.streamHoldTicket() != ticket) return
+            com.enigmacast.playback.ZapTiming.mark(com.enigmacast.playback.ZapTimeline.Step.OWIF)
             playback.playAfterRelease(ticket, target.url, force = true, authorization = target.authorization, checkStart = false, internet = true)
             streaming = true
+            loadGuide(channel, myToken)
             saveLastChannel(receiver.id, channel)
             return
         }
-        // Give the receiver a moment to notice the closed stream and free its tuner.
-        // Retries stay blocked until playAfterRelease, so the old channel cannot grab the tuner again.
-        if (hadStream) delay(STREAM_RELEASE_MS)
-        val snapshot = runCatching { tunerSource.snapshot(receiver) }.getOrElse { error ->
-            if (error is CancellationException) throw error
-            EnigmaLog.service("tuner check unavailable: ${error.javaClass.simpleName}")
-            null
+        // The tuner check runs while the receiver frees the old stream's tuner: our own streams
+        // are not counted as users, so it does not have to wait for that. The guide and the
+        // OSD info are asked for after the stream request, so they do not queue in front of it.
+        val (snapshot, addresses) = coroutineScope {
+            val snapshotCall = async {
+                runCatching { tunerSource.snapshot(receiver) }.getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    EnigmaLog.service("tuner check unavailable: ${error.javaClass.simpleName}")
+                    null
+                }
+            }
+            val addressCall = async { ownAddresses(receiver) }
+            snapshotCall.await() to addressCall.await()
         }
+        val checkMs = (System.nanoTime() - releasedAt) / 1_000_000
         if (myToken != token || playback.streamHoldTicket() != ticket) return
         lastSnapshot = snapshot
-        lastOwnAddresses = ownAddresses(receiver)
-        if (myToken != token || playback.streamHoldTicket() != ticket) return
+        lastOwnAddresses = addresses
         val verdict = snapshot?.let {
             TunerAvailability.evaluate(it, channel.reference, lastOwnAddresses)
         } ?: TunerVerdict.Unknown
         EnigmaLog.service("tuner check ${channel.name}: $verdict")
+        // Give the receiver a moment to notice the closed stream and free its tuner, unless
+        // another tuner is free anyway. Retries stay blocked until playAfterRelease, so the
+        // old channel cannot grab the tuner again.
+        val wait = if (hadStream) ZapRelease.remainingWaitMs(verdict, checkMs, STREAM_RELEASE_MS) else 0L
+        com.enigmacast.playback.ZapTiming.note("check", "${checkMs}ms")
+        com.enigmacast.playback.ZapTiming.note("wait", "${wait}ms")
+        if (wait > 0) delay(wait)
+        if (myToken != token || playback.streamHoldTicket() != ticket) return
         if (verdict is TunerVerdict.Full) {
             if (tryNextBox(channel)) return
             restoreOrigin()
@@ -797,8 +818,10 @@ class OwnTunerSession @Inject constructor(
         _state.update { it.copy(tuner = TunerState(TunerStatus.STARTING, UiText.res(R.string.tuner_starting))) }
         val target = streamTargets.target(receiver, channel.reference)
         if (myToken != token) return
+        com.enigmacast.playback.ZapTiming.mark(com.enigmacast.playback.ZapTimeline.Step.OWIF)
         playback.playAfterRelease(ticket, target.url, force = true, authorization = target.authorization, checkStart = true)
         streaming = true
+        loadGuide(channel, myToken)
         saveLastChannel(receiver.id, channel)
     }
 

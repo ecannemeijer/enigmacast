@@ -141,6 +141,7 @@ class CompanionSettingsHost @Inject constructor(
                 settings.playback.subtitlesEnabled,
             ),
             bool("playback.lowLatency", R.string.companion_setting_low_latency, 0, playback, settings.playback.lowLatency),
+            bool("playback.fastStart", R.string.companion_setting_fast_start, 0, playback, settings.playback.fastStart),
             bool("playback.hardwareDecoder", R.string.companion_setting_hw_decoder, 0, playback, settings.playback.hardwareDecoder),
             bool("playback.autoReconnect", R.string.auto_reconnect, 0, playback, settings.playback.autoReconnect),
             bool(
@@ -320,6 +321,7 @@ class CompanionSettingsHost @Inject constructor(
                 s.copy(playback = s.playback.copy(subtitlesEnabled = v.bool(s.playback.subtitlesEnabled)))
             },
             "playback.lowLatency" to { s, v -> s.copy(playback = s.playback.copy(lowLatency = v.bool(s.playback.lowLatency))) },
+            "playback.fastStart" to { s, v -> s.copy(playback = s.playback.copy(fastStart = v.bool(s.playback.fastStart))) },
             "playback.hardwareDecoder" to { s, v ->
                 s.copy(playback = s.playback.copy(hardwareDecoder = v.bool(s.playback.hardwareDecoder)))
             },

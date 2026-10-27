@@ -66,6 +66,7 @@ class SettingsViewModel @Inject constructor(
     fun setRecordingTarget(target: RecordingTarget) = update { it.copy(playback = it.playback.copy(recordingTarget = target)) }
     fun setRecordingPreset(preset: TranscodePreset?) = update { it.copy(playback = it.playback.copy(recordingPreset = preset)) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }
+    fun setFastStart(enabled: Boolean) = update { it.copy(playback = it.playback.copy(fastStart = enabled)) }
     fun setTvFallback(mode: com.enigmacast.domain.model.TvFallback) = update { it.copy(tvFallback = mode) }
     fun setAutoReconnect(enabled: Boolean) = update { it.copy(playback = it.playback.copy(autoReconnect = enabled)) }
     fun setVideoDecoder(mode: com.enigmacast.domain.model.VideoDecoderMode) = update { it.copy(playback = it.playback.copy(videoDecoder = mode)) }

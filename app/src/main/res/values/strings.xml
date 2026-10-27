@@ -279,6 +279,9 @@
     <string name="buffer">Buffer</string>
     <string name="buffer_fast_desc">Fast: less delay, more chance of stutter.</string>
     <string name="buffer_stable_desc">Stable: larger buffer, smoother picture.</string>
+    <string name="fast_start">Quick start</string>
+    <string name="fast_start_on_desc">On: the picture starts after a short buffer and on the first full frame. A zap is quicker; the first moment can look blocky.</string>
+    <string name="fast_start_off_desc">Off: wait for a 2-second buffer and a clean keyframe before the picture starts.</string>
     <string name="buffer_stable">Stable</string>
     <string name="buffer_fast">Fast</string>
     <string name="sound">Sound</string>
@@ -1555,6 +1558,7 @@
     <string name="companion_cat_remote">Remote</string>
     <string name="companion_cat_debug">Debug</string>
     <string name="companion_setting_low_latency">Low latency</string>
+    <string name="companion_setting_fast_start">Quick start</string>
     <string name="companion_setting_hw_decoder">Hardware decoder</string>
     <string name="companion_setting_audio_delay_pcm">Audio delay (PCM)</string>
     <string name="companion_setting_audio_delay_passthrough">Audio delay (HDMI)</string>
