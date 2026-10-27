@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -287,17 +289,13 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     val providerFailures by model.providerFailures.collectAsStateWithLifecycle()
     val loads by model.lastLoad.collectAsStateWithLifecycle()
     val load by model.load.collectAsStateWithLifecycle()
-    var selectedId by remember { mutableStateOf<String?>(null) }
-    var adding by remember { mutableStateOf(false) }
+    // The provider whose dialog is open: an id, NEW_PROVIDER for "Add provider", or null.
+    var editing by remember { mutableStateOf<String?>(null) }
+    // Where focus goes back to when the dialog closes (a provider id or NEW_PROVIDER).
+    var returnFocus by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf("") }
-    var deleteTarget by remember { mutableStateOf<String?>(null) }
-    val selected = providers.firstOrNull { it.id == selectedId }
-    var name by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.displayName().orEmpty()) }
-    var kind by remember(selected?.id, adding) { mutableStateOf(if (adding) IptvPlaylistKind.M3U else selected?.kind ?: IptvPlaylistKind.M3U) }
-    var m3u by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.m3uUrl.orEmpty()) }
-    var server by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.server.orEmpty()) }
-    var user by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.username.orEmpty()) }
-    var pass by remember(selected?.id, adding) { mutableStateOf(if (adding) "" else selected?.password.orEmpty()) }
+    val rowFocus = remember { mutableMapOf<String, FocusRequester>() }
+    fun focusFor(key: String) = rowFocus.getOrPut(key) { FocusRequester() }
     var count by remember { mutableStateOf(0) }
     LaunchedEffect(loads) { count = model.count() }
     LaunchedEffect(providers, loads) { model.refreshProviderCounts() }
@@ -331,8 +329,8 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
             }
             providers.forEach { provider ->
                 CompactListRow(
-                    onClick = { adding = false; selectedId = provider.id },
-                    selected = provider.id == selectedId,
+                    onClick = { editing = provider.id },
+                    modifier = Modifier.focusRequester(focusFor(provider.id)),
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -361,103 +359,11 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton(
-                    stringResource(R.string.iptv_provider_new),
-                    {
-                        adding = true
-                        selectedId = null
-                        name = ""
-                        kind = IptvPlaylistKind.M3U
-                        m3u = ""
-                        server = ""
-                        user = ""
-                        pass = ""
-                    },
+                    stringResource(R.string.iptv_provider_add),
+                    { editing = NEW_PROVIDER },
+                    modifier = Modifier.focusRequester(focusFor(NEW_PROVIDER)),
                     compact = true,
                 )
-            }
-        }
-
-        if (selected != null || adding) {
-            SettingsCard(
-                if (adding) stringResource(R.string.iptv_provider_new_title)
-                else selected?.displayName() ?: stringResource(R.string.iptv_provider_edit_title),
-            ) {
-                if (selected != null) {
-                    Text(
-                        "${selected.kind.name} · ${if (selected.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}",
-                        color = EnigmaColors.Muted,
-                        fontSize = 12.sp,
-                    )
-                }
-                TvTextField(stringResource(R.string.iptv_provider_name), name, { name = it }, Modifier.fillMaxWidth())
-                val kinds = IptvPlaylistKind.entries
-                ChoiceRow(
-                    title = stringResource(R.string.iptv_playlist_kind),
-                    options = listOf(stringResource(R.string.iptv_kind_m3u), stringResource(R.string.iptv_kind_xtream)),
-                    selectedIndex = kinds.indexOf(kind),
-                    onSelect = { kind = kinds[it] },
-                )
-                if (kind == IptvPlaylistKind.M3U) {
-                    TvTextField(stringResource(R.string.iptv_m3u_url), m3u, { m3u = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
-                } else {
-                    TvTextField(stringResource(R.string.iptv_xtream_server), server, { server = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
-                    TvTextField(stringResource(R.string.iptv_xtream_user), user, { user = it }, Modifier.fillMaxWidth())
-                    TvTextField(stringResource(R.string.iptv_xtream_pass), pass, { pass = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.PASSWORD)
-                }
-                val draft = IptvProvider(
-                    id = selected?.id.orEmpty(),
-                    name = name,
-                    kind = kind,
-                    m3uUrl = m3u,
-                    server = server,
-                    username = user,
-                    password = pass,
-                    enabled = selected?.enabled ?: true,
-                    sortOrder = selected?.sortOrder ?: 0,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TvButton(
-                        stringResource(R.string.iptv_provider_save),
-                        {
-                            val saved = model.saveProvider(draft)
-                            if (saved != null) {
-                                adding = false
-                                selectedId = saved.id
-                            }
-                        },
-                        enabled = name.isNotBlank() && draft.configured(),
-                    )
-                }
-                if (selected != null) {
-                    Text(
-                        stringResource(R.string.iptv_provider_actions),
-                        color = EnigmaColors.Text,
-                        fontSize = 15.sp,
-                        fontWeight = EnigmaType.Strong,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                    ValueRow(
-                        title = stringResource(if (selected.enabled) R.string.iptv_provider_disable_action else R.string.iptv_provider_enable_action),
-                        value = if (selected.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled),
-                        onClick = { model.setProviderEnabled(selected.id, !selected.enabled) },
-                    )
-                    ValueRow(
-                        title = stringResource(R.string.iptv_provider_move_up),
-                        value = "›",
-                        onClick = { model.moveProvider(selected.id, -1) },
-                    )
-                    ValueRow(
-                        title = stringResource(R.string.iptv_provider_move_down),
-                        value = "›",
-                        onClick = { model.moveProvider(selected.id, 1) },
-                    )
-                    ValueRow(
-                        title = stringResource(R.string.iptv_provider_delete),
-                        value = "›",
-                        description = stringResource(R.string.iptv_provider_delete_desc),
-                        onClick = { deleteTarget = selected.id },
-                    )
-                }
             }
         }
 
@@ -513,19 +419,28 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
             modifier = Modifier.padding(horizontal = 6.dp),
         )
     }
-    deleteTarget?.let { id ->
-        val provider = providers.firstOrNull { it.id == id }
-        com.enigmacast.ui.theme.TvChoiceDialog(
-            title = stringResource(R.string.iptv_provider_delete_confirm),
-            message = provider?.displayName().orEmpty(),
-            choices = listOf(stringResource(R.string.iptv_provider_delete), stringResource(R.string.cancel)),
-            onChoose = { choice ->
-                if (choice == 0) model.deleteProvider(id)
-                deleteTarget = null
-            },
-            onDismiss = { deleteTarget = null },
-            compact = true,
-        )
+    editing?.let { key ->
+        val provider = providers.firstOrNull { it.id == key }
+        if (key != NEW_PROVIDER && provider == null) {
+            // Deleted (here or from the sync server): close and land on "Add provider".
+            LaunchedEffect(key) { editing = null; returnFocus = NEW_PROVIDER }
+        } else {
+            IptvProviderDialog(
+                provider = provider,
+                model = model,
+                onClose = { savedId ->
+                    returnFocus = savedId ?: key
+                    editing = null
+                },
+            )
+        }
+    }
+    // Back (or Save) closes the dialog: focus returns to the provider row it was opened from.
+    LaunchedEffect(returnFocus, providers) {
+        val key = returnFocus ?: return@LaunchedEffect
+        val target = if (key == NEW_PROVIDER || providers.any { it.id == key }) key else NEW_PROVIDER
+        focusFor(target).requestWhenReady()
+        returnFocus = null
     }
     load?.let { IptvLoadDialog(it, onCancel = model::cancel, onClose = model::close) }
     val categoryPage by model.categoryPage.collectAsStateWithLifecycle()
@@ -533,6 +448,149 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     val subtitlesOpen by model.subtitlesOpen.collectAsStateWithLifecycle()
     val subtitleLanguages by model.subtitleLanguages.collectAsStateWithLifecycle()
     if (subtitlesOpen) IptvSubtitlesDialog(subtitleLanguages, model)
+}
+
+private const val NEW_PROVIDER = "\u0000new"
+
+/**
+ * One IPTV provider in its own dialog (Settings › IPTV › a provider row, or "Add provider"): name,
+ * type, address and login, then for a saved provider on/off, order, reload and delete. Focus starts
+ * on the name field and stays inside the dialog; Back closes it ([onClose] gets the saved id, or
+ * null when nothing was saved).
+ */
+@Composable
+private fun IptvProviderDialog(
+    provider: IptvProvider?,
+    model: IptvSettingsViewModel,
+    onClose: (savedId: String?) -> Unit,
+) {
+    var name by remember(provider?.id) { mutableStateOf(provider?.displayName().orEmpty()) }
+    var kind by remember(provider?.id) { mutableStateOf(provider?.kind ?: IptvPlaylistKind.M3U) }
+    var m3u by remember(provider?.id) { mutableStateOf(provider?.m3uUrl.orEmpty()) }
+    var server by remember(provider?.id) { mutableStateOf(provider?.server.orEmpty()) }
+    var user by remember(provider?.id) { mutableStateOf(provider?.username.orEmpty()) }
+    var pass by remember(provider?.id) { mutableStateOf(provider?.password.orEmpty()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    Dialog(
+        onDismissRequest = { onClose(null) },
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+    ) {
+        NavigationSoundsForWindow()
+        val first = remember { FocusRequester() }
+        LaunchedEffect(provider?.id) { first.requestWhenReady() }
+        Column(
+            modifier = Modifier
+                .width(620.dp)
+                .heightIn(max = 600.dp)
+                .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
+                .padding(16.dp)
+                .focusGroup()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                provider?.displayName() ?: stringResource(R.string.iptv_provider_new_title),
+                color = EnigmaColors.Text,
+                fontSize = 18.sp,
+                fontWeight = EnigmaType.Strong,
+            )
+            if (provider != null) {
+                Text(
+                    "${provider.kind.name} · ${if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled)}",
+                    color = EnigmaColors.Muted,
+                    fontSize = 12.sp,
+                )
+            }
+            TvTextField(stringResource(R.string.iptv_provider_name), name, { name = it }, Modifier.fillMaxWidth(), fieldFocus = first)
+            val kinds = IptvPlaylistKind.entries
+            ChoiceRow(
+                title = stringResource(R.string.iptv_playlist_kind),
+                options = listOf(stringResource(R.string.iptv_kind_m3u), stringResource(R.string.iptv_kind_xtream)),
+                selectedIndex = kinds.indexOf(kind),
+                onSelect = { kind = kinds[it] },
+            )
+            if (kind == IptvPlaylistKind.M3U) {
+                TvTextField(stringResource(R.string.iptv_m3u_url), m3u, { m3u = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
+            } else {
+                TvTextField(stringResource(R.string.iptv_xtream_server), server, { server = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.HOST)
+                TvTextField(stringResource(R.string.iptv_xtream_user), user, { user = it }, Modifier.fillMaxWidth())
+                TvTextField(stringResource(R.string.iptv_xtream_pass), pass, { pass = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.PASSWORD)
+            }
+            val draft = IptvProvider(
+                id = provider?.id.orEmpty(),
+                name = name,
+                kind = kind,
+                m3uUrl = m3u,
+                server = server,
+                username = user,
+                password = pass,
+                enabled = provider?.enabled ?: true,
+                sortOrder = provider?.sortOrder ?: 0,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton(
+                    stringResource(R.string.iptv_provider_save),
+                    {
+                        val saved = model.saveProvider(draft)
+                        if (saved != null) onClose(saved.id)
+                    },
+                    enabled = name.isNotBlank() && draft.configured(),
+                )
+                TvButton(stringResource(R.string.cancel), { onClose(null) })
+            }
+            if (provider != null) {
+                Text(
+                    stringResource(R.string.iptv_provider_actions),
+                    color = EnigmaColors.Text,
+                    fontSize = 15.sp,
+                    fontWeight = EnigmaType.Strong,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                ValueRow(
+                    title = stringResource(if (provider.enabled) R.string.iptv_provider_disable_action else R.string.iptv_provider_enable_action),
+                    value = if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled),
+                    onClick = { model.setProviderEnabled(provider.id, !provider.enabled) },
+                )
+                ValueRow(
+                    title = stringResource(R.string.iptv_provider_move_up),
+                    value = "›",
+                    onClick = { model.moveProvider(provider.id, -1) },
+                )
+                ValueRow(
+                    title = stringResource(R.string.iptv_provider_move_down),
+                    value = "›",
+                    onClick = { model.moveProvider(provider.id, 1) },
+                )
+                ValueRow(
+                    title = stringResource(R.string.iptv_provider_reload),
+                    value = "›",
+                    onClick = model::reloadAll,
+                )
+                ValueRow(
+                    title = stringResource(R.string.iptv_provider_delete),
+                    value = "›",
+                    description = stringResource(R.string.iptv_provider_delete_desc),
+                    onClick = { confirmDelete = true },
+                )
+            }
+        }
+    }
+    if (confirmDelete && provider != null) {
+        com.enigmacast.ui.theme.TvChoiceDialog(
+            title = stringResource(R.string.iptv_provider_delete_confirm),
+            message = provider.displayName(),
+            choices = listOf(stringResource(R.string.iptv_provider_delete), stringResource(R.string.cancel)),
+            onChoose = { choice ->
+                confirmDelete = false
+                if (choice == 0) {
+                    model.deleteProvider(provider.id)
+                    onClose(null)
+                }
+            },
+            onDismiss = { confirmDelete = false },
+            compact = true,
+        )
+    }
 }
 
 @Composable

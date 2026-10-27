@@ -1141,6 +1141,15 @@
     <string name="video_compat_auto">Automatisch</string>
     <string name="video_compat_on">An</string>
     <string name="video_compat_off">Aus</string>
+    <string name="afr">Automatische Bildrate</string>
+    <string name="afr_desc">Der Fernseher folgt dem Vollbildvideo: 50 Hz für TV (25/50 fps), 24 Hz für Filme, 60 Hz für 30/60 fps. Flüssigere Bewegung, aber der Bildschirm wird bei jedem Wechsel kurz schwarz. Nur beim Start: einmal beim Start der Wiedergabe; Immer: auch beim Umschalten. Ohne passenden Modus passiert nichts.</string>
+    <string name="afr_off">Aus</string>
+    <string name="afr_start">Nur beim Start</string>
+    <string name="afr_always">Immer</string>
+    <string name="tvhome_favorites">EnigmaCast – Favoriten</string>
+    <string name="tvhome_recordings">EnigmaCast – Aufnahmen</string>
+    <string name="tvhome_setting">Zeilen auf dem Android-TV-Startbildschirm</string>
+    <string name="tvhome_setting_desc">Zeigt „EnigmaCast – Favoriten“ (zuletzt gesehene Sender mit der laufenden Sendung) und „EnigmaCast – Aufnahmen“ auf dem Android-TV-Startbildschirm. Nie im Hotelmodus.</string>
     <string name="settings_import">Einstellungen importieren</string>
     <string name="premium_feature_settings_import">Einstellungen importieren</string>
     <string name="import_title">Einstellungen importieren</string>
@@ -1588,6 +1597,7 @@
     <string name="companion_hint">Die Bridge läuft nur, solange EnigmaCast auf dem Bildschirm ist. Nichts geht über das Internet.</string>
     <string name="iptv_providers">IPTV-Anbieter</string>
     <string name="iptv_provider_new">Neuer Anbieter</string>
+    <string name="iptv_provider_add">Anbieter hinzufügen</string>
     <string name="iptv_provider_name">Name</string>
     <string name="iptv_provider_enabled">Aktiviert</string>
     <string name="iptv_provider_disabled">Deaktiviert</string>

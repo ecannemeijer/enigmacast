@@ -63,6 +63,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setStreamMode(mode: StreamMode) = update { it.copy(streamMode = mode) }
     fun setStartupLive(mode: StartupLive) = update { it.copy(startupLive = mode) }
+    fun setTvHomeChannels(enabled: Boolean) = update { it.copy(tvHomeChannels = enabled) }
     fun setRecordingTarget(target: RecordingTarget) = update { it.copy(playback = it.playback.copy(recordingTarget = target)) }
     fun setRecordingPreset(preset: TranscodePreset?) = update { it.copy(playback = it.playback.copy(recordingPreset = preset)) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }
@@ -71,6 +72,7 @@ class SettingsViewModel @Inject constructor(
     fun setAutoReconnect(enabled: Boolean) = update { it.copy(playback = it.playback.copy(autoReconnect = enabled)) }
     fun setVideoDecoder(mode: com.enigmacast.domain.model.VideoDecoderMode) = update { it.copy(playback = it.playback.copy(videoDecoder = mode)) }
     fun setVideoCompatibility(mode: com.enigmacast.domain.model.VideoCompatibility) = update { it.copy(playback = it.playback.copy(videoCompatibility = mode)) }
+    fun setAutoFrameRate(mode: com.enigmacast.domain.model.AutoFrameRateMode) = update { it.copy(playback = it.playback.copy(autoFrameRate = mode)) }
     fun setHdmiPassthrough(enabled: Boolean) = update { it.copy(playback = it.playback.copy(hdmiPassthrough = enabled)) }
     fun stepAudioDelay(passthrough: Boolean, direction: Int) = update { current ->
         val playback = current.playback

@@ -26,6 +26,7 @@ interface SyncEntryPoint {
     fun engine(): SyncEngine
     fun settings(): SettingsRepository
     fun iptvPlaylist(): com.enigmacast.data.xtream.IptvPlaylistSync
+    fun tvHome(): com.enigmacast.data.tvhome.TvHomePublisher
 }
 
 /** Runs [SyncEngine] for the active receiver. Hourly it only does the steps that are due. */
@@ -48,6 +49,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 com.enigmacast.domain.sync.CacheWorkOrder.Step.IPTV -> loadIptv(entry)
             }
         }
+        // Android TV home rows: programme on now and the newest recordings (removes them in hotel mode).
+        entry.tvHome().refresh()
         return Result.success()
     }
 

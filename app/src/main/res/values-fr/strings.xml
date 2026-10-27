@@ -1145,6 +1145,15 @@
     <string name="video_compat_auto">Automatique</string>
     <string name="video_compat_on">Activé</string>
     <string name="video_compat_off">Désactivé</string>
+    <string name="afr">Fréquence d\'images automatique</string>
+    <string name="afr_desc">Le téléviseur suit la vidéo plein écran : 50 Hz pour la TV (25/50 i/s), 24 Hz pour les films, 60 Hz pour 30/60 i/s. Mouvements plus fluides, mais l\'écran devient noir un instant à chaque changement. Au démarrage seulement : une fois au début de la lecture ; Toujours : aussi en zappant. Rien ne se passe si le téléviseur n\'a pas de mode adapté.</string>
+    <string name="afr_off">Désactivée</string>
+    <string name="afr_start">Au démarrage seulement</string>
+    <string name="afr_always">Toujours</string>
+    <string name="tvhome_favorites">EnigmaCast – Favoris</string>
+    <string name="tvhome_recordings">EnigmaCast – Enregistrements</string>
+    <string name="tvhome_setting">Rangées sur l’écran d’accueil Android TV</string>
+    <string name="tvhome_setting_desc">Affiche « EnigmaCast – Favoris » (chaînes récentes avec l’émission en cours) et « EnigmaCast – Enregistrements » sur l’écran d’accueil Android TV. Jamais en mode hôtel.</string>
     <string name="settings_import">Importer des paramètres</string>
     <string name="premium_feature_settings_import">Importer des paramètres</string>
     <string name="import_title">Importer des paramètres</string>
@@ -1592,6 +1601,7 @@
     <string name="companion_hint">Le pont ne fonctionne que lorsque EnigmaCast est à l\'écran. Rien ne passe par internet.</string>
     <string name="iptv_providers">Fournisseurs IPTV</string>
     <string name="iptv_provider_new">Nouveau fournisseur</string>
+    <string name="iptv_provider_add">Ajouter un fournisseur</string>
     <string name="iptv_provider_name">Nom</string>
     <string name="iptv_provider_enabled">Activé</string>
     <string name="iptv_provider_disabled">Désactivé</string>

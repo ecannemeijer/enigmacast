@@ -1163,6 +1163,15 @@
     <string name="video_compat_auto">Automatisch</string>
     <string name="video_compat_on">Aan</string>
     <string name="video_compat_off">Uit</string>
+    <string name="afr">Automatische framerate</string>
+    <string name="afr_desc">De tv volgt video op volledig scherm: 50 Hz voor tv (25/50 fps), 24 Hz voor films, 60 Hz voor 30/60 fps. Vloeiender beeld, maar het scherm is bij elke wissel even zwart. Alleen bij start: één keer als het afspelen begint; Altijd: ook bij zappen. Er gebeurt niets als de tv geen passende modus heeft.</string>
+    <string name="afr_off">Uit</string>
+    <string name="afr_start">Alleen bij start</string>
+    <string name="afr_always">Altijd</string>
+    <string name="tvhome_favorites">EnigmaCast – Favorieten</string>
+    <string name="tvhome_recordings">EnigmaCast – Opnames</string>
+    <string name="tvhome_setting">Rijen op het Android TV-startscherm</string>
+    <string name="tvhome_setting_desc">Toont “EnigmaCast – Favorieten” (recente zenders met het programma van nu) en “EnigmaCast – Opnames” op het Android TV-startscherm. Nooit in hotelmodus.</string>
     <string name="settings_import">Settings importeren</string>
     <string name="premium_feature_settings_import">Settings importeren</string>
     <string name="import_title">Settings importeren</string>
@@ -1565,6 +1574,7 @@
     <string name="companion_hint">De brug draait alleen zolang EnigmaCast op het scherm staat. Er gaat niets via het internet.</string>
     <string name="iptv_providers">IPTV-providers</string>
     <string name="iptv_provider_new">Nieuwe provider</string>
+    <string name="iptv_provider_add">Provider toevoegen</string>
     <string name="iptv_provider_name">Naam</string>
     <string name="iptv_provider_enabled">Aan</string>
     <string name="iptv_provider_disabled">Uit</string>

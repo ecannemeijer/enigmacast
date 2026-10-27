@@ -1787,6 +1787,15 @@ private fun PlaybackSettingsPanel(
             },
         )
     }
+    val tvHomeChannels = viewModel.settings.collectAsStateWithLifecycle().value.tvHomeChannels
+    SettingsCard(stringResource(R.string.tvhome_setting)) {
+        ToggleRow(
+            title = stringResource(R.string.tvhome_setting),
+            checked = tvHomeChannels,
+            onCheckedChange = viewModel::setTvHomeChannels,
+            description = stringResource(R.string.tvhome_setting_desc),
+        )
+    }
     SettingsCard(stringResource(R.string.picture)) {
         ChoiceRow(
             title = stringResource(R.string.buffer),
@@ -2314,6 +2323,18 @@ private fun VideoDecoderCard(viewModel: SettingsViewModel) {
             ),
             selectedIndex = modes.indexOf(compat),
             onSelect = { viewModel.setVideoCompatibility(modes[it]) },
+        )
+        val afrModes = com.enigmacast.domain.model.AutoFrameRateMode.entries
+        ChoiceRow(
+            title = stringResource(R.string.afr),
+            description = stringResource(R.string.afr_desc),
+            options = listOf(
+                stringResource(R.string.afr_off),
+                stringResource(R.string.afr_start),
+                stringResource(R.string.afr_always),
+            ),
+            selectedIndex = afrModes.indexOf(all.playback.autoFrameRate),
+            onSelect = { viewModel.setAutoFrameRate(afrModes[it]) },
         )
     }
 }

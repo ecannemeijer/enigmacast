@@ -73,6 +73,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="enigmacast" android:host="watchnext" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="enigmacast" android:host="tvhome" />
+            </intent-filter>
             <meta-data
                 android:name="android.app.searchable"
                 android:resource="@xml/searchable" />
@@ -106,6 +112,18 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <!-- Android TV home-screen rows: picons for the launcher (read only, files/tvhome/<hex>.png). -->
+        <provider
+            android:name=".data.tvhome.TvHomeArtProvider"
+            android:authorities="${applicationId}.tvhomeart"
+            android:exported="true" />
+        <receiver
+            android:name=".data.tvhome.TvHomeInitReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.tv.action.INITIALIZE_PROGRAMS" />
             </intent-filter>
         </receiver>
         <receiver
