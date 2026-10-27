@@ -92,6 +92,7 @@ import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.enigmacast.domain.tuner.StreamHealth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,9 +100,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 data class OsdFrame(
@@ -1230,8 +1236,19 @@ class RemoteDisplayViewModel @Inject constructor(
         if (osdInfoKey != key) _ui.update { it.copy(osdInfo = OsdInfo.Empty) }
         osdInfoKey = key
         val internet = ServiceStreams.internetUrl(reference) != null || ServiceStreams.isStreamPlayer(reference)
+        // After a zap the receiver is first asked for the new stream; signal and service data
+        // wait until its picture plays (at most OSD_ZAP_DEFER_MS), so they do not queue in front.
+        val deferForZap = ui.bannerFromZap
+        val receiverInfo = flow {
+            if (deferForZap) {
+                withTimeoutOrNull(OSD_ZAP_DEFER_MS) {
+                    playback.health.dropWhile { it == StreamHealth.PLAYING }.first { it == StreamHealth.PLAYING }
+                }
+            }
+            emitAll(osdInfoRepository.watch(receiver, reference))
+        }
         osdInfoJob = viewModelScope.launch {
-            combine(osdInfoRepository.watch(receiver, reference), playback.streamFacts, playback.state) { data, stream, player ->
+            combine(receiverInfo, playback.streamFacts, playback.state) { data, stream, player ->
                 OsdInfoBuilder.build(
                     OsdInfoInput(
                         reference = reference,
@@ -1457,20 +1474,33 @@ class RemoteDisplayViewModel @Inject constructor(
             ui.programmePrompt != null -> dismissProgramme()
             ui.searchOpen -> closeSearch()
             ui.quickBar -> closeQuickBar()
-            ui.channelList -> {
-                val pane = ChannelListNavigation.back(listPane(ui))
-                applyPane(pane, focusList = pane == ListPane.CHANNELS)
+            // Back ladder: list -> bouquets -> leave (EPG panel first goes back to the list).
+            ui.channelList -> when (ChannelListNavigation.backLadder(listPane(ui))) {
+                ListPane.CHANNELS -> closeChannelEpg()
+                ListPane.BOUQUETS -> openBouquets()
+                null -> leaveFromBouquets()
+                else -> Unit
             }
             ui.numberEntry.isNotEmpty() -> {
                 numberJob?.cancel()
                 numberEntry.clear()
                 _ui.update { it.copy(numberEntry = "") }
             }
-            ui.banner && !playingRadio(ui) -> hideBanner()
             pip.playing() -> pip.stop()
-            // Back on the bare picture returns to the dashboard (the programme grid, on this channel).
-            else -> onLeaveToDashboard?.invoke()
+            // Back on the picture (banner up or not) opens the channel list on the playing
+            // channel, the same as Left.
+            else -> openChannelList()
         }
+    }
+
+    /**
+     * Last step of the Back ladder: the list closes (a bouquet only looked at is not kept) and the
+     * player leaves to Home with focus on the side menu. Hotel mode has no Home: the app shell
+     * turns that into the guest's hotel menu, never the launcher.
+     */
+    private fun leaveFromBouquets() {
+        closeChannelList()
+        onLeaveToDashboard?.invoke()
     }
 
     private fun pushDigit(digit: Int) {
@@ -1755,6 +1785,7 @@ class RemoteDisplayViewModel @Inject constructor(
 }
 
 private const val BANNER_VISIBLE_MS = 5_000L
+private const val OSD_ZAP_DEFER_MS = 3_000L
 private const val DETAILS_VISIBLE_MS = 12_000L
 private const val NUMBER_ENTRY_MS = 1_500L
 private const val NOW_EPG_CHECK_MS = 30_000L

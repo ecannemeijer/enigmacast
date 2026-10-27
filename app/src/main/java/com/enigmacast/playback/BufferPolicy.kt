@@ -22,6 +22,39 @@ object BufferPolicy {
     /** Below this, a player that stopped loading has nothing it can play (Media3's own floor). */
     const val STARVED_MS = 500L
 
+    /** Buffer times for a live Enigma2 stream (Media3 DefaultLoadControl). */
+    data class LiveDurations(val minMs: Int, val maxMs: Int, val playbackMs: Int, val rebufferMs: Int)
+
+    /** Stable buffer: 2 s before the picture starts and after a stall. */
+    val STABLE = LiveDurations(minMs = 2_000, maxMs = 15_000, playbackMs = 2_000, rebufferMs = 2_000)
+
+    /**
+     * Stable buffer with "Snel starten": the picture starts after 0.75 s of stream. A stall
+     * still waits the full 2 s, and the 2–15 s target is unchanged, so a stream that runs
+     * keeps the same cushion as before; only the first start (each zap) is quicker.
+     */
+    val FAST_START = LiveDurations(minMs = 2_000, maxMs = 15_000, playbackMs = 750, rebufferMs = 2_000)
+
+    /**
+     * The live buffer for these settings. The low-latency buffer ([custom]) wins when it is on;
+     * values are kept in the order Media3 requires (playback, rebuffer <= min <= max).
+     */
+    fun live(lowLatency: Boolean, fastStart: Boolean, custom: LiveDurations): LiveDurations {
+        val chosen = when {
+            lowLatency -> custom
+            fastStart -> FAST_START
+            else -> STABLE
+        }
+        val min = chosen.minMs.coerceAtLeast(500)
+        val max = chosen.maxMs.coerceAtLeast(min)
+        return LiveDurations(
+            minMs = min,
+            maxMs = max,
+            playbackMs = chosen.playbackMs.coerceIn(250, min),
+            rebufferMs = chosen.rebufferMs.coerceIn(250, min),
+        )
+    }
+
     fun targetBytes(maxHeapBytes: Long, kind: Kind): Int {
         val (fraction, min, max) = when (kind) {
             Kind.LIVE -> Triple(0.12, 16L * MB, 64L * MB)

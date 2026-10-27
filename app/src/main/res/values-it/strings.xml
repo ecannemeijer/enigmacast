@@ -276,6 +276,9 @@
     <string name="buffer">Buffer</string>
     <string name="buffer_fast_desc">Veloce: meno ritardo, più rischio di scatti.</string>
     <string name="buffer_stable_desc">Stabile: buffer più grande, immagine più fluida.</string>
+    <string name="fast_start">Avvio rapido</string>
+    <string name="fast_start_on_desc">Attivo: l\'immagine parte dopo un buffer breve e dal primo fotogramma completo. Lo zapping è più veloce; il primo istante può apparire a blocchi.</string>
+    <string name="fast_start_off_desc">Disattivo: attende 2 secondi di buffer e un fotogramma chiave pulito prima di mostrare l\'immagine.</string>
     <string name="buffer_stable">Stabile</string>
     <string name="buffer_fast">Veloce</string>
     <string name="sound">Audio</string>
@@ -1574,6 +1577,7 @@
     <string name="companion_cat_remote">Telecomando</string>
     <string name="companion_cat_debug">Debug</string>
     <string name="companion_setting_low_latency">Bassa latenza</string>
+    <string name="companion_setting_fast_start">Avvio rapido</string>
     <string name="companion_setting_hw_decoder">Decoder hardware</string>
     <string name="companion_setting_audio_delay_pcm">Ritardo audio (PCM)</string>
     <string name="companion_setting_audio_delay_passthrough">Ritardo audio (HDMI)</string>

@@ -68,6 +68,13 @@ data class PlaybackSettings(
     val maxBufferMs: Int = 5_000,
     val bufferForPlaybackMs: Int = 500,
     val bufferForRebufferMs: Int = 1_000,
+    /**
+     * "Snel starten": Enigma2 streams start playing after a short buffer (about 0.75 s instead
+     * of 2 s) and the MPEG-TS reader may start on the first I-frame instead of waiting for an
+     * IDR frame. Only used with the stable buffer (the fast buffer starts even sooner). Missing
+     * in older settings, so it is on.
+     */
+    val fastStart: Boolean = true,
     val hardwareDecoder: Boolean = true,
     val autoReconnect: Boolean = true,
     val hdmiPassthrough: Boolean = false,
@@ -228,6 +235,8 @@ data class LastIptvChannel(
     val streamId: String = "",
     val name: String = "",
     val url: String = "",
+    /** The IPTV provider the channel came from (playlist mode); blank for single Xtream accounts and old saves. */
+    val providerId: String = "",
 )
 
 @Serializable

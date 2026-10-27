@@ -1351,7 +1351,7 @@ class XtreamViewModel @Inject constructor(
             if (!hotelAllows(last)) return@launch
             if (playing?.item?.id == last.streamId && playing?.item?.section == XtreamSection.LIVE) return@launch
             if (vodFromDashboard || playing?.item?.section.let { it != null && it != XtreamSection.LIVE } == true) return@launch
-            play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url))
+            play(XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url, providerId = last.providerId))
             libraryPlayed++
         }
     }
@@ -1374,7 +1374,7 @@ class XtreamViewModel @Inject constructor(
                 liveListNeeded = true
                 return@launch
             }
-            val item = XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url)
+            val item = XtreamItem(last.streamId, last.name, XtreamSection.LIVE, last.categoryId, url = last.url, providerId = last.providerId)
             if (playing?.item?.id != item.id || playing?.item?.section != XtreamSection.LIVE) play(item)
             if (playing != null) libraryPlayed++ else liveListNeeded = true
         }
@@ -1473,6 +1473,19 @@ class XtreamViewModel @Inject constructor(
                     if (section == XtreamSection.LIVE && com.enigmacast.domain.xtream.IptvZapList.sameCategory(category, zapCategory) &&
                         playing?.item?.let { com.enigmacast.domain.xtream.IptvZapList.holds(list, it) } == true
                     ) zapItems = list
+                    // A channel that started before its category was at hand (autostart while the
+                    // playlist still loaded from Room/cache): this list holds it, so zap follows it now.
+                    val live = playing?.item?.takeIf { it.section == XtreamSection.LIVE }
+                    if (section == XtreamSection.LIVE && live != null && !com.enigmacast.domain.xtream.IptvZapList.holds(zapItems, live) &&
+                        live.categoryId == category.id
+                    ) {
+                        com.enigmacast.domain.xtream.IptvZapList.resolve(list, live)?.let { row ->
+                            zapCategory = category
+                            zapItems = list
+                            adoptResolved(live, row)
+                            EnigmaLog.player("iptv zap context (category loaded): category=${category.id} channels=${list.size}")
+                        }
+                    }
                     // Only an OK-loaded category moves focus into the grid; the auto-loaded first one does not.
                     if (announce) itemsReady++
                 }
@@ -1595,8 +1608,19 @@ class XtreamViewModel @Inject constructor(
         // The playing channel's category, also while another one is only browsed in the panel.
         val next = com.enigmacast.domain.xtream.IptvZapList.step(zapItems, current, step)
             ?: com.enigmacast.domain.xtream.IptvZapList.step(items, current, step)
-            ?: return
-        play(next)
+        if (next != null) {
+            play(next)
+            return
+        }
+        // No zap list yet (the channel started on its own and its category is still loading, or
+        // that load failed): fetch it now and zap once it is there.
+        if (current.categoryId.isBlank()) return
+        zapJob?.cancel()
+        zapJob = viewModelScope.launch {
+            if (!loadZapList(current, "zap")) return@launch
+            val now = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return@launch
+            com.enigmacast.domain.xtream.IptvZapList.step(zapItems, now, step)?.let(::play)
+        }
     }
 
     /** A live channel started: its category becomes the zap list (fetched when not at hand). */
@@ -1611,19 +1635,58 @@ class XtreamViewModel @Inject constructor(
             com.enigmacast.domain.xtream.IptvZapList.Source.LOAD -> {
                 zapJob?.cancel()
                 if (item.categoryId.isBlank()) return
-                val account = accountFor(item.providerId) ?: return
-                val target = categories.firstOrNull { it.id == item.categoryId && it.providerId == item.providerId }
-                    ?: XtreamCategory(item.categoryId, "", item.providerId)
-                zapJob = viewModelScope.launch {
-                    val list = runCatching { itemsOf(account, XtreamSection.LIVE, target, false) }
-                        .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-                        .getOrNull() ?: return@launch
-                    val now = playing?.item ?: return@launch
-                    if (com.enigmacast.domain.xtream.IptvZapList.same(now, item) && com.enigmacast.domain.xtream.IptvZapList.holds(list, item)) {
-                        zapCategory = target
-                        zapItems = list
-                    }
-                }
+                zapJob = viewModelScope.launch { loadZapList(item, "start") }
+            }
+        }
+    }
+
+    /**
+     * The zap list for a channel that started outside the panel (autostart of the remembered
+     * channel, Live TV from the menu, recent strip). The categories are read from Room/cache
+     * here (they may still be loading when playback starts), and a remembered channel without a
+     * provider is matched on its id, then replaced by the full row so channel up/down finds it.
+     * Logs ids and counts only (never the address).
+     */
+    private suspend fun loadZapList(item: XtreamItem, reason: String): Boolean {
+        val account = accountFor(item.providerId) ?: return false
+        fun wanted(c: XtreamCategory) = c.id == item.categoryId && (item.providerId.isBlank() || c.providerId == item.providerId)
+        val known = categories.filter(::wanted)
+        val candidates = known.ifEmpty {
+            runCatching { categoriesOf(account, XtreamSection.LIVE) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                .getOrDefault(emptyList())
+                .filter(::wanted)
+        }.ifEmpty { listOf(XtreamCategory(item.categoryId, "", item.providerId)) }
+        for (target in candidates) {
+            val list = runCatching { itemsOf(account, XtreamSection.LIVE, target, false) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                .getOrNull() ?: continue
+            val resolved = com.enigmacast.domain.xtream.IptvZapList.resolve(list, item) ?: continue
+            val now = playing?.item ?: return false
+            if (now.id != item.id || now.section != XtreamSection.LIVE) return false
+            zapCategory = target
+            zapItems = list
+            adoptResolved(now, resolved)
+            val index = list.filter { it.section == XtreamSection.LIVE }.indexOfFirst { com.enigmacast.domain.xtream.IptvZapList.same(it, resolved) }
+            EnigmaLog.player("iptv zap context ($reason): category=${target.id} provider=${resolved.providerId.ifBlank { "-" }} channels=${list.size} index=$index")
+            return true
+        }
+        EnigmaLog.player("iptv zap context ($reason): category=${item.categoryId} provider=${item.providerId.ifBlank { "-" }} not found in ${candidates.size} categor(y/ies)")
+        return false
+    }
+
+    /** The playing stub (remembered channel) becomes the list's row: same stream, with its provider. */
+    private fun adoptResolved(now: XtreamItem, resolved: XtreamItem) {
+        if (now.providerId == resolved.providerId) return
+        val full = resolved.copy(url = resolved.url.ifBlank { now.url })
+        playing = playing?.copy(item = full)
+        if (currentLive?.id == now.id) currentLive = full
+        val source = account?.key ?: return
+        viewModelScope.launch {
+            settingsRepository.update { settings ->
+                val last = settings.lastIptvChannels[source]
+                if (last == null || last.streamId != full.id || last.providerId == full.providerId) settings
+                else settings.copy(lastIptvChannels = settings.lastIptvChannels + (source to last.copy(providerId = full.providerId)))
             }
         }
     }
@@ -1951,7 +2014,7 @@ class XtreamViewModel @Inject constructor(
                 settingsRepository.update { settings ->
                     com.enigmacast.domain.model.ChannelMemory.rememberIptv(
                         settings,
-                        com.enigmacast.domain.model.LastIptvChannel(account.key, item.categoryId, item.id, item.name, url),
+                        com.enigmacast.domain.model.LastIptvChannel(account.key, item.categoryId, item.id, item.name, url, item.providerId),
                     )
                 }
             }

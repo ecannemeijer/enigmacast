@@ -316,14 +316,24 @@ fun XtreamScreen(onBack: () -> Unit, onSearch: () -> Unit = {}) {
             quickBar -> { quickBar = false; showBanner(fromZap = false); openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
             panelOpen && column == PanelColumn.CHANNELS && model.series != null -> { model.closeSeries(); openRequest++ }
-            panelOpen && (column == PanelColumn.CHANNELS || column == PanelColumn.CATEGORIES) -> {
+            // Back ladder: channel list -> categories (on the playing channel's one) -> leave.
+            panelOpen && column == PanelColumn.CHANNELS -> { column = PanelColumn.CATEGORIES; openRequest++ }
+            panelOpen && column == PanelColumn.VOD_GRID -> { column = PanelColumn.VOD_CATEGORIES; openRequest++ }
+            panelOpen -> {
+                // A category only browsed is dropped, so the next visit opens on the playing one.
                 panelOpen = false
                 model.closeGuide()
-                openRequest++
+                model.restorePlayingCategory()
+                // Home then focuses the side menu (IPTV item), unless a Home/Library card started it.
+                if (model.launchOrigin == null) model.markReturnToMenu()
+                leaveLive()
             }
-            bannerShown -> { bannerUntil = 0L; details = false; openRequest++ }
             model.pip.playing() -> model.pip.stop()
-            else -> leaveLive()
+            // Back on the picture (banner up or not) opens the channel list, the same as Left.
+            else -> {
+                if (bannerShown) { bannerUntil = 0L; details = false }
+                openPanel()
+            }
         }
     }
     BackHandler {

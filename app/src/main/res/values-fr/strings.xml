@@ -276,6 +276,9 @@
     <string name="buffer">Mémoire tampon</string>
     <string name="buffer_fast_desc">Rapide : moins de délai, plus de risque de saccades.</string>
     <string name="buffer_stable_desc">Stable : tampon plus grand, image plus fluide.</string>
+    <string name="fast_start">Démarrage rapide</string>
+    <string name="fast_start_on_desc">Activé : l\'image démarre après une courte mémoire tampon, dès la première image complète. Le zapping est plus rapide ; le premier instant peut être pixelisé.</string>
+    <string name="fast_start_off_desc">Désactivé : attend 2 secondes de mémoire tampon et une image clé nette avant d\'afficher l\'image.</string>
     <string name="buffer_stable">Stable</string>
     <string name="buffer_fast">Rapide</string>
     <string name="sound">Son</string>
@@ -1574,6 +1577,7 @@
     <string name="companion_cat_remote">Télécommande</string>
     <string name="companion_cat_debug">Débogage</string>
     <string name="companion_setting_low_latency">Faible latence</string>
+    <string name="companion_setting_fast_start">Démarrage rapide</string>
     <string name="companion_setting_hw_decoder">Décodeur matériel</string>
     <string name="companion_setting_audio_delay_pcm">Décalage audio (PCM)</string>
     <string name="companion_setting_audio_delay_passthrough">Décalage audio (HDMI)</string>

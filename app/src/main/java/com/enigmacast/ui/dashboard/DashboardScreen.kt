@@ -1574,6 +1574,7 @@ private fun SettingsHub(
                         settings.playback.recordingPreset,
                         viewModel,
                         contentFocus = pageContentFocus,
+                        fastStart = settings.playback.fastStart,
                         part = PlaybackPart.STREAMING,
                     )
                     SettingPage.Viewing -> PlaybackSettingsPanel(
@@ -1588,6 +1589,7 @@ private fun SettingsHub(
                         settings.playback.recordingPreset,
                         viewModel,
                         contentFocus = pageContentFocus,
+                        fastStart = settings.playback.fastStart,
                         part = PlaybackPart.VIEWING,
                     )
                     SettingPage.Keys -> com.enigmacast.ui.keys.RemoteKeysSettingsPanel(pageContentFocus, settings.streamMode)
@@ -1609,6 +1611,7 @@ private fun SettingsHub(
                         settings.playback.recordingPreset,
                         viewModel,
                         contentFocus = pageContentFocus,
+                        fastStart = settings.playback.fastStart,
                         part = PlaybackPart.RECORDINGS,
                     )
                     SettingPage.Appearance -> {
@@ -1678,6 +1681,7 @@ private fun PlaybackSettingsPanel(
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
     part: PlaybackPart,
+    fastStart: Boolean = true,
     remote: RemoteDisplayViewModel = hiltViewModel(),
 ) {
     val playback by remote.uiState.collectAsStateWithLifecycle()
@@ -1744,6 +1748,13 @@ private fun PlaybackSettingsPanel(
             options = listOf(stringResource(R.string.buffer_stable), stringResource(R.string.buffer_fast)),
             selectedIndex = if (fast) 1 else 0,
             onSelect = { viewModel.setLowLatency(it == 1) },
+        )
+        ChoiceRow(
+            title = stringResource(R.string.fast_start),
+            description = if (fastStart) stringResource(R.string.fast_start_on_desc) else stringResource(R.string.fast_start_off_desc),
+            options = listOf(stringResource(R.string.off), stringResource(R.string.on)),
+            selectedIndex = if (fastStart) 1 else 0,
+            onSelect = { viewModel.setFastStart(it == 1) },
         )
     }
     VideoDecoderCard(viewModel)

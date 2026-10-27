@@ -45,6 +45,8 @@ import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
@@ -374,8 +376,19 @@ class OpenWebifApi @Inject constructor(
      * read when a tuner shows a recording, to learn which transponder it holds.
      */
     suspend fun tunerSnapshot(config: ReceiverConfig): TunerSnapshot {
-        val about = get(config, endpoints.about(config))
-        val status = runCatching { get(config, endpoints.statusInfo(config)) }.getOrNull()
+        // Both at once: each zap waits for this check before it asks for the stream.
+        val (about, status) = coroutineScope {
+            val statusCall = async {
+                try {
+                    get(config, endpoints.statusInfo(config))
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            get(config, endpoints.about(config)) to statusCall.await()
+        }
         val first = parsed { OpenWebifJson.parseTunerSnapshot(about, status, null) }
         if (first.tuners.none { it.recording.isNotBlank() }) return first
         val timers = runCatching { get(config, endpoints.timerList(config)) }.getOrNull()

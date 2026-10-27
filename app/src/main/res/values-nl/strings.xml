@@ -276,6 +276,9 @@
     <string name="buffer">Buffer</string>
     <string name="buffer_fast_desc">Snel: minder vertraging, meer kans op haperen.</string>
     <string name="buffer_stable_desc">Stabiel: grotere buffer, rustiger beeld.</string>
+    <string name="fast_start">Snel starten</string>
+    <string name="fast_start_on_desc">Aan: het beeld start na een korte buffer en op het eerste volledige beeld. Zappen gaat sneller; het eerste moment kan blokkerig zijn.</string>
+    <string name="fast_start_off_desc">Uit: wacht op 2 seconden buffer en een schoon sleutelbeeld voordat het beeld start.</string>
     <string name="buffer_stable">Stabiel</string>
     <string name="buffer_fast">Snel</string>
     <string name="sound">Geluid</string>
@@ -1547,6 +1550,7 @@
     <string name="companion_cat_remote">Bediening</string>
     <string name="companion_cat_debug">Debug</string>
     <string name="companion_setting_low_latency">Lage latency</string>
+    <string name="companion_setting_fast_start">Snel starten</string>
     <string name="companion_setting_hw_decoder">Hardware-decoder</string>
     <string name="companion_setting_audio_delay_pcm">Audiovetraging (PCM)</string>
     <string name="companion_setting_audio_delay_passthrough">Audiovetraging (HDMI)</string>

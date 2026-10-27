@@ -30,6 +30,20 @@ object IptvZapList {
         else -> Source.LOAD
     }
 
+    /**
+     * [item] as a row of [list]: the exact channel (id and provider), or, for a remembered channel
+     * saved before the provider was stored (blank provider), the row with the same id — the one
+     * with the same address when several providers use that id.
+     */
+    fun resolve(list: List<XtreamItem>, item: XtreamItem): XtreamItem? {
+        val live = list.filter { it.section == XtreamSection.LIVE }
+        live.firstOrNull { same(it, item) }?.let { return it }
+        if (item.providerId.isNotBlank()) return null
+        val byId = live.filter { it.id == item.id }
+        if (byId.size <= 1 || item.url.isBlank()) return byId.firstOrNull()
+        return byId.firstOrNull { it.url == item.url } ?: byId.first()
+    }
+
     /** The channel [step] places from [current] in [list] (wrapping); null when it is not in it. */
     fun step(list: List<XtreamItem>, current: XtreamItem, step: Int): XtreamItem? {
         val live = list.filter { it.section == XtreamSection.LIVE }

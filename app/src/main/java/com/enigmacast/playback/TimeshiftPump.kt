@@ -20,6 +20,10 @@ internal class TimeshiftPump(
     private val authorization: String?,
     private val onFull: () -> Unit,
     private val onEnded: () -> Unit,
+    /** The receiver answered the request (zap timing only). */
+    private val onConnected: () -> Unit = {},
+    /** The first stream bytes are in the buffer (zap timing only). */
+    private val onFirstBytes: () -> Unit = {},
 ) {
     private val stopped = AtomicBoolean(false)
     private val thread = Thread(::run, "timeshift").apply { isDaemon = true }
@@ -54,8 +58,10 @@ internal class TimeshiftPump(
                     fail(TimeshiftHttpException(response.code))
                     return
                 }
+                onConnected()
                 val input = response.body.byteStream()
                 val buffer = ByteArray(32 * 1024)
+                var first = true
                 while (!stopped.get()) {
                     val n = input.read(buffer)
                     if (n < 0) {
@@ -64,7 +70,10 @@ internal class TimeshiftPump(
                     }
                     if (n == 0) continue
                     when (store.write(buffer, 0, n)) {
-                        WriteResult.ACCEPTED -> Unit
+                        WriteResult.ACCEPTED -> if (first) {
+                            first = false
+                            onFirstBytes()
+                        }
                         WriteResult.FULL -> {
                             if (stopped.compareAndSet(false, true)) onFull()
                             return

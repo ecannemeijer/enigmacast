@@ -63,6 +63,7 @@ fun SettingsScreen(
         Column(Modifier.widthIn(max = 720.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SettingsCard(stringResource(R.string.playback)) {
                 ToggleRow(stringResource(R.string.fast_playback), settings.playback.lowLatency, viewModel::setLowLatency)
+                ToggleRow(stringResource(R.string.fast_start), settings.playback.fastStart, viewModel::setFastStart)
                 ToggleRow(stringResource(R.string.hdmi_audio_passthrough), settings.playback.hdmiPassthrough, viewModel::setHdmiPassthrough)
                 ToggleRow(stringResource(R.string.dvb_subtitles), settings.playback.subtitlesEnabled, viewModel::setSubtitlesEnabled)
                 ToggleRow(stringResource(R.string.auto_reconnect), settings.playback.autoReconnect, viewModel::setAutoReconnect)

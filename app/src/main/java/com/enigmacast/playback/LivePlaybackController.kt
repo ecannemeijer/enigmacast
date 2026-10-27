@@ -45,6 +45,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
@@ -136,6 +137,9 @@ class LivePlaybackController @Inject constructor(
     private var checkStart = false
     private var startedAtMs = 0L
     private var firstFrame = false
+    /** The first network bytes of this start were timed (internet streams; see [ZapTiming]). */
+    @Volatile
+    private var zapBytesSeen = false
     private var lastFailure = StreamFailure.NONE
     private var watchdog: Job? = null
 
@@ -267,6 +271,7 @@ class LivePlaybackController @Inject constructor(
     }
 
     fun stop() {
+        ZapTiming.abandon("stopped")
         playbackEnabled = false
         endFilePlayback()
         currentUrl = null
@@ -464,6 +469,9 @@ class LivePlaybackController @Inject constructor(
         exo.setMediaItem(builder.build(), true)
         exo.prepare()
         exo.playWhenReady = true
+        zapBytesSeen = false
+        ZapTiming.note("buffer", if (settings.lowLatency) "low-latency" else if (settings.fastStart) "fast-start" else "stable")
+        ZapTiming.mark(ZapTimeline.Step.PREPARE)
         EnigmaLog.player(
             "switching live stream ${EnigmaLog.sanitizeUrl(url)} auth=${if (authorization == null) "none" else "basic"}" +
                 if (internet) " kind=internet type=${mime ?: "auto"}" else " timeshift",
@@ -839,6 +847,8 @@ class LivePlaybackController @Inject constructor(
             authorization = authorization,
             onFull = { onTimeshiftFull(generation) },
             onEnded = { onTimeshiftEnded(generation) },
+            onConnected = { if (generation == timeshiftGeneration) ZapTiming.mark(ZapTimeline.Step.CONNECT) },
+            onFirstBytes = { if (generation == timeshiftGeneration) ZapTiming.mark(ZapTimeline.Step.BYTES) },
         )
         pump = started
         started.start()
@@ -864,27 +874,18 @@ class LivePlaybackController @Inject constructor(
     }
 
     private fun loadControl(): DefaultLoadControl {
-        val minBuffer: Int
-        val maxBuffer: Int
-        val playback: Int
-        val rebuffer: Int
-        if (settings.lowLatency) {
-            minBuffer = settings.minBufferMs
-            maxBuffer = settings.maxBufferMs
-            playback = settings.bufferForPlaybackMs
-            rebuffer = settings.bufferForRebufferMs
-        } else {
-            minBuffer = 2_000
-            maxBuffer = 15_000
-            playback = 2_000
-            rebuffer = 2_000
-        }
+        val durations = BufferPolicy.live(
+            lowLatency = settings.lowLatency,
+            fastStart = settings.fastStart,
+            custom = BufferPolicy.LiveDurations(settings.minBufferMs, settings.maxBufferMs, settings.bufferForPlaybackMs, settings.bufferForRebufferMs),
+        )
+        EnigmaLog.player("live buffer min=${durations.minMs} max=${durations.maxMs} start=${durations.playbackMs} rebuffer=${durations.rebufferMs} ms")
         // A byte target that fits the heap, and size before time: "time over size" let a stream
         // whose buffered duration stays short (a track that does not advance, a stream that never
         // finishes preparing) fill the whole heap, then stop loading and re-check every 10 ms.
         // Live seconds take little room: even 2 s of UHD is a few MB of the 16–64 MB target.
         return DefaultLoadControl.Builder()
-            .setBufferDurationsMs(minBuffer, maxBuffer, playback, rebuffer)
+            .setBufferDurationsMs(durations.minMs, durations.maxMs, durations.playbackMs, durations.rebufferMs)
             .setTargetBufferBytes(PlayerBuffers.targetBytes(BufferPolicy.Kind.LIVE))
             .setPrioritizeTimeOverSizeThresholds(false)
             .build()
@@ -923,8 +924,18 @@ class LivePlaybackController @Inject constructor(
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesOn())
             .setSelectUndeterminedTextLanguage(subtitlesOn())
             .build()
+        // "Snel starten": start decoding on the first I-frame (DVB H.264 often sends IDR frames
+        // seconds apart) and cut H.264 samples on slice headers too, so a stream without access
+        // unit delimiters does not wait for the next one. A missed reference can show a few
+        // blocky frames right after the zap; the picture is clean at the next keyframe.
+        val tsFlags = if (settings.fastStart) {
+            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
+        } else {
+            0
+        }
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
+            .setTsExtractorFlags(tsFlags)
         val http = OkHttpDataSource.Factory(clientFactory.streamCalls())
             .setTransferListener(byteCounter)
         val withAuthorization: DataSource.Factory = ResolvingDataSource.Factory(http) { spec: DataSpec ->
@@ -1114,6 +1125,12 @@ class LivePlaybackController @Inject constructor(
         override fun onBytesTransferred(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
             bytesLoaded.addAndGet(bytesTransferred.toLong())
             totalBytes.addAndGet(bytesTransferred.toLong())
+            // Internet streams have no pump: their first bytes are the player's own.
+            if (internet && !zapBytesSeen && isNetwork) {
+                zapBytesSeen = true
+                ZapTiming.mark(ZapTimeline.Step.CONNECT)
+                ZapTiming.mark(ZapTimeline.Step.BYTES)
+            }
         }
     }
 
@@ -1248,6 +1265,7 @@ class LivePlaybackController @Inject constructor(
         override fun onPlayerError(error: PlaybackException) {
             if (StreamFailures.isCancellation(error)) return
             EnigmaLog.player("error ${error.errorCodeName} http=${httpStatus(error) ?: "-"}")
+            ZapTiming.note("error", error.errorCodeName)
             if (internet) {
                 val exo = player
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && exo != null) {
@@ -1271,6 +1289,7 @@ class LivePlaybackController @Inject constructor(
 
         override fun onRenderedFirstFrame() {
             firstFrame = true
+            ZapTiming.mark(ZapTimeline.Step.FRAME)
             if (rescue != null && !rescueWorked) {
                 rescueWorked = true
                 EnigmaLog.player("picture after retry with $rescue: kept for this session")
@@ -1281,6 +1300,7 @@ class LivePlaybackController @Inject constructor(
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) {
+                ZapTiming.mark(ZapTimeline.Step.READY)
                 failures = 0
                 wasReady = true
                 if (internet) {
@@ -1318,6 +1338,7 @@ class LivePlaybackController @Inject constructor(
         }
 
         override fun onTracksChanged(tracks: Tracks) {
+            if (!tracks.isEmpty) ZapTiming.mark(ZapTimeline.Step.TRACKS, video = tracks.groups.any { it.type == C.TRACK_TYPE_VIDEO })
             publish()
             selectSubtitles(player ?: return)
         }
