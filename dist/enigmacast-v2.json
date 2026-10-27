@@ -1,8 +1,8 @@
 {
-  "versionCode": 118,
-  "versionName": "1.0.0-beta.115",
+  "versionCode": 119,
+  "versionName": "1.0.0-beta.116",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "Live TV: Back op volledig scherm opent nu de TV-gids met de focus op het kanaal dat speelt. Back in de kanalenlijst sluit de lijst en gaat terug naar volledig scherm. Nieuw: TV-gids voor IPTV, ook in de hotelmodus. Snel starten staat standaard uit.",
+  "notes": "Automatische framerate (instelbaar), rijen Favorieten en Opnames op het Android TV-startscherm, en IPTV-providers bewerken in een eigen venster.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
