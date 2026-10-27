@@ -228,8 +228,11 @@ internal object OpenWebifJson {
      * and `duration_sec`. Channels without EPG come back as title "N/A" and begin 0; they
      * are left out.
      */
-    fun parseNowEvents(body: String): List<NowEvent> {
-        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+    fun parseNowEvents(body: String): List<NowEvent> = parseNowEventsOrNull(body).orEmpty()
+
+    /** [parseNowEvents], or null when [body] is no JSON object at all (a broken bouquet answer). */
+    fun parseNowEventsOrNull(body: String): List<NowEvent>? {
+        val root = epgRoot(body) ?: return null
         val array = findArray(root, "events") ?: return emptyList()
         return array.mapNotNull { element ->
             val event = element as? JsonObject ?: return@mapNotNull null
@@ -245,8 +248,23 @@ internal object OpenWebifJson {
                 durationSec = duration,
                 eventId = event.primitive("id")?.toIntOrNull() ?: -1,
                 alternatives = alternativeRefs(event),
+                serviceName = unescape(event.primitive("sname").orEmpty()).trim(),
             )
         }
+    }
+
+    /**
+     * An EPG answer's root object. Some DVB titles and descriptions carry raw control bytes
+     * (character-table and emphasis codes), which some OpenWebif versions pass on unescaped and
+     * which make the whole bouquet's answer invalid JSON. Such an answer is read again with those
+     * bytes turned into spaces, so one bad programme cannot blank a whole bouquet.
+     */
+    internal fun epgRoot(body: String): JsonObject? {
+        runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull()?.let { return it }
+        val cleaned = buildString(body.length) {
+            for (char in body) append(if (char < ' ' || char in '\u0080'..'\u009f') ' ' else char)
+        }
+        return runCatching { openWebifJson.parseToJsonElement(cleaned).jsonObject }.getOrNull()
     }
 
     /** `asrefs` is a list of service references, or one string with several references. */
@@ -273,8 +291,12 @@ internal object OpenWebifJson {
      * `shortdesc`, `longdesc`, `begin_timestamp` and `duration_sec` per event. Events
      * without a reference (older epgservice answers) get [fallbackReference].
      */
-    fun parseGuideEvents(body: String, fallbackReference: String = ""): List<GuideEvent> {
-        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+    fun parseGuideEvents(body: String, fallbackReference: String = ""): List<GuideEvent> =
+        parseGuideEventsOrNull(body, fallbackReference).orEmpty()
+
+    /** [parseGuideEvents], or null when [body] is no JSON object at all (a broken bouquet answer). */
+    fun parseGuideEventsOrNull(body: String, fallbackReference: String = ""): List<GuideEvent>? {
+        val root = epgRoot(body) ?: return null
         val array = findArray(root, "events") ?: return emptyList()
         return array.mapNotNull { element ->
             val event = element as? JsonObject ?: return@mapNotNull null
@@ -295,13 +317,14 @@ internal object OpenWebifJson {
                 durationSec = duration,
                 genreId = event.primitive("genreid")?.toIntOrNull() ?: -1,
                 genre = unescape(event.primitive("genre").orEmpty()).trim(),
+                serviceName = unescape(event.primitive("sname").orEmpty()).trim(),
             )
         }
     }
 
     /** `/api/epgsearch`: the same event fields as the guide, plus the channel name in `sname`. */
     fun parseEpgSearch(body: String): List<EpgSearchEvent> {
-        val root = runCatching { openWebifJson.parseToJsonElement(body).jsonObject }.getOrNull() ?: return emptyList()
+        val root = epgRoot(body) ?: return emptyList()
         val array = findArray(root, "events") ?: return emptyList()
         return array.mapNotNull { element ->
             val event = element as? JsonObject ?: return@mapNotNull null

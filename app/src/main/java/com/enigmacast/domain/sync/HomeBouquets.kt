@@ -37,12 +37,27 @@ object GuideCachePolicy {
     /**
      * Use the cache when it has programmes in the window. Otherwise go to the network; when the
      * window lies within the synced days (today .. [horizonSec]) a sync is due as well.
+     * [coveredChannels] of [bouquetChannels] having programmes is the coverage check (-1: unknown).
      */
-    fun decide(cachedEvents: Int, fromSec: Long, toSec: Long, todayStartSec: Long, horizonSec: Long): Decision = when {
+    fun decide(
+        cachedEvents: Int,
+        fromSec: Long,
+        toSec: Long,
+        todayStartSec: Long,
+        horizonSec: Long,
+        coveredChannels: Int = -1,
+        bouquetChannels: Int = -1,
+    ): Decision = when {
+        // A cache with programmes for only a few channels of a large bouquet (a sync that got only
+        // part of it) would hide what the receiver has: ask the receiver for this block.
+        cachedEvents > 0 && coveredChannels >= 0 && bouquetChannels >= MIN_CHANNELS_FOR_COVERAGE &&
+            coveredChannels * 4 < bouquetChannels -> Decision.NETWORK
         cachedEvents > 0 -> Decision.CACHE
         toSec > todayStartSec && fromSec < horizonSec -> Decision.NETWORK_AND_SYNC
         else -> Decision.NETWORK
     }
 
     enum class Decision { CACHE, NETWORK, NETWORK_AND_SYNC }
+
+    private const val MIN_CHANNELS_FOR_COVERAGE = 8
 }

@@ -1,5 +1,6 @@
 package com.enigmacast.live
 
+import com.enigmacast.domain.tuner.ServiceMatch
 import com.enigmacast.domain.epg.GuideCell
 import com.enigmacast.domain.epg.GuideCursor
 import com.enigmacast.domain.epg.GuideEvent
@@ -127,7 +128,8 @@ class GuideGridController(
     fun putEvents(bouquetReference: String, events: List<GuideEvent>) {
         if (events.isEmpty()) return
         _state.update {
-            if (it.bouquetReference != bouquetReference) it else it.copy(events = GuideTimeline.merge(it.events, events))
+            if (it.bouquetReference != bouquetReference) it
+            else it.copy(events = GuideTimeline.merge(it.events, ServiceMatch.guideEvents(events, it.channels)))
         }
     }
 
@@ -182,7 +184,9 @@ class GuideGridController(
                 }
                 loaded += chunk
                 _state.update {
-                    it.copy(events = GuideTimeline.merge(it.events, events), failed = false, loading = pending.isNotEmpty())
+                    // Programmes whose reference is written differently from the list's still land on their row.
+                    val matched = ServiceMatch.guideEvents(events, it.channels)
+                    it.copy(events = GuideTimeline.merge(it.events, matched), failed = false, loading = pending.isNotEmpty())
                 }
             }
         }

@@ -12,12 +12,17 @@ data class BouquetSnapshot(val reference: String, val name: String, val channels
 object ChannelListHash {
     fun of(bouquets: List<BouquetSnapshot>): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        // The stored channel rows carry NowEvents.key: a new key format replaces them once.
+        digest.update(KEY_FORMAT.toByteArray())
         bouquets.forEach { b ->
             digest.update("B\u0000${b.reference}\u0000${b.name}\u0001".toByteArray())
             b.channels.forEach { digest.update("C\u0000$it\u0001".toByteArray()) }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
+
+    /** Raised when [com.enigmacast.domain.tuner.NowEvents.key] changes (2: alternatives keep their own key). */
+    private const val KEY_FORMAT = "K2\u0001"
 }
 
 /** What a channel check does with a freshly fetched list. Pure for tests. */

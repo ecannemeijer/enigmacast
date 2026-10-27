@@ -8,6 +8,8 @@ import com.enigmacast.data.tmdb.SyncSettings
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.service.BouquetChannels
+import com.enigmacast.domain.service.ServiceStreams
 import com.enigmacast.domain.sync.DayWindow
 import com.enigmacast.domain.sync.GuideCachePolicy
 import com.enigmacast.domain.sync.GuideCacheReader
@@ -41,7 +43,12 @@ class RoomGuideCache @Inject constructor(
         val now = System.currentTimeMillis()
         val today = DayWindow.of(now, ZoneId.systemDefault())
         val horizon = today.startSec + settings.values.value.epgDays * 24 * 3600L
-        return when (GuideCachePolicy.decide(rows.size, fromSec, toSec, today.startSec, horizon)) {
+        val covered = rows.mapTo(HashSet()) { it.serviceKey }.size
+        val channelCount = if (rows.isEmpty()) -1
+        else runCatching { dao.channelsIn(key(receiver), bouquetReference) }.getOrNull()
+            ?.filter { BouquetChannels.isPlayableChannel(it.reference) && !ServiceStreams.isInternet(it.reference) }
+            ?.size ?: -1
+        return when (GuideCachePolicy.decide(rows.size, fromSec, toSec, today.startSec, horizon, covered, channelCount)) {
             // A bouquet block is thousands of rows: mapped off the caller (often Main).
             GuideCachePolicy.Decision.CACHE -> withContext(dispatchers.default) { rows.map(CacheMappers::event) } + aliasEvents(receiver, bouquetReference, fromSec, toSec)
             GuideCachePolicy.Decision.NETWORK_AND_SYNC -> { askSync(now); null }

@@ -15,6 +15,8 @@ data class GuideEvent(
     val genreId: Int = -1,
     /** OpenWebif's genre text, for example "Movie/Drama"; blank when the receiver sends none. */
     val genre: String = "",
+    /** The channel name OpenWebif sent with the programme (`sname`); blank when none. Only used to match channels. */
+    val serviceName: String = "",
 ) {
     val endEpochSec: Long get() = beginEpochSec + durationSec
 
