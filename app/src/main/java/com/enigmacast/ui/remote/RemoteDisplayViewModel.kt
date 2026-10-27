@@ -1457,20 +1457,33 @@ class RemoteDisplayViewModel @Inject constructor(
             ui.programmePrompt != null -> dismissProgramme()
             ui.searchOpen -> closeSearch()
             ui.quickBar -> closeQuickBar()
-            ui.channelList -> {
-                val pane = ChannelListNavigation.back(listPane(ui))
-                applyPane(pane, focusList = pane == ListPane.CHANNELS)
+            // Back ladder: list -> bouquets -> leave (EPG panel first goes back to the list).
+            ui.channelList -> when (ChannelListNavigation.backLadder(listPane(ui))) {
+                ListPane.CHANNELS -> closeChannelEpg()
+                ListPane.BOUQUETS -> openBouquets()
+                null -> leaveFromBouquets()
+                else -> Unit
             }
             ui.numberEntry.isNotEmpty() -> {
                 numberJob?.cancel()
                 numberEntry.clear()
                 _ui.update { it.copy(numberEntry = "") }
             }
-            ui.banner && !playingRadio(ui) -> hideBanner()
             pip.playing() -> pip.stop()
-            // Back on the bare picture returns to the dashboard (the programme grid, on this channel).
-            else -> onLeaveToDashboard?.invoke()
+            // Back on the picture (banner up or not) opens the channel list on the playing
+            // channel, the same as Left.
+            else -> openChannelList()
         }
+    }
+
+    /**
+     * Last step of the Back ladder: the list closes (a bouquet only looked at is not kept) and the
+     * player leaves to Home with focus on the side menu. Hotel mode has no Home: the app shell
+     * turns that into the guest's hotel menu, never the launcher.
+     */
+    private fun leaveFromBouquets() {
+        closeChannelList()
+        onLeaveToDashboard?.invoke()
     }
 
     private fun pushDigit(digit: Int) {

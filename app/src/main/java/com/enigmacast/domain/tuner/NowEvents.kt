@@ -111,6 +111,18 @@ object ChannelListNavigation {
         ListPane.CHANNELS, ListPane.CLOSED -> ListPane.CLOSED
     }
 
+    /**
+     * Back while watching live TV full screen, one level per press: the picture opens the channel
+     * list (as Left does), the list goes to the bouquets, a channel's programmes back to the list,
+     * and the bouquets leave the player (null: Home's side menu, or the hotel menu).
+     */
+    fun backLadder(pane: ListPane): ListPane? = when (pane) {
+        ListPane.CLOSED -> ListPane.CHANNELS
+        ListPane.CHANNELS -> ListPane.BOUQUETS
+        ListPane.EPG -> ListPane.CHANNELS
+        ListPane.BOUQUETS -> null
+    }
+
     fun bouquetChosen(): ListPane = ListPane.CHANNELS
 
     /** The bouquet to focus when the bouquet column opens: the active one, else the first. */

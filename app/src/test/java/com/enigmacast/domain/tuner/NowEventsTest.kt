@@ -82,6 +82,16 @@ class ChannelListNavigationTest {
     }
 
     @Test
+    fun backLadderGoesPictureListBouquetsThenLeaves() {
+        assertEquals(ListPane.CHANNELS, ChannelListNavigation.backLadder(ListPane.CLOSED))
+        assertEquals(ListPane.BOUQUETS, ChannelListNavigation.backLadder(ListPane.CHANNELS))
+        assertEquals(ListPane.CHANNELS, ChannelListNavigation.backLadder(ListPane.EPG))
+        assertEquals(null, ChannelListNavigation.backLadder(ListPane.BOUQUETS))
+        // Back matches Left from the list.
+        assertEquals(ChannelListNavigation.left(ListPane.CHANNELS), ChannelListNavigation.backLadder(ListPane.CHANNELS))
+    }
+
+    @Test
     fun rightOpensTheChannelGuideAndLeftOrBackReturns() {
         assertEquals(ListPane.EPG, ChannelListNavigation.right(ListPane.CHANNELS))
         assertEquals(ListPane.BOUQUETS, ChannelListNavigation.right(ListPane.BOUQUETS))
