@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.draw.clip
@@ -51,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
-import com.enigmacast.ui.theme.ChoiceChip
 import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.CompactListRow
 import androidx.compose.ui.focus.focusRestorer
@@ -208,14 +208,7 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
     // With no rows yet, Left from the right panel lands on the provider chooser.
     val backTarget = if (targetKey != null) focus.lastRow else focus.chooser
     Column(Modifier.weight(1f).fillMaxHeight().focusGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        CompactChoice(
-            title = stringResource(R.string.import_provider),
-            options = SettingsProvider.entries.map { it.title },
-            selectedIndex = viewModel.provider.ordinal,
-            onSelect = { viewModel.chooseProvider(SettingsProvider.entries[it]) },
-            selectedModifier = Modifier.focusRequester(focus.chooser),
-            lastRight = focus.panel,
-        )
+        ProviderField(viewModel, focus)
         when {
             viewModel.packagesLoading -> Muted(stringResource(R.string.import_loading))
             viewModel.packagesError != null -> {
@@ -576,35 +569,118 @@ internal fun CheckBox(checked: Boolean, focused: Boolean) {
     }
 }
 
-/** Title and choices on one line (provider chooser). */
+/**
+ * The settings-list field: shows the chosen GitHub list and opens [ProviderPickerDialog] on OK.
+ * Right goes to the panel with Load; when the picker closes (choice or Back), focus comes
+ * back here.
+ */
 @Composable
-private fun CompactChoice(
-    title: String,
-    options: List<String>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-    firstLeft: FocusRequester? = null,
-    lastRight: FocusRequester? = null,
-    selectedModifier: Modifier = Modifier,
-) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(title, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.widthIn(max = 130.dp))
-        options.forEachIndexed { index, label ->
-            ChoiceChip(
-                label = label,
-                selected = index == selectedIndex,
-                onClick = { onSelect(index) },
-                modifier = Modifier
-                    .then(if (index == selectedIndex) selectedModifier else Modifier)
-                    .focusProperties {
-                        if (index == 0 && firstLeft != null) left = firstLeft
-                        if (index == options.lastIndex && lastRight != null) right = lastRight
-                    },
+private fun ProviderField(viewModel: SettingsImportViewModel, focus: PanelFocus) {
+    val provider = viewModel.provider
+    CompactListRow(
+        onClick = viewModel::openProviderPicker,
+        modifier = Modifier.focusRequester(focus.chooser).focusProperties { right = focus.panel },
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+    ) { focused ->
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.import_list_source),
+                fontSize = 12.sp,
+                color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted,
+                maxLines = 1,
             )
+            Text(provider.title, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                provider.repoPath,
+                fontSize = 12.sp,
+                color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Subtle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(Icons.Filled.ArrowDropDown, contentDescription = stringResource(R.string.import_list_source_title), modifier = Modifier.size(24.dp))
+    }
+    var wasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(viewModel.providerPicker) {
+        if (wasOpen && !viewModel.providerPicker) focus.chooser.requestWhenReady()
+        wasOpen = viewModel.providerPicker
+    }
+    if (viewModel.providerPicker) ProviderPickerDialog(viewModel)
+}
+
+/**
+ * One row per GitHub repository with its address, the date of its newest commit and, once
+ * read, how many variants it has. Focus starts on the chosen list and stays in the dialog
+ * (Up on the first row and Down on the last row stop there); OK picks, Back closes.
+ */
+@Composable
+private fun ProviderPickerDialog(viewModel: SettingsImportViewModel) {
+    Dialog(onDismissRequest = viewModel::closeProviderPicker, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        NavigationSoundsForWindow()
+        val current = remember { FocusRequester() }
+        LaunchedEffect(Unit) { current.requestWhenReady() }
+        val entries = SettingsProvider.entries
+        Column(
+            modifier = Modifier
+                .widthIn(min = 420.dp, max = 560.dp)
+                .heightIn(max = 480.dp)
+                .background(EnigmaColors.Selected, skinShape(14.dp))
+                .border(1.dp, EnigmaColors.CardBorder, skinShape(14.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                stringResource(R.string.import_list_source_title),
+                color = EnigmaColors.Text,
+                fontSize = 17.sp,
+                fontWeight = EnigmaType.Strong,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            Text(
+                stringResource(R.string.import_list_source_hint),
+                color = EnigmaColors.Muted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
+            )
+            Column(Modifier.verticalScroll(rememberScrollState()).focusGroup()) {
+                entries.forEachIndexed { index, provider ->
+                    val chosen = provider == viewModel.provider
+                    CompactListRow(
+                        onClick = { viewModel.chooseProvider(provider) },
+                        selected = chosen,
+                        modifier = Modifier
+                            .then(if (chosen) Modifier.focusRequester(current) else Modifier)
+                            .focusProperties {
+                                left = FocusRequester.Cancel
+                                right = FocusRequester.Cancel
+                                if (index == 0) up = FocusRequester.Cancel
+                                if (index == entries.lastIndex) down = FocusRequester.Cancel
+                            },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) { focused ->
+                        val subtle = if (focused) EnigmaColors.OnFocus else EnigmaColors.Subtle
+                        Column(Modifier.weight(1f)) {
+                            Text(provider.title, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
+                            Text(provider.repoPath, fontSize = 12.sp, color = subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Column(Modifier.padding(start = 10.dp), horizontalAlignment = Alignment.End) {
+                            val date = viewModel.providerDates[provider]
+                            Text(
+                                if (date != null) stringResource(R.string.import_list_updated, DAY.format(date.atZone(ZoneId.systemDefault()))) else "…",
+                                fontSize = 12.sp,
+                                color = subtle,
+                                maxLines = 1,
+                            )
+                            viewModel.providerCounts[provider]?.let { count ->
+                                Text(stringResource(R.string.import_list_variants, count), fontSize = 12.sp, color = subtle, maxLines = 1)
+                            }
+                        }
+                        if (chosen) {
+                            Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -815,6 +891,9 @@ private fun failureMessage(error: TransferException): String {
             TransferFailure.RELOAD_FAILED -> R.string.import_err_reload
             TransferFailure.DOWNLOAD_FAILED -> R.string.import_err_download
             TransferFailure.NO_FILES -> R.string.import_err_no_files
+            TransferFailure.NOT_FOUND -> R.string.import_err_not_found
+            TransferFailure.RATE_LIMITED -> R.string.import_err_rate_limited
+            TransferFailure.OFFLINE -> R.string.import_err_offline
             TransferFailure.UNKNOWN -> R.string.import_err_unknown
         },
     )
@@ -926,3 +1005,4 @@ private fun ReceiverChoiceDialog(viewModel: SettingsImportViewModel) {
 }
 
 private val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")

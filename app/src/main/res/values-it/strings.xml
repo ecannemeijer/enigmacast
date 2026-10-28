@@ -1225,6 +1225,14 @@
     <string name="import_err_reload">I file sono stati copiati, ma il ricaricamento dell\'elenco canali non è riuscito. Riavvia la GUI del ricevitore.</string>
     <string name="import_err_download">Download non riuscito. Controlla la connessione internet.</string>
     <string name="import_err_no_files">Questo elenco non contiene lamedb o bouquets.tv.</string>
+    <string name="import_list_source">Lista settings</string>
+    <string name="import_list_source_title">Scegli una lista settings</string>
+    <string name="import_list_source_hint">Liste canali Enigma2 su GitHub. Al caricamento viene scaricata la versione più recente.</string>
+    <string name="import_list_updated">Aggiornata %1$s</string>
+    <string name="import_list_variants">%1$d varianti</string>
+    <string name="import_err_not_found">Questa lista settings non è stata trovata su GitHub; potrebbe essere stata rimossa o rinominata.</string>
+    <string name="import_err_rate_limited">Limite di richieste GitHub raggiunto (60 all\'ora senza login). Riprova più tardi.</string>
+    <string name="import_err_offline">Nessuna connessione internet. GitHub non è raggiungibile.</string>
     <string name="import_err_unknown">Si è verificato un problema.</string>
     <string name="import_confirm_list_title">Sostituire l\'elenco canali?</string>
     <string name="import_confirm_list">L\'elenco canali attuale su %2$s verrà sostituito da \"%1$s\". Prima viene creato un backup, che puoi ripristinare in Ripristina. I bouquet IPTV di EnigmaCast restano. Un nuovo satellites.xml ha effetto solo dopo il riavvio del ricevitore.</string>

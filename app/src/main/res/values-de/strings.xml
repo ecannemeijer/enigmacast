@@ -1221,6 +1221,14 @@
     <string name="import_err_reload">Die Dateien wurden kopiert, aber das Neuladen der Senderliste ist fehlgeschlagen. Starte die GUI des Receivers neu.</string>
     <string name="import_err_download">Download fehlgeschlagen. Prüfe die Internetverbindung.</string>
     <string name="import_err_no_files">Diese Liste enthält kein lamedb oder bouquets.tv.</string>
+    <string name="import_list_source">Senderliste</string>
+    <string name="import_list_source_title">Senderliste wählen</string>
+    <string name="import_list_source_hint">Enigma2-Senderlisten auf GitHub. Beim Laden wird die neueste Version heruntergeladen.</string>
+    <string name="import_list_updated">Aktualisiert %1$s</string>
+    <string name="import_list_variants">%1$d Varianten</string>
+    <string name="import_err_not_found">Diese Senderliste wurde auf GitHub nicht gefunden; sie wurde eventuell entfernt oder umbenannt.</string>
+    <string name="import_err_rate_limited">GitHub-Limit erreicht (60 Anfragen pro Stunde ohne Anmeldung). Später erneut versuchen.</string>
+    <string name="import_err_offline">Keine Internetverbindung. GitHub ist nicht erreichbar.</string>
     <string name="import_err_unknown">Etwas ist schiefgelaufen.</string>
     <string name="import_confirm_list_title">Senderliste ersetzen?</string>
     <string name="import_confirm_list">Die aktuelle Senderliste auf %2$s wird durch \"%1$s\" ersetzt. Zuerst wird eine Sicherung erstellt, die du unter Wiederherstellen zurückspielen kannst. Deine IPTV-Bouquets aus EnigmaCast bleiben erhalten. Eine neue satellites.xml wirkt erst nach einem Neustart des Receivers.</string>

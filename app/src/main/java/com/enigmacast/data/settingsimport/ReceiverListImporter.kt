@@ -99,7 +99,8 @@ class ReceiverListImporter @Inject constructor(
     suspend fun restore(backup: SettingsBackup, receiver: ReceiverConfig, onStep: (ImportStep) -> Unit = {}): ReceiverOutcome =
         run(receiver, takeBackup = false, onStep = onStep) { _, boxFiles, _ ->
             val saved = backups.read(backup)
-            val deletions = boxFiles.filter { SettingsFiles.isEnigmaListFile(it) && it !in saved }
+            // alternatives.* stay: backups made before they were backed up do not have them.
+            val deletions = boxFiles.filter { SettingsFiles.isEnigmaListFile(it) && !SettingsFiles.isAlternatives(it) && it !in saved }
             ImportPlan(saved, deletions) to saved.keys.count { it.startsWith("userbouquet.") && it.endsWith(".tv") }
         }
 
