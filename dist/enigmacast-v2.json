@@ -1,8 +1,8 @@
 {
-  "versionCode": 120,
-  "versionName": "1.0.0-beta.117",
+  "versionCode": 121,
+  "versionName": "1.0.0-beta.118",
   "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "EPG in de kanalenlijst en TV-gids werkt nu voor alle satellietboeketten (bijv. 13 graden Italie), plus automatische framerate, startschermrijen en IPTV-providers in een eigen venster.",
+  "notes": "Keuzemenu met 8 Enigma2 settings-lijsten (o.a. Vhannibal, GioppyGio, Matze, Dona, Predrag), focusfix in de IPTV-kanalenlijst, echte picons op het startscherm en TMDB-artwork bij opnames.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
