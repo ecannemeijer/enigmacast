@@ -22,16 +22,22 @@ import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.model.ChannelMemory
 import com.enigmacast.domain.model.LastLiveSource
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.recording.Recording
+import com.enigmacast.domain.recording.RecordingPlace
+import com.enigmacast.domain.recording.RecordingStatus
 import com.enigmacast.domain.source.TunerStatusSource
 import com.enigmacast.domain.sync.GuideCacheReader
-import com.enigmacast.domain.tuner.ServiceRef
 import com.enigmacast.domain.tvhome.TvHome
+import com.enigmacast.domain.tvhome.TvHomeArt
+import com.enigmacast.data.xtream.XtreamRepository
+import com.enigmacast.live.RecordingArtwork
 import com.enigmacast.util.EnigmaLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.security.MessageDigest
 import java.text.DateFormat
 import java.util.Date
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
@@ -42,6 +48,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 /**
  * The two Android TV home-screen rows: "EnigmaCast – Favorieten" (recent live channels with the
@@ -60,10 +68,14 @@ class TvHomePublisher @Inject constructor(
     private val guide: GuideCacheReader,
     private val tuner: TunerStatusSource,
     private val api: OpenWebifApi,
+    private val artwork: RecordingArtwork,
 ) {
     private val mutex = Mutex()
     private val prefs by lazy { context.getSharedPreferences("tvhome", Context.MODE_PRIVATE) }
     private val _browsableRequest = MutableStateFlow<Long?>(null)
+    private val logoClient by lazy {
+        OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()
+    }
 
     /** A row the launcher only shows after the user agrees (the second channel); MainActivity asks once. */
     val browsableRequest: StateFlow<Long?> = _browsableRequest.asStateFlow()
@@ -103,29 +115,37 @@ class TvHomePublisher @Inject constructor(
         val favorites = ensureChannel(TvHome.FAVORITES_KEY, context.getString(R.string.tvhome_favorites), default = true)
         val recordings = ensureChannel(TvHome.RECORDINGS_KEY, context.getString(R.string.tvhome_recordings), default = false)
         val used = HashSet<String>()
+        val channels = BouquetIndex(receiver)
         val live = liveCards(current)
-        replace(favorites, live.mapIndexed { index, card -> liveProgram(favorites, card, index, live.size, receiver, used) })
+        replace(favorites, live.mapIndexed { index, card -> liveProgram(favorites, card, index, live.size, receiver, channels, used) })
         val movies = receiver?.let { r -> runCatching { api.movies(r) }.getOrNull() }
         // An unreachable receiver keeps the last row instead of emptying it.
         if (movies != null && receiver != null) {
             val newest = movies.filter { it.filename.isNotBlank() }.sortedByDescending { it.begin }.take(TvHome.MAX_RECORDINGS)
-            val picons = piconsByName(receiver, newest.map { it.serviceName })
+            val items = newest.map { movie -> movie to recordingOf(receiver, movie) }
+            // The same TMDB match (and Room cache) as the recordings in My items; no key = picons only.
+            runCatching { artwork.resolve(items.map { it.second }) }
+            val matches = artwork.movies.value
             replace(
                 recordings,
-                newest.mapIndexed { index, movie ->
-                    val picon = picons[movie.serviceName.trim().lowercase()]
-                    val art = picon?.let { savePicon(receiver, it, used) }
-                    val description = listOfNotNull(
-                        movie.serviceName.takeIf { it.isNotBlank() },
-                        movie.begin.takeIf { it > 0 }?.let { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it * 1000)) },
-                    ).joinToString(" · ")
+                items.mapIndexed { index, (movie, item) ->
+                    val tmdb = matches[item.id]
+                    val picture = TvHomeArt.recordingPicture(tmdb)
+                    val art = picture?.let { Uri.parse(it.url) }
+                        ?: piconArt(receiver, channels.piconPaths("", movie.serviceName), used)
+                    val aspect = if (picture?.shape == TvHomeArt.Shape.POSTER) {
+                        TvContractCompat.PreviewPrograms.ASPECT_RATIO_2_3
+                    } else {
+                        TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9
+                    }
+                    val date = movie.begin.takeIf { it > 0 }?.let { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it * 1000)) }
                     PreviewProgram.Builder()
                         .setChannelId(recordings)
                         .setType(TvContractCompat.PreviewPrograms.TYPE_CLIP)
                         .setTitle(movie.name.ifBlank { movie.filename.substringAfterLast('/') })
-                        .setDescription(description)
+                        .setDescription(TvHomeArt.recordingDescription(movie.description, tmdb, movie.serviceName, date))
                         .setPosterArtUri(art ?: banner())
-                        .setPosterArtAspectRatio(TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9)
+                        .setPosterArtAspectRatio(aspect)
                         .setDurationMillis((movie.lengthSec * 1000).coerceIn(0, Int.MAX_VALUE.toLong()).toInt())
                         .setIntentUri(Uri.parse(TvHome.uri(TvHome.Link.Recording(movie.filename))))
                         .setInternalProviderId("rec:" + hash(movie.filename))
@@ -153,12 +173,19 @@ class TvHomePublisher @Inject constructor(
         index: Int,
         count: Int,
         receiver: ReceiverConfig?,
+        channels: BouquetIndex,
         used: MutableSet<String>,
     ): PreviewProgram {
         var title = card.title
         var description = ""
-        var art: Uri? = card.logo.takeIf { it.isNotBlank() }?.let(Uri::parse)
+        var art: Uri? = null
         val link = card.link
+        if (link is TvHome.Link.Iptv) {
+            // Downloaded by the app and served from our provider: launchers do not load plain-http
+            // logos, and the address may carry the playlist login. A public https logo is the fallback.
+            art = card.logo.takeIf { it.isNotBlank() }?.let { saveLogo(it, used) }
+                ?: TvHome.publicLogo(card.logo)?.takeIf { it.startsWith("https://", ignoreCase = true) }?.let(Uri::parse)
+        }
         if (link is TvHome.Link.Sat && receiver != null) {
             val now = System.currentTimeMillis() / 1000
             val event = runCatching { guide.serviceEvents(receiver, link.reference) }.getOrNull()
@@ -167,7 +194,7 @@ class TvHomePublisher @Inject constructor(
                 title = "${card.title} – ${event.title}"
                 description = event.shortDescription
             }
-            art = ServiceRef.piconPath(link.reference)?.let { savePicon(receiver, it, used) }
+            art = piconArt(receiver, channels.piconPaths(link.reference, link.name.ifBlank { card.title }), used)
         }
         return PreviewProgram.Builder()
             .setChannelId(channelId)
@@ -183,37 +210,83 @@ class TvHomePublisher @Inject constructor(
             .build()
     }
 
-    /** Channel name → picon path, from the cached bouquets (for recordings, which only name their channel). */
-    private suspend fun piconsByName(receiver: ReceiverConfig, names: List<String>): Map<String, String> {
-        val wanted = names.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toMutableSet()
-        val out = HashMap<String, String>()
-        if (wanted.isEmpty()) return out
-        val bouquets = runCatching { guide.televisionBouquets(receiver) }.getOrNull().orEmpty().take(8)
-        for (bouquet in bouquets) {
-            val channels: List<BouquetEntry> = runCatching { guide.channelsInBouquet(receiver, bouquet.reference) }.getOrNull().orEmpty()
-            for (channel in channels) {
-                val key = channel.name.trim().lowercase()
-                if (key in wanted) {
-                    val path = channel.picon.ifBlank { ServiceRef.piconPath(channel.reference).orEmpty() }
-                    if (path.isNotBlank()) { out[key] = path; wanted -= key }
+    /** A box recording as a [Recording], so [RecordingArtwork] matches it like the ones in My items. */
+    private fun recordingOf(receiver: ReceiverConfig, movie: com.enigmacast.data.openwebif.OpenWebifJson.ReceiverMovie): Recording =
+        Recording(
+            id = "tvhome:" + hash(receiver.id + "|" + movie.filename),
+            title = movie.name.ifBlank { movie.filename.substringAfterLast('/').substringBeforeLast('.') },
+            channelName = movie.serviceName,
+            reference = "",
+            eventId = 0,
+            beginEpochSec = movie.begin,
+            endEpochSec = movie.begin + movie.lengthSec.coerceAtLeast(0),
+            place = RecordingPlace.RECEIVER,
+            status = RecordingStatus.READY,
+            receiverId = receiver.id,
+            fileName = movie.filename,
+        )
+
+    /**
+     * The synced TV bouquets of the receiver, read once per refresh and only when a card needs a
+     * picon: the picon paths OpenWebif reported are the files the app's own channel lists show.
+     */
+    private inner class BouquetIndex(private val receiver: ReceiverConfig?) {
+        private var entries: List<BouquetEntry>? = null
+
+        suspend fun piconPaths(reference: String, name: String): List<String> =
+            TvHomeArt.piconCandidates(reference, name, entries())
+
+        private suspend fun entries(): List<BouquetEntry> {
+            entries?.let { return it }
+            val out = ArrayList<BouquetEntry>()
+            val box = receiver
+            if (box != null) {
+                val bouquets = runCatching { guide.televisionBouquets(box) }.getOrNull().orEmpty().take(MAX_BOUQUETS)
+                for (bouquet in bouquets) {
+                    out += runCatching { guide.channelsInBouquet(box, bouquet.reference) }.getOrNull().orEmpty()
                 }
             }
-            if (wanted.isEmpty()) break
+            entries = out
+            return out
         }
-        return out
     }
 
-    /** The picon on our own provider; fetched from the receiver once, kept for later refreshes. */
-    private suspend fun savePicon(receiver: ReceiverConfig, path: String, used: MutableSet<String>): Uri? {
-        val name = hash(receiver.id + "|" + path) + ".png"
+    /** The first of [paths] the receiver has, as a 16:9 card on our own provider. */
+    private suspend fun piconArt(receiver: ReceiverConfig?, paths: List<String>, used: MutableSet<String>): Uri? {
+        if (receiver == null) return null
+        for (path in paths) {
+            saveCard(receiver.id + "|" + path, used) { runCatching { tuner.picon(receiver, path) }.getOrNull() }?.let { return it }
+        }
+        return null
+    }
+
+    /** An IPTV logo, downloaded by the app (never handed to the launcher as an address). */
+    private suspend fun saveLogo(url: String, used: MutableSet<String>): Uri? = saveCard("logo|$url", used) {
+        try {
+            logoClient.newCall(Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()).execute().use { r ->
+                if (!r.isSuccessful) null else r.body.bytes().takeIf { it.size <= TvHomeArt.MAX_LOGO_BYTES }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * A card picture on our own provider: fetched once, laid on a 16:9 card, kept for later
+     * refreshes. The file name is a hash, so no address or login ends up in the TV provider.
+     */
+    private suspend fun saveCard(key: String, used: MutableSet<String>, fetch: suspend () -> ByteArray?): Uri? {
+        val name = hash("v${TvHomeArt.VERSION}|$key") + ".png"
         val dir = TvHomeArtProvider.dir(context)
         val file = File(dir, name)
         if (!file.isFile || file.length() == 0L) {
-            val bytes = runCatching { tuner.picon(receiver, path) }.getOrNull() ?: return null
-            if (bytes.isEmpty()) return null
+            val bytes = fetch()?.takeIf { it.isNotEmpty() } ?: return null
+            val png = runCatching { TvHomeCardArt.card(bytes) }.getOrNull() ?: return null
             dir.mkdirs()
             val tmp = File(dir, "$name.tmp")
-            tmp.writeBytes(bytes)
+            tmp.writeBytes(png)
             if (!tmp.renameTo(file)) { tmp.delete(); return null }
         }
         used += name
@@ -267,7 +340,7 @@ class TvHomePublisher @Inject constructor(
 
     /** Swaps the row's programs, unless nothing changed (no flicker on the home screen). */
     private fun replace(channelId: Long, programs: List<PreviewProgram>) {
-        val fingerprint = hash(programs.joinToString("\n") { it.toContentValues().toString() })
+        val fingerprint = hash("v${TvHomeArt.VERSION}\n" + programs.joinToString("\n") { it.toContentValues().toString() })
         val key = "rows:$channelId"
         if (prefs.getString(key, null) == fingerprint) return
         val helper = helper()
@@ -297,6 +370,10 @@ class TvHomePublisher @Inject constructor(
             .forEach { helper.deletePreviewChannel(it.id) }
         prefs.edit().clear().apply()
         TvHomeArtProvider.dir(context).listFiles()?.forEach { it.delete() }
+    }
+
+    private companion object {
+        const val MAX_BOUQUETS = 40
     }
 
     private fun hash(value: String): String =

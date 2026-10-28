@@ -30,7 +30,10 @@ object TvHome {
         data object Open : Link
     }
 
-    /** One card in the Favorieten row. */
+    /**
+     * One card in the Favorieten row. [logo] is the IPTV logo address the app downloads itself
+     * (it may carry a login, so it never goes to the TV provider as is).
+     */
     data class LiveCard(val link: Link, val title: String, val logo: String)
 
     fun uri(link: Link): String = when (link) {
@@ -76,7 +79,7 @@ object TvHome {
             LiveCard(Link.Sat(it.reference, it.name), it.name, "")
         }
         val iptvCards = iptv.filter { it.second.reference.isNotBlank() }.distinctBy { it.first + "/" + it.second.reference }.map { (source, ch) ->
-            LiveCard(Link.Iptv(source, ch.reference, ch.name, ch.bouquetReference), ch.name, publicLogo(ch.logo).orEmpty())
+            LiveCard(Link.Iptv(source, ch.reference, ch.name, ch.bouquetReference), ch.name, TvHomeArt.downloadableLogo(ch.logo).orEmpty())
         }
         val (first, second) = if (iptvFirst) iptvCards to satCards else satCards to iptvCards
         val out = ArrayList<LiveCard>()
