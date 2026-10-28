@@ -389,12 +389,13 @@ fun XtreamScreen(
                 model.restorePlayingCategory()
                 openRequest++
             }
-            model.pip.playing() -> model.pip.stop()
-            // Back on the picture (banner up or not) opens the TV guide on this channel (the
-            // channel list stays on Left). Without the guide (Premium) the page closes as before.
-            else -> {
-                if (bannerShown) { bannerUntil = 0L; details = false }
-                if (!leaveToGuide()) leaveLive()
+            // The info bar (OSD) up: Back only closes it and the channel stays full screen. Back on
+            // the bare picture opens the TV guide on this channel (the channel list stays on Left).
+            // Without the guide (Premium) the page closes as before.
+            else -> when (com.enigmacast.domain.player.LiveBack.onPicture(osdVisible = bannerShown, insetPlaying = model.pip.playing())) {
+                com.enigmacast.domain.player.LiveBackStep.HIDE_OSD -> { bannerUntil = 0L; details = false; openRequest++ }
+                com.enigmacast.domain.player.LiveBackStep.STOP_INSET -> model.pip.stop()
+                com.enigmacast.domain.player.LiveBackStep.GUIDE -> if (!leaveToGuide()) leaveLive()
             }
         }
     }
@@ -663,7 +664,8 @@ fun XtreamScreen(
 
         model.playing?.let { playing ->
             var now by remember { mutableStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay(500) } }
+            // Wakes right at the end too, so the bar is gone exactly when Back stops treating it as shown.
+            LaunchedEffect(bannerUntil) { while (true) { now = System.currentTimeMillis(); if (now > bannerUntil) break; delay((bannerUntil - now + 1).coerceIn(1L, 500L)) } }
             if (!panelOpen && playingVod()) {
                 val ep = playing.episode
                 com.enigmacast.ui.player.VodTitleOverlay(vodOsd, model.titleInfo, startKey = playing, modifier = Modifier.align(Alignment.TopStart))
