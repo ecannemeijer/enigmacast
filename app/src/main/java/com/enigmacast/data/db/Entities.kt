@@ -165,3 +165,5 @@ data class IptvRowEpgRow(
 
 /** A receiver channel name and its guide key (not a table). */
 data class ChannelNameRow(val name: String, val serviceKey: String)
+
+data class ChannelMatchRow(val name: String, val reference: String, val serviceKey: String)

@@ -38,6 +38,14 @@ object EnigmaLog {
         Timber.tag("EnigmaPlayer").i(message)
     }
 
+    /**
+     * IPTV channels borrowing the satellite guide: counts only, never names or addresses. Always
+     * on (also in release builds, which plant no Timber tree): `adb logcat -s EcSatEpg`.
+     */
+    fun satEpg(message: String) {
+        runCatching { android.util.Log.i("EcSatEpg", message) }
+    }
+
     fun service(message: String) {
         Timber.tag("EnigmaService").i(message)
     }
