@@ -21,7 +21,6 @@ import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.playback.SleepEvent
 import com.enigmacast.update.AppUpdateClient
 import com.enigmacast.update.RemoteRelease
-import com.enigmacast.update.isNewerRelease
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.uiMessage
@@ -205,26 +204,70 @@ class AppViewModel @Inject constructor(
                 runCatching { account.refresh() }
             }
         }
+        // Update check: at start and every few hours here, and when the app comes back to the
+        // front (onForeground); on a TV the process lives for days.
         viewModelScope.launch {
+            checkForUpdate(com.enigmacast.update.UpdateCheckPolicy.Reason.START)
+            while (true) {
+                delay(com.enigmacast.update.UpdateCheckPolicy.PERIODIC_MS)
+                checkForUpdate(com.enigmacast.update.UpdateCheckPolicy.Reason.PERIODIC)
+            }
+        }
+    }
+
+    private val updateCheckLock = kotlinx.coroutines.sync.Mutex()
+    private var lastUpdateCheckAt: Long? = null
+    private var dismissedUpdateVersion: Int? = null
+    private var dismissedUpdateAt: Long? = null
+
+    /** The app came to the front: look for a new release (at most once per half hour). */
+    fun onForeground() {
+        viewModelScope.launch { checkForUpdate(com.enigmacast.update.UpdateCheckPolicy.Reason.FOREGROUND) }
+    }
+
+    private fun updateBusy(): Boolean =
+        downloadJob?.isActive == true || updatePrompt?.installing == true || updatePrompt?.progress != null
+
+    private fun promptAllowed(remote: RemoteRelease): Boolean = com.enigmacast.update.UpdateCheckPolicy.shouldPrompt(
+        localVersionCode = BuildConfig.VERSION_CODE,
+        remoteVersionCode = remote.versionCode,
+        // Hotel mode: never an update dialog in front of a guest (the owner updates with hotel mode off).
+        hotelMode = hotel.current.enabled,
+        promptShowing = updatePrompt != null,
+        busy = updateBusy(),
+        dismissedVersion = dismissedUpdateVersion,
+        dismissedAt = dismissedUpdateAt,
+        nowMs = android.os.SystemClock.elapsedRealtime(),
+    )
+
+    /** One check at a time; a check that is still running (or waiting for setup) makes the next one skip. */
+    private suspend fun checkForUpdate(reason: com.enigmacast.update.UpdateCheckPolicy.Reason) {
+        if (!updateCheckLock.tryLock()) return
+        try {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (!com.enigmacast.update.UpdateCheckPolicy.shouldCheck(reason, now, lastUpdateCheckAt)) return
+            lastUpdateCheckAt = now
             val remote = runCatching { updates.check() }.getOrElse { error ->
+                if (error is CancellationException) throw error
                 EnigmaLog.connection("update check failed: ${error.javaClass.simpleName}")
                 null
-            } ?: return@launch
-            // Hotel mode: never an update dialog in front of a guest (the owner updates with hotel mode off).
-            if (isNewerRelease(BuildConfig.VERSION_CODE, remote) && !hotel.current.enabled) {
-                // Never over the first-run wizard: wait until setup is behind the viewer.
-                kotlinx.coroutines.flow.combine(
-                    androidx.compose.runtime.snapshotFlow { screen },
-                    settingsRepository.settings,
-                ) { current, settings ->
-                    com.enigmacast.domain.setup.SetupStep.allowsUpdatePrompt(
-                        receiverCount = settings.receivers.size,
-                        completed = settings.setupCompleted,
-                        onSetupScreen = current == AppScreen.Setup || current == AppScreen.Loading,
-                    )
-                }.first { it }
-                updatePrompt = UpdatePrompt(remote)
-            }
+            } ?: return
+            if (!promptAllowed(remote)) return
+            // Never over the first-run wizard: wait until setup is behind the viewer.
+            kotlinx.coroutines.flow.combine(
+                androidx.compose.runtime.snapshotFlow { screen },
+                settingsRepository.settings,
+            ) { current, settings ->
+                com.enigmacast.domain.setup.SetupStep.allowsUpdatePrompt(
+                    receiverCount = settings.receivers.size,
+                    completed = settings.setupCompleted,
+                    onSetupScreen = current == AppScreen.Setup || current == AppScreen.Loading,
+                )
+            }.first { it }
+            // Things may have changed while waiting (hotel mode on, a prompt from elsewhere).
+            if (promptAllowed(remote)) updatePrompt = UpdatePrompt(remote)
+        } finally {
+            updateCheckLock.unlock()
         }
     }
 
@@ -241,6 +284,10 @@ class AppViewModel @Inject constructor(
      * that was stopped for it play again.
      */
     fun dismissUpdate() {
+        updatePrompt?.let {
+            dismissedUpdateVersion = it.release.versionCode
+            dismissedUpdateAt = android.os.SystemClock.elapsedRealtime()
+        }
         downloadJob?.cancel()
         downloadJob = null
         updatePrompt = null
