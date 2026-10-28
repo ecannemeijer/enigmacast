@@ -1,11 +1,18 @@
 package com.enigmacast.domain.tvhome
 
+import com.enigmacast.data.db.IptvLibraryRow
+import com.enigmacast.data.db.IptvResumeRow
+import com.enigmacast.domain.model.AppSettings
 import com.enigmacast.domain.model.LastChannel
+import com.enigmacast.domain.resume.ResumePoint
+import com.enigmacast.domain.resume.ResumePolicy
+import com.enigmacast.domain.xtream.IptvLibraryRows
 import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
- * Android TV home-screen preview channels ("EnigmaCast – Favorieten" and "EnigmaCast – Opnames"):
+ * Android TV home-screen preview channels ("EnigmaCast – Favorieten", "– IPTV-favorieten",
+ * "– Verder kijken" and "– Opnames"):
  * which cards they hold and the deep links behind them. Pure; the publisher writes them to the
  * TV provider. Links carry only ids (never stream addresses or logins), because the TV provider
  * is readable by the launcher.
@@ -13,8 +20,38 @@ import java.net.URLEncoder
 object TvHome {
     const val FAVORITES_KEY = "enigmacast.favorites"
     const val RECORDINGS_KEY = "enigmacast.recordings"
+    const val IPTV_FAVORITES_KEY = "enigmacast.iptvfavorites"
+    const val CONTINUE_KEY = "enigmacast.continue"
     const val MAX_CHANNELS = 12
     const val MAX_RECORDINGS = 12
+    const val MAX_LIBRARY = 12
+
+    /**
+     * The rows, in the order they are created (Android TV adds a new row below the others):
+     * live first (what you zap to most), then what you saved, then what you were watching, then
+     * the receiver's recordings. [FAVORITES] is the default channel (shown without asking).
+     */
+    enum class Row(val key: String) {
+        FAVORITES(FAVORITES_KEY),
+        IPTV_FAVORITES(IPTV_FAVORITES_KEY),
+        CONTINUE(CONTINUE_KEY),
+        RECORDINGS(RECORDINGS_KEY),
+    }
+
+    val ALL_KEYS: List<String> = Row.entries.map { it.key }
+
+    /** Rows to publish: none when the setting is off or in hotel mode, else the switched-on ones. */
+    fun rows(settings: AppSettings, hotel: Boolean): List<Row> {
+        if (!settings.tvHomeChannels || hotel) return emptyList()
+        return Row.entries.filter { row ->
+            when (row) {
+                Row.FAVORITES -> settings.tvHomeFavorites
+                Row.IPTV_FAVORITES -> settings.tvHomeIptvFavorites
+                Row.CONTINUE -> settings.tvHomeContinue
+                Row.RECORDINGS -> settings.tvHomeRecordings
+            }
+        }
+    }
 
     private const val SCHEME = "enigmacast"
     private const val HOST = "tvhome"
@@ -24,8 +61,12 @@ object TvHome {
         data class Sat(val reference: String, val name: String) : Link
         /** An IPTV live channel: playlist account key, stream id, and what is needed to show it before the list loads. */
         data class Iptv(val source: String, val id: String, val name: String, val category: String) : Link
-        /** A recording on the receiver by its file path. */
-        data class Recording(val file: String) : Link
+        /** A recording on the receiver by its file path; [resume] plays from the saved place. */
+        data class Recording(val file: String, val resume: Boolean = false) : Link
+        /** An IPTV favorite: a film ("m") plays, a series ("s") opens its page. */
+        data class Library(val source: String, val kind: String, val id: String) : Link
+        /** An IPTV film ("m") or episode ("e") in Verder kijken: plays from the saved place. */
+        data class Resume(val source: String, val kind: String, val id: String) : Link
         /** The channel row itself: just open the app. */
         data object Open : Link
     }
@@ -39,7 +80,9 @@ object TvHome {
     fun uri(link: Link): String = when (link) {
         is Link.Sat -> build("sat", "ref" to link.reference, "name" to link.name)
         is Link.Iptv -> build("iptv", "source" to link.source, "id" to link.id, "name" to link.name, "cat" to link.category)
-        is Link.Recording -> build("rec", "file" to link.file)
+        is Link.Recording -> if (link.resume) build("rec", "file" to link.file, "resume" to "1") else build("rec", "file" to link.file)
+        is Link.Library -> build("lib", "source" to link.source, "kind" to link.kind, "id" to link.id)
+        is Link.Resume -> build("cont", "source" to link.source, "kind" to link.kind, "id" to link.id)
         Link.Open -> "$SCHEME://$HOST/open"
     }
 
@@ -59,7 +102,13 @@ object TvHome {
                 val id = query["id"]?.takeIf { it.isNotBlank() } ?: return null
                 Link.Iptv(source, id, query["name"].orEmpty(), query["cat"].orEmpty())
             }
-            "rec" -> query["file"]?.takeIf { it.isNotBlank() }?.let { Link.Recording(it) }
+            "rec" -> query["file"]?.takeIf { it.isNotBlank() }?.let { Link.Recording(it, query["resume"] == "1") }
+            "lib", "cont" -> {
+                val source = query["source"]?.takeIf { it.isNotBlank() } ?: return null
+                val kind = query["kind"]?.takeIf { it.isNotBlank() } ?: return null
+                val id = query["id"]?.takeIf { it.isNotBlank() } ?: return null
+                if (path == "lib") Link.Library(source, kind, id) else Link.Resume(source, kind, id)
+            }
             "open" -> Link.Open
             else -> null
         }
@@ -88,6 +137,71 @@ object TvHome {
             second.getOrNull(i)?.let(out::add)
         }
         return out.take(max)
+    }
+
+    /** One card in IPTV-favorieten or Verder kijken. [poster] may need a download (see [publicLogo]). */
+    data class LibraryCard(
+        val link: Link,
+        val title: String,
+        val subtitle: String,
+        val poster: String?,
+        /** A movie poster (2:3) rather than a wide picture. */
+        val tall: Boolean,
+        val positionMs: Long = 0L,
+        val durationMs: Long = 0L,
+        val updatedMs: Long = 0L,
+        /** Receiver channel name of a recording (its picon is the fallback picture). */
+        val channel: String = "",
+    )
+
+    /** A receiver recording with a saved place, for Verder kijken. */
+    data class RecordingResume(
+        val file: String,
+        val title: String,
+        val channel: String,
+        val positionMs: Long,
+        val durationMs: Long,
+        val updatedMs: Long,
+    )
+
+    /** IPTV-favorieten: the viewer's starred films and series of playlists in use, newest first. */
+    fun iptvFavorites(rows: List<IptvLibraryRow>, sources: Set<String>, max: Int = MAX_LIBRARY): List<LibraryCard> =
+        IptvLibraryRows.favorites(rows, emptyMap(), sources)
+            .filter { it.kind == "m" || it.kind == "s" }
+            .take(max)
+            .map { card ->
+                LibraryCard(Link.Library(card.source, card.kind, card.id), card.title, card.subtitle, card.poster?.takeIf { it.isNotBlank() }, tall = true)
+            }
+
+    /**
+     * Verder kijken: IPTV films and episodes (one per series, as in Library) and receiver
+     * recordings with a place worth resuming, newest first.
+     */
+    fun continueCards(
+        iptv: List<IptvResumeRow>,
+        sources: Set<String>,
+        recordings: List<RecordingResume>,
+        max: Int = MAX_LIBRARY,
+    ): List<LibraryCard> {
+        val byKey = iptv.associateBy { "${it.source}/${it.kind}/${it.id}" }
+        val iptvCards = IptvLibraryRows.continueWatching(iptv, sources).mapNotNull { card ->
+            val row = byKey["${card.source}/${card.kind}/${card.id}"] ?: return@mapNotNull null
+            LibraryCard(
+                Link.Resume(card.source, card.kind, card.id), card.title, card.subtitle,
+                card.poster?.takeIf { it.isNotBlank() }, tall = true,
+                positionMs = row.positionMs, durationMs = row.durationMs, updatedMs = row.updatedMs,
+            )
+        }
+        val recordingCards = recordings
+            .filter { it.file.isNotBlank() && ResumePolicy.offer(ResumePoint(it.file, it.positionMs, it.durationMs)) != null }
+            .distinctBy { it.file }
+            .map {
+                LibraryCard(
+                    Link.Recording(it.file, resume = true), it.title, ResumePolicy.clock(it.positionMs), null, tall = false,
+                    positionMs = it.positionMs, durationMs = it.durationMs, updatedMs = it.updatedMs, channel = it.channel,
+                )
+            }
+        return (iptvCards + recordingCards).sortedByDescending { it.updatedMs }.take(max)
     }
 
     /**

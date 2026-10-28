@@ -21,6 +21,11 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- Settings › home rows: recognise the Google TV home screen (honest note, no promises). -->
+    <queries>
+        <package android:name="com.google.android.apps.tv.launcherx" />
+    </queries>
+
     <application
         android:name=".EnigmaCastApp"
         android:allowBackup="false"

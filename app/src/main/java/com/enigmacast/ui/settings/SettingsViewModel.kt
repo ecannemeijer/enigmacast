@@ -24,6 +24,7 @@ class SettingsViewModel @Inject constructor(
     private val switcher: com.enigmacast.live.ReceiverSwitcher,
     private val syncEngine: com.enigmacast.sync.SyncEngine,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
+    private val tvHome: com.enigmacast.data.tvhome.TvHomePublisher,
 ) : ViewModel() {
     /** Settings › Receivers "Refresh channels & bouquets now": per receiver id. */
     sealed interface ChannelRefresh {
@@ -64,6 +65,23 @@ class SettingsViewModel @Inject constructor(
     fun setStreamMode(mode: StreamMode) = update { it.copy(streamMode = mode) }
     fun setStartupLive(mode: StartupLive) = update { it.copy(startupLive = mode) }
     fun setTvHomeChannels(enabled: Boolean) = update { it.copy(tvHomeChannels = enabled) }
+    fun setTvHomeFavorites(enabled: Boolean) = update { it.copy(tvHomeFavorites = enabled) }
+    fun setTvHomeIptvFavorites(enabled: Boolean) = update { it.copy(tvHomeIptvFavorites = enabled) }
+    fun setTvHomeContinue(enabled: Boolean) = update { it.copy(tvHomeContinue = enabled) }
+    fun setTvHomeRecordings(enabled: Boolean) = update { it.copy(tvHomeRecordings = enabled) }
+
+    /** Google TV decides itself which app rows it shows (note under the home-row settings). */
+    val googleTv: Boolean by lazy { com.enigmacast.data.tvhome.TvHomeDevice.isGoogleTv(appContext) }
+
+    /** "Rijen op startscherm toevoegen": the rows are built and every hidden row is asked for again. */
+    fun requestTvHomeRows() {
+        viewModelScope.launch {
+            val asked = tvHome.requestRows()
+            if (asked == 0) {
+                android.widget.Toast.makeText(appContext, com.enigmacast.R.string.tvhome_rows_all_on, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     fun setRecordingTarget(target: RecordingTarget) = update { it.copy(playback = it.playback.copy(recordingTarget = target)) }
     fun setRecordingPreset(preset: TranscodePreset?) = update { it.copy(playback = it.playback.copy(recordingPreset = preset)) }
     fun setLowLatency(enabled: Boolean) = update { it.copy(playback = it.playback.copy(lowLatency = enabled)) }
