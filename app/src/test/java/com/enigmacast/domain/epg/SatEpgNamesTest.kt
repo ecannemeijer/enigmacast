@@ -85,4 +85,30 @@ class SatEpgNamesTest {
         assertFalse(SatEpgNames.needsRebuild(stamp, now - 1_000, true, stamp, now))
         assertTrue(SatEpgNames.needsRebuild(stamp, now - SatEpgNames.EMPTY_RETRY_MS, true, stamp, now))
     }
+
+    @Test
+    fun nlDashSbs6HdFindsEverySatelliteSpelling() {
+        listOf("SBS 6 HD", "SBS6 HD", "SBS 6", "SBS6").forEach { satName ->
+            val channel = sat(satName, "1:0:19:4653:3EB:1:C00000:0:0:0:")
+            val single = SatEpgNames.index(listOf(channel))
+            assertEquals(satName, listOf(channel.serviceKey), single.lookup("NL - SBS 6 HD"))
+        }
+    }
+
+    @Test
+    fun digitSpacingDoesNotMergeDifferentNumbers() {
+        val rtl41 = sat("RTL 41", "1:0:19:4660:3EB:1:C00000:0:0:0:")
+        val npo12 = sat("NPO 12", "1:0:19:4661:3EB:1:C00000:0:0:0:")
+        val both = SatEpgNames.index(listOf(rtl4, rtl41, npoHd, npo12))
+        assertEquals(listOf(rtl4.serviceKey), both.lookup("NL - RTL 4 HD"))
+        assertEquals(listOf(rtl41.serviceKey), both.lookup("NL - RTL 41"))
+        assertEquals(listOf(npoHd.serviceKey), both.lookup("NL: NPO 1"))
+        assertEquals(listOf(npo12.serviceKey), both.lookup("NL: NPO 12 HD"))
+        val onlyLonger = SatEpgNames.index(listOf(rtl41, npo12))
+        assertTrue(onlyLonger.lookup("RTL 4").isEmpty())
+        assertTrue(onlyLonger.lookup("NPO 1").isEmpty())
+        val onlyShorter = SatEpgNames.index(listOf(rtl4, npoHd))
+        assertTrue(onlyShorter.lookup("RTL 41").isEmpty())
+        assertTrue(onlyShorter.lookup("NPO 12").isEmpty())
+    }
 }
