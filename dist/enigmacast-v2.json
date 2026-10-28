@@ -6,7 +6,7 @@
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
-    "apkUrl": "https://update.velixatv.com/enigmacast-companion.apk",
+    "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/companion-v1.0.0-beta.19/enigmacast-companion.apk",
     "notes": "Volledige vaste Companion-interface in vijf talen, met taalkeuze onder Meer.",
     "sideloadFile": "enigmacast-companion.apk"
   }
