@@ -267,9 +267,12 @@ class AppViewModel @Inject constructor(
             playback.holdForUpdate()
             updatePrompt = prompt.copy(progress = 0, message = null)
             val apk = runCatching {
+                // Called only when the whole percent changes (at most 101 times), not per network chunk.
                 updates.download(prompt.release) { percent ->
-                    withContext(Dispatchers.Main) {
-                        updatePrompt = prompt.copy(progress = percent)
+                    if (percent >= 0) {
+                        withContext(Dispatchers.Main.immediate) {
+                            if (updatePrompt != null) updatePrompt = prompt.copy(progress = percent)
+                        }
                     }
                 }
             }.getOrElse { error ->

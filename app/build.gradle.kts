@@ -42,6 +42,19 @@ android {
         }
     }
 
+    // Download size: with minSdk 28 AGP stores native libraries and dex files uncompressed in
+    // the APK (about 100 MB of .so for four ABIs plus ~46 MB dex). Compressing them makes the APK
+    // (and the in-app update) roughly 60% smaller; Android unpacks the libraries for the device's
+    // own ABI at install time. Nothing changes in how the app runs.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+        dex {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
