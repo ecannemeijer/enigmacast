@@ -12,7 +12,7 @@ data class AccessConfig(
     val authEpoch: Long = 0L,
     val minVersionCode: Int = 0,
     val minVersionName: String = "",
-    val updateUrl: String = "https://update.velixatv.com/enigmacast.apk",
+    val updateUrl: String = "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
     val message: String = "",
     val features: Map<String, Boolean> = emptyMap(),
     val verifiedAtMs: Long = 0L,

@@ -26,4 +26,12 @@ class AppUpdateTest {
         org.junit.Assert.assertEquals("EN text", release.reinstallText("en"))
         org.junit.Assert.assertEquals("EN text", release.copy(reinstallMessageNl = "").reinstallText("nl"))
     }
+
+    @Test
+    fun updatesComeFromTheLatestGitHubRelease() {
+        val base = "https://github.com/ecannemeijer/enigmacast/releases/latest/download/"
+        org.junit.Assert.assertEquals(base + "enigmacast-v2.json", UPDATE_MANIFEST_URL)
+        org.junit.Assert.assertEquals(base + "enigmacast.apk", UPDATE_APK_URL)
+        org.junit.Assert.assertEquals(UPDATE_APK_URL, RemoteRelease(versionCode = 1).apkUrl)
+    }
 }

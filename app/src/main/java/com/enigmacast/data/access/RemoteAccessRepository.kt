@@ -141,6 +141,6 @@ class RemoteAccessRepository @Inject constructor(
         const val MESSAGE = "message"
         const val FEATURES = "features"
         const val VERIFIED = "verified_at"
-        const val DEFAULT_UPDATE_URL = "https://update.velixatv.com/enigmacast.apk"
+        const val DEFAULT_UPDATE_URL = "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk"
     }
 }

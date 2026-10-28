@@ -33,6 +33,9 @@ class AppUpdateClient @Inject constructor(
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        // GitHub release downloads: github.com -> release-assets.githubusercontent.com (both https).
+        .followRedirects(true)
+        .followSslRedirects(true)
         .build()
 
     suspend fun check(): RemoteRelease? = withContext(Dispatchers.IO) {
