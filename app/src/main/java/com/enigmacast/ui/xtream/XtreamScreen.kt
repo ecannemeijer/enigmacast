@@ -64,6 +64,7 @@ import com.enigmacast.domain.xtream.XtreamEpg
 import com.enigmacast.domain.xtream.XtreamItem
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import com.enigmacast.domain.xtream.XtreamSection
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
 import com.enigmacast.ui.components.KeepAnchored
@@ -154,6 +155,11 @@ fun XtreamScreen(
     // "Next episode" card: Play has the focus while the card is up.
     val nextFocus = remember { FocusRequester() }
     var openRequest by remember { mutableIntStateOf(0) }
+    // Live channel list: the row last focused (its lazy key) and the row that carries itemFocus.
+    // Left from the programme panel, Back and Right from the categories return to that row.
+    var channelKey by remember { mutableStateOf<String?>(null) }
+    var channelTarget by remember { mutableStateOf<String?>(null) }
+    val liveKeys = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
     var quickBar by remember { mutableStateOf(false) }
     var recentBar by remember { mutableStateOf(false) }
     var recentToken by remember { mutableIntStateOf(0) }
@@ -200,7 +206,45 @@ fun XtreamScreen(
     // Closing the panel (Back, a timeout, the menu) after only browsing another live category:
     // the playing channel's category is shown again, so the next Left opens on that channel.
     LaunchedEffect(panelOpen) {
+        if (!panelOpen) { channelKey = null; channelTarget = null }
         if (!panelOpen && model.playingLive) model.restorePlayingCategory()
+    }
+    /**
+     * Focus into the live channel list: the remembered channel, else the playing one, else the
+     * first row on screen ([com.enigmacast.domain.xtream.LiveListFocus]). The row is scrolled on
+     * screen first: a row that is not composed cannot take the focus, and that used to drop
+     * the focus into the categories (and keep it there on every Right).
+     */
+    suspend fun focusChannels(): Boolean {
+        if (model.series != null) return itemFocus.requestWhenReady(4)
+        val keys = liveKeys.map { it.key }
+        if (keys.isEmpty()) return false
+        val state = liveChannelList.state
+        androidx.compose.runtime.withFrameNanos { }
+        kotlinx.coroutines.withTimeoutOrNull(500) {
+            snapshotFlow { state.layoutInfo.visibleItemsInfo.size }.first { it > 0 }
+        }
+        fun visibleRows(): List<Int> {
+            val info = state.layoutInfo
+            return info.visibleItemsInfo
+                .filter { com.enigmacast.domain.remote.ListAnchor.fullyVisible(it.offset, it.offset + it.size, info.viewportStartOffset, info.viewportEndOffset) }
+                .map { it.index }
+        }
+        val playingItem = model.playing?.item
+        val playingIndex = if (playingItem == null) -1 else model.items.indexOfFirst { com.enigmacast.domain.xtream.IptvZapList.same(it, playingItem) }
+        suspend fun tryRow(remembered: String?, playing: Int): Boolean {
+            val visible = visibleRows()
+            val target = com.enigmacast.domain.xtream.LiveListFocus.target(keys, remembered, playing, visible)
+            if (target < 0) return false
+            channelTarget = keys[target]
+            if (com.enigmacast.domain.xtream.LiveListFocus.needsScroll(target, visible)) {
+                state.scrollToItem(liveChannelList.firstVisibleFor(target, keys.size))
+            }
+            return itemFocus.requestWhenReady(6)
+        }
+        if (tryRow(channelKey, playingIndex)) return true
+        // Last resort: any row on screen, never the categories while the list has rows.
+        return tryRow(null, -1)
     }
     fun openPanel() {
         val vod = model.section != XtreamSection.LIVE
@@ -266,7 +310,10 @@ fun XtreamScreen(
                 openRequest++
             } else {
                 column = PanelColumn.CHANNELS
-                itemFocus.requestWhenReady()
+                // A newly chosen category opens on its playing channel or its first row on screen.
+                channelKey = null
+                channelTarget = null
+                focusChannels()
             }
         }
     }
@@ -280,7 +327,7 @@ fun XtreamScreen(
         }
         when (column) {
             PanelColumn.GUIDE -> guideFocus.requestWhenReady()
-            PanelColumn.CHANNELS -> if (!itemFocus.requestWhenReady(4)) { column = PanelColumn.CATEGORIES }
+            PanelColumn.CHANNELS -> if (!focusChannels() && (model.series != null || model.items.isEmpty())) { column = PanelColumn.CATEGORIES }
             PanelColumn.CATEGORIES -> categoryFocus.requestWhenReady()
             PanelColumn.VOD_CATEGORIES -> categoryFocus.requestWhenReady()
             PanelColumn.VOD_GRID -> if (!gridFocus.requestWhenReady(4)) { column = PanelColumn.VOD_CATEGORIES }
@@ -598,6 +645,9 @@ fun XtreamScreen(
                 categoryFocus = categoryFocus,
                 itemFocus = itemFocus,
                 guideFocus = guideFocus,
+                keyedItems = liveKeys,
+                itemTargetKey = channelTarget,
+                onChannelFocused = { channelKey = it },
             ) { panelOpen = false; model.closeGuide(); showBanner(fromZap = true) }
         }
 
@@ -760,6 +810,9 @@ private fun SidePanel(
     categoryFocus: FocusRequester,
     itemFocus: FocusRequester,
     guideFocus: FocusRequester,
+    keyedItems: List<com.enigmacast.domain.xtream.Keyed<XtreamItem>>,
+    itemTargetKey: String?,
+    onChannelFocused: (String) -> Unit,
     onPlayed: () -> Unit,
 ) {
     val hasList = if (model.series != null) model.episodes.isNotEmpty() else model.items.isNotEmpty()
@@ -861,7 +914,7 @@ private fun SidePanel(
         // Films / Series show only the sections here; their categories and grid are XtreamVodPage.
         if (liveList) {
         // Column 3: channels, films, series or the episodes of the opened series.
-        var focused by remember { mutableStateOf<XtreamItem?>(null) }
+        var focused by remember { mutableStateOf<com.enigmacast.domain.xtream.Keyed<XtreamItem>?>(null) }
         val guideOpen = column == PanelColumn.GUIDE
         Column(
             Modifier
@@ -883,8 +936,11 @@ private fun SidePanel(
                     }
                 },
                 onRight = {
-                    val item = focused
+                    val row = focused
+                    val item = row?.value
                     if (model.series == null && item != null && item.section == XtreamSection.LIVE) {
+                        // Left from the programme panel comes back to this row (by key).
+                        onChannelFocused(row.key)
                         model.openGuide(item)
                         onColumn(PanelColumn.GUIDE)
                     }
@@ -936,7 +992,12 @@ private fun SidePanel(
                 val firstFocus = remember { FocusRequester() }
                 val lastFocus = remember { FocusRequester() }
                 val lastIndex = model.items.lastIndex
-                val keyedItems = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
+                // itemFocus sits on the row the screen chose (remembered / playing / on screen),
+                // the playing row until it chose one.
+                val focusKey = remember(itemTargetKey, keyedItems, playingIndex) {
+                    itemTargetKey?.takeIf { key -> keyedItems.any { it.key == key } }
+                        ?: keyedItems.getOrNull(playingIndex)?.key
+                }
                 // Focusing a visible row must not scroll (the TV default pulls it to ~30 % from the top).
                 com.enigmacast.ui.theme.MinimalScrolling {
                 LazyColumn(state = state, modifier = Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -948,10 +1009,10 @@ private fun SidePanel(
                             onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
                             selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
                             modifier = Modifier
-                                .focusRequesterIf(index == playingIndex, itemFocus)
+                                .focusRequesterIf(k.key == focusKey, itemFocus)
                                 .focusRequesterIf(index == 0, firstFocus)
                                 .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
-                                .onFocusChanged { if (it.isFocused) focused = item }
+                                .onFocusChanged { if (it.isFocused) { focused = k; onChannelFocused(k.key) } }
                                 .wrapListEnds(
                                     index = index,
                                     lastIndex = lastIndex,
