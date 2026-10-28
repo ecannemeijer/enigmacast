@@ -13,6 +13,10 @@ interface CacheDao {
     @Query("SELECT DISTINCT name, serviceKey FROM channels WHERE receiverKey = :receiverKey AND serviceKey != ''")
     suspend fun channelNames(receiverKey: String): List<ChannelNameRow>
 
+    /** Every channel's name, reference and key (also rows whose key was never filled in), for the IPTV → satellite guide index. */
+    @Query("SELECT DISTINCT name, reference, serviceKey FROM channels WHERE receiverKey = :receiverKey")
+    suspend fun channelMatchRows(receiverKey: String): List<ChannelMatchRow>
+
     @Query("SELECT * FROM epg_events WHERE receiverKey = :receiverKey AND serviceKey IN (:serviceKeys) AND endSec > :fromSec AND beginSec < :toSec ORDER BY beginSec")
     suspend fun eventsFor(receiverKey: String, serviceKeys: List<String>, fromSec: Long, toSec: Long): List<EpgRow>
 

@@ -485,35 +485,51 @@ class XtreamViewModel @Inject constructor(
             val nowMs = System.currentTimeMillis()
             val now = nowMs / 1000
             val source = current.key
-            val todo = visible.asSequence()
-                .filter { it.section == XtreamSection.LIVE && rowEpg.needsFetch(source, it.id, nowMs) }
+            val live = visible.asSequence()
+                .filter { it.section == XtreamSection.LIVE }
                 .distinctBy { it.id }
-                .take(EPG_BATCH)
+                .take(EPG_BATCH * 2)
                 .toList()
-            if (todo.isEmpty()) return@launch
-            val xtream = current.takeIf { it !== M3U_ACCOUNT }
+            if (live.isEmpty()) return@launch
+            val todo = live.filter { rowEpg.needsFetch(source, it.id, nowMs) }.take(EPG_BATCH)
+            val todoIds = todo.mapTo(HashSet()) { it.id }
+            // Rows that already have listings but nothing on now (an empty Xtream answer that is
+            // remembered for minutes) also ask the satellite guide: it wins as soon as it has something on.
+            val idle = live.filter { it.id !in todoIds && epgNow(it.id)?.airingAt(now) == null }
+            if (todo.isEmpty() && idle.isEmpty()) return@launch
             val sat = try {
-                satelliteEpg.byName(todo.map { it.name })
+                satelliteEpg.byName((todo + idle).map { it.name })
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 emptyMap()
             }
-            val stored = if (xtream != null) rowEpg.stored(xtream, todo.map { it.id }) else emptyMap()
-            val network = ArrayList<XtreamItem>()
+            idle.forEach { item ->
+                val bulk = sat[item.name].orEmpty()
+                if (bulk.airingAt(now) != null) publishEpg(item.id, chooseGuide(epgNow(item.id).orEmpty(), bulk, now))
+            }
+            if (todo.isEmpty()) return@launch
+            val stored = HashMap<String, List<XtreamEpg>>()
+            todo.groupBy { xtreamFor(it) }.forEach { (xtream, items) ->
+                if (xtream != null) stored += rowEpg.stored(xtream, items.map { it.id })
+            }
+            val network = ArrayList<Pair<XtreamItem, XtreamAccount>>()
             todo.forEach { item ->
                 val bulk = sat[item.name].orEmpty()
                 val kept = stored[item.id]
+                val xtream = xtreamFor(item)
                 when {
                     bulk.airingAt(now) != null -> { publishEpg(item.id, bulk); rowEpg.remember(source, item.id, bulk, nowMs) }
                     kept != null -> publishEpg(item.id, chooseGuide(kept, bulk, now))
-                    xtream == null -> { publishEpg(item.id, bulk); rowEpg.remember(source, item.id, bulk, nowMs) }
-                    else -> { if (bulk.isNotEmpty()) publishEpg(item.id, bulk); network += item }
+                    // M3U: the satellite guide is all there is. Nothing found is not remembered,
+                    // so the row asks again once the receiver's guide or channel list arrives.
+                    xtream == null -> { if (bulk.isNotEmpty()) { publishEpg(item.id, bulk); rowEpg.remember(source, item.id, bulk, nowMs) } }
+                    else -> { if (bulk.isNotEmpty()) publishEpg(item.id, bulk); network += item to xtream }
                 }
             }
-            if (xtream == null || network.isEmpty()) return@launch
+            if (network.isEmpty()) return@launch
             kotlinx.coroutines.coroutineScope {
-                network.forEach { item ->
+                network.forEach { (item, xtream) ->
                     launch {
                         val list = rowEpg.fetch(xtream, item.id) ?: return@launch
                         publishEpg(item.id, chooseGuide(list, sat[item.name].orEmpty(), System.currentTimeMillis() / 1000))
@@ -522,6 +538,15 @@ class XtreamViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * The Xtream account that has [item]'s listings, or null for a playlist without them (M3U):
+     * an M3U provider's stand-in account must not be asked for an Xtream guide.
+     */
+    private fun xtreamFor(item: XtreamItem): XtreamAccount? =
+        accountFor(item.providerId)?.takeIf {
+            it !== M3U_ACCOUNT && !isM3uProvider(item.providerId) && !it.server.startsWith(M3U_PROVIDER_SERVER)
+        }
 
     /** The IPTV TV guide (dashboard and hotel menu): live categories as a programme grid. */
     val iptvGuide: IptvGuide = IptvGuide(
@@ -583,7 +608,6 @@ class XtreamViewModel @Inject constructor(
         val source = current.key
         val todo = rows.filter { it.section == XtreamSection.LIVE }.distinctBy { it.id }
         if (todo.isEmpty()) return
-        val xtream = current.takeIf { it !== M3U_ACCOUNT }
         val sat = try {
             satelliteEpg.byName(todo.map { it.name }, hours = 24)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -591,24 +615,28 @@ class XtreamViewModel @Inject constructor(
         } catch (e: Exception) {
             emptyMap()
         }
-        val stored = if (xtream != null) rowEpg.stored(xtream, todo.map { it.id }) else emptyMap()
-        val network = ArrayList<XtreamItem>()
+        val stored = HashMap<String, List<XtreamEpg>>()
+        todo.groupBy { xtreamFor(it) }.forEach { (xtream, items) ->
+            if (xtream != null) stored += rowEpg.stored(xtream, items.map { it.id })
+        }
+        val network = ArrayList<Pair<XtreamItem, XtreamAccount>>()
         todo.forEach { item ->
             val bulk = sat[item.name].orEmpty()
             val kept = stored[item.id]
+            val xtream = xtreamFor(item)
             when {
-                kept != null -> chooseGuide(kept, bulk, now).also { publishEpg(item.id, it); onRow(item, it) }
+                kept != null -> chooseGuide(kept, bulk, now).also { if (it.isNotEmpty()) publishEpg(item.id, it); onRow(item, it) }
                 xtream == null || !rowEpg.needsFetch(source, item.id, nowMs) -> (epgNow(item.id) ?: bulk).let { list ->
                     val chosen = chooseGuide(list, bulk, now)
                     if (chosen.isNotEmpty()) publishEpg(item.id, chosen)
                     onRow(item, chosen)
                 }
-                else -> { if (bulk.isNotEmpty()) onRow(item, bulk); network += item }
+                else -> { if (bulk.isNotEmpty()) onRow(item, bulk); network += item to xtream }
             }
         }
-        if (xtream == null || network.isEmpty()) return
+        if (network.isEmpty()) return
         kotlinx.coroutines.coroutineScope {
-            network.forEach { item ->
+            network.forEach { (item, xtream) ->
                 launch {
                     val bulk = sat[item.name].orEmpty()
                     val list = chooseGuide(rowEpg.fetch(xtream, item.id).orEmpty(), bulk, System.currentTimeMillis() / 1000)
@@ -631,7 +659,7 @@ class XtreamViewModel @Inject constructor(
                 if (list.isNotEmpty()) {
                     guideEvents = list
                     publishEpg(item.id, list)
-                    account?.takeIf { it !== M3U_ACCOUNT }?.let { rowEpg.store(it, item.id, list) }
+                    xtreamFor(item)?.let { rowEpg.store(it, item.id, list) }
                 }
             } finally {
                 guideLoading = false
@@ -650,9 +678,17 @@ class XtreamViewModel @Inject constructor(
     private suspend fun loadGuide(item: XtreamItem): List<XtreamEpg> {
         val now = System.currentTimeMillis() / 1000
         val pastDays = com.enigmacast.domain.xtream.Catchup.windowDays(item).coerceAtLeast(1)
-        val xtream = accountFor(item.providerId)?.takeIf { !isM3uProvider(item.providerId) && it !== M3U_ACCOUNT }
-        val full = if (xtream != null) repository.guideFull(xtream, item.id) else emptyList()
-        val listings = full.ifEmpty { if (xtream != null) repository.guide(xtream, item.id) else emptyList() }
+        val xtream = xtreamFor(item)
+        // A failing Xtream guide must not hide the satellite one.
+        suspend fun safe(block: suspend () -> List<XtreamEpg>): List<XtreamEpg> = try {
+            block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val full = if (xtream != null) safe { repository.guideFull(xtream, item.id) } else emptyList()
+        val listings = full.ifEmpty { if (xtream != null) safe { repository.guide(xtream, item.id) } else emptyList() }
         val chosen = if (listings.airingAt(now) != null) listings else {
             val sat = try {
                 satelliteEpg.byName(listOf(item.name), hours = 36, pastHours = pastDays * 24)[item.name].orEmpty()
@@ -2529,6 +2565,8 @@ class XtreamViewModel @Inject constructor(
         private const val EXTERNAL_PREFIX = "ext:"
         /** Stand-in account of an M3U playlist: every entry has its own address. */
         val M3U_ACCOUNT = XtreamAccount("Playlist", "http://playlist.invalid", "", "", "ts")
+        /** [com.enigmacast.data.xtream.IptvProvider.account] of an M3U provider (no Xtream API behind it). */
+        const val M3U_PROVIDER_SERVER = "http://m3u.invalid/"
     }
 }
 
