@@ -1,8 +1,8 @@
 {
-  "versionCode": 122,
-  "versionName": "1.0.0-beta.119",
-  "apkUrl": "https://update.velixatv.com/enigmacast.apk",
-  "notes": "IPTV gebruikt nu de satellietgids als er geen eigen EPG is, logo's en picons op het startscherm, nieuwe rijen IPTV-favorieten en Verder kijken, en een knop om de rijen opnieuw toe te voegen.",
+  "versionCode": 123,
+  "versionName": "1.0.0-beta.120",
+  "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/v1.0.0-beta.120/enigmacast.apk",
+  "notes": "Updates downloaden nu veel sneller en komen voortaan van GitHub, en de app is ruim de helft kleiner.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
