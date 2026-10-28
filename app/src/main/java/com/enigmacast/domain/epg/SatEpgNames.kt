@@ -124,7 +124,7 @@ object SatEpgNames {
     private val PREFIX_BRACKET = Regex("^[|\\[(<«]\\s*([a-z]{2}|$COUNTRY3)\\s*[|\\])>»]\\s*")
     /** "NL: ", "NL | ", "IT - ", "NL▸", "NLD: " at the start (a two-letter code or a known three-letter one). */
     private val PREFIX_SEPARATOR = Regex("^([a-z]{2}|$COUNTRY3)\\s*[:|\\-\\u2013\\u2014\\u25B6\\u25B8\\u27A4\\u2022\\u00BB\\u2500-\\u259F/]+\\s*")
-    private val BRACKETS = Regex("\\([^)]*\\)|\\[[^]]*]|\\{[^}]*}")
+    private val BRACKETS = Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}")
     private val NON_WORD = Regex("[^a-z0-9+&]+")
     private val QUALITY = Regex("\\b(uhd|fhd|hd|sd|hq|lq|4k|8k|hevc|h265|h264|x265|1080p|1080i|720p|576p|480p|50fps|60fps|25fps|raw|backup|multi|vip|dolby|hdr|geo blocked)\\b")
     private val REGION = Regex("\\s+[a-z]{2}$")
