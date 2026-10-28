@@ -33,6 +33,7 @@ import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 enum class ImportTab { LIST, IPTV, RESTORE, ACCESS }
@@ -87,6 +88,14 @@ class SettingsImportViewModel @Inject constructor(
     var selected by mutableStateOf<TunerPackage?>(null); private set
     var selectedDate by mutableStateOf<Instant?>(null); private set
     var listRefresh by mutableStateOf(RefreshInterval.OFF); private set
+
+    /** The settings-list picker (one entry per GitHub repository) is open. */
+    var providerPicker by mutableStateOf(false); private set
+    /** Newest commit per repository, filled in while the picker is open. */
+    var providerDates by mutableStateOf<Map<SettingsProvider, Instant>>(emptyMap()); private set
+    /** Variants per repository already read this session. */
+    var providerCounts by mutableStateOf<Map<SettingsProvider, Int>>(emptyMap()); private set
+    private var providerDatesJob: Job? = null
 
     // IPTV
     var iptvSources by mutableStateOf(setOf(IptvSource.FREE_TV)); private set
@@ -151,7 +160,23 @@ class SettingsImportViewModel @Inject constructor(
     }
 
     // ---- Channel lists
+    fun openProviderPicker() {
+        providerPicker = true
+        providerCounts = SettingsProvider.entries.mapNotNull { p -> sources.cachedPackages(p)?.let { p to it.size } }.toMap()
+        if (providerDatesJob?.isActive == true) return
+        providerDatesJob = viewModelScope.launch {
+            SettingsProvider.entries.filter { it !in providerDates }.map { p ->
+                async { sources.repoUpdated(p)?.let { p to it } }
+            }.forEach { pending ->
+                pending.await()?.let { (p, date) -> providerDates = providerDates + (p to date) }
+            }
+        }
+    }
+
+    fun closeProviderPicker() { providerPicker = false }
+
     fun chooseProvider(target: SettingsProvider) {
+        providerPicker = false
         if (target == provider && packages.isNotEmpty()) return
         provider = target
         selected = null
@@ -165,6 +190,7 @@ class SettingsImportViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val list = sources.packages(wanted, reload)
+                providerCounts = providerCounts + (wanted to list.size)
                 if (provider == wanted) {
                     packages = list
                     val remembered = activeId?.let { configs.get(it).settingsPackageId }

@@ -18,12 +18,15 @@ object ImportPlans {
      * refer to are written: Enigma2 loads any other userbouquet file it finds ("load unlinked
      * userbouquets", on by default) and puts it on top of bouquets.tv in directory order. Every
      * other userbouquet on the box goes, except our IPTV ones. An old lamedb5 goes too when the
-     * package only has lamedb, because Enigma2 prefers lamedb5.
+     * package only has lamedb, because Enigma2 prefers lamedb5. alternatives.* files are written
+     * when a written bouquet uses them and are never removed (older backups do not hold them).
      */
     fun settingsImport(packageFiles: Map<String, ByteArray>, boxFiles: List<String>, boxBouquetsTv: String?): ImportPlan {
         val linked = BouquetLinks.linked(packageFiles)
         val uploads = LinkedHashMap<String, ByteArray>()
-        packageFiles.keys.filter { SettingsFiles.isSettingsFile(it) && (!it.startsWith("userbouquet.") || it in linked) }
+        packageFiles.keys.filter { name ->
+            SettingsFiles.isSettingsFile(name) && (!(name.startsWith("userbouquet.") || SettingsFiles.isAlternatives(name)) || name in linked)
+        }
             .sortedWith(compareBy({ SettingsFiles.uploadOrder(it) }, { it }))
             .forEach { uploads[it] = packageFiles.getValue(it) }
         val keptIptv = boxBouquetsTv?.let { BouquetsTvMerge.iptvFiles(it) }.orEmpty().filter { it in boxFiles }

@@ -1225,6 +1225,14 @@
     <string name="import_err_reload">Les fichiers ont été copiés, mais le rechargement de la liste de chaînes a échoué. Redémarrez l\'interface du récepteur.</string>
     <string name="import_err_download">Échec du téléchargement. Vérifiez la connexion internet.</string>
     <string name="import_err_no_files">Cette liste ne contient ni lamedb ni bouquets.tv.</string>
+    <string name="import_list_source">Liste de chaînes</string>
+    <string name="import_list_source_title">Choisir une liste de chaînes</string>
+    <string name="import_list_source_hint">Listes de chaînes Enigma2 sur GitHub. La version la plus récente est téléchargée au chargement.</string>
+    <string name="import_list_updated">Mise à jour %1$s</string>
+    <string name="import_list_variants">%1$d variantes</string>
+    <string name="import_err_not_found">Cette liste est introuvable sur GitHub ; elle a peut-être été supprimée ou renommée.</string>
+    <string name="import_err_rate_limited">Limite de requêtes GitHub atteinte (60 par heure sans connexion). Réessayez plus tard.</string>
+    <string name="import_err_offline">Pas de connexion internet. GitHub est injoignable.</string>
     <string name="import_err_unknown">Une erreur s\'est produite.</string>
     <string name="import_confirm_list_title">Remplacer la liste de chaînes ?</string>
     <string name="import_confirm_list">La liste de chaînes actuelle sur %2$s sera remplacée par « %1$s ». Une sauvegarde est d\'abord créée, que vous pourrez restaurer dans Restaurer. Vos bouquets IPTV d\'EnigmaCast sont conservés. Un nouveau satellites.xml ne s\'applique qu\'après un redémarrage du récepteur.</string>

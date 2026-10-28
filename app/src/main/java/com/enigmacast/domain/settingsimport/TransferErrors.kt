@@ -19,6 +19,12 @@ enum class TransferFailure {
     RELOAD_FAILED,
     DOWNLOAD_FAILED,
     NO_FILES,
+    /** The list's repository, branch or file is gone on GitHub (removed or renamed). */
+    NOT_FOUND,
+    /** GitHub's hourly limit for requests without login is used up. */
+    RATE_LIMITED,
+    /** No internet: GitHub (or the playlist host) cannot be reached at all. */
+    OFFLINE,
     UNKNOWN,
 }
 
@@ -30,6 +36,23 @@ class TransferException(val failure: TransferFailure, val detail: String = "", c
 enum class TransferStage { CONNECT, LOGIN, BACKUP, UPLOAD, RELOAD, DOWNLOAD }
 
 object TransferErrors {
+    /**
+     * An unsuccessful GitHub reply. 403/429 with `x-ratelimit-remaining: 0` (or a
+     * `retry-after`) is the limit for requests without login, 404 a repository, branch or
+     * file that was removed or renamed; anything else is a plain download failure.
+     */
+    fun fromHttp(code: Int, rateRemaining: String?, retryAfter: String?, what: String): TransferException = when {
+        (code == 403 || code == 429) && (rateRemaining?.trim() == "0" || retryAfter != null || code == 429) ->
+            TransferException(TransferFailure.RATE_LIMITED, "")
+        code == 404 || code == 410 -> TransferException(TransferFailure.NOT_FOUND, what)
+        else -> TransferException(TransferFailure.DOWNLOAD_FAILED, "HTTP $code $what".trim())
+    }
+
+    /** No route to the internet at all, as opposed to a server that answers badly. */
+    fun isOffline(error: Throwable): Boolean = generateSequence(error) { it.cause }.any {
+        it is UnknownHostException || it is NoRouteToHostException || it is ConnectException
+    }
+
     fun map(error: Throwable, stage: TransferStage): TransferException {
         if (error is TransferException) return error
         val detail = error.message.orEmpty().take(160)

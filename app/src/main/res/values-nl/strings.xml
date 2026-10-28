@@ -1243,6 +1243,14 @@
     <string name="import_err_reload">De bestanden zijn gekopieerd, maar het herladen van de zenderlijst is mislukt. Herstart de GUI van de ontvanger.</string>
     <string name="import_err_download">Downloaden mislukt. Controleer de internetverbinding.</string>
     <string name="import_err_no_files">Deze lijst heeft geen lamedb of bouquets.tv.</string>
+    <string name="import_list_source">Settingslijst</string>
+    <string name="import_list_source_title">Kies een settingslijst</string>
+    <string name="import_list_source_hint">Enigma2-kanaallijsten op GitHub. De nieuwste versie wordt gedownload als je er een laadt.</string>
+    <string name="import_list_updated">Bijgewerkt %1$s</string>
+    <string name="import_list_variants">%1$d varianten</string>
+    <string name="import_err_not_found">Deze settingslijst is niet gevonden op GitHub; mogelijk verwijderd of hernoemd.</string>
+    <string name="import_err_rate_limited">GitHub-limiet bereikt (60 verzoeken per uur zonder inlog). Probeer het later opnieuw.</string>
+    <string name="import_err_offline">Geen internetverbinding. GitHub is niet bereikbaar.</string>
     <string name="import_err_unknown">Er ging iets mis.</string>
     <string name="import_confirm_list_title">Zenderlijst vervangen?</string>
     <string name="import_confirm_list">De huidige zenderlijst op %2$s wordt vervangen door \"%1$s\". Eerst wordt een back-up gemaakt, die je bij Terugzetten kunt terugzetten. Je IPTV-bouquets van EnigmaCast blijven staan. Een nieuwe satellites.xml werkt pas na een herstart van de ontvanger.</string>
