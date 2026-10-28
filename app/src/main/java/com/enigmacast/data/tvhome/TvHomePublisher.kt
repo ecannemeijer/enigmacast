@@ -1,6 +1,8 @@
 package com.enigmacast.data.tvhome
 
 import android.content.Context
+import android.util.Log
+import coil3.toBitmap
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
@@ -45,6 +47,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -52,11 +56,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /**
- * The two Android TV home-screen rows: "EnigmaCast – Favorieten" (recent live channels with the
- * programme on now) and "EnigmaCast – Opnames" (newest receiver recordings). The rows are rebuilt
- * by the background refresh, when the launcher asks, and when the app goes to the background.
- * Off in hotel mode and when the setting is off: then both rows are removed. Watch Next is
- * [com.enigmacast.data.xtream.WatchNextPublisher]'s and is not touched here.
+ * The Android TV home-screen rows: "EnigmaCast – Favorieten" (recent live channels with the
+ * programme on now), "– IPTV-favorieten" (starred films and series), "– Verder kijken" (IPTV
+ * films, episodes and receiver recordings with a saved place) and "– Opnames" (newest receiver
+ * recordings). The rows are rebuilt by the background refresh, when the launcher asks, and when
+ * the app goes to the background. Off in hotel mode and when the setting is off: then all rows
+ * are removed. Watch Next is [com.enigmacast.data.xtream.WatchNextPublisher]'s and is not touched here.
  */
 @Singleton
 class TvHomePublisher @Inject constructor(
@@ -69,19 +74,68 @@ class TvHomePublisher @Inject constructor(
     private val tuner: TunerStatusSource,
     private val api: OpenWebifApi,
     private val artwork: RecordingArtwork,
+    private val library: com.enigmacast.data.xtream.IptvLibrary,
+    private val resumeDao: com.enigmacast.data.db.ResumeDao,
+    private val profiles: com.enigmacast.data.profile.ProfileStore,
+    private val gate: com.enigmacast.live.PremiumGate,
+    private val xtream: XtreamRepository,
+    private val playlistSync: com.enigmacast.data.xtream.IptvPlaylistSync,
 ) {
     private val mutex = Mutex()
     private val prefs by lazy { context.getSharedPreferences("tvhome", Context.MODE_PRIVATE) }
-    private val _browsableRequest = MutableStateFlow<Long?>(null)
+    private val _browsablePending = MutableStateFlow<List<Long>>(emptyList())
     private val logoClient by lazy {
         OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()
     }
+    /** SVG logos (BitmapFactory cannot read them); only built when one turns up. */
+    private val svgLoader by lazy {
+        coil3.ImageLoader.Builder(context)
+            .components { add(coil3.svg.SvgDecoder.Factory()) }
+            .build()
+    }
 
-    /** A row the launcher only shows after the user agrees (the second channel); MainActivity asks once. */
-    val browsableRequest: StateFlow<Long?> = _browsableRequest.asStateFlow()
+    /**
+     * Rows the launcher only shows after the user agrees (every row but the first). MainActivity
+     * asks for them one by one while it is in the foreground (Android cancels the question from
+     * the background) and reports each one with [browsableAsked].
+     */
+    val browsablePending: StateFlow<List<Long>> = _browsablePending.asStateFlow()
 
-    fun browsableAsked() {
-        _browsableRequest.value = null
+    /** The question for [channelId] was shown (or the TV has none): not asked again by itself. */
+    fun browsableAsked(channelId: Long) {
+        prefs.edit().putBoolean("asked:$channelId", true).apply()
+        _browsablePending.update { it - channelId }
+    }
+
+    private fun queueBrowsable(channelId: Long) {
+        _browsablePending.update { if (channelId in it) it else it + channelId }
+    }
+
+    /** Google TV (its launcher decides which app rows it shows; see the note in Settings). */
+    fun isGoogleTv(): Boolean = TvHomeDevice.isGoogleTv(context)
+
+    /**
+     * Settings › "Rijen op startscherm toevoegen": builds the rows now and asks again for every
+     * row that is still hidden. The number of rows asked for; 0 when all are shown already.
+     */
+    suspend fun requestRows(): Int {
+        refresh()
+        return mutex.withLock {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (!supported()) return@runCatching 0
+                    val hidden = helper().allChannels.filter { it.internalProviderId in TvHome.ALL_KEYS && !it.isBrowsable }
+                    hidden.forEach { channel ->
+                        if (channel.internalProviderId == TvHome.FAVORITES_KEY) {
+                            requestDefault(channel.id)
+                        } else {
+                            queueBrowsable(channel.id)
+                        }
+                    }
+                    hidden.size
+                }.getOrDefault(0)
+            }
+        }
     }
 
     suspend fun refresh() = mutex.withLock {
@@ -89,10 +143,11 @@ class TvHomePublisher @Inject constructor(
             try {
                 if (!supported()) return@withContext
                 val current = settings.current()
-                if (!current.tvHomeChannels || hotel.current.enabled || HotelRuntime.active) {
+                val rows = TvHome.rows(current, hotel.current.enabled || HotelRuntime.active)
+                if (rows.isEmpty()) {
                     removeChannels()
                 } else {
-                    publish(current)
+                    publish(current, rows)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -102,7 +157,7 @@ class TvHomePublisher @Inject constructor(
         }
     }
 
-    /** Hotel mode turned on or the setting off: both rows go, right away. */
+    /** Hotel mode turned on or the setting off: all rows go, right away. */
     suspend fun removeAll() = mutex.withLock {
         withContext(Dispatchers.IO) { runCatching { if (supported()) removeChannels() } }
     }
@@ -110,17 +165,36 @@ class TvHomePublisher @Inject constructor(
     private fun supported(): Boolean =
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
-    private suspend fun publish(current: AppSettings) {
+    private suspend fun publish(current: AppSettings, rows: List<TvHome.Row>) {
         val receiver = current.activeReceiver()
-        val favorites = ensureChannel(TvHome.FAVORITES_KEY, context.getString(R.string.tvhome_favorites), default = true)
-        val recordings = ensureChannel(TvHome.RECORDINGS_KEY, context.getString(R.string.tvhome_recordings), default = false)
+        migrateLayout(rows)
+        val ids = LinkedHashMap<TvHome.Row, Long>()
+        val hasDefault = helper().allChannels.any { it.internalProviderId == TvHome.FAVORITES_KEY }
+        for (row in TvHome.Row.entries) {
+            if (row in rows || row == TvHome.Row.FAVORITES) {
+                // Favorieten is the default channel: kept (emptied) when only its own switch is off,
+                // because a removed default channel comes back at the bottom only after the user adds it.
+                if (row == TvHome.Row.FAVORITES && row !in rows && !hasDefault) continue
+                ids[row] = ensureChannel(row.key, rowName(row), default = row == TvHome.Row.FAVORITES)
+            } else {
+                deleteChannel(row.key)
+            }
+        }
         val used = HashSet<String>()
         val channels = BouquetIndex(receiver)
-        val live = liveCards(current)
-        replace(favorites, live.mapIndexed { index, card -> liveProgram(favorites, card, index, live.size, receiver, channels, used) })
-        val movies = receiver?.let { r -> runCatching { api.movies(r) }.getOrNull() }
+        ids[TvHome.Row.FAVORITES]?.let { favorites ->
+            val live = if (TvHome.Row.FAVORITES in rows) liveCards(current) else emptyList()
+            val stats = LogoStats()
+            replace(favorites, live.mapIndexed { index, card -> liveProgram(favorites, card, index, live.size, receiver, channels, used, stats) })
+            if (stats.total > 0) Log.i(TAG, "favorites row: ${stats.total} iptv logos, ${stats.own} own, ${stats.playlist} playlist, ${stats.picon} picon, ${stats.banner} banner")
+        }
+        val needMovies = TvHome.Row.RECORDINGS in rows || TvHome.Row.CONTINUE in rows
+        val movies = if (needMovies) receiver?.let { r -> runCatching { api.movies(r) }.getOrNull() } else null
+        var keepArt = false
+        val recordings = ids[TvHome.Row.RECORDINGS]
         // An unreachable receiver keeps the last row instead of emptying it.
-        if (movies != null && receiver != null) {
+        if (recordings != null && receiver != null && movies == null) keepArt = true
+        if (recordings != null && movies != null && receiver != null) {
             val newest = movies.filter { it.filename.isNotBlank() }.sortedByDescending { it.begin }.take(TvHome.MAX_RECORDINGS)
             val items = newest.map { movie -> movie to recordingOf(receiver, movie) }
             // The same TMDB match (and Room cache) as the recordings in My items; no key = picons only.
@@ -154,7 +228,146 @@ class TvHomePublisher @Inject constructor(
                 },
             )
         }
-        cleanArt(used, keepAll = movies == null)
+        val sources = if (TvHome.Row.IPTV_FAVORITES in rows || TvHome.Row.CONTINUE in rows) librarySources(current) else emptySet()
+        ids[TvHome.Row.IPTV_FAVORITES]?.let { channelId ->
+            val cards = TvHome.iptvFavorites(runCatching { library.favoritesNow() }.getOrDefault(emptyList()), sources)
+            replace(channelId, cards.mapIndexed { index, card -> libraryProgram(channelId, card, index, cards.size, receiver, channels, used, "fav:") })
+        }
+        ids[TvHome.Row.CONTINUE]?.let { channelId ->
+            if (receiver != null && movies == null) keepArt = true
+            val boxResumes = movies?.let { list -> recordingResumes(list) }.orEmpty()
+            val cards = TvHome.continueCards(runCatching { library.resumesNow() }.getOrDefault(emptyList()), sources, boxResumes)
+            // Recordings come from the receiver: when it does not answer, the IPTV part still updates.
+            if (movies != null || receiver == null || cards.isNotEmpty()) {
+                replace(channelId, cards.mapIndexed { index, card -> libraryProgram(channelId, card, index, cards.size, receiver, channels, used, "cont:") })
+            }
+        }
+        cleanArt(used, keepAll = keepArt)
+    }
+
+    private fun rowName(row: TvHome.Row): String = context.getString(
+        when (row) {
+            TvHome.Row.FAVORITES -> R.string.tvhome_favorites
+            TvHome.Row.IPTV_FAVORITES -> R.string.tvhome_iptv_favorites
+            TvHome.Row.CONTINUE -> R.string.tvhome_continue
+            TvHome.Row.RECORDINGS -> R.string.tvhome_recordings
+        },
+    )
+
+    /**
+     * Earlier versions made "Opnames" the second row. When the new rows are added for the first
+     * time and Opnames was never shown (still waiting for the user's OK), it is made again after
+     * them, so the order is Favorieten, IPTV-favorieten, Verder kijken, Opnames. A shown Opnames
+     * row is left alone (the user would have to agree again).
+     */
+    private fun migrateLayout(rows: List<TvHome.Row>) {
+        if (prefs.getInt("layout", 1) >= LAYOUT) return
+        val helper = helper()
+        val all = helper.allChannels
+        val newRows = all.any { it.internalProviderId == TvHome.IPTV_FAVORITES_KEY || it.internalProviderId == TvHome.CONTINUE_KEY }
+        val adding = TvHome.Row.IPTV_FAVORITES in rows || TvHome.Row.CONTINUE in rows
+        if (!newRows && adding) {
+            all.filter { it.internalProviderId == TvHome.RECORDINGS_KEY && !it.isBrowsable }.forEach {
+                helper.deletePreviewChannel(it.id)
+                prefs.edit().remove("rows:${it.id}").remove("asked:${it.id}").apply()
+            }
+        }
+        prefs.edit().putInt("layout", LAYOUT).apply()
+    }
+
+    /** Playlist accounts in use (as Library shows them); none without IPTV Premium or for a viewer without playlists. */
+    private suspend fun librarySources(current: AppSettings): Set<String> = runCatching {
+        if (!gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return@runCatching emptySet()
+        val out = LinkedHashSet<String>()
+        if (current.iptvSource == com.enigmacast.domain.model.IptvSourceMode.PLAYLIST) {
+            if (!profiles.seesPlaylist()) return@runCatching emptySet()
+            val providers = playlists.enabledProviders()
+            if (providers.isNotEmpty()) {
+                providers.mapNotNullTo(out) { it.account()?.key }
+            } else {
+                val login = playlists.login.value
+                when (current.iptvPlaylistKind) {
+                    com.enigmacast.domain.model.IptvPlaylistKind.XTREAM -> login.xtreamAccount()?.key?.let(out::add)
+                    com.enigmacast.domain.model.IptvPlaylistKind.M3U ->
+                        if (login.configured(com.enigmacast.domain.model.IptvPlaylistKind.M3U)) out += com.enigmacast.ui.xtream.XtreamViewModel.M3U_ACCOUNT.key
+                }
+            }
+        } else {
+            val receiver = current.activeReceiver()
+            if (receiver != null) xtream.cachedDetection(receiver.id)?.accounts?.mapTo(out) { it.key }
+            // The receiver's IPTV accounts are only known after a detection; the last-watched ones are.
+            current.lastIptvChannels.keys.filterTo(out) { it.isNotBlank() }
+        }
+        out - com.enigmacast.domain.torrent.TorrentLibraryRows.SOURCE
+    }.getOrDefault(emptySet())
+
+    /** Box recordings with a saved place (the viewer's own), by file name. */
+    private suspend fun recordingResumes(movies: List<com.enigmacast.data.openwebif.OpenWebifJson.ReceiverMovie>): List<TvHome.RecordingResume> {
+        val profile = profiles.state.value.activeId
+        val points = runCatching { resumeDao.all().first() }.getOrDefault(emptyList()).mapNotNull { row ->
+            com.enigmacast.domain.profile.ProfileRules.unscope(profile, row.key)?.let { it to row }
+        }.toMap()
+        return movies.mapNotNull { movie ->
+            val row = points[com.enigmacast.live.RecordingBook.BOX_MOVIE + movie.filename] ?: return@mapNotNull null
+            TvHome.RecordingResume(
+                file = movie.filename,
+                title = movie.name.ifBlank { movie.filename.substringAfterLast('/') },
+                channel = movie.serviceName,
+                positionMs = row.positionMs,
+                durationMs = row.durationMs.takeIf { it > 0 } ?: (movie.lengthSec * 1000),
+                updatedMs = row.updatedMs,
+            )
+        }
+    }
+
+    /** A card in IPTV-favorieten or Verder kijken. */
+    private suspend fun libraryProgram(
+        channelId: Long,
+        card: TvHome.LibraryCard,
+        index: Int,
+        count: Int,
+        receiver: ReceiverConfig?,
+        channels: BouquetIndex,
+        used: MutableSet<String>,
+        prefix: String,
+    ): PreviewProgram {
+        val uri = TvHome.uri(card.link)
+        val poster = card.poster
+        var tall = card.tall
+        var art: Uri? = null
+        if (poster != null) {
+            art = TvHome.publicLogo(poster)?.takeIf { it.startsWith("https://", ignoreCase = true) }?.let(Uri::parse)
+                ?: TvHomeArt.downloadableLogo(poster)?.let { savePoster(it, used) }
+        }
+        if (art == null && card.link is TvHome.Link.Recording && receiver != null) {
+            art = piconArt(receiver, channels.piconPaths("", card.channel), used)
+            tall = false
+        }
+        if (art == null) tall = false
+        val builder = PreviewProgram.Builder()
+            .setChannelId(channelId)
+            .setType(
+                when {
+                    card.link is TvHome.Link.Recording -> TvContractCompat.PreviewPrograms.TYPE_CLIP
+                    card.link is TvHome.Link.Resume && card.link.kind == "e" -> TvContractCompat.PreviewPrograms.TYPE_TV_EPISODE
+                    card.link is TvHome.Link.Library && card.link.kind == "s" -> TvContractCompat.PreviewPrograms.TYPE_TV_SERIES
+                    else -> TvContractCompat.PreviewPrograms.TYPE_MOVIE
+                },
+            )
+            .setTitle(card.title)
+            .setDescription(card.subtitle)
+            .setPosterArtUri(art ?: banner())
+            .setPosterArtAspectRatio(
+                if (tall) TvContractCompat.PreviewPrograms.ASPECT_RATIO_2_3 else TvContractCompat.PreviewPrograms.ASPECT_RATIO_16_9,
+            )
+            .setIntentUri(Uri.parse(uri))
+            .setInternalProviderId(prefix + hash(uri))
+            .setWeight(count - index)
+        if (card.durationMs > 0) {
+            builder.setDurationMillis(card.durationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+            if (card.positionMs > 0) builder.setLastPlaybackPositionMillis(card.positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        }
+        return builder.build()
     }
 
     private fun liveCards(current: AppSettings): List<TvHome.LiveCard> {
@@ -175,16 +388,27 @@ class TvHomePublisher @Inject constructor(
         receiver: ReceiverConfig?,
         channels: BouquetIndex,
         used: MutableSet<String>,
+        stats: LogoStats,
     ): PreviewProgram {
         var title = card.title
         var description = ""
         var art: Uri? = null
         val link = card.link
         if (link is TvHome.Link.Iptv) {
-            // Downloaded by the app and served from our provider: launchers do not load plain-http
-            // logos, and the address may carry the playlist login. A public https logo is the fallback.
-            art = card.logo.takeIf { it.isNotBlank() }?.let { saveLogo(it, used) }
-                ?: TvHome.publicLogo(card.logo)?.takeIf { it.startsWith("https://", ignoreCase = true) }?.let(Uri::parse)
+            // 1. The logo the app shows (downloaded by the app and served from our provider: launchers
+            //    do not load plain-http logos, and the address may carry the playlist login).
+            // 2. The playlist's current logo for this channel, when the remembered one is gone.
+            // 3. The receiver's picon of the same channel by name ("NL - SBS 6 4K" → SBS 6).
+            // 4. The EnigmaCast banner.
+            stats.total++
+            art = card.logo.takeIf { it.isNotBlank() }?.let { saveLogo(it, used) }?.also { stats.own++ }
+            if (art == null) {
+                art = channels.playlistLogo(link)?.takeIf { it != card.logo }?.let { saveLogo(it, used) }?.also { stats.playlist++ }
+            }
+            if (art == null && receiver != null) {
+                art = piconArt(receiver, channels.piconsByName(link.name.ifBlank { card.title }), used)?.also { stats.picon++ }
+            }
+            if (art == null) stats.banner++
         }
         if (link is TvHome.Link.Sat && receiver != null) {
             val now = System.currentTimeMillis() / 1000
@@ -233,8 +457,34 @@ class TvHomePublisher @Inject constructor(
     private inner class BouquetIndex(private val receiver: ReceiverConfig?) {
         private var entries: List<BouquetEntry>? = null
 
+        private var names: com.enigmacast.domain.epg.SatEpgNames.Index? = null
+        private var logos: Map<String, List<com.enigmacast.domain.xtream.XtreamItem>>? = null
+
         suspend fun piconPaths(reference: String, name: String): List<String> =
             TvHomeArt.piconCandidates(reference, name, entries())
+
+        /** Picons of the receiver channel an IPTV channel name matches (the satellite-guide matching). */
+        suspend fun piconsByName(name: String): List<String> {
+            val all = entries()
+            if (all.isEmpty()) return emptyList()
+            val index = names ?: com.enigmacast.domain.epg.SatEpgNames.index(
+                all.map { com.enigmacast.domain.epg.SatEpgNames.Channel(it.name, it.reference, it.reference) },
+            ).also { names = it }
+            return TvHomeArt.piconsByName(name, all, index)
+        }
+
+        /** The logo the playlist has now for this IPTV channel (read once, only when a logo failed). */
+        suspend fun playlistLogo(link: TvHome.Link.Iptv): String? {
+            val byId = logos ?: runCatching { playlistSync.liveItems() }.getOrDefault(emptyList())
+                .filter { it.icon.isNotBlank() }
+                .groupBy { it.id }
+                .also { logos = it }
+            val items = byId[link.id].orEmpty()
+            if (items.isEmpty()) return null
+            val providers = playlists.providers.value.filter { it.account()?.key == link.source }.map { it.id }.toSet()
+            val item = items.firstOrNull { it.providerId in providers } ?: items.first()
+            return TvHomeArt.downloadableLogo(item.icon)
+        }
 
         private suspend fun entries(): List<BouquetEntry> {
             entries?.let { return it }
@@ -255,17 +505,43 @@ class TvHomePublisher @Inject constructor(
     private suspend fun piconArt(receiver: ReceiverConfig?, paths: List<String>, used: MutableSet<String>): Uri? {
         if (receiver == null) return null
         for (path in paths) {
-            saveCard(receiver.id + "|" + path, used) { runCatching { tuner.picon(receiver, path) }.getOrNull() }?.let { return it }
+            saveCard(receiver.id + "|" + path, used, fetch = { runCatching { tuner.picon(receiver, path) }.getOrNull() })?.let { return it }
         }
         return null
     }
 
     /** An IPTV logo, downloaded by the app (never handed to the launcher as an address). */
-    private suspend fun saveLogo(url: String, used: MutableSet<String>): Uri? = saveCard("logo|$url", used) {
-        try {
-            logoClient.newCall(Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()).execute().use { r ->
-                if (!r.isSuccessful) null else r.body.bytes().takeIf { it.size <= TvHomeArt.MAX_LOGO_BYTES }
-            }
+    private suspend fun saveLogo(url: String, used: MutableSet<String>): Uri? =
+        saveCard("logo|$url", used, render = { bytes -> TvHomeCardArt.card(bytes) ?: svgCard(bytes) }) { download(url) }
+
+    /** A film or series poster, downloaded by the app (its address may carry the playlist login). */
+    private suspend fun savePoster(url: String, used: MutableSet<String>): Uri? =
+        saveCard("poster|$url", used, render = { bytes -> TvHomeCardArt.poster(bytes) }) { download(url) }
+
+    private fun download(url: String): ByteArray? = try {
+        logoClient.newCall(Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()).execute().use { r ->
+            if (!r.isSuccessful) null else r.body.bytes().takeIf { it.size <= TvHomeArt.MAX_LOGO_BYTES }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    /** An SVG logo (common in IPTV playlists) drawn by Coil, then laid on the card like the others. */
+    private suspend fun svgCard(bytes: ByteArray): ByteArray? {
+        if (!TvHomeArt.looksLikeSvg(bytes)) return null
+        return try {
+            val request = coil3.request.ImageRequest.Builder(context)
+                .data(bytes)
+                .size(TvHomeArt.CARD_WIDTH, TvHomeArt.CARD_HEIGHT)
+                .memoryCachePolicy(coil3.request.CachePolicy.DISABLED)
+                .diskCachePolicy(coil3.request.CachePolicy.DISABLED)
+                .decoderFactory(coil3.svg.SvgDecoder.Factory())
+                .build()
+            val result = svgLoader.execute(request) as? coil3.request.SuccessResult ?: return null
+            val bitmap = result.image.toBitmap()
+            TvHomeCardArt.card(bitmap)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -277,13 +553,24 @@ class TvHomePublisher @Inject constructor(
      * A card picture on our own provider: fetched once, laid on a 16:9 card, kept for later
      * refreshes. The file name is a hash, so no address or login ends up in the TV provider.
      */
-    private suspend fun saveCard(key: String, used: MutableSet<String>, fetch: suspend () -> ByteArray?): Uri? {
+    private suspend fun saveCard(
+        key: String,
+        used: MutableSet<String>,
+        render: suspend (ByteArray) -> ByteArray? = { TvHomeCardArt.card(it) },
+        fetch: suspend () -> ByteArray?,
+    ): Uri? {
         val name = hash("v${TvHomeArt.VERSION}|$key") + ".png"
         val dir = TvHomeArtProvider.dir(context)
         val file = File(dir, name)
         if (!file.isFile || file.length() == 0L) {
             val bytes = fetch()?.takeIf { it.isNotEmpty() } ?: return null
-            val png = runCatching { TvHomeCardArt.card(bytes) }.getOrNull() ?: return null
+            val png = try {
+                render(bytes)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: return null
             dir.mkdirs()
             val tmp = File(dir, "$name.tmp")
             tmp.writeBytes(png)
@@ -311,9 +598,8 @@ class TvHomePublisher @Inject constructor(
             if (existing.displayName?.toString() != name) {
                 helper.updatePreviewChannel(existing.id, PreviewChannel.Builder(existing).setDisplayName(name).build())
             }
-            if (!existing.isBrowsable && !default && !prefs.getBoolean("asked:$key", false)) {
-                prefs.edit().putBoolean("asked:$key", true).apply()
-                _browsableRequest.value = existing.id
+            if (!existing.isBrowsable && !prefs.getBoolean("asked:${existing.id}", false)) {
+                if (default) requestDefault(existing.id) else queueBrowsable(existing.id)
             }
             return existing.id
         }
@@ -323,13 +609,28 @@ class TvHomePublisher @Inject constructor(
             .setInternalProviderId(key)
             .setLogo(logo())
             .build()
+        // publishDefaultChannel also makes it browsable (the first request of an app is granted).
         val id = if (default) helper.publishDefaultChannel(channel) else helper.publishChannel(channel)
-        if (!default) {
-            prefs.edit().putBoolean("asked:$key", true).apply()
-            _browsableRequest.value = id
-        }
+        if (!default) queueBrowsable(id)
         prefs.edit().remove("rows:$id").apply()
+        Log.i(TAG, "home row added: $key")
         return id
+    }
+
+    /** The default row needs no dialog: Android grants an app's first request by itself. */
+    private fun requestDefault(channelId: Long) {
+        runCatching { TvContractCompat.requestChannelBrowsable(context, channelId) }
+            .onFailure { Log.i(TAG, "default row not made browsable: ${it.javaClass.simpleName}") }
+        prefs.edit().putBoolean("asked:$channelId", true).apply()
+    }
+
+    private fun deleteChannel(key: String) {
+        val helper = helper()
+        helper.allChannels.filter { it.internalProviderId == key }.forEach {
+            helper.deletePreviewChannel(it.id)
+            prefs.edit().remove("rows:${it.id}").remove("asked:${it.id}").apply()
+            _browsablePending.update { list -> list - it.id }
+        }
     }
 
     private fun logo(): Bitmap {
@@ -366,14 +667,27 @@ class TvHomePublisher @Inject constructor(
     private fun removeChannels() {
         val helper = helper()
         helper.allChannels
-            .filter { it.internalProviderId == TvHome.FAVORITES_KEY || it.internalProviderId == TvHome.RECORDINGS_KEY }
+            .filter { it.internalProviderId in TvHome.ALL_KEYS }
             .forEach { helper.deletePreviewChannel(it.id) }
         prefs.edit().clear().apply()
+        _browsablePending.value = emptyList()
         TvHomeArtProvider.dir(context).listFiles()?.forEach { it.delete() }
+    }
+
+    /** Where the IPTV cards in Favorieten got their picture (logged without any address). */
+    private class LogoStats {
+        var total = 0
+        var own = 0
+        var playlist = 0
+        var picon = 0
+        var banner = 0
     }
 
     private companion object {
         const val MAX_BOUQUETS = 40
+        const val TAG = "EcTvHome"
+        /** 2: Favorieten, IPTV-favorieten, Verder kijken, Opnames. */
+        const val LAYOUT = 2
     }
 
     private fun hash(value: String): String =

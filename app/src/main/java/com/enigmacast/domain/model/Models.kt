@@ -294,6 +294,14 @@ data class AppSettings(
     val startupLive: StartupLive = StartupLive.OFF,
     /** Android TV home screen: "EnigmaCast – Favorieten" and "– Opnames" rows (never in hotel mode). */
     val tvHomeChannels: Boolean = true,
+    /** Per row under [tvHomeChannels]: "Favorieten" (recent channels). */
+    val tvHomeFavorites: Boolean = true,
+    /** "IPTV-favorieten": starred IPTV films and series. */
+    val tvHomeIptvFavorites: Boolean = true,
+    /** "Verder kijken": IPTV films/episodes and box recordings with a resume point. */
+    val tvHomeContinue: Boolean = true,
+    /** "Opnames": the receiver's recordings. */
+    val tvHomeRecordings: Boolean = true,
     /** Last live IPTV channel per playlist source key. */
     val lastIptvChannels: Map<String, LastIptvChannel> = emptyMap(),
     /** Click sound when moving with the D-pad (Settings › General). On, as before, unless switched off. */

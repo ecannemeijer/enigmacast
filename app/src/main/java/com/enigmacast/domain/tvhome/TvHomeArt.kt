@@ -42,6 +42,36 @@ object TvHomeArt {
         return out.filter { it.isNotBlank() }
     }
 
+    /**
+     * Picons for an IPTV channel by its name ("NL - SBS 6 4K" → the receiver's "SBS 6"), via the
+     * same name matching that gives IPTV channels the satellite guide. Best match first; empty
+     * when no receiver channel has that name.
+     */
+    fun piconsByName(name: String, channels: List<BouquetEntry>): List<String> {
+        if (name.isBlank() || channels.isEmpty()) return emptyList()
+        val index = com.enigmacast.domain.epg.SatEpgNames.index(
+            channels.map { com.enigmacast.domain.epg.SatEpgNames.Channel(it.name, it.reference, it.reference) },
+        )
+        return piconsByName(name, channels, index)
+    }
+
+    fun piconsByName(name: String, channels: List<BouquetEntry>, index: com.enigmacast.domain.epg.SatEpgNames.Index): List<String> {
+        val out = LinkedHashSet<String>()
+        for (reference in index.lookup(name)) {
+            val entry = channels.firstOrNull { it.reference == reference }
+            out += piconCandidates(reference, entry?.name.orEmpty(), channels)
+        }
+        return out.toList()
+    }
+
+    /** Whether downloaded logo bytes are an SVG drawing (text with an `<svg` tag near the start). */
+    fun looksLikeSvg(bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) return false
+        val head = String(bytes, 0, minOf(bytes.size, 1024), Charsets.UTF_8).trimStart('\uFEFF', ' ', '\n', '\r', '\t')
+        if (!head.startsWith("<")) return false
+        return head.contains("<svg", ignoreCase = true)
+    }
+
     /** An IPTV logo the app may download itself (http or https); it is never handed to the launcher. */
     fun downloadableLogo(url: String?): String? {
         val value = url?.trim().orEmpty()

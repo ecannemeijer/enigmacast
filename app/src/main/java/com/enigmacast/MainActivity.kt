@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,6 +87,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var recordingBook: com.enigmacast.live.RecordingBook
     @Inject lateinit var iptvPlaylistSync: com.enigmacast.data.xtream.IptvPlaylistSync
     @Inject lateinit var iptvPlaylistStore: com.enigmacast.data.xtream.IptvPlaylistStore
+    @Inject lateinit var resumeTracker: com.enigmacast.live.ResumeTracker
     private companion object {
         const val REQUEST_TV_HOME_CHANNEL = 4711
     }
@@ -196,25 +198,17 @@ class MainActivity : ComponentActivity() {
         // Android TV home rows: rebuilt when the setting or hotel mode changes (removed in hotel mode).
         lifecycleScope.launch {
             kotlinx.coroutines.flow.combine(
-                settingsRepository.settings.map { it.tvHomeChannels }.distinctUntilChanged(),
+                settingsRepository.settings.map { com.enigmacast.domain.tvhome.TvHome.rows(it, hotel = false) }.distinctUntilChanged(),
                 com.enigmacast.domain.hotel.HotelRuntime.state.map { it.enabled }.distinctUntilChanged(),
-            ) { on, hotel -> on && !hotel }
+            ) { rows, hotel -> if (hotel) emptyList() else rows }
                 .distinctUntilChanged()
-                .collect { on -> if (on) com.enigmacast.data.tvhome.TvHomeWorker.enqueue(applicationContext) else tvHome.removeAll() }
+                .collect { rows -> if (rows.isNotEmpty()) com.enigmacast.data.tvhome.TvHomeWorker.enqueue(applicationContext) else tvHome.removeAll() }
         }
-        // The second row needs the user's OK once before the launcher shows it.
+        // Every row but the first needs the user's OK before the launcher shows it. Asked one at a
+        // time and only while the app is on screen: from the background Android cancels the question.
         lifecycleScope.launch {
-            tvHome.browsableRequest.collect { id ->
-                if (id == null) return@collect
-                tvHome.browsableAsked()
-                runCatching {
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(
-                        Intent(androidx.tvprovider.media.tv.TvContractCompat.ACTION_REQUEST_CHANNEL_BROWSABLE)
-                            .putExtra(androidx.tvprovider.media.tv.TvContractCompat.EXTRA_CHANNEL_ID, id),
-                        REQUEST_TV_HOME_CHANNEL,
-                    )
-                }
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                tvHome.browsablePending.collect { askTvHomeRow() }
             }
         }
         handleSearchIntent(intent)
@@ -230,8 +224,52 @@ class MainActivity : ComponentActivity() {
         handleTvHome(intent)
     }
 
+    /** Channel id whose "show this row?" question is on screen now. */
+    private var tvHomeAsking: Long? = null
+
+    private fun askTvHomeRow() {
+        if (tvHomeAsking != null || com.enigmacast.domain.hotel.HotelRuntime.active) return
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return
+        val id = tvHome.browsablePending.value.firstOrNull() ?: return
+        tvHomeAsking = id
+        tvHome.browsableAsked(id)
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(
+                Intent(androidx.tvprovider.media.tv.TvContractCompat.ACTION_REQUEST_CHANNEL_BROWSABLE)
+                    .putExtra(androidx.tvprovider.media.tv.TvContractCompat.EXTRA_CHANNEL_ID, id),
+                REQUEST_TV_HOME_CHANNEL,
+            )
+        } catch (e: android.content.ActivityNotFoundException) {
+            // Google TV and some other home screens have no such question.
+            tvHomeAsking = null
+            android.util.Log.i("EcTvHome", "row question not available on this TV")
+            if (!tvHomeNoDialogShown) {
+                tvHomeNoDialogShown = true
+                android.widget.Toast.makeText(this, R.string.tvhome_rows_no_dialog, android.widget.Toast.LENGTH_LONG).show()
+            }
+            askTvHomeRow()
+        } catch (e: RuntimeException) {
+            tvHomeAsking = null
+            android.util.Log.i("EcTvHome", "row question failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private var tvHomeNoDialogShown = false
+
+    @Deprecated("Deprecated in Java")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_TV_HOME_CHANNEL) {
+            android.util.Log.i("EcTvHome", "row question answered: ${if (resultCode == RESULT_OK) "ok" else "not added"}")
+            tvHomeAsking = null
+            askTvHomeRow()
+        }
+    }
+
     /**
-     * A card on the "EnigmaCast – Favorieten" or "– Opnames" home row: zap to that channel or play
+     * A card on one of the EnigmaCast home rows: zap to that channel or play
      * that recording directly. Not in hotel mode (the rows do not exist there).
      */
     private fun handleTvHome(intent: Intent?) {
@@ -270,12 +308,37 @@ class MainActivity : ComponentActivity() {
                 }
                 is com.enigmacast.domain.tvhome.TvHome.Link.Recording -> {
                     val own = recordingBook.items.value.firstOrNull { it.fileName == link.file }
+                    suspend fun startAt(key: String): Long = if (!link.resume) 0L else
+                        com.enigmacast.domain.resume.ResumePolicy.offer(runCatching { resumeTracker.get(key) }.getOrNull()) ?: 0L
                     val started = if (own != null) {
-                        recordingBook.play(own.id)
+                        recordingBook.play(own.id, startAt(own.id))
                     } else {
-                        recordingBook.boxItems()?.movies?.firstOrNull { it.fileName == link.file }?.let { recordingBook.playBox(it) } == true
+                        recordingBook.boxItems()?.movies?.firstOrNull { it.fileName == link.file }
+                            ?.let { recordingBook.playBox(it, startAt(it.id)) } == true
                     }
                     if (started) appViewModel.openStream() else EnigmaLog.service("tv home recording not found")
+                }
+                is com.enigmacast.domain.tvhome.TvHome.Link.Library -> {
+                    val row = iptvLibrary.favoritesNow().firstOrNull { it.source == link.source && it.kind == link.kind && it.id == link.id }
+                    if (row == null) {
+                        EnigmaLog.service("tv home favorite not found")
+                        return@launch
+                    }
+                    val section = if (row.kind == "s") com.enigmacast.domain.xtream.XtreamSection.SERIES else com.enigmacast.domain.xtream.XtreamSection.MOVIES
+                    val item = com.enigmacast.domain.xtream.XtreamItem(row.id, row.title, section, row.categoryId, row.poster.orEmpty(), row.extension, url = row.url)
+                    // A film plays (with the resume question); a series opens its page.
+                    iptvLibrary.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(row.source, item, detail = row.kind == "s")
+                    appViewModel.openXtream()
+                }
+                is com.enigmacast.domain.tvhome.TvHome.Link.Resume -> {
+                    val row = iptvLibrary.findResume(link.source, link.kind, link.id)
+                    val request = row?.let { com.enigmacast.data.xtream.WatchNextPublisher.request(it) }
+                    if (request == null) {
+                        EnigmaLog.service("tv home resume not found")
+                        return@launch
+                    }
+                    iptvLibrary.openRequest.value = request
+                    appViewModel.openXtream()
                 }
                 com.enigmacast.domain.tvhome.TvHome.Link.Open -> Unit
             }

@@ -76,6 +76,18 @@ class IptvLibrary @Inject constructor(
     val favoriteKeys: StateFlow<Set<String>> = favorites.map { list -> list.map { key(it.source, it.kind, it.id) }.toSet() }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
+    /** The active viewer's favorites straight from Room (the home-screen rows run without the UI). */
+    suspend fun favoritesNow(): List<IptvLibraryRow> {
+        val profile = profiles.state.first().activeUuid
+        return dao.favorites().first().filter { it.profileId == profile }
+    }
+
+    /** The active viewer's resume rows straight from Room. */
+    suspend fun resumesNow(): List<IptvResumeRow> {
+        val profile = profiles.state.first().activeUuid
+        return dao.resumes().first().filter { it.profileId == profile }
+    }
+
     /** Library → IPTV page. */
     /** Set when the IPTV screen closes after a start from Home/Library: the card to focus again. */
     val returnTo = MutableStateFlow<String?>(null)

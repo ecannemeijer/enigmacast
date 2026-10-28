@@ -1787,7 +1787,8 @@ private fun PlaybackSettingsPanel(
             },
         )
     }
-    val tvHomeChannels = viewModel.settings.collectAsStateWithLifecycle().value.tvHomeChannels
+    val tvHomeSettings = viewModel.settings.collectAsStateWithLifecycle().value
+    val tvHomeChannels = tvHomeSettings.tvHomeChannels
     SettingsCard(stringResource(R.string.tvhome_setting)) {
         ToggleRow(
             title = stringResource(R.string.tvhome_setting),
@@ -1795,6 +1796,27 @@ private fun PlaybackSettingsPanel(
             onCheckedChange = viewModel::setTvHomeChannels,
             description = stringResource(R.string.tvhome_setting_desc),
         )
+        if (tvHomeChannels) {
+            ToggleRow(stringResource(R.string.tvhome_row_favorites), tvHomeSettings.tvHomeFavorites, viewModel::setTvHomeFavorites)
+            ToggleRow(stringResource(R.string.tvhome_row_iptv_favorites), tvHomeSettings.tvHomeIptvFavorites, viewModel::setTvHomeIptvFavorites)
+            ToggleRow(stringResource(R.string.tvhome_row_continue), tvHomeSettings.tvHomeContinue, viewModel::setTvHomeContinue)
+            ToggleRow(stringResource(R.string.tvhome_row_recordings), tvHomeSettings.tvHomeRecordings, viewModel::setTvHomeRecordings)
+            ValueRow(
+                title = stringResource(R.string.tvhome_add_rows),
+                value = "",
+                onClick = viewModel::requestTvHomeRows,
+                description = stringResource(R.string.tvhome_add_rows_desc),
+            )
+            if (viewModel.googleTv) {
+                Text(
+                    stringResource(R.string.tvhome_google_tv_note),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = EnigmaColors.Muted,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+        }
     }
     SettingsCard(stringResource(R.string.picture)) {
         ChoiceRow(
