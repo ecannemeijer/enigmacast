@@ -11,7 +11,11 @@ import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
 import com.enigmacast.util.UiTextException
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -43,31 +47,43 @@ class AppUpdateClient @Inject constructor(
         }
     }
 
+    /**
+     * Downloads the APK into the cache. [onProgress] gets a whole percent only when it changes
+     * (-1 now and then when the size is unknown) and 100 at the end. The file is written next to
+     * the target and only renamed when complete; a cancelled or failed download leaves nothing.
+     */
     suspend fun download(release: RemoteRelease, onProgress: suspend (Int) -> Unit): File = withContext(Dispatchers.IO) {
         val url = release.apkUrl.ifBlank { UPDATE_APK_URL }
         val request = Request.Builder().url(url).build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw UiTextException(UiText.res(R.string.error_download_failed_code, response.code), "Download failed (${response.code})")
-            }
-            val body = response.body
-            val total = body.contentLength()
-            val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-            val target = File(dir, "enigmacast-update.apk")
-            body.byteStream().use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var readTotal = 0L
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        readTotal += count
-                        if (total > 0) onProgress(((readTotal * 100) / total).toInt().coerceIn(0, 100))
+        val dir = File(context.cacheDir, "updates").apply { mkdirs() }
+        val target = File(dir, "enigmacast-update.apk")
+        val part = File(dir, "enigmacast-update.apk.part")
+        val call = client.newCall(request)
+        // Cancelling the coroutine also aborts a read that is blocked on the network.
+        val onCancel = coroutineContext[Job]?.invokeOnCompletion { if (it is CancellationException) call.cancel() }
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw UiTextException(UiText.res(R.string.error_download_failed_code, response.code), "Download failed (${response.code})")
+                }
+                val body = response.body
+                val total = body.contentLength()
+                part.delete()
+                body.byteStream().use { input ->
+                    part.outputStream().use { output ->
+                        UpdateDownload.copy(input, output, total, onProgress, checkActive = { ensureActive() })
                     }
                 }
             }
+            target.delete()
+            if (!part.renameTo(target)) throw java.io.IOException("Could not store the update")
             target
+        } catch (e: Throwable) {
+            part.delete()
+            if (e is java.io.IOException && !isActive) throw CancellationException("update download cancelled")
+            throw e
+        } finally {
+            onCancel?.dispose()
         }
     }
 
