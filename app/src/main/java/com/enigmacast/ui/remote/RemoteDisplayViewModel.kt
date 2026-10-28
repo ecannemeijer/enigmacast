@@ -38,6 +38,8 @@ import com.enigmacast.domain.network.ReceiverRoute
 import com.enigmacast.domain.network.ReceiverRouting
 import com.enigmacast.domain.network.StreamLevel
 import com.enigmacast.domain.osd.GrabFormat
+import com.enigmacast.domain.player.LiveBack
+import com.enigmacast.domain.player.LiveBackStep
 import com.enigmacast.domain.osd.OsdConfig
 import com.enigmacast.domain.osd.OsdController
 import com.enigmacast.domain.osd.OsdPollState
@@ -1492,11 +1494,15 @@ class RemoteDisplayViewModel @Inject constructor(
                 numberEntry.clear()
                 _ui.update { it.copy(numberEntry = "") }
             }
-            pip.playing() -> pip.stop()
-            // Back on the picture (banner up or not) opens the TV guide on the playing channel at
-            // the current time (Left still opens the channel list). Without the guide (Premium)
-            // the player leaves to Home's side menu as before (hotel mode: the guest's menu).
-            else -> if (onLeaveToGuide?.invoke() != true) onLeaveToDashboard?.invoke()
+            // The info bar (OSD) up: Back only closes it and the channel stays full screen. Back on
+            // the bare picture opens the TV guide on the playing channel at the current time (Left
+            // still opens the channel list). Without the guide (Premium) the player leaves to Home's
+            // side menu as before (hotel mode: the guest's menu).
+            else -> when (LiveBack.onPicture(osdVisible = ui.banner, insetPlaying = pip.playing())) {
+                LiveBackStep.HIDE_OSD -> hideBanner()
+                LiveBackStep.STOP_INSET -> pip.stop()
+                LiveBackStep.GUIDE -> if (onLeaveToGuide?.invoke() != true) onLeaveToDashboard?.invoke()
+            }
         }
     }
 
