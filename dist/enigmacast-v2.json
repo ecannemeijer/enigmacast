@@ -2,7 +2,7 @@
   "versionCode": 123,
   "versionName": "1.0.0-beta.120",
   "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/v1.0.0-beta.120/enigmacast.apk",
-  "notes": "Updates downloaden nu veel sneller en komen voortaan van GitHub, en de app is ruim de helft kleiner.",
+  "notes": "Updates now download much faster and the app is less than half its previous size.",
   "companion": {
     "versionCode": 118,
     "versionName": "1.0.0-beta.19",
