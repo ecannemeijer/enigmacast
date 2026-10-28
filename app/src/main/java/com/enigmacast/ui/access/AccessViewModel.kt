@@ -21,7 +21,7 @@ data class AccessUiState(
     val needsLogin: Boolean = false,
     val updateRequired: Boolean = false,
     val minVersionName: String = "",
-    val updateUrl: String = "https://update.velixatv.com/enigmacast.apk",
+    val updateUrl: String = "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
     val message: String = "",
 )
 

@@ -6,8 +6,10 @@ import kotlinx.serialization.Serializable
  * Builds from the accounts release on read enigmacast-v2.json. enigmacast.json stays frozen for
  * older installs and only tells them to reinstall (its apkUrl is not an APK).
  */
-const val UPDATE_MANIFEST_URL = "https://update.velixatv.com/enigmacast-v2.json"
-const val UPDATE_APK_URL = "https://update.velixatv.com/enigmacast.apk"
+// Hosted as assets of the latest GitHub release; github.com answers with redirects to
+// release-assets.githubusercontent.com, which OkHttp follows (AppUpdateClient).
+const val UPDATE_MANIFEST_URL = "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast-v2.json"
+const val UPDATE_APK_URL = "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk"
 
 /**
  * dist/enigmacast-v2.json (dist/enigmacast.json for pre-account builds). [reinstallRequired] marks a release that cannot be installed over the
