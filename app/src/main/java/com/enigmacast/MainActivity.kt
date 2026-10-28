@@ -390,6 +390,8 @@ class MainActivity : ComponentActivity() {
         clients.evictIdleConnections()
         appViewModel.setForeground(true)
         appViewModel.resumeFromBackground()
+        // The process stays alive on a TV: look for a new release when the app is back in front.
+        appViewModel.onForeground()
         companionBridge.onForeground(this)
         // Bouquets or channels edited on the box itself show up without waiting for the daily refresh.
         com.enigmacast.sync.SyncScheduler.checkForChanges(applicationContext)
