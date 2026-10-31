@@ -81,6 +81,8 @@ data class XtreamVodInfo(
     val runtimeMin: Int?,
     val director: String,
     val tmdbId: Int?,
+    /** The playlist's own cast (`cast` / `actors`), names only. */
+    val cast: List<String> = emptyList(),
 )
 
 data class XtreamEpg(val title: String, val startSec: Long, val endSec: Long, val description: String = "")
@@ -290,8 +292,17 @@ object XtreamJson {
             runtimeMin = info.str("duration_secs")?.toIntOrNull()?.div(60)?.takeIf { it > 0 } ?: info.str("episode_run_time")?.toIntOrNull(),
             director = info.str("director").orEmpty(),
             tmdbId = info.str("tmdb_id")?.toIntOrNull() ?: info.str("tmdb")?.toIntOrNull(),
+            cast = castNames(info.str("cast") ?: info.str("actors")),
         )
     }
+
+    /** "Keanu Reeves, Carrie-Anne Moss" → names; at most 15, no duplicates. */
+    fun castNames(raw: String?): List<String> = raw.orEmpty()
+        .split(',', ';', '/', '|')
+        .map { it.trim() }
+        .filter { it.length >= 2 && !it.equals("n/a", true) }
+        .distinct()
+        .take(15)
 
     /** `get_short_epg`: titles are base64. */
     fun shortEpg(body: String): List<XtreamEpg> {

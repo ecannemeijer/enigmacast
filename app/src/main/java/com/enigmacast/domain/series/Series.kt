@@ -142,6 +142,9 @@ class HomeSeriesBuilder(private val tmdb: TmdbApi, private val cache: FilmCache 
         .maxWithOrNull(compareBy<Pair<TmdbSearchHit, Double>> { it.second }.thenBy { it.first.popularity })
         ?.first
 
+    /** A series by its TMDB tv id (the IPTV playlist's `tmdb_id`), cached like a matched one. */
+    suspend fun details(tvId: Int, country: String, language: String): TmdbMovie? = show(SeriesIds.toRow(tvId), country, language)
+
     private suspend fun show(rowId: Int, country: String, language: String): TmdbMovie? {
         cache.movie(rowId, language)?.let { return it }
         val parsed = tmdb.tv(SeriesIds.tvId(rowId), language)?.let { TmdbJson.parseTv(it, country, language) } ?: return null
