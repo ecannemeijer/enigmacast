@@ -200,65 +200,17 @@ fun SearchPanel(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
-                    // IPTV Live / Films / Series: sideways poster rows after the programme results.
-                    iptvRows.forEach { (title, cards) ->
-                        item(key = "iptv-$title") {
-                            Column {
-                                Text(stringResource(title), color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
-                                androidx.compose.foundation.lazy.LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                                ) {
-                                    items(cards, key = { it.key }) { card ->
-                                        com.enigmacast.ui.dashboard.IptvCard(
-                                            card = card,
-                                            modifier = Modifier.focusProperties {
-                                                canFocus = rowsFocusable
-                                                if (card === cards.first()) left = menuFocus ?: FocusRequester.Cancel
-                                                if (card === cards.last()) right = FocusRequester.Cancel
-                                            },
-                                            onClick = { onXtream?.let { viewModel.openIptv(card, it) } },
-                                            onOptions = {},
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    sections.forEach { (kind, hits) ->
-                        item(key = "header-$kind") {
-                            Text(
-                                sectionTitle(kind),
-                                color = EnigmaColors.Accent,
-                                fontSize = 12.sp,
-                                fontWeight = EnigmaType.Strong,
-                                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
-                            )
-                        }
-                        items(hits, key = { it.rowKey() }) { hit ->
-                            CompactListRow(
-                                onClick = {
-                                    if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) viewModel.openProgramme(hit)
-                                    else viewModel.choose(hit, onPlayed, onBouquet, onPrepare)
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
-                                modifier = Modifier
-                                    .focusProperties {
-                                        canFocus = rowsFocusable
-                                        left = menuFocus ?: FocusRequester.Cancel
-                                        if (menuFocus == null) right = FocusRequester.Cancel
-                                    },
-                            ) {
-                                Column {
-                                    Text(SearchRows.headline(hit), color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    val subtitle = detail(hit)
-                                    if (subtitle.isNotBlank()) {
-                                        Text(subtitle, color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    searchResultItems(
+                        iptvRows = iptvRows,
+                        sections = sections,
+                        rowsFocusable = rowsFocusable,
+                        menuFocus = menuFocus,
+                        onIptv = { card -> onXtream?.let { viewModel.openIptv(card, it) } },
+                        onHit = { hit ->
+                            if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) viewModel.openProgramme(hit)
+                            else viewModel.choose(hit, onPlayed, onBouquet, onPrepare)
+                        },
+                    )
                 }
             }
         }
@@ -271,8 +223,78 @@ fun SearchPanel(
     }
 }
 
+/**
+ * The result rows of a search: IPTV poster rows, then the programme / recording / channel
+ * sections. Shared by [SearchPanel] and the actor page's "where to watch" list.
+ */
+internal fun androidx.compose.foundation.lazy.LazyListScope.searchResultItems(
+    iptvRows: List<Pair<Int, List<com.enigmacast.domain.xtream.IptvLibraryCard>>>,
+    sections: List<Pair<SearchKind, List<SearchHit>>>,
+    rowsFocusable: Boolean,
+    menuFocus: FocusRequester?,
+    onIptv: (com.enigmacast.domain.xtream.IptvLibraryCard) -> Unit,
+    onHit: (SearchHit) -> Unit,
+) {
+    // IPTV Live / Films / Series: sideways poster rows after the programme results.
+    iptvRows.forEach { (title, cards) ->
+        item(key = "iptv-$title") {
+            Column {
+                Text(stringResource(title), color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                ) {
+                    items(cards, key = { it.key }) { card ->
+                        com.enigmacast.ui.dashboard.IptvCard(
+                            card = card,
+                            modifier = Modifier.focusProperties {
+                                canFocus = rowsFocusable
+                                if (card === cards.first()) left = menuFocus ?: FocusRequester.Cancel
+                                if (card === cards.last()) right = FocusRequester.Cancel
+                            },
+                            onClick = { onIptv(card) },
+                            onOptions = {},
+                        )
+                    }
+                }
+            }
+        }
+    }
+    sections.forEach { (kind, hits) ->
+        item(key = "header-$kind") {
+            Text(
+                sectionTitle(kind),
+                color = EnigmaColors.Accent,
+                fontSize = 12.sp,
+                fontWeight = EnigmaType.Strong,
+                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
+            )
+        }
+        items(hits, key = { it.rowKey() }) { hit ->
+            CompactListRow(
+                onClick = { onHit(hit) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+                modifier = Modifier
+                    .focusProperties {
+                        canFocus = rowsFocusable
+                        left = menuFocus ?: FocusRequester.Cancel
+                        if (menuFocus == null) right = FocusRequester.Cancel
+                    },
+            ) {
+                Column {
+                    Text(SearchRows.headline(hit), color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val subtitle = detail(hit)
+                    if (subtitle.isNotBlank()) {
+                        Text(subtitle, color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
-private fun SearchSpinner() {
+internal fun SearchSpinner() {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),

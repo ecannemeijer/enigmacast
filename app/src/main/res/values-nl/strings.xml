@@ -1772,4 +1772,16 @@
     <string name="sync_server_reinstall_message">Op %1$s draait al een syncserver. Opnieuw installeren is alleen bedoeld voor een kapotte server: het installeert de nieuwste versie via SSH en herstart de server. Bestaande gegevens, koppelingen en het dashboardwachtwoord blijven behouden (eerst wordt een back-up gemaakt); worden die gegevens niet gevonden, dan stopt de installatie. Wil je deze tv met de server gebruiken, kies dan Koppelen. Gebruik de herstelcode hier alleen als je alle andere apparaten wilt afmelden.</string>
     <string name="sync_server_reinstall_confirm">Installatieformulier tonen</string>
     <string name="sync_server_search_again">Opnieuw zoeken</string>
+    <string name="actor_filmography">Films en series</string>
+    <string name="actor_born">Geboren %1$s</string>
+    <string name="actor_died">Overleden %1$s</string>
+    <string name="actor_age">%1$d jaar</string>
+    <string name="actor_failed">Kan de pagina van deze acteur niet laden.</string>
+    <string name="actor_no_bio">Geen biografie beschikbaar.</string>
+    <string name="actor_as">als %1$s</string>
+    <string name="actor_kind_film">Film</string>
+    <string name="actor_kind_series">Serie</string>
+    <string name="where_to_watch">Waar te kijken</string>
+    <string name="where_to_watch_torrent">Openen in Torrent</string>
+    <string name="where_to_watch_none">Niet gevonden op IPTV of in de satellietgids.</string>
 </resources>

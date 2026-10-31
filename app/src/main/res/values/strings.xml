@@ -1780,4 +1780,16 @@
     <string name="sync_server_reinstall_message">A sync server is already running on %1$s. Reinstalling is only meant for a broken server: it installs the latest release over SSH and restarts the server. Existing data, pairings and the dashboard password are kept (a backup is made first); if that data cannot be found, the install stops. To use this TV with the server, choose Pair instead. Do not use the recovery code here unless you want to sign out all other devices.</string>
     <string name="sync_server_reinstall_confirm">Show install form</string>
     <string name="sync_server_search_again">Search again</string>
+    <string name="actor_filmography">Films &amp; series</string>
+    <string name="actor_born">Born %1$s</string>
+    <string name="actor_died">Died %1$s</string>
+    <string name="actor_age">%1$d years</string>
+    <string name="actor_failed">Could not load this actor’s page.</string>
+    <string name="actor_no_bio">No biography available.</string>
+    <string name="actor_as">as %1$s</string>
+    <string name="actor_kind_film">Film</string>
+    <string name="actor_kind_series">Series</string>
+    <string name="where_to_watch">Where to watch</string>
+    <string name="where_to_watch_torrent">Open in Torrent</string>
+    <string name="where_to_watch_none">Not found on IPTV or in the satellite guide.</string>
 </resources>

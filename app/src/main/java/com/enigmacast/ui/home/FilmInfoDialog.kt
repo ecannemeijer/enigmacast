@@ -7,6 +7,8 @@ import com.enigmacast.ui.theme.skinShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -222,12 +224,7 @@ fun FilmInfoDialog(
                 if (vod?.below != null) {
                     vod.below.invoke()
                 } else if (movie.cast.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
-                            items(movie.cast, key = { it.name + it.character }) { member -> CastCard(member) }
-                        }
-                    }
+                    CastRow(movie.cast)
                 }
             }
             if (showPlot) {
@@ -237,7 +234,7 @@ fun FilmInfoDialog(
     }
 }
 
-private const val PLOT_MORE_CHARS = 260
+internal const val PLOT_MORE_CHARS = 260
 
 /** The IPTV part of [FilmInfoDialog]. */
 data class VodDetail(
@@ -254,7 +251,7 @@ data class VodDetail(
 
 /** "More": the whole plot (and tagline) in a small window; Back or OK closes it. */
 @Composable
-private fun PlotDialog(title: String, plot: String, onClose: () -> Unit) {
+internal fun PlotDialog(title: String, plot: String, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         NavigationSoundsForWindow()
         val close = remember { FocusRequester() }
@@ -274,12 +271,45 @@ private fun PlotDialog(title: String, plot: String, onClose: () -> Unit) {
     }
 }
 
+/**
+ * The cast of a film or series. OK on an actor opens their page (bio and filmography); Back
+ * there returns to the same actor card.
+ */
 @Composable
-private fun CastCard(member: TmdbCastMember) {
+private fun CastRow(cast: List<TmdbCastMember>) {
+    var actorIndex by remember { mutableStateOf<Int?>(null) }
+    var returnTo by remember { mutableStateOf<Int?>(null) }
+    val focus = remember(cast) { List(cast.size) { FocusRequester() } }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
+            itemsIndexed(cast, key = { _, it -> it.name + it.character }) { index, member ->
+                CastCard(member, Modifier.focusRequester(focus[index])) { actorIndex = index }
+            }
+        }
+    }
+    actorIndex?.let { index ->
+        cast.getOrNull(index)?.let { member ->
+            com.enigmacast.ui.person.ActorInfoDialog(member, onClose = {
+                actorIndex = null
+                returnTo = index
+            })
+        }
+    }
+    LaunchedEffect(returnTo) {
+        val index = returnTo ?: return@LaunchedEffect
+        returnTo = null
+        kotlinx.coroutines.delay(60)
+        runCatching { focus[index].requestFocus() }
+    }
+}
+
+@Composable
+private fun CastCard(member: TmdbCastMember, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     Column(
-        Modifier.width(84.dp).focusable(interactionSource = interaction),
+        modifier.width(84.dp).clickable(interactionSource = interaction, indication = null, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
@@ -381,12 +411,7 @@ fun RecordingInfoDialog(
                     }
                 }
                 if (movie.cast.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
-                            items(movie.cast, key = { it.name + it.character }) { member -> CastCard(member) }
-                        }
-                    }
+                    CastRow(movie.cast)
                 }
             }
             if (showPlot) PlotDialog(film.displayTitle, plot, onClose = { showPlot = false })
