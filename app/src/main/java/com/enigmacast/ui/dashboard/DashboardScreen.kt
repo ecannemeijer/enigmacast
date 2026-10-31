@@ -243,6 +243,20 @@ fun DashboardScreen(
     }
     var navFocused by remember { mutableStateOf(false) }
     var contentFocused by remember { mutableStateOf(false) }
+    // Arriving on a page that focuses its own content (Back from live TV into the guide, back from
+    // a film or series, My items): keep the menu folded until that focus lands, instead of
+    // opening it on the first frame and folding it away again.
+    val entryToContent = remember {
+        openGuide != null || iptvReturn != null || returnToMyItemsId != null || focusLanguageSetting ||
+            xtreamModel.vodFromDashboard
+    }
+    var entrySettled by remember { mutableStateOf(!entryToContent) }
+    LaunchedEffect(navFocused, contentFocused) {
+        if (entrySettled) return@LaunchedEffect
+        if (navFocused || contentFocused) { entrySettled = true; return@LaunchedEffect }
+        delay(com.enigmacast.ui.components.DrawerExpansion.CONTENT_ENTRY_GRACE_MS)
+        entrySettled = true
+    }
     val homeFocus = remember { FocusRequester() }
     val homeContentFocus = remember { FocusRequester() }
     val moviesFocus = remember { FocusRequester() }
@@ -554,7 +568,9 @@ fun DashboardScreen(
                 false
             },
     ) {
-        val drawerExpanded = navFocused || !contentFocused
+        val drawerExpanded = com.enigmacast.ui.components.DrawerExpansion.expanded(
+            navFocused, contentFocused, awaitingContent = !entrySettled,
+        )
         Row(modifier = Modifier.fillMaxSize()) {
             EnigmaNavigationDrawer(
                 expanded = drawerExpanded,
