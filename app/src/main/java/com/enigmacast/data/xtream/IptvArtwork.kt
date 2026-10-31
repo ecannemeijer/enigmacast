@@ -73,6 +73,21 @@ class IptvArtwork @Inject constructor(
         }
     }
 
+    /**
+     * The full TMDB page (with cast) for the playlist's own `tmdb_id`, when the title search
+     * found nothing or only a search hit without details.
+     */
+    suspend fun byTmdbId(item: XtreamItem, tmdbId: Int): TmdbMovie? = withContext(Dispatchers.IO) {
+        if (tmdbId <= 0 || tmdb.apiKey().isBlank()) return@withContext null
+        val countryCode = runCatching { country.country() }.getOrDefault("NL")
+        val language = CountryResolver.tmdbLanguage(country.appLanguage(), countryCode)
+        val cache = RoomFilmCache(dao, CACHE_MS)
+        runCatching {
+            if (item.section == XtreamSection.SERIES) HomeSeriesBuilder(tmdb, cache).details(tmdbId, countryCode, language)
+            else HomeFilmsBuilder(tmdb, cache).details(tmdbId, countryCode, language)
+        }.getOrNull()
+    }
+
     companion object {
         const val CACHE_MS = 30L * 24 * 3600 * 1000
     }
@@ -117,6 +132,7 @@ object IptvVod {
                 backdropPath = movie.backdropPath ?: info.backdrop,
                 posterPath = movie.posterPath ?: info.cover ?: item.icon.ifBlank { null },
                 runtimeMin = movie.runtimeMin ?: info.runtimeMin,
+                cast = movie.cast.ifEmpty { cast(info) },
             )
         }
         val base = fallback(item)
@@ -129,8 +145,13 @@ object IptvVod {
             genres = info.genre.split(',', '/').map { it.trim() }.filter { it.isNotEmpty() },
             runtimeMin = info.runtimeMin,
             directors = info.director.split(',').map { it.trim() }.filter { it.isNotEmpty() },
+            cast = cast(info),
         )
     }
+
+    /** The playlist's cast names as cards; the actor page finds them on TMDB by name. */
+    fun cast(info: com.enigmacast.domain.xtream.XtreamVodInfo): List<com.enigmacast.domain.films.TmdbCastMember> =
+        info.cast.map { com.enigmacast.domain.films.TmdbCastMember(it, "", null) }
 
     fun film(item: XtreamItem, movie: TmdbMovie?): HomeFilm {
         val base = candidate(item) ?: FilmCandidate(event(item.name, item.id.hashCode()), "", item.name, null, item.icon)

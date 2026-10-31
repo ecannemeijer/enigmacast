@@ -76,6 +76,9 @@ class HomeFilmsBuilder(private val tmdb: TmdbApi, private val cache: FilmCache =
         return movie
     }
 
+    /** A film by its TMDB id (the IPTV playlist's `tmdb_id`), cached like a matched one. */
+    suspend fun details(tmdbId: Int, country: String, language: String): TmdbMovie? = movie(tmdbId, country, language)
+
     private fun fits(candidate: FilmCandidate, movie: TmdbMovie): Boolean {
         val runtime = movie.runtimeMin ?: return true
         return candidate.event.durationSec / 60 + 15 >= runtime

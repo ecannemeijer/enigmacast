@@ -745,7 +745,13 @@ class XtreamViewModel @Inject constructor(
                 runCatching { artworkSource.resolve(listOf(item)) }
                 val xtream = accountFor(item.providerId)?.takeIf { !isM3uProvider(item.providerId) && it !== M3U_ACCOUNT }
                 val info = xtream?.let { repository.vodInfo(it, item) }
-                detailFilm = vod.film(item, vod.merge(item, artwork.value[vod.key(item)], info))
+                var movie = artwork.value[vod.key(item)]
+                // No TMDB match by title (or only a search hit without the cast): the playlist's
+                // own tmdb_id gives the full page, cast included.
+                if (movie?.cast.isNullOrEmpty() && info?.tmdbId != null) {
+                    runCatching { artworkSource.byTmdbId(item, info.tmdbId) }.getOrNull()?.let { movie = it }
+                }
+                detailFilm = vod.film(item, vod.merge(item, movie, info))
                 if (item.section == XtreamSection.SERIES && xtream != null) {
                     detailEpisodes = runCatching { repository.episodes(xtream, item.id) }.getOrDefault(emptyList())
                 }

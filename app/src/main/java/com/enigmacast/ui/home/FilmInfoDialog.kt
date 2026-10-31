@@ -221,9 +221,9 @@ fun FilmInfoDialog(
                         }
                     }
                 }
-                if (vod?.below != null) {
-                    vod.below.invoke()
-                } else if (movie.cast.isNotEmpty()) {
+                // A series page shows its episodes first, then the cast under them.
+                vod?.below?.invoke()
+                if (movie.cast.isNotEmpty()) {
                     CastRow(movie.cast)
                 }
             }
