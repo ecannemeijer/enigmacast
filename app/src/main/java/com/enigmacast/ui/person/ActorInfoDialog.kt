@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +88,12 @@ fun ActorInfoDialog(member: TmdbCastMember, onClose: () -> Unit) {
         val person = (state as? ActorState.Ready)?.person
         val credits = person?.credits.orEmpty()
         val posterFocus = remember(credits) { List(credits.size) { FocusRequester() } }
+        // Back from a title chosen on "where to watch": its poster chosen again, so that list reopens.
+        LaunchedEffect(credits) {
+            if (credits.isEmpty()) return@LaunchedEffect
+            val key = TitleTrails.shared.takeCredit(com.enigmacast.domain.person.TitleTrail.actorKey(member.name, member.character)) ?: return@LaunchedEffect
+            credits.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { chosen = it }
+        }
         LaunchedEffect(person?.id) {
             // The films first: that is what the page is for; Close when there are none.
             if (posterFocus.isNotEmpty()) posterFocus[0].requestWhenReady() else closeFocus.requestWhenReady()
@@ -169,9 +177,13 @@ fun ActorInfoDialog(member: TmdbCastMember, onClose: () -> Unit) {
         if (showBio && person != null) PlotDialog(person.name, person.biography, onClose = { showBio = false })
         chosen?.let { index ->
             credits.getOrNull(index)?.let { credit ->
-                WhereToWatchDialog(credit, viewModel, onClose = {
+                WhereToWatchDialog(credit, member, viewModel, onClose = {
                     chosen = null
                     returnTo = index
+                }, onJumped = {
+                    // A title opened elsewhere: this page and "where to watch" make way for it.
+                    chosen = null
+                    onClose()
                 })
             }
         }
@@ -240,31 +252,38 @@ private fun CreditCard(credit: TmdbCredit, modifier: Modifier, onClick: () -> Un
 }
 
 /**
- * Where a title from the filmography can be watched, like Search: IPTV films and series, the
- * Torrent page (when it is on) and satellite guide broadcasts with Watch / AutoSwitch / Record.
+ * Where a title from the filmography can be watched: one row per source, each with its own
+ * header and its own searching / nothing found state, using the searches Search uses:
+ * IPTV films and series, the satellite TV guide (Watch / AutoSwitch / Record), the IPTV TV
+ * guide and, when the Torrent page is on, the torrents found for it.
  */
 @Composable
-private fun WhereToWatchDialog(credit: TmdbCredit, actor: ActorViewModel, onClose: () -> Unit) {
+private fun WhereToWatchDialog(credit: TmdbCredit, member: TmdbCastMember, actor: ActorViewModel, onClose: () -> Unit, onJumped: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         NavigationSoundsForWindow()
         val search: SearchViewModel = hiltViewModel(key = "actor-where-to-watch")
+        val rows: WhereToWatchViewModel = hiltViewModel(key = "actor-where-to-watch-rows")
         val nav = LocalTitleNavigation.current
+        val origin = LocalTrailOrigin.current
         val onPlayed = nav?.onPlayed ?: {}
-        LaunchedEffect(credit.key) { search.onQuery(credit.title, immediate = true) }
+        val torrentsOn = remember(credit.key) { actor.torrentsAllowed() } && nav != null
+        LaunchedEffect(credit.key) { rows.search(credit, torrentsOn) }
         SearchProgrammeDialogs(search, onPlayed, {}, {})
-        val firstFocus = remember { FocusRequester() }
-        LaunchedEffect(credit.key) { firstFocus.requestWhenReady() }
-        val torrents = remember(credit.key) { actor.torrentsAllowed() } && nav != null
+        val closeFocus = remember { FocusRequester() }
+        LaunchedEffect(credit.key) { closeFocus.requestWhenReady() }
         val iptvResumes by search.iptvResumes.collectAsStateWithLifecycle()
         val iptvHistory by search.iptvHistory.collectAsStateWithLifecycle()
-        val iptvFilms = remember(search.iptv.films, iptvResumes, iptvHistory) {
-            com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(search.iptv.films, iptvResumes, iptvHistory)
+        val vod = rows.vod
+        val vodCards = remember(vod, iptvResumes, iptvHistory) {
+            val found = vod.found
+            val films = com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(found.filter { it.kind == "m" }, iptvResumes, iptvHistory)
+            films + found.filter { it.kind != "m" }
         }
-        val iptvRows = if (nav == null) emptyList() else listOf(
-            R.string.search_iptv_films to iptvFilms,
-            R.string.search_iptv_series to search.iptv.series,
-        ).filter { it.second.isNotEmpty() }
-        val sections = search.results.sections().filter { it.first != SearchKind.CHANNEL }
+        val actorKey = com.enigmacast.domain.person.TitleTrail.actorKey(member.name, member.character)
+        // Opening a title's info page: remember the way back here first.
+        fun jumpTo(targetKey: String) {
+            origin?.let { TitleTrails.shared.push(com.enigmacast.domain.person.TrailStep(it, actorKey, credit.key, targetKey)) }
+        }
         Box(Modifier.fillMaxSize().skinCanvas()) {
             if (credit.backdropPath != null) {
                 AsyncImage(
@@ -281,50 +300,148 @@ private fun WhereToWatchDialog(credit: TmdbCredit, actor: ActorViewModel, onClos
                     .fillMaxSize()
                     .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical)
                     .trapVertical(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(stringResource(R.string.where_to_watch), color = EnigmaColors.Accent, fontSize = 13.sp, fontWeight = EnigmaType.Strong)
-                Text(
-                    listOfNotNull(credit.title, credit.year?.let { "($it)" }).joinToString(" "),
-                    color = EnigmaColors.Text, fontSize = 24.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                if (credit.character.isNotBlank()) {
-                    Text(stringResource(R.string.actor_as, credit.character), color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                    if (torrents) {
-                        EnigmaGlassButton(
-                            stringResource(R.string.where_to_watch_torrent),
-                            { actor.openTorrent(credit) { nav?.onTorrent?.invoke() } },
-                            Modifier.focusRequester(firstFocus).focusProperties { left = FocusRequester.Cancel },
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.where_to_watch), color = EnigmaColors.Accent, fontSize = 13.sp, fontWeight = EnigmaType.Strong)
+                        Text(
+                            listOfNotNull(credit.title, credit.year?.let { "($it)" }).joinToString(" "),
+                            color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
-                        EnigmaGlassButton(stringResource(R.string.home_close), onClose)
-                    } else {
-                        EnigmaGlassButton(stringResource(R.string.home_close), onClose, Modifier.focusRequester(firstFocus).focusProperties { left = FocusRequester.Cancel })
+                        if (credit.character.isNotBlank()) {
+                            Text(stringResource(R.string.actor_as, credit.character), color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
+                    EnigmaGlassButton(
+                        stringResource(R.string.home_close),
+                        onClose,
+                        Modifier.focusRequester(closeFocus).focusProperties { left = FocusRequester.Cancel; right = FocusRequester.Cancel },
+                    )
                 }
-                val empty = sections.isEmpty() && iptvRows.isEmpty()
-                when {
-                    search.searching && empty -> SearchSpinner()
-                    empty -> Text(stringResource(R.string.where_to_watch_none), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.padding(8.dp))
-                    else -> LazyColumn(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(1.dp),
-                    ) {
-                        searchResultItems(
-                            iptvRows = iptvRows,
-                            sections = sections,
-                            rowsFocusable = true,
-                            menuFocus = null,
-                            onIptv = { card -> nav?.let { search.openIptv(card, it.onXtream) } },
-                            onHit = { hit ->
-                                if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) search.openProgramme(hit)
-                                else search.choose(hit, onPlayed, {}, {})
-                            },
-                        )
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    if (nav != null) sourceRow(R.string.wtw_row_iptv_vod, vod, "vod") {
+                        item(key = "vod-row") {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                            ) {
+                                items(vodCards, key = { it.key }) { card ->
+                                    com.enigmacast.ui.dashboard.IptvCard(
+                                        card = card,
+                                        modifier = Modifier.focusProperties {
+                                            if (card === vodCards.first()) left = FocusRequester.Cancel
+                                            if (card === vodCards.last()) right = FocusRequester.Cancel
+                                        },
+                                        onClick = {
+                                            jumpTo(com.enigmacast.domain.person.TitleTrail.iptvKey(card.open))
+                                            search.openIptv(card) { nav.onXtream(); onJumped() }
+                                        },
+                                        onOptions = {},
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    sourceRow(R.string.wtw_row_sat_epg, rows.satellite, "sat") {
+                        items(rows.satellite.found, key = { "sat:${it.serviceReference}:${it.beginEpochSec}" }) { hit ->
+                            HitRow(hit) { openHit(search, hit, onPlayed) }
+                        }
+                    }
+                    sourceRow(R.string.wtw_row_iptv_epg, rows.iptvTv, "iptvtv") {
+                        items(rows.iptvTv.found, key = { item ->
+                            when (item) {
+                                is IptvTvItem.Guide -> "g:${item.hit.serviceReference}:${item.hit.beginEpochSec}"
+                                is IptvTvItem.Channel -> "c:${item.hit.source}:${item.hit.streamId}:${item.hit.programme.startSec}"
+                            }
+                        }) { item ->
+                            when (item) {
+                                is IptvTvItem.Guide -> HitRow(item.hit) { openHit(search, item.hit, onPlayed) }
+                                is IptvTvItem.Channel -> ListRow(
+                                    item.hit.programme.title,
+                                    listOf(item.channel.name, guideWhen(item.hit.programme.startSec)).filter { it.isNotBlank() }.joinToString("  ·  "),
+                                ) { nav?.let { n -> search.openIptv(item.card) { n.onXtream(); onJumped() } } }
+                            }
+                        }
+                    }
+                    if (rows.recorded.isNotEmpty()) {
+                        item(key = "rec-header") { RowHeader(stringResource(R.string.search_recordings)) }
+                        items(rows.recorded, key = { "rec:${it.recordingId}" }) { hit ->
+                            HitRow(hit) { search.choose(hit, onPlayed, {}, {}) }
+                        }
+                    }
+                    if (torrentsOn) sourceRow(R.string.wtw_row_torrents, rows.torrents, "torrent") {
+                        items(rows.torrents.found, key = { "torrent:${it.credit.key}" }) { find ->
+                            ListRow(
+                                listOfNotNull(find.credit.title, find.credit.year?.let { "($it)" }).joinToString(" "),
+                                pluralStringResource(R.plurals.wtw_torrent_sources, find.sources, find.sources),
+                            ) {
+                                actor.openTorrent(find.credit, beforeOpen = { jumpTo(com.enigmacast.domain.person.TitleTrail.tmdbKey(it)) }) {
+                                    nav?.onTorrent?.invoke()
+                                    onJumped()
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/** A source's header, then its spinner, "nothing found" or its [content]; nothing when the source is off. */
+private fun <T> androidx.compose.foundation.lazy.LazyListScope.sourceRow(
+    title: Int,
+    state: com.enigmacast.domain.person.SourceState<T>,
+    key: String,
+    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
+) {
+    if (state is com.enigmacast.domain.person.SourceState.Off) return
+    item(key = "$key-header") { RowHeader(stringResource(title)) }
+    when {
+        state is com.enigmacast.domain.person.SourceState.Searching -> item(key = "$key-busy") { SearchSpinner() }
+        state.found.isEmpty() -> item(key = "$key-none") {
+            Text(stringResource(R.string.wtw_nothing_found), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+        }
+        else -> content()
+    }
+}
+
+@Composable
+private fun RowHeader(text: String) {
+    Text(text, color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
+}
+
+@Composable
+private fun HitRow(hit: com.enigmacast.domain.search.SearchHit, onClick: () -> Unit) {
+    ListRow(com.enigmacast.domain.search.SearchRows.headline(hit), com.enigmacast.ui.search.searchHitDetail(hit), onClick)
+}
+
+/** One focusable result line; left and right stay in the list. */
+@Composable
+private fun ListRow(title: String, subtitle: String, onClick: () -> Unit) {
+    com.enigmacast.ui.theme.CompactListRow(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+        modifier = Modifier.focusProperties { left = FocusRequester.Cancel; right = FocusRequester.Cancel },
+    ) {
+        Column {
+            Text(title, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle.isNotBlank()) Text(subtitle, color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** A guide programme: Watch / AutoSwitch / Record while it is on or still to come, like Search. */
+private fun openHit(search: SearchViewModel, hit: com.enigmacast.domain.search.SearchHit, onPlayed: () -> Unit) {
+    if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) search.openProgramme(hit)
+    else search.choose(hit, onPlayed, {}, {})
+}
+
+private val GuideWhen = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM  HH:mm")
+
+private fun guideWhen(startSec: Long): String =
+    java.time.Instant.ofEpochSecond(startSec).atZone(java.time.ZoneId.systemDefault()).format(GuideWhen)

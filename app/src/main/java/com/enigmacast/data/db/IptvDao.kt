@@ -13,6 +13,13 @@ interface IptvDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putRowEpg(row: IptvRowEpgRow)
 
+    /** Every stored channel guide (all accounts): searched by the actor page's "where to watch". */
+    @Query("SELECT * FROM iptv_row_epg WHERE fetchedAtMs >= :sinceMs")
+    suspend fun allRowEpg(sinceMs: Long): List<IptvRowEpgRow>
+
+    @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section AND id IN (:ids)")
+    suspend fun itemsByIds(source: String, section: String, ids: List<String>): List<IptvItemRow>
+
     @Query("DELETE FROM iptv_row_epg WHERE fetchedAtMs < :beforeMs")
     suspend fun pruneRowEpg(beforeMs: Long)
 

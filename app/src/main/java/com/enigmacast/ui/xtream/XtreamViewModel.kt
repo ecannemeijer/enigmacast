@@ -90,6 +90,7 @@ class XtreamViewModel @Inject constructor(
     private val artworkSource: com.enigmacast.data.xtream.IptvArtwork,
     private val hiddenCategories: com.enigmacast.data.xtream.IptvHiddenCategories,
     private val library: com.enigmacast.data.xtream.IptvLibrary,
+    private val torrentLibrary: com.enigmacast.data.torrent.TorrentLibrary,
     private val watchNext: com.enigmacast.data.xtream.WatchNextPublisher,
     private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val recentIptv: com.enigmacast.data.xtream.RecentIptvStore,
@@ -783,6 +784,34 @@ class XtreamViewModel @Inject constructor(
         holdEpisodes(detailEpisodes)
         closeDetail()
         requestEpisode(episode, show, onStarted)
+    }
+
+    /** The open info page, for "where to watch" on its actor pages to come back to. */
+    fun trailOrigin(): com.enigmacast.domain.person.TrailOrigin? {
+        val item = detail ?: return null
+        val source = accountFor(item.providerId)?.key ?: return null
+        return com.enigmacast.domain.person.TrailOrigin.Iptv(source, item, launchOrigin)
+    }
+
+    /**
+     * Back on an info page that "where to watch" opened: the info page it was chosen from opens
+     * again (here, or on the Torrent page via [onTorrent]), with its actor page on top.
+     * False when this page was opened any other way.
+     */
+    fun trailBack(onTorrent: () -> Unit): Boolean {
+        val item = detail ?: return false
+        val step = com.enigmacast.ui.person.TitleTrails.shared.back(com.enigmacast.domain.person.TitleTrail.iptvKey(item)) ?: return false
+        closeDetail()
+        when (val origin = step.origin) {
+            is com.enigmacast.domain.person.TrailOrigin.Iptv ->
+                library.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(origin.source, origin.item, origin = origin.launchOrigin, detail = true)
+            is com.enigmacast.domain.person.TrailOrigin.Torrent -> {
+                torrentLibrary.openRequest.value = com.enigmacast.domain.torrent.TorrentOpenRequest(origin.title, origin = origin.origin)
+                launchOrigin = null
+                onTorrent()
+            }
+        }
+        return true
     }
 
     fun closeDetail() {

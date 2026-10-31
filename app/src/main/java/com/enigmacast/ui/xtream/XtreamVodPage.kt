@@ -389,6 +389,7 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
     val isSeries = item.section == XtreamSection.SERIES
     val history by model.history.collectAsState()
     val watch = if (isSeries) null else remember(item, model.resumeVersion, history) { model.filmWatch(item, history) }
+    val trailNav = com.enigmacast.ui.person.LocalTitleNavigation.current
     FilmInfoDialog(
         film = film,
         nowSec = System.currentTimeMillis() / 1000,
@@ -397,10 +398,12 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
         onWatch = {},
         onSchedule = {},
         onRecord = {},
-        onClose = onClose,
+        // Opened on an actor page's "where to watch": Back goes to the info page it came from.
+        onClose = { if (!model.trailBack { trailNav?.onTorrent?.invoke() }) onClose() },
         picon = { null },
         cachedPicon = { null },
         channel = BouquetEntry(item.name, "iptv:${item.id}"),
+        trail = model.trailOrigin(),
         vod = VodDetail(
             // A series plays the Continue watching / latest watched / first episode (Play is always
             // there and has the focus; the episodes below still pick any other one).

@@ -84,8 +84,11 @@ fun FilmInfoDialog(
     channel: BouquetEntry,
     /** IPTV film or series: Play / Resume instead of channel, schedule and record; [VodDetail.below] (seasons and episodes) instead of the cast. */
     vod: VodDetail? = null,
+    /** This page as a place "where to watch" on its actor pages can come back to (null: no way back). */
+    trail: com.enigmacast.domain.person.TrailOrigin? = null,
 ) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+      androidx.compose.runtime.CompositionLocalProvider(com.enigmacast.ui.person.LocalTrailOrigin provides trail) {
         NavigationSoundsForWindow()
         val watchFocus = remember { FocusRequester() }
         LaunchedEffect(film.key) { watchFocus.requestWhenReady() }
@@ -231,6 +234,7 @@ fun FilmInfoDialog(
                 PlotDialog(film.displayTitle, plot, onClose = { showPlot = false })
             }
         }
+      }
     }
 }
 
@@ -296,6 +300,17 @@ private fun CastRow(cast: List<TmdbCastMember>) {
             })
         }
     }
+    // Back from a title chosen on "where to watch": this page reopened, so its actor page opens again.
+    val trail = com.enigmacast.ui.person.LocalTrailOrigin.current
+    LaunchedEffect(cast, trail) {
+        val origin = trail ?: return@LaunchedEffect
+        val step = com.enigmacast.ui.person.TitleTrails.shared.takeRestore(origin) ?: return@LaunchedEffect
+        val index = cast.indexOfFirst { com.enigmacast.domain.person.TitleTrail.actorKey(it.name, it.character) == step.actorKey }
+        if (index >= 0) {
+            com.enigmacast.ui.person.TitleTrails.shared.markCredit(step)
+            actorIndex = index
+        }
+    }
     LaunchedEffect(returnTo) {
         val index = returnTo ?: return@LaunchedEffect
         returnTo = null
@@ -305,7 +320,7 @@ private fun CastRow(cast: List<TmdbCastMember>) {
 }
 
 @Composable
-private fun CastCard(member: TmdbCastMember, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun CastCard(member: TmdbCastMember, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     Column(

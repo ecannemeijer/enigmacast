@@ -262,6 +262,36 @@ class TorrentViewModel @Inject constructor(
         }
     }
 
+    /** The open info page, for "where to watch" on its actor pages to come back to. */
+    fun trailOrigin(): com.enigmacast.domain.person.TrailOrigin? =
+        info?.let { com.enigmacast.domain.person.TrailOrigin.Torrent(it.title, returnOrigin) }
+
+    /**
+     * Back on an info page that "where to watch" opened: the info page it was chosen from opens
+     * again (here, or on the IPTV page via [onXtream]), with its actor page on top.
+     * False when this page was opened any other way.
+     */
+    fun trailBack(onXtream: () -> Unit): Boolean {
+        val current = info ?: return false
+        val step = com.enigmacast.ui.person.TitleTrails.shared.back(com.enigmacast.domain.person.TitleTrail.tmdbKey(current.title)) ?: return false
+        infoJob?.cancel()
+        stepJob?.cancel()
+        info = null
+        if (overlay is TorrentOverlay.Streams) overlay = TorrentOverlay.None
+        returnOrigin = null
+        when (val origin = step.origin) {
+            is com.enigmacast.domain.person.TrailOrigin.Torrent -> {
+                openTitle(origin.title)
+                returnOrigin = origin.origin
+            }
+            is com.enigmacast.domain.person.TrailOrigin.Iptv -> {
+                library.requestIptv(com.enigmacast.data.xtream.IptvOpenRequest(origin.source, origin.item, origin = origin.launchOrigin, detail = true))
+                onXtream()
+            }
+        }
+        return true
+    }
+
     /** Back on the info page: to the grid, on the same card. */
     fun closeInfo() {
         infoJob?.cancel()

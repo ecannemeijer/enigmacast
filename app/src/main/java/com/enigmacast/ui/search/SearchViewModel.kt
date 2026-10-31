@@ -31,7 +31,12 @@ class SearchViewModel @Inject constructor(
     private val iptvSearch: com.enigmacast.data.xtream.IptvSearchSource,
     private val iptvLibrary: com.enigmacast.data.xtream.IptvLibrary,
     private val gate: com.enigmacast.live.PremiumGate,
+    private val tmdb: com.enigmacast.data.tmdb.TmdbHttp,
+    private val country: com.enigmacast.live.CountryDetector,
 ) : ViewModel() {
+    /** Actors whose name matches the query (TMDB people search); OK opens the actor page. */
+    var people by mutableStateOf<List<com.enigmacast.domain.films.TmdbCastMember>>(emptyList())
+        private set
     /** IPTV Live / Films / Series rows (Premium XTREAM; playlist DB or already fetched lists). */
     var iptv by mutableStateOf(com.enigmacast.domain.xtream.IptvSearchResults())
         private set
@@ -112,6 +117,7 @@ class SearchViewModel @Inject constructor(
         if (!SearchQuery.parse(value, nowSec).isSearchable) {
             results = SearchResults()
             iptv = com.enigmacast.domain.xtream.IptvSearchResults()
+            people = emptyList()
             searching = false
             return
         }
@@ -119,10 +125,23 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             if (!immediate) delay(DEBOUNCE_MS)
             launch { iptv = iptvSearch.search(value) }
+            launch { people = findPeople(SearchQuery.parse(value, nowSec).text.ifBlank { value }) }
             val found = programmeSearch.search(value, recordings.items.value, System.currentTimeMillis() / 1000)
             results = found
             searching = false
         }
+    }
+
+    private suspend fun findPeople(name: String): List<com.enigmacast.domain.films.TmdbCastMember> = try {
+        if (name.trim().length < 3) emptyList() else {
+            val cc = runCatching { country.country() }.getOrDefault("NL")
+            val language = com.enigmacast.domain.films.CountryResolver.tmdbLanguage(country.appLanguage(), cc)
+            tmdb.searchPerson(name.trim(), language)?.let { com.enigmacast.data.tmdb.TmdbJson.parsePeople(it) }.orEmpty()
+        }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        emptyList()
     }
 
     fun applyExternalQuery(

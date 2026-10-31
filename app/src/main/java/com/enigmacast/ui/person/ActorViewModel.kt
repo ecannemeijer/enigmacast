@@ -72,7 +72,7 @@ class ActorViewModel @Inject constructor(
         gate.allows(PremiumFeature.TORRENT)
 
     /** Opens the title's Torrent info page (its sources); Back there returns to the Torrent page. */
-    fun openTorrent(credit: TmdbCredit, onTorrent: () -> Unit) {
+    fun openTorrent(credit: TmdbCredit, beforeOpen: (TmdbTitle) -> Unit = {}, onTorrent: () -> Unit) {
         if (!gate.require(PremiumFeature.TORRENT)) return
         val title = TmdbTitle(
             id = credit.id,
@@ -84,6 +84,7 @@ class ActorViewModel @Inject constructor(
             overview = credit.overview,
             rating = credit.rating,
         )
+        beforeOpen(title)
         torrents.openRequest.value = TorrentOpenRequest(title)
         onTorrent()
     }

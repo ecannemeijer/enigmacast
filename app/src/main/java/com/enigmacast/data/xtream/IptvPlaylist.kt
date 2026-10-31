@@ -565,6 +565,18 @@ class IptvPlaylistSync @Inject constructor(
         }
     }
 
+    /** Live channels with these stream ids, with the account key their guide rows are stored under. */
+    suspend fun liveChannels(ids: Collection<String>): List<Pair<String, XtreamItem>> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyList()
+        readProviders().flatMap { provider ->
+            val account = provider.account() ?: return@flatMap emptyList()
+            val source = sourceOf(provider.id)
+            ids.distinct().chunked(500).flatMap { chunk ->
+                runCatching { dao.itemsByIds(source, XtreamSection.LIVE.name, chunk) }.getOrDefault(emptyList())
+            }.map { account.key to it.toItem(XtreamSection.LIVE, provider.id, provider.displayName()) }
+        }
+    }
+
     suspend fun counts(section: XtreamSection): Map<String, Int> {
         val out = LinkedHashMap<String, Int>()
         readProviders().forEach { provider ->
