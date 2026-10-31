@@ -150,6 +150,13 @@ class AppViewModel @Inject constructor(
     private var returnScreen = AppScreen.Connection
     private var decided = false
 
+    // Above the init block below: viewModelScope runs on Main.immediate, so the start update check
+    // runs inside the constructor and needs these already set (they were declared after it: NPE on start).
+    private val updateCheckLock = kotlinx.coroutines.sync.Mutex()
+    private var lastUpdateCheckAt: Long? = null
+    private var dismissedUpdateVersion: Int? = null
+    private var dismissedUpdateAt: Long? = null
+
     init {
         playback.allowPlayback()
         watchSleepTimer()
@@ -214,11 +221,6 @@ class AppViewModel @Inject constructor(
             }
         }
     }
-
-    private val updateCheckLock = kotlinx.coroutines.sync.Mutex()
-    private var lastUpdateCheckAt: Long? = null
-    private var dismissedUpdateVersion: Int? = null
-    private var dismissedUpdateAt: Long? = null
 
     /** The app came to the front: look for a new release (at most once per half hour). */
     fun onForeground() {
