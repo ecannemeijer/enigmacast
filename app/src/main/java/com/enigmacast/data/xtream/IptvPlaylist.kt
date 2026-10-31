@@ -587,19 +587,35 @@ class IptvPlaylistSync @Inject constructor(
                 }
             }
 
-    /** A whole category, read from Room in pages of [PAGE]. */
-    suspend fun items(section: XtreamSection, categoryId: String, providerId: String = ""): List<XtreamItem> = withContext(Dispatchers.IO) {
+    /** A whole category, read from Room page by page (keyset, see [KeysetPages]). */
+    suspend fun items(section: XtreamSection, categoryId: String, providerId: String = ""): List<XtreamItem> {
+        val out = ArrayList<XtreamItem>()
+        itemsInChunks(section, categoryId, providerId, com.enigmacast.domain.xtream.KeysetPages.PAGE) { chunk, _ -> out.addAll(chunk) }
+        return out
+    }
+
+    /**
+     * A category in two parts: the first [first] items, then the rest ([onChunk] with last = true).
+     * Read on the IO thread; [onChunk] is called from there.
+     */
+    suspend fun itemsInChunks(
+        section: XtreamSection,
+        categoryId: String,
+        providerId: String,
+        first: Int,
+        onChunk: suspend (items: List<XtreamItem>, last: Boolean) -> Unit,
+    ) = withContext(Dispatchers.IO) {
         val source = sourceOf(providerId)
         val providerName = store.provider(providerId)?.displayName().orEmpty()
-        val out = ArrayList<XtreamItem>()
-        var offset = 0
-        while (true) {
-            val page = dao.itemsPage(source, section.name, categoryId, PAGE, offset)
-            page.mapTo(out) { it.toItem(section, providerId, providerName) }
-            if (page.size < PAGE) break
-            offset += PAGE
-        }
-        out
+        com.enigmacast.domain.xtream.KeysetPages.read(
+            first = first,
+            fetch = { after, limit ->
+                if (after == null) dao.itemsFirst(source, section.name, categoryId, limit)
+                else dao.itemsAfter(source, section.name, categoryId, after.sort, after.id, limit)
+            },
+            position = { com.enigmacast.domain.xtream.KeysetPages.After(it.sort, it.id) },
+            onChunk = { rows, last -> onChunk(rows.map { it.toItem(section, providerId, providerName) }, last) },
+        )
     }
 
     /** Every live channel in the loaded playlist, for matching an equivalent channel. */
@@ -656,6 +672,5 @@ class IptvPlaylistSync @Inject constructor(
         const val STAGING = "playlist.new"
         const val OTHER = "—"
         private const val CHUNK = 1000
-        private const val PAGE = 500
     }
 }
