@@ -23,6 +23,9 @@ class TorrentLibrary @Inject constructor(private val library: IptvLibrary) {
     /** Library / Home → Torrent page. */
     val openRequest = MutableStateFlow<TorrentOpenRequest?>(null)
 
+    /** Back from a title opened on "where to watch": the IPTV info page it came from opens again. */
+    fun requestIptv(request: com.enigmacast.data.xtream.IptvOpenRequest) { library.openRequest.value = request }
+
     fun isFavorite(title: TmdbTitle): Boolean =
         IptvLibrary.key(TorrentLibraryRows.SOURCE, TorrentLibraryRows.kindOf(title.kind), title.id.toString()) in library.favoriteKeys.value
 

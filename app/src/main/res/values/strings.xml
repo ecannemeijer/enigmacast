@@ -1792,4 +1792,14 @@
     <string name="where_to_watch">Where to watch</string>
     <string name="where_to_watch_torrent">Open in Torrent</string>
     <string name="where_to_watch_none">Not found on IPTV or in the satellite guide.</string>
+    <string name="wtw_row_iptv_vod">IPTV films and series</string>
+    <string name="wtw_row_sat_epg">Satellite TV guide</string>
+    <string name="wtw_row_iptv_epg">IPTV TV guide</string>
+    <string name="wtw_row_torrents">Torrents</string>
+    <string name="wtw_nothing_found">Nothing found.</string>
+    <plurals name="wtw_torrent_sources">
+        <item quantity="one">%d source</item>
+        <item quantity="other">%d sources</item>
+    </plurals>
+    <string name="search_actors">Actors</string>
 </resources>

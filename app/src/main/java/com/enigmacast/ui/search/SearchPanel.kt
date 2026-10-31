@@ -49,6 +49,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.R
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.domain.search.SearchHit
@@ -124,6 +125,7 @@ fun SearchPanel(
     val iptvFilms = remember(viewModel.iptv.films, iptvResumes, iptvHistory) {
         com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(viewModel.iptv.films, iptvResumes, iptvHistory)
     }
+    var openActor by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.enigmacast.domain.films.TmdbCastMember?>(null) }
     val iptvRows = if (onXtream == null) emptyList() else listOf(
         R.string.search_iptv_live to viewModel.iptv.live,
         R.string.search_iptv_films to iptvFilms,
@@ -192,14 +194,35 @@ fun SearchPanel(
         }
         when {
             !searchable -> Hint(stringResource(R.string.search_hint))
-            viewModel.searching && viewModel.results.isEmpty && iptvRows.isEmpty() -> SearchSpinner()
-            !viewModel.searching && viewModel.results.isEmpty && iptvRows.isEmpty() -> Hint(stringResource(R.string.search_empty))
+            viewModel.searching && viewModel.results.isEmpty && iptvRows.isEmpty() && viewModel.people.isEmpty() -> SearchSpinner()
+            !viewModel.searching && viewModel.results.isEmpty && iptvRows.isEmpty() && viewModel.people.isEmpty() -> Hint(stringResource(R.string.search_empty))
             else -> {
                 if (viewModel.searching) SearchSpinner()
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
+                    val people = viewModel.people
+                    if (people.isNotEmpty()) item(key = "actors") {
+                        Column {
+                            Text(stringResource(R.string.search_actors), color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
+                            androidx.compose.foundation.lazy.LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                            ) {
+                                items(people, key = { "p${it.id}" }) { member ->
+                                    com.enigmacast.ui.home.CastCard(
+                                        member,
+                                        Modifier.focusProperties {
+                                            canFocus = rowsFocusable
+                                            if (member === people.first()) left = menuFocus ?: FocusRequester.Cancel
+                                            if (member === people.last()) right = FocusRequester.Cancel
+                                        },
+                                    ) { openActor = member }
+                                }
+                            }
+                        }
+                    }
                     searchResultItems(
                         iptvRows = iptvRows,
                         sections = sections,
@@ -215,6 +238,9 @@ fun SearchPanel(
             }
         }
     }
+    }
+    openActor?.let { member ->
+        com.enigmacast.ui.person.ActorInfoDialog(member, onClose = { openActor = null })
     }
     if (menuFocus != null) {
         CompositionLocalProvider(LocalEdgeLeft provides menuFocus) { column() }
@@ -283,7 +309,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.searchResultItems(
             ) {
                 Column {
                     Text(SearchRows.headline(hit), color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val subtitle = detail(hit)
+                    val subtitle = searchHitDetail(hit)
                     if (subtitle.isNotBlank()) {
                         Text(subtitle, color = EnigmaColors.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -309,7 +335,7 @@ private fun Hint(text: String) {
 }
 
 @Composable
-private fun sectionTitle(kind: SearchKind): String = stringResource(
+internal fun sectionTitle(kind: SearchKind): String = stringResource(
     when (kind) {
         SearchKind.NOW -> R.string.search_now
         SearchKind.LATER -> R.string.search_later
@@ -320,7 +346,7 @@ private fun sectionTitle(kind: SearchKind): String = stringResource(
 )
 
 @Composable
-private fun detail(hit: SearchHit): String {
+internal fun searchHitDetail(hit: SearchHit): String {
     val whenText = if (hit.beginEpochSec > 0) {
         Instant.ofEpochSecond(hit.beginEpochSec).atZone(ZoneId.systemDefault()).format(WhenFormat)
     } else {

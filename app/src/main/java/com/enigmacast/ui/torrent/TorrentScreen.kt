@@ -485,6 +485,7 @@ private fun TorrentInfoPage(i: TorrentInfo, model: TorrentViewModel) {
     val isSeries = i.title.kind == TorrentKind.TV
     val history by model.history.collectAsStateWithLifecycle()
     val watch = remember(i.title, history) { model.filmWatch(i.title, history) }
+    val trailNav = com.enigmacast.ui.person.LocalTitleNavigation.current
     com.enigmacast.ui.home.FilmInfoDialog(
         film = i.film,
         nowSec = System.currentTimeMillis() / 1000,
@@ -493,10 +494,11 @@ private fun TorrentInfoPage(i: TorrentInfo, model: TorrentViewModel) {
         onWatch = {},
         onSchedule = {},
         onRecord = {},
-        onClose = model::closeInfo,
+        onClose = { if (!model.trailBack { trailNav?.onXtream?.invoke() }) model.closeInfo() },
         picon = { null },
         cachedPicon = { null },
         channel = com.enigmacast.domain.model.BouquetEntry(i.title.title, "tmdb:${i.title.key}"),
+        trail = model.trailOrigin(),
         vod = com.enigmacast.ui.home.VodDetail(
             onPlay = model::playInfo,
             below = if (isSeries) ({ TorrentEpisodes(i, model) }) else null,

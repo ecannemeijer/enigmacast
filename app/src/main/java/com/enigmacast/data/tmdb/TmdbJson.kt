@@ -205,6 +205,16 @@ object TmdbJson {
     }
 
     /** `/search/person`: the best-known match's id for [name] (old cached casts have no id). */
+    /** People found by name (Search's Actors row): actors first, most popular first, at most [limit]. */
+    fun parsePeople(body: String, limit: Int = 12): List<com.enigmacast.domain.films.TmdbCastMember> {
+        val results = (obj(body)?.get("results") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        return results
+            .filter { it.int("id") != null && it.str("name") != null }
+            .sortedWith(compareBy<JsonObject> { if (it.str("known_for_department") == "Acting") 0 else 1 }.thenByDescending { it.double("popularity") ?: 0.0 })
+            .take(limit)
+            .map { com.enigmacast.domain.films.TmdbCastMember(it.str("name")!!, "", it.str("profile_path"), it.int("id")!!) }
+    }
+
     fun parsePersonSearch(body: String, name: String): Int? {
         val results = (obj(body)?.get("results") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
         val wanted = name.trim()

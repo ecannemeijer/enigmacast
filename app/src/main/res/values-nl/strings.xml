@@ -1784,4 +1784,14 @@
     <string name="where_to_watch">Waar te kijken</string>
     <string name="where_to_watch_torrent">Openen in Torrent</string>
     <string name="where_to_watch_none">Niet gevonden op IPTV of in de satellietgids.</string>
+    <string name="wtw_row_iptv_vod">IPTV-films en -series</string>
+    <string name="wtw_row_sat_epg">Satelliet-tv-gids</string>
+    <string name="wtw_row_iptv_epg">IPTV-tv-gids</string>
+    <string name="wtw_row_torrents">Torrents</string>
+    <string name="wtw_nothing_found">Niets gevonden.</string>
+    <plurals name="wtw_torrent_sources">
+        <item quantity="one">%d bron</item>
+        <item quantity="other">%d bronnen</item>
+    </plurals>
+    <string name="search_actors">Acteurs</string>
 </resources>
