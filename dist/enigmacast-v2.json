@@ -1,7 +1,7 @@
 {
-  "versionCode": 126,
-  "versionName": "1.0.0-beta.123",
-  "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/v1.0.0-beta.123/enigmacast.apk",
+  "versionCode": 127,
+  "versionName": "1.0.0-beta.124",
+  "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/v1.0.0-beta.124/enigmacast.apk",
   "notes": "What's new in EnigmaCast\n\n• Faster IPTV films and series: the first posters of a category appear at once, the rest is added while you browse.\n• Easier Back button: while watching live TV, Back now first closes the information bar at the bottom. Press Back again to open the TV guide.\n• Faster updates: updates now download much faster, and the app is less than half its previous size.\n• Smoother picture: EnigmaCast can now switch your TV to the right picture rate for what you're watching, so fast movement like football looks smoother. Turn it on under Settings › Display (Automatic frame rate). It's off by default.\n• EnigmaCast on your TV home screen: rows with your favourite channels, IPTV favourites, Continue watching and your recordings. Select a card to start watching straight away. Recordings now show film artwork, and channels show their own logo.\n• TV guide for more channels: the channel list and TV guide now show what's on for every satellite channel list, including Italian and other foreign channels. IPTV channels without a guide of their own now borrow it from the same satellite channel.\n• Easier channel list setup: choose from 8 ready-made channel lists (including Vhannibal, GioppyGio, Matze, Dona and Predrag) in one simple menu.\n• Tidier IPTV settings: each IPTV provider now opens in its own window, so the settings page stays clear.\n• Fixes: moving between the channel list and the programme info in IPTV works properly again.",
   "companion": {
     "versionCode": 118,
