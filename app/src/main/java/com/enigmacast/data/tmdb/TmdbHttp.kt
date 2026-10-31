@@ -91,6 +91,13 @@ class TmdbHttp @Inject constructor(
 
     suspend fun season(tvId: Int, season: Int, language: String): String? = get("/tv/$tvId/season/$season", listOf("language" to language))
 
+    /** An actor with their films and series (one call). */
+    suspend fun person(id: Int, language: String): String? =
+        get("/person/$id", listOf("language" to language, "append_to_response" to "combined_credits"))
+
+    suspend fun searchPerson(name: String, language: String): String? =
+        get("/search/person", listOf("query" to name, "language" to language, "include_adult" to "false"))
+
     private suspend fun get(path: String, params: List<Pair<String, String>>): String? {
         val key = apiKey()
         if (key.isBlank()) return null

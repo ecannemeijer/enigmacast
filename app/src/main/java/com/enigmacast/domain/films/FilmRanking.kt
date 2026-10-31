@@ -30,7 +30,13 @@ data class TmdbMovie(
 )
 
 @kotlinx.serialization.Serializable
-data class TmdbCastMember(val name: String, val character: String, val profilePath: String?)
+data class TmdbCastMember(
+    val name: String,
+    val character: String,
+    val profilePath: String?,
+    /** TMDB person id; 0 in films cached before it was stored (the actor page then searches by name). */
+    val id: Int = 0,
+)
 
 /** A guide film with its TMDB match. */
 data class HomeFilm(

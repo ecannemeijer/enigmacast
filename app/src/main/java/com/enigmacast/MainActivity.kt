@@ -649,6 +649,14 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
         if (appViewModel.screen != AppScreen.Loading && appViewModel.screen != AppScreen.Connection) {
             com.enigmacast.ui.recording.TunerConflictHost()
         }
+        val titleNavigation = androidx.compose.runtime.remember(appViewModel) {
+            com.enigmacast.ui.person.TitleNavigation(
+                onXtream = appViewModel::openXtream,
+                onTorrent = appViewModel::openTorrent,
+                onPlayed = appViewModel::openStream,
+            )
+        }
+        androidx.compose.runtime.CompositionLocalProvider(com.enigmacast.ui.person.LocalTitleNavigation provides titleNavigation) {
         when (appViewModel.screen) {
             AppScreen.Loading -> com.enigmacast.ui.components.EnigmaCastBootLogo()
             AppScreen.Setup -> com.enigmacast.ui.setup.SetupWizard(
@@ -723,6 +731,7 @@ private fun EnigmaCastAppBody(appViewModel: AppViewModel, onChooseLanguage: (App
                 openGuide = appViewModel.openGuide,
                 onGuideOpened = appViewModel::guideOpened,
             )
+        }
         }
         // Hotel mode: the IPTV page opens on live TV (the start or remembered channel).
         val xtreamForHotel: com.enigmacast.ui.xtream.XtreamViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()

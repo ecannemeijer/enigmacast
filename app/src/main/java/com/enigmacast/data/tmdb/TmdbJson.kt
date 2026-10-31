@@ -49,7 +49,7 @@ object TmdbJson {
         val cast = (credits?.get("cast") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
             .sortedBy { it.int("order") ?: Int.MAX_VALUE }
             .take(15)
-            .map { TmdbCastMember(it.str("name").orEmpty(), it.str("character").orEmpty(), it.str("profile_path")) }
+            .map { TmdbCastMember(it.str("name").orEmpty(), it.str("character").orEmpty(), it.str("profile_path"), it.int("id") ?: 0) }
             .filter { it.name.isNotBlank() }
         val directors = (credits?.get("crew") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
             .filter { it.str("job") == "Director" }
@@ -110,7 +110,7 @@ object TmdbJson {
             .take(15)
             .map { member ->
                 val role = (member["roles"] as? JsonArray)?.firstOrNull()?.let { (it as? JsonObject)?.str("character") }.orEmpty()
-                TmdbCastMember(member.str("name").orEmpty(), role, member.str("profile_path"))
+                TmdbCastMember(member.str("name").orEmpty(), role, member.str("profile_path"), member.int("id") ?: 0)
             }
             .filter { it.name.isNotBlank() }
         val creators = (root["created_by"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.str("name") }.orEmpty()
@@ -163,6 +163,53 @@ object TmdbJson {
     }
 
     fun yearOf(date: String?): Int? = date?.take(4)?.toIntOrNull()?.takeIf { it in 1880..2100 }
+
+    /** `/person/{id}?append_to_response=combined_credits`: the actor page (null when unreadable). */
+    fun parsePerson(body: String): com.enigmacast.domain.films.TmdbPerson? {
+        val root = obj(body) ?: return null
+        val id = root.int("id") ?: return null
+        val credits = ((root["combined_credits"] as? JsonObject)?.get("cast") as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }.orEmpty()
+            .mapNotNull { c ->
+                val series = when (c.str("media_type")) { "tv" -> true; "movie" -> false; else -> return@mapNotNull null }
+                val creditId = c.int("id") ?: return@mapNotNull null
+                val title = (if (series) c.str("name") else c.str("title")) ?: return@mapNotNull null
+                val date = if (series) c.str("first_air_date") else c.str("release_date")
+                com.enigmacast.domain.films.TmdbCredit(
+                    id = creditId,
+                    isSeries = series,
+                    title = title,
+                    originalTitle = (if (series) c.str("original_name") else c.str("original_title")) ?: title,
+                    date = date,
+                    posterPath = c.str("poster_path"),
+                    backdropPath = c.str("backdrop_path"),
+                    overview = c.str("overview").orEmpty(),
+                    character = c.str("character").orEmpty(),
+                    popularity = c.double("popularity") ?: 0.0,
+                    rating = c.double("vote_average") ?: 0.0,
+                    votes = c.int("vote_count") ?: 0,
+                    episodes = c.int("episode_count") ?: 0,
+                )
+            }
+        return com.enigmacast.domain.films.TmdbPerson(
+            id = id,
+            name = root.str("name").orEmpty(),
+            biography = root.str("biography").orEmpty(),
+            birthday = root.str("birthday"),
+            deathday = root.str("deathday"),
+            birthPlace = root.str("place_of_birth"),
+            profilePath = root.str("profile_path"),
+            knownFor = root.str("known_for_department"),
+            credits = com.enigmacast.domain.films.PersonCredits.order(credits),
+        )
+    }
+
+    /** `/search/person`: the best-known match's id for [name] (old cached casts have no id). */
+    fun parsePersonSearch(body: String, name: String): Int? {
+        val results = (obj(body)?.get("results") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        val wanted = name.trim()
+        return (results.firstOrNull { it.str("name").equals(wanted, ignoreCase = true) } ?: results.firstOrNull())?.int("id")
+    }
 
     private fun obj(body: String): JsonObject? = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
 

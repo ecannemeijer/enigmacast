@@ -1781,4 +1781,16 @@
     <string name="sync_server_reinstall_message">Un serveur de synchronisation fonctionne déjà sur %1$s. La réinstallation n\'est prévue que pour un serveur défectueux : elle installe la dernière version via SSH et redémarre le serveur. Les données, associations et le mot de passe du tableau de bord sont conservés (une sauvegarde est faite d\'abord) ; si ces données sont introuvables, l\'installation s\'arrête. Pour utiliser ce téléviseur avec le serveur, choisissez plutôt Associer. N\'utilisez le code de récupération ici que si vous voulez déconnecter tous les autres appareils.</string>
     <string name="sync_server_reinstall_confirm">Afficher le formulaire d\'installation</string>
     <string name="sync_server_search_again">Rechercher à nouveau</string>
+    <string name="actor_filmography">Films et séries</string>
+    <string name="actor_born">Né(e) le %1$s</string>
+    <string name="actor_died">Décédé(e) le %1$s</string>
+    <string name="actor_age">%1$d ans</string>
+    <string name="actor_failed">Impossible de charger la page de cet acteur.</string>
+    <string name="actor_no_bio">Aucune biographie disponible.</string>
+    <string name="actor_as">dans le rôle de %1$s</string>
+    <string name="actor_kind_film">Film</string>
+    <string name="actor_kind_series">Série</string>
+    <string name="where_to_watch">Où regarder</string>
+    <string name="where_to_watch_torrent">Ouvrir dans Torrent</string>
+    <string name="where_to_watch_none">Introuvable sur IPTV et dans le guide satellite.</string>
 </resources>

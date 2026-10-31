@@ -1777,4 +1777,16 @@
     <string name="sync_server_reinstall_message">Auf %1$s läuft bereits ein Sync-Server. Neu installieren ist nur für einen defekten Server gedacht: Es installiert die neueste Version per SSH und startet den Server neu. Vorhandene Daten, Kopplungen und das Dashboard-Passwort bleiben erhalten (vorher wird eine Sicherung erstellt); werden diese Daten nicht gefunden, bricht die Installation ab. Um diesen Fernseher mit dem Server zu nutzen, wählen Sie stattdessen Koppeln. Verwenden Sie den Wiederherstellungscode hier nur, wenn Sie alle anderen Geräte abmelden möchten.</string>
     <string name="sync_server_reinstall_confirm">Installationsformular anzeigen</string>
     <string name="sync_server_search_again">Erneut suchen</string>
+    <string name="actor_filmography">Filme und Serien</string>
+    <string name="actor_born">Geboren am %1$s</string>
+    <string name="actor_died">Gestorben am %1$s</string>
+    <string name="actor_age">%1$d Jahre</string>
+    <string name="actor_failed">Die Seite dieses Schauspielers konnte nicht geladen werden.</string>
+    <string name="actor_no_bio">Keine Biografie verfügbar.</string>
+    <string name="actor_as">als %1$s</string>
+    <string name="actor_kind_film">Film</string>
+    <string name="actor_kind_series">Serie</string>
+    <string name="where_to_watch">Wo ansehen</string>
+    <string name="where_to_watch_torrent">In Torrent öffnen</string>
+    <string name="where_to_watch_none">Weder auf IPTV noch im Satelliten-EPG gefunden.</string>
 </resources>
