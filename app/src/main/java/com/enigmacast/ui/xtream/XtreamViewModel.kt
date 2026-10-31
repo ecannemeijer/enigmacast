@@ -1572,7 +1572,7 @@ class XtreamViewModel @Inject constructor(
     fun selectCategory(category: XtreamCategory) {
         val account = account ?: return
         if (category.id == this.category?.id && category.providerId == this.category?.providerId &&
-            series == null && pendingCategory == null && items.isNotEmpty()
+            series == null && pendingCategory == null && items.isNotEmpty() && itemsComplete
         ) {
             itemsReady++
             return
@@ -1581,34 +1581,37 @@ class XtreamViewModel @Inject constructor(
         loadJob = viewModelScope.launch { loadCategory(account, category) }
     }
 
+    /** The film or series category in [items] has been read completely (not only its first chunk). */
+    private var itemsComplete = false
+
     private suspend fun loadCategory(account: XtreamAccount, category: XtreamCategory, force: Boolean = false, announce: Boolean = true) {
         pendingCategory = category
         loading = true; error = false
+        itemsComplete = false
         try {
             val started = System.currentTimeMillis()
-            runCatching {
-                val list = itemsOf(account, section, category, force)
-                // The cards' playlist data (title clean-up per name) is built once, off the main thread.
-                val base = if (section == XtreamSection.LIVE) emptyList()
-                else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { IptvCard.of(list) }
-                list to base
+            if (section != XtreamSection.LIVE) {
+                loadVodCategory(account, category, force, announce, started)
+                return
             }
-                .onSuccess { (list, base) ->
+            runCatching { itemsOf(account, section, category, force) }
+                .onSuccess { list ->
                     if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: ${list.size} items in ${System.currentTimeMillis() - started} ms")
                     if (this.category?.id != category.id || this.category?.providerId != category.providerId) gridAnchor = 0
                     this.category = category
                     series = null; episodes = emptyList()
-                    cards = base
+                    cards = emptyList()
                     categoryCounts = categoryCounts + (countKey(category) to list.size)
                     items = list
+                    itemsComplete = true
                     // The playing channel's own category read again (refresh, sync): zap follows it.
-                    if (section == XtreamSection.LIVE && com.enigmacast.domain.xtream.IptvZapList.sameCategory(category, zapCategory) &&
+                    if (com.enigmacast.domain.xtream.IptvZapList.sameCategory(category, zapCategory) &&
                         playing?.item?.let { com.enigmacast.domain.xtream.IptvZapList.holds(list, it) } == true
                     ) zapItems = list
                     // A channel that started before its category was at hand (autostart while the
                     // playlist still loaded from Room/cache): this list holds it, so zap follows it now.
                     val live = playing?.item?.takeIf { it.section == XtreamSection.LIVE }
-                    if (section == XtreamSection.LIVE && live != null && !com.enigmacast.domain.xtream.IptvZapList.holds(zapItems, live) &&
+                    if (live != null && !com.enigmacast.domain.xtream.IptvZapList.holds(zapItems, live) &&
                         live.categoryId == category.id
                     ) {
                         com.enigmacast.domain.xtream.IptvZapList.resolve(list, live)?.let { row ->
@@ -1626,6 +1629,61 @@ class XtreamViewModel @Inject constructor(
             if (pendingCategory?.id == category.id && pendingCategory?.providerId == category.providerId) pendingCategory = null
             loading = false
         }
+    }
+
+    /**
+     * Films or series: the first chunk is shown as soon as it is read, the rest is appended after
+     * it (same keys, same order), so focus and the scroll position stay where they are.
+     */
+    private suspend fun loadVodCategory(account: XtreamAccount, category: XtreamCategory, force: Boolean, announce: Boolean, started: Long) {
+        val same = this.category?.id == category.id && this.category?.providerId == category.providerId
+        val first = com.enigmacast.domain.xtream.KeysetPages.firstChunk(if (same) gridAnchor else 0)
+        val keyer = IptvCard.keyer()
+        var shown = 0
+        suspend fun deliver(chunk: List<XtreamItem>, last: Boolean) {
+            if (shown == 0) {
+                if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: first ${chunk.size} items in ${System.currentTimeMillis() - started} ms")
+                if (!same) gridAnchor = 0
+                this.category = category
+                series = null; episodes = emptyList()
+                cards = IptvCard.of(chunk, keyer)
+                items = chunk
+                shown = chunk.size
+                if (announce) itemsReady++
+            } else if (chunk.isNotEmpty()) {
+                cards = cards + IptvCard.of(chunk, keyer, shown)
+                items = items + chunk
+                shown += chunk.size
+            }
+            if (last) {
+                if (shown == 0) {
+                    // An empty category: still the open one.
+                    if (!same) gridAnchor = 0
+                    this.category = category
+                    series = null; episodes = emptyList()
+                    cards = emptyList(); items = emptyList()
+                    if (announce) itemsReady++
+                }
+                categoryCounts = categoryCounts + (countKey(category) to shown)
+                itemsComplete = true
+                if (com.enigmacast.BuildConfig.DEBUG) timber.log.Timber.d("IPTV ${section.name} category: ${shown} items in ${System.currentTimeMillis() - started} ms")
+            }
+        }
+        runCatching {
+            if (playlist != null) {
+                playlistSync.itemsInChunks(section, category.id, category.providerId, first) { chunk, last ->
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { deliver(chunk, last) }
+                }
+            } else {
+                // Online: the list arrives in one answer; the first part is drawn before the rest is added.
+                val list = repository.items(account, section, category.id, force)
+                deliver(list.take(first), list.size <= first)
+                if (list.size > first) {
+                    kotlinx.coroutines.yield()
+                    deliver(list.subList(first, list.size).toList(), true)
+                }
+            }
+        }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; error = true }
     }
 
     /** In playlist mode the list is reloaded in Settings or by the background sync; here Room is read again. */
@@ -2607,11 +2665,23 @@ internal class IptvRenderersFactory(
  * One film or series card: the item, its playlist-only card and its unique grid key, built
  * together so the grid's list and its keys always come from the same snapshot.
  */
-data class IptvCard(val key: String, val item: XtreamItem, val base: com.enigmacast.domain.films.HomeFilm) {
+/**
+ * A film or series poster. [base] (the playlist title cleaned up for the card) is worked out the
+ * first time the card is drawn and kept: a 9000-film category no longer cleans up every title
+ * before the first poster shows.
+ */
+data class IptvCard(val key: String, val item: XtreamItem) {
+    val base: com.enigmacast.domain.films.HomeFilm by lazy { com.enigmacast.data.xtream.IptvVod.film(item, null) }
+
     companion object {
-        fun of(items: List<XtreamItem>): List<IptvCard> =
-            com.enigmacast.domain.xtream.LazyKeys.keyed(items, "vod") { "${it.section.name}:${it.id}" }
-                .map { IptvCard(it.key, it.value, com.enigmacast.data.xtream.IptvVod.film(it.value, null)) }
+        fun keyer() = com.enigmacast.domain.xtream.LazyKeys.Keyer("vod")
+
+        /** Cards for [items]; with a shared [keyer] and [start] (their place in the whole list) a list can grow by parts. */
+        fun of(
+            items: List<XtreamItem>,
+            keyer: com.enigmacast.domain.xtream.LazyKeys.Keyer = keyer(),
+            start: Int = 0,
+        ): List<IptvCard> = items.mapIndexed { i, item -> IptvCard(keyer.key("${item.section.name}:${item.id}", start + i), item) }
     }
 }
 

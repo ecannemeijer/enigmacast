@@ -37,9 +37,20 @@ interface IptvDao {
     @Query("SELECT * FROM iptv_category WHERE source = :source AND section = :section ORDER BY sort")
     suspend fun categories(source: String, section: String): List<IptvCategoryRow>
 
-    /** One page of a category; read in pages so a 20 000-channel group never fills a CursorWindow. */
-    @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section AND categoryId = :categoryId ORDER BY sort LIMIT :limit OFFSET :offset")
-    suspend fun itemsPage(source: String, section: String, categoryId: String, limit: Int, offset: Int): List<IptvItemRow>
+    /**
+     * The first rows of a category. Later pages continue after the last row ([itemsAfter]) rather
+     * than with OFFSET, so each page is a seek on the (source, section, categoryId, sort) index.
+     * Read in pages so a 20 000-channel group never fills a CursorWindow.
+     */
+    @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section AND categoryId = :categoryId ORDER BY sort, id LIMIT :limit")
+    suspend fun itemsFirst(source: String, section: String, categoryId: String, limit: Int): List<IptvItemRow>
+
+    /** The rows after ([afterSort], [afterId]) in the order of [itemsFirst]. */
+    @Query(
+        "SELECT * FROM iptv_item WHERE source = :source AND section = :section AND categoryId = :categoryId " +
+            "AND (sort > :afterSort OR (sort = :afterSort AND id > :afterId)) ORDER BY sort, id LIMIT :limit",
+    )
+    suspend fun itemsAfter(source: String, section: String, categoryId: String, afterSort: Int, afterId: String, limit: Int): List<IptvItemRow>
 
     /** All rows of one section; used for name matching across the whole playlist. */
     @Query("SELECT * FROM iptv_item WHERE source = :source AND section = :section ORDER BY sort")

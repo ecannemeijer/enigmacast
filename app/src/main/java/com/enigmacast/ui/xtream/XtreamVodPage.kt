@@ -111,8 +111,9 @@ internal fun XtreamVodPage(
     val art by model.artwork.collectAsStateWithLifecycle()
     val history by model.history.collectAsStateWithLifecycle()
     var focused by remember { mutableStateOf<HomeFilm?>(null) }
-    var focusedIndex by remember(model.cards) { mutableStateOf<Int?>(null) }
-    // Built once per category (off the main thread); an artwork update only changes its own card.
+    // Per category: the rest of a category appended after its first chunk keeps the focused place.
+    var focusedIndex by remember(model.category) { mutableStateOf<Int?>(null) }
+    // The first chunk of a category, then the rest appended; each card cleans up its title when drawn.
     val cards = model.cards
     Box(Modifier.fillMaxSize().skinCanvas()) {
         Box(Modifier.padding(start = 260.dp)) { Backdrop(focused) }
