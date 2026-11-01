@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -139,6 +140,13 @@ fun FilmInfoDialog(
                         }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        // The texts give way (clipped at the bottom) when the space is short, so the
+                        // buttons under them always stay: a series page has the episodes and the cast
+                        // under this row, which pushed the buttons off the page.
+                        Column(
+                            Modifier.weight(1f, fill = false).clipToBounds(),
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
                         TitleOrLogo(film, height = 56.dp, fontSize = 28.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             RatingStars(movie.voteAverage, size = 13.sp)
@@ -182,6 +190,7 @@ fun FilmInfoDialog(
                             if (recordingSet) Badge(stringResource(R.string.home_recording_set), LiveRed)
                         }
                         if (airing && vod == null) EnigmaProgramProgress(film.event.progress(nowSec), Modifier.width(320.dp))
+                        }
                         if (vod?.watch != null) com.enigmacast.ui.components.VodWatchLine(vod.watch)
                         if (vod != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
                             if (vod.resumeLabel != null && vod.onResume != null) {

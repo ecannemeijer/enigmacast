@@ -101,6 +101,8 @@ fun TvTextField(
      * Only for an explicit search action (Torrent › Search); fields otherwise open on OK.
      */
     startEditing: Boolean = false,
+    /** OK / Done ended the typing (not Back): e.g. Search moves on to its first result. */
+    onDone: (() -> Unit)? = null,
 ) {
     var editing by remember { mutableStateOf(startEditing) }
     // Whether the text input really had focus during this edit: only losing it after that ends
@@ -243,7 +245,7 @@ fun TvTextField(
                 },
                 imeAction = ImeAction.Done,
             ),
-            keyboardActions = KeyboardActions(onDone = { stopEditing() }),
+            keyboardActions = KeyboardActions(onDone = { val was = editing; stopEditing(); if (was) onDone?.invoke() }),
             decorationBox = { inner ->
                 // The frame is what the D-pad focuses while browsing; the text input inside only takes focus while editing.
                 androidx.compose.foundation.layout.Box(
@@ -282,7 +284,11 @@ fun TvTextField(
                         TvFieldKeys.Action.NONE -> false
                         TvFieldKeys.Action.CONSUME -> true
                         TvFieldKeys.Action.START_EDIT -> { editing = true; true }
-                        TvFieldKeys.Action.STOP_EDIT -> { stopEditing(); true }
+                        TvFieldKeys.Action.STOP_EDIT -> {
+                            stopEditing()
+                            if (TvFieldKeys.isOk(code)) onDone?.invoke()
+                            true
+                        }
                         TvFieldKeys.Action.STOP_AND_MOVE_UP -> { stopEditing(FocusDirection.Up); true }
                         TvFieldKeys.Action.STOP_AND_MOVE_DOWN -> { stopEditing(FocusDirection.Down); true }
                     }

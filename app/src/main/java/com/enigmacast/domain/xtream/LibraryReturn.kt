@@ -7,9 +7,20 @@ package com.enigmacast.domain.xtream
 object LibraryReturn {
     const val HOME_PREFIX = "home/"
 
+    /** A result opened from the dashboard Search: "search/<row id>/<card key>". */
+    const val SEARCH_PREFIX = "search/"
+
     fun isHome(origin: String?): Boolean = origin?.startsWith(HOME_PREFIX) == true
 
-    fun isMyItems(origin: String?): Boolean = origin != null && !isHome(origin)
+    fun isSearch(origin: String?): Boolean = origin?.startsWith(SEARCH_PREFIX) == true
+
+    fun isMyItems(origin: String?): Boolean = origin != null && !isHome(origin) && !isSearch(origin)
+
+    /** The origin of a Search result card in the row [rowId]. */
+    fun searchOrigin(rowId: String, cardKey: String): String = "$SEARCH_PREFIX$rowId/$cardKey"
+
+    /** "<row id>/<card key>" of a Search origin (for [locate]), null for any other origin. */
+    fun searchKey(origin: String?): String? = origin?.takeIf { isSearch(it) }?.removePrefix(SEARCH_PREFIX)
 
     /**
      * Whether a page's own entry focus (its first card) must stand back because a return to a
@@ -17,6 +28,9 @@ object LibraryReturn {
      */
     fun entryFocusYields(returnKey: String?, homePage: Boolean): Boolean =
         if (homePage) isHome(returnKey) else isMyItems(returnKey)
+
+    /** Search's own entry focus (the query field) stands back while a return to a result is pending. */
+    fun searchEntryYields(returnKey: String?): Boolean = isSearch(returnKey)
 
     /** Back on an info page that a library card opened leaves the IPTV screen for that card. */
     fun infoBackLeaves(launchOrigin: String?): Boolean = launchOrigin != null

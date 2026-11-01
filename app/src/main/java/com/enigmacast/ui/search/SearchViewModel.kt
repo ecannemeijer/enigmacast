@@ -45,10 +45,22 @@ class SearchViewModel @Inject constructor(
     val iptvResumes get() = iptvLibrary.resumeMap
     val iptvHistory get() = iptvLibrary.history
 
+    /** Where the IPTV screen sent the viewer back to ("search/<row>/<card>" when it is a result here). */
+    val returnKeys get() = iptvLibrary.returnTo
+    fun consumeReturn() { iptvLibrary.returnTo.value = null }
+
     /** OK on an IPTV result: live plays, a film opens its info page, a series its series page. */
-    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, onXtream: () -> Unit) {
+    fun openIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, rowId: String? = null, onXtream: () -> Unit) =
+        openIptvFrom(card, rowId?.let { com.enigmacast.domain.xtream.LibraryReturn.searchOrigin(it, card.key) }, onXtream)
+
+    /** [openIptv] with the page Back comes back to ([origin]; null keeps the IPTV screen). */
+    fun openIptvFrom(card: com.enigmacast.domain.xtream.IptvLibraryCard, origin: String?, onXtream: () -> Unit) {
         if (!gate.require(com.enigmacast.domain.account.PremiumFeature.XTREAM)) return
-        iptvLibrary.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(card.source, card.open, detail = true)
+        // With Search as origin, Back on the info page (or after playing) comes back here, on this card.
+        iptvLibrary.openRequest.value = com.enigmacast.data.xtream.IptvOpenRequest(
+            card.source, card.open, detail = true,
+            origin = origin,
+        )
         onXtream()
     }
     /** A programme whose OK opened the action dialog (AutoSwitch / Record / Watch now). */
