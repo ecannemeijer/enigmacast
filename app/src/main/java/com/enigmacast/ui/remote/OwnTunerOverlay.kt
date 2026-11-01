@@ -224,6 +224,7 @@ fun OwnTunerOverlay(
                     tuner = tuner,
                     details = ui.details,
                     optionsHint = !ui.bannerFromZap && !ui.quickBar,
+                    zapHint = ui.bannerFromZap && !ui.quickBar,
                     recording = isRecording(ui.recordingReferences, channel.reference),
                     osdInfo = ui.osdInfo,
                     osdFields = ui.osdInfoFields,
@@ -272,6 +273,8 @@ internal fun ChannelBanner(
     tuner: TunerState,
     details: Boolean,
     optionsHint: Boolean,
+    /** The banner a zap brought up: "OK: options" (Up/Down keep zapping). */
+    zapHint: Boolean = false,
     recording: Boolean,
     osdInfo: OsdInfo,
     osdFields: OsdInfoFields,
@@ -298,7 +301,7 @@ internal fun ChannelBanner(
         tuner.status == TunerStatus.CHECKING ||
         tuner.status == TunerStatus.STARTING
     val layout = ActiveSkin.current.osd
-    val info: @Composable () -> Unit = { BannerInfo(player, osdInfo, osdFields, osdSkin, optionsHint) }
+    val info: @Composable () -> Unit = { BannerInfo(player, osdInfo, osdFields, osdSkin, optionsHint, zapHint) }
     when (layout) {
         OsdLayout.PLI_BAR -> {
             PliHdInfoBar(channel, number, current, next, nowSec, loading, recording, tuner, details, picon, cachedPicon, OsdInfoPresenter.present(osdInfo, osdFields), osdInfo, player, modifier)
@@ -407,7 +410,7 @@ internal fun ChannelBanner(
 
 /** Right-hand facts of the banner (receiver info strip, audio, subtitles, key hint); every layout places it. */
 @Composable
-private fun BannerInfo(player: PlayerState, osdInfo: OsdInfo, osdFields: OsdInfoFields, osdSkin: OsdSkinId, optionsHint: Boolean) {
+private fun BannerInfo(player: PlayerState, osdInfo: OsdInfo, osdFields: OsdInfoFields, osdSkin: OsdSkinId, optionsHint: Boolean, zapHint: Boolean = false) {
     val infoView = OsdInfoPresenter.present(osdInfo, osdFields)
     val resolution = videoLabel(player)
     if (!infoView.isEmpty || resolution.isNotBlank()) {
@@ -430,6 +433,7 @@ private fun BannerInfo(player: PlayerState, osdInfo: OsdInfo, osdFields: OsdInfo
     val hint = when {
         player.timeshiftPaused && optionsHint -> R.string.osd_banner_hint_options_paused
         player.timeshiftPaused -> R.string.osd_banner_hint_paused
+        zapHint -> R.string.osd_banner_hint_zap
         optionsHint -> R.string.osd_banner_hint_options
         else -> R.string.osd_banner_hint
     }

@@ -41,3 +41,19 @@ object OwnTunerKeys {
         return key.name.removePrefix("DIGIT_").toIntOrNull() ?: -1
     }
 }
+
+/** What OK does on live TV, by what the banner shows. */
+object BannerOk {
+    enum class Action { RETRY, OPTIONS_BANNER, PAUSE_OR_LIST, SHOW_BANNER }
+
+    /**
+     * A banner a zap brought up turns into the info banner (Down then opens the options) instead
+     * of pausing; OK on that banner (or on radio) pauses as before; no banner: the banner.
+     */
+    fun decide(tunerTrouble: Boolean, radio: Boolean, banner: Boolean, fromZap: Boolean): Action = when {
+        tunerTrouble -> Action.RETRY
+        !radio && banner && fromZap -> Action.OPTIONS_BANNER
+        radio || banner -> Action.PAUSE_OR_LIST
+        else -> Action.SHOW_BANNER
+    }
+}

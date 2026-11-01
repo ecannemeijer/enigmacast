@@ -360,6 +360,7 @@
     <string name="conn_receiver_offline">Ricevitore non raggiungibile: %s</string>
     <string name="conn_receiver_offline_plain">Ricevitore non raggiungibile</string>
     <string name="skin_standard">Standard</string>
+    <string name="osd_banner_hint_zap">OK: opzioni · ▲▼: cambia canale</string>
     <string name="osd_banner_hint_options">OK: pausa · Sinistra: elenco canali · ▼ opzioni · Info: dettagli</string>
     <string name="osd_banner_hint_options_paused">OK: riprendi · Sinistra: elenco canali · ▼ opzioni · Info: dettagli</string>
     <string name="timeshift_full">Il timeshift è pieno. Ritorno alla diretta.</string>

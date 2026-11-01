@@ -1354,12 +1354,16 @@ class RemoteDisplayViewModel @Inject constructor(
         when (action) {
             OwnKeyAction.OK -> if (!down) {
                 val tuner = ui.own.tuner.status
-                when {
-                    tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM -> ownSession.retry()
+                val trouble = tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM
+                when (com.enigmacast.domain.tuner.BannerOk.decide(trouble, radio, ui.banner, ui.bannerFromZap)) {
+                    com.enigmacast.domain.tuner.BannerOk.Action.RETRY -> ownSession.retry()
+                    // The banner a zap brought up: the info banner at once (timer restarted), so
+                    // Down reaches the options without waiting; a second OK pauses.
+                    com.enigmacast.domain.tuner.BannerOk.Action.OPTIONS_BANNER -> showBanner(fromZap = false)
                     // Banner up, or radio (no banner): pause or resume. Left opens the list.
                     // An internet stream cannot pause, so OK still opens the list there.
-                    radio || ui.banner -> if (!playback.toggleTimeshiftPause()) openChannelList()
-                    else -> showBanner()
+                    com.enigmacast.domain.tuner.BannerOk.Action.PAUSE_OR_LIST -> if (!playback.toggleTimeshiftPause()) openChannelList()
+                    com.enigmacast.domain.tuner.BannerOk.Action.SHOW_BANNER -> showBanner()
                 }
             }
             OwnKeyAction.DIGIT -> if (down && event.repeatCount == 0) pushDigit(OwnTunerKeys.digit(event.keyCode))
