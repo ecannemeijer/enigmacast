@@ -75,7 +75,12 @@ import com.enigmacast.ui.theme.trapVertical
  * filmography as posters. OK on a poster shows where that title can be watched; Back closes.
  */
 @Composable
-fun ActorInfoDialog(member: TmdbCastMember, onClose: () -> Unit) {
+fun ActorInfoDialog(
+    member: TmdbCastMember,
+    onClose: () -> Unit,
+    /** Opened on the Search page: a title chosen here comes back to Search (on this actor) with Back. */
+    returnOrigin: String? = null,
+) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         NavigationSoundsForWindow()
         val viewModel: ActorViewModel = hiltViewModel(key = "actor-page")
@@ -184,7 +189,7 @@ fun ActorInfoDialog(member: TmdbCastMember, onClose: () -> Unit) {
                     // A title opened elsewhere: this page and "where to watch" make way for it.
                     chosen = null
                     onClose()
-                })
+                }, returnOrigin = returnOrigin)
             }
         }
         LaunchedEffect(returnTo) {
@@ -258,7 +263,7 @@ private fun CreditCard(credit: TmdbCredit, modifier: Modifier, onClick: () -> Un
  * guide and, when the Torrent page is on, the torrents found for it.
  */
 @Composable
-private fun WhereToWatchDialog(credit: TmdbCredit, member: TmdbCastMember, actor: ActorViewModel, onClose: () -> Unit, onJumped: () -> Unit) {
+private fun WhereToWatchDialog(credit: TmdbCredit, member: TmdbCastMember, actor: ActorViewModel, onClose: () -> Unit, onJumped: () -> Unit, returnOrigin: String? = null) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         NavigationSoundsForWindow()
         val search: SearchViewModel = hiltViewModel(key = "actor-where-to-watch")
@@ -338,7 +343,7 @@ private fun WhereToWatchDialog(credit: TmdbCredit, member: TmdbCastMember, actor
                                         },
                                         onClick = {
                                             jumpTo(com.enigmacast.domain.person.TitleTrail.iptvKey(card.open))
-                                            search.openIptv(card) { nav.onXtream(); onJumped() }
+                                            search.openIptvFrom(card, returnOrigin) { nav.onXtream(); onJumped() }
                                         },
                                         onOptions = {},
                                     )
@@ -363,7 +368,7 @@ private fun WhereToWatchDialog(credit: TmdbCredit, member: TmdbCastMember, actor
                                 is IptvTvItem.Channel -> ListRow(
                                     item.hit.programme.title,
                                     listOf(item.channel.name, guideWhen(item.hit.programme.startSec)).filter { it.isNotBlank() }.joinToString("  ·  "),
-                                ) { nav?.let { n -> search.openIptv(item.card) { n.onXtream(); onJumped() } } }
+                                ) { nav?.let { n -> search.openIptvFrom(item.card, returnOrigin) { n.onXtream(); onJumped() } } }
                             }
                         }
                     }

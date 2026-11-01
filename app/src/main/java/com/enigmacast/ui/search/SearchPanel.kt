@@ -62,6 +62,7 @@ import com.enigmacast.ui.theme.EnigmaIcons
 import com.enigmacast.ui.theme.LocalEdgeLeft
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.util.asString
 import java.time.Instant
 import java.time.ZoneId
@@ -113,8 +114,22 @@ fun SearchPanel(
             else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
+    // Back from a result opened here (film, series, channel): "<row id>/<card key>" of that card.
+    val returnOrigin by viewModel.returnKeys.collectAsStateWithLifecycle()
+    val searchReturn = com.enigmacast.domain.xtream.LibraryReturn.searchKey(returnOrigin)
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val returnFocus = remember { FocusRequester() }
+    val firstFocus = remember { FocusRequester() }
+    // OK / Done in the field: the first result gets the focus once the search has something.
+    var focusFirstPending by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // The result list had the focus until a moment ago (a result update can take the focused row away).
+    var listFocused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var bodyFocused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var listLostAt by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     LaunchedEffect(rowsFocusable, focusToken) {
         if (!rowsFocusable) return@LaunchedEffect
+        // A pending return puts the focus on that result instead of on the field.
+        if (com.enigmacast.domain.xtream.LibraryReturn.searchEntryYields(viewModel.returnKeys.value)) return@LaunchedEffect
         fieldFocus.requestWhenReady()
     }
     val nowSec = System.currentTimeMillis() / 1000
@@ -131,11 +146,50 @@ fun SearchPanel(
         R.string.search_iptv_films to iptvFilms,
         R.string.search_iptv_series to viewModel.iptv.series,
     ).filter { it.second.isNotEmpty() }
+    val people = viewModel.people
+    val rowIds = remember(iptvRows, people) {
+        (if (people.isEmpty()) emptyList() else listOf(ACTORS_ROW to people.map { actorKey(it) })) +
+            iptvRows.map { (title, cards) -> title.toString() to cards.map { it.key } }
+    }
+    val hasResults = viewModel.people.isNotEmpty() || iptvRows.isNotEmpty() || sections.isNotEmpty()
+    LaunchedEffect(searchReturn, rowIds, rowsFocusable) {
+        val key = searchReturn ?: return@LaunchedEffect
+        if (!rowsFocusable) return@LaunchedEffect
+        val spot = com.enigmacast.domain.search.SearchFocus.returnSpot(key, rowIds, leadingItems = 0)
+        if (spot == null) {
+            // Still searching: wait for the rows. Gone for good: the field (as on entering Search).
+            if (viewModel.searching) return@LaunchedEffect
+            viewModel.consumeReturn()
+            fieldFocus.requestWhenReady()
+            return@LaunchedEffect
+        }
+        runCatching { listState.scrollToItem(spot.first) }
+        if (!returnFocus.requestWhenReady(attempts = 30)) fieldFocus.requestWhenReady()
+        viewModel.consumeReturn()
+        // A title chosen on an actor's page: that page again (Back there lands on the actor card).
+        if (key.startsWith("$ACTORS_ROW/")) people.getOrNull(spot.second)?.let { openActor = it }
+    }
+    LaunchedEffect(focusFirstPending, viewModel.searching, hasResults) {
+        if (!com.enigmacast.domain.search.SearchFocus.focusFirstNow(focusFirstPending, viewModel.searching, hasResults)) return@LaunchedEffect
+        focusFirstPending = false
+        runCatching { listState.scrollToItem(0) }
+        firstFocus.requestWhenReady(attempts = 20)
+    }
+    // New results took the focused row away (focus fell off the page): back to the first result.
+    LaunchedEffect(viewModel.results, iptvRows, viewModel.people) {
+        androidx.compose.runtime.withFrameNanos { }
+        kotlinx.coroutines.delay(80)
+        val justLost = !bodyFocused && !listFocused && System.currentTimeMillis() - listLostAt < 600
+        if (rowsFocusable && justLost && hasResults) firstFocus.requestWhenReady()
+    }
     val body = modifier
         .fillMaxSize()
         // Down at the last result / Up at the field stay on the page (Left still goes to the menu).
         .trapVertical()
-        .onFocusChanged { if (it.hasFocus && menuFocus != null) onRetreatTo?.invoke(menuFocus) }
+        .onFocusChanged {
+            bodyFocused = it.hasFocus
+            if (it.hasFocus && menuFocus != null) onRetreatTo?.invoke(menuFocus)
+        }
         .onPreviewKeyEvent { event ->
             if (event.type != KeyEventType.KeyDown || event.key != Key.Search) return@onPreviewKeyEvent false
             startVoice()
@@ -163,6 +217,7 @@ fun SearchPanel(
                 fieldFocus = fieldFocus,
                 leftFocus = menuFocus ?: FocusRequester.Cancel,
                 rightFocus = micFocus,
+                onDone = { focusFirstPending = true },
                 modifier = Modifier.weight(1f),
             )
             Button(
@@ -199,21 +254,31 @@ fun SearchPanel(
             else -> {
                 if (viewModel.searching) SearchSpinner()
                 LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth().onFocusChanged {
+                        if (listFocused && !it.hasFocus) listLostAt = System.currentTimeMillis()
+                        listFocused = it.hasFocus
+                    },
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
-                    val people = viewModel.people
                     if (people.isNotEmpty()) item(key = "actors") {
                         Column {
                             Text(stringResource(R.string.search_actors), color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
+                            val backActor = searchReturn?.takeIf { it.startsWith("$ACTORS_ROW/") }?.removePrefix("$ACTORS_ROW/")
                             androidx.compose.foundation.lazy.LazyRow(
+                                state = androidx.compose.foundation.lazy.rememberLazyListState(
+                                    initialFirstVisibleItemIndex = backActor?.let { k -> people.indexOfFirst { actorKey(it) == k }.coerceAtLeast(0) } ?: 0,
+                                ),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                             ) {
-                                items(people, key = { "p${it.id}" }) { member ->
+                                items(people, key = { actorKey(it) }) { member ->
                                     com.enigmacast.ui.home.CastCard(
                                         member,
-                                        Modifier.focusProperties {
+                                        Modifier
+                                            .focusRequesterIf(backActor != null && actorKey(member) == backActor, returnFocus)
+                                            .focusRequesterIf(member === people.first(), firstFocus)
+                                            .focusProperties {
                                             canFocus = rowsFocusable
                                             if (member === people.first()) left = menuFocus ?: FocusRequester.Cancel
                                             if (member === people.last()) right = FocusRequester.Cancel
@@ -228,7 +293,10 @@ fun SearchPanel(
                         sections = sections,
                         rowsFocusable = rowsFocusable,
                         menuFocus = menuFocus,
-                        onIptv = { card -> onXtream?.let { viewModel.openIptv(card, it) } },
+                        returnKey = searchReturn,
+                        returnFocus = returnFocus,
+                        firstFocus = firstFocus.takeIf { people.isEmpty() },
+                        onIptv = { title, card -> onXtream?.let { viewModel.openIptv(card, title.toString(), it) } },
                         onHit = { hit ->
                             if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) viewModel.openProgramme(hit)
                             else viewModel.choose(hit, onPlayed, onBouquet, onPrepare)
@@ -240,7 +308,11 @@ fun SearchPanel(
     }
     }
     openActor?.let { member ->
-        com.enigmacast.ui.person.ActorInfoDialog(member, onClose = { openActor = null })
+        com.enigmacast.ui.person.ActorInfoDialog(
+            member,
+            onClose = { openActor = null },
+            returnOrigin = com.enigmacast.domain.xtream.LibraryReturn.searchOrigin(ACTORS_ROW, actorKey(member)),
+        )
     }
     if (menuFocus != null) {
         CompositionLocalProvider(LocalEdgeLeft provides menuFocus) { column() }
@@ -258,27 +330,40 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.searchResultItems(
     sections: List<Pair<SearchKind, List<SearchHit>>>,
     rowsFocusable: Boolean,
     menuFocus: FocusRequester?,
-    onIptv: (com.enigmacast.domain.xtream.IptvLibraryCard) -> Unit,
+    onIptv: (title: Int, card: com.enigmacast.domain.xtream.IptvLibraryCard) -> Unit,
     onHit: (SearchHit) -> Unit,
+    /** "<row id>/<card key>" of the result to come back on (its row opens scrolled to it). */
+    returnKey: String? = null,
+    returnFocus: FocusRequester? = null,
+    /** Put on the first result of these rows (null when an earlier row has the first result). */
+    firstFocus: FocusRequester? = null,
 ) {
+    val firstIptv = iptvRows.firstOrNull()?.second?.firstOrNull()
+    val firstHit = if (firstIptv == null) sections.firstOrNull()?.second?.firstOrNull() else null
     // IPTV Live / Films / Series: sideways poster rows after the programme results.
     iptvRows.forEach { (title, cards) ->
         item(key = "iptv-$title") {
             Column {
                 Text(stringResource(title), color = EnigmaColors.Accent, fontSize = 12.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp))
+                val back = returnKey?.takeIf { it.startsWith("$title/") }?.removePrefix("$title/")
+                val start = back?.let { k -> cards.indexOfFirst { it.key == k }.coerceAtLeast(0) } ?: 0
                 androidx.compose.foundation.lazy.LazyRow(
+                    state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = start),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                 ) {
                     items(cards, key = { it.key }) { card ->
                         com.enigmacast.ui.dashboard.IptvCard(
                             card = card,
-                            modifier = Modifier.focusProperties {
+                            modifier = Modifier
+                                .focusRequesterIf(back != null && card.key == back, returnFocus)
+                                .focusRequesterIf(card === firstIptv, firstFocus)
+                                .focusProperties {
                                 canFocus = rowsFocusable
                                 if (card === cards.first()) left = menuFocus ?: FocusRequester.Cancel
                                 if (card === cards.last()) right = FocusRequester.Cancel
                             },
-                            onClick = { onIptv(card) },
+                            onClick = { onIptv(title, card) },
                             onOptions = {},
                         )
                     }
@@ -301,6 +386,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.searchResultItems(
                 onClick = { onHit(hit) },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                 modifier = Modifier
+                    .focusRequesterIf(hit === firstHit, firstFocus)
                     .focusProperties {
                         canFocus = rowsFocusable
                         left = menuFocus ?: FocusRequester.Cancel
@@ -398,3 +484,7 @@ internal fun SearchProgrammeDialogs(viewModel: SearchViewModel, onPlayed: () -> 
         com.enigmacast.ui.recording.RecordConfirmDialog(ask, onConfirm = viewModel::confirmRecord, onDismiss = viewModel::dismissRecord)
     }
 }
+
+/** Row id and card key of the Actors row in a Search origin ("search/actors/p<id>"). */
+private const val ACTORS_ROW = "actors"
+private fun actorKey(member: com.enigmacast.domain.films.TmdbCastMember): String = "p${member.id}"

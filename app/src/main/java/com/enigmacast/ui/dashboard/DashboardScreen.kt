@@ -234,7 +234,9 @@ fun DashboardScreen(
                 openGuide == GuideOpen.SATELLITE -> DashSection.Guide
                 openGuide == GuideOpen.IPTV -> DashSection.IptvGuide
                 returnToMyItemsId != null -> DashSection.MyItems
-                iptvReturn != null && !iptvReturn.startsWith("home/") -> DashSection.MyItems
+                // Back from a film/series/channel opened from Search: Search again, on that result.
+                LibraryReturn.isSearch(iptvReturn) -> DashSection.Search
+                LibraryReturn.isMyItems(iptvReturn) -> DashSection.MyItems
                 xtreamModel.vodFromDashboard && xtreamModel.section == com.enigmacast.domain.xtream.XtreamSection.SERIES -> DashSection.IptvSeries
                 xtreamModel.vodFromDashboard -> DashSection.IptvMovies
                 else -> DashSection.Home
@@ -286,7 +288,8 @@ fun DashboardScreen(
     var radioItemFocused by remember { mutableStateOf(false) }
     val channelFocus = remember { FocusRequester() }
     val searchMenuFocus = remember { FocusRequester() }
-    var searchActive by remember { mutableStateOf(false) }
+    // Back from a Search result: the results take the focus at once (the panel puts it on that card).
+    var searchActive by remember { mutableStateOf(LibraryReturn.isSearch(iptvReturn)) }
     var searchEnterToken by remember { mutableIntStateOf(0) }
     val myItemsMenuFocus = remember { FocusRequester() }
     val myItemsListFocus = remember { FocusRequester() }
@@ -426,7 +429,7 @@ fun DashboardScreen(
                 iptvGuideOpenToken += 1
                 onGuideOpened()
             }
-            iptvReturn != null -> { if (!iptvReturn.startsWith("home/")) { myItemsListActive = true; onMyItemsFocused() } }
+            iptvReturn != null -> { if (LibraryReturn.isMyItems(iptvReturn)) { myItemsListActive = true; onMyItemsFocused() } }
             // Back from the player: Live TV opens the player, so focus its menu item.
             focusPlayingChannel -> { tvMenuFocus.requestWhenReady(); onPlayingChannelFocused() }
             xtreamModel.vodFromDashboard || section == DashSection.IptvMovies || section == DashSection.IptvSeries -> Unit
