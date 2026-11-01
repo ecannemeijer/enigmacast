@@ -168,8 +168,9 @@ object TmdbJson {
     fun parsePerson(body: String): com.enigmacast.domain.films.TmdbPerson? {
         val root = obj(body) ?: return null
         val id = root.int("id") ?: return null
-        val credits = ((root["combined_credits"] as? JsonObject)?.get("cast") as? JsonArray)
+        fun creditsOf(part: String, keep: (JsonObject) -> Boolean) = ((root["combined_credits"] as? JsonObject)?.get(part) as? JsonArray)
             ?.mapNotNull { it as? JsonObject }.orEmpty()
+            .filter(keep)
             .mapNotNull { c ->
                 val series = when (c.str("media_type")) { "tv" -> true; "movie" -> false; else -> return@mapNotNull null }
                 val creditId = c.int("id") ?: return@mapNotNull null
@@ -191,6 +192,8 @@ object TmdbJson {
                     episodes = c.int("episode_count") ?: 0,
                 )
             }
+        val credits = creditsOf("cast") { true }
+        val directed = creditsOf("crew") { it.str("job") == "Director" }
         return com.enigmacast.domain.films.TmdbPerson(
             id = id,
             name = root.str("name").orEmpty(),
@@ -201,18 +204,24 @@ object TmdbJson {
             profilePath = root.str("profile_path"),
             knownFor = root.str("known_for_department"),
             credits = com.enigmacast.domain.films.PersonCredits.order(credits),
+            directed = com.enigmacast.domain.films.PersonCredits.order(directed),
         )
     }
 
     /** `/search/person`: the best-known match's id for [name] (old cached casts have no id). */
-    /** People found by name (Search's Actors row): actors first, most popular first, at most [limit]. */
+    /** People found by name (Search's people row): actors and directors (marked) first, most popular first, at most [limit]. */
     fun parsePeople(body: String, limit: Int = 12): List<com.enigmacast.domain.films.TmdbCastMember> {
         val results = (obj(body)?.get("results") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
         return results
             .filter { it.int("id") != null && it.str("name") != null }
-            .sortedWith(compareBy<JsonObject> { if (it.str("known_for_department") == "Acting") 0 else 1 }.thenByDescending { it.double("popularity") ?: 0.0 })
+            .sortedWith(compareBy<JsonObject> { if (it.str("known_for_department") in setOf("Acting", "Directing")) 0 else 1 }.thenByDescending { it.double("popularity") ?: 0.0 })
             .take(limit)
-            .map { com.enigmacast.domain.films.TmdbCastMember(it.str("name")!!, "", it.str("profile_path"), it.int("id")!!) }
+            .map {
+                com.enigmacast.domain.films.TmdbCastMember(
+                    it.str("name")!!, "", it.str("profile_path"), it.int("id")!!,
+                    director = it.str("known_for_department") == "Directing",
+                )
+            }
     }
 
     fun parsePersonSearch(body: String, name: String): Int? {

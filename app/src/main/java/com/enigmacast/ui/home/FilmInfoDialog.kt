@@ -234,8 +234,8 @@ fun FilmInfoDialog(
                 }
                 // A series page shows its episodes first, then the cast under them.
                 vod?.below?.invoke()
-                if (movie.cast.isNotEmpty()) {
-                    CastRow(movie.cast)
+                if (movie.cast.isNotEmpty() || movie.directors.isNotEmpty()) {
+                    CastRow(movie.cast, movie.directors)
                 }
             }
             if (showPlot) {
@@ -288,7 +288,12 @@ internal fun PlotDialog(title: String, plot: String, onClose: () -> Unit) {
  * there returns to the same actor card.
  */
 @Composable
-private fun CastRow(cast: List<TmdbCastMember>) {
+private fun CastRow(actors: List<TmdbCastMember>, directors: List<String> = emptyList()) {
+    // The directors lead the row as cards of their own: OK opens their page (what they directed).
+    val directorLabel = stringResource(R.string.home_director)
+    val cast = remember(actors, directors, directorLabel) {
+        directors.map { TmdbCastMember(it, directorLabel, null, director = true) } + actors
+    }
     var actorIndex by remember { mutableStateOf<Int?>(null) }
     var returnTo by remember { mutableStateOf<Int?>(null) }
     val focus = remember(cast) { List(cast.size) { FocusRequester() } }
@@ -364,8 +369,9 @@ internal fun CastCard(member: TmdbCastMember, modifier: Modifier = Modifier, onC
             }
         }
         Text(member.name, color = if (focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (member.character.isNotBlank()) {
-            Text(member.character, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val role = member.character.ifBlank { if (member.director) stringResource(R.string.home_director) else "" }
+        if (role.isNotBlank()) {
+            Text(role, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -441,8 +447,8 @@ fun RecordingInfoDialog(
                         }
                     }
                 }
-                if (movie.cast.isNotEmpty()) {
-                    CastRow(movie.cast)
+                if (movie.cast.isNotEmpty() || movie.directors.isNotEmpty()) {
+                    CastRow(movie.cast, movie.directors)
                 }
             }
             if (showPlot) PlotDialog(film.displayTitle, plot, onClose = { showPlot = false })
