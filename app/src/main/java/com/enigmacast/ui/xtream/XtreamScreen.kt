@@ -511,6 +511,10 @@ fun XtreamScreen(
                 val playing = model.playing
                 val vod = playing != null && (playing.episode != null || playing.item?.section == XtreamSection.MOVIES)
                 val repeat = e.nativeKeyEvent.repeatCount
+                // Every key while the banner shows keeps it up for its full time again (as on the own tuner).
+                if (com.enigmacast.domain.tuner.BannerTimer.restartsOnKey(bannerShown, quickBar, keyDown = true)) {
+                    bannerUntil = System.currentTimeMillis() + if (details) 10_000 else 5_000
+                }
                 when (val action = IptvPlayerKeys.action(code, bindings, bannerShown, bannerFromZap, vod)) {
                     is IptvKeyAction.Zap -> if (repeat % 4 == 0) {
                         if (model.pip.playing() && model.pip.swapped.value) model.pip.zap(action.step)
@@ -518,6 +522,7 @@ fun XtreamScreen(
                     }
                     IptvKeyAction.Banner -> if (repeat == 0 && model.pip.playing() && !panelOpen) model.pip.swap()
                     else if (repeat == 0 && model.playing != null) showBanner(fromZap = false)
+                    IptvKeyAction.OptionsBanner -> if (repeat == 0) showBanner(fromZap = false, withDetails = details)
                     // Right: the channel before this one (A → B → A …); with an inset it swaps, as before.
                     IptvKeyAction.PreviousChannel -> if (repeat == 0 && model.pip.playing() && !panelOpen) model.pip.swap()
                     else if (repeat == 0 && model.playing != null && model.zapPrevious()) showBanner(fromZap = true)
@@ -703,6 +708,7 @@ fun XtreamScreen(
                     Modifier.align(Alignment.BottomCenter),
                     showChannelBanner = !quickBar,
                     showIcons = !bannerFromZap || quickBar,
+                    fromZap = bannerFromZap,
                     onGuide = openPlayingGuide,
                     onSearch = onSearch,
                     onEquivalent = { quickBar = false; bannerUntil = 0L; model.openEquivalent() },
@@ -1340,6 +1346,8 @@ private fun IptvOsd(
     modifier: Modifier,
     showChannelBanner: Boolean = true,
     showIcons: Boolean = true,
+    /** The banner a zap brought up: the "OK: options" hint instead of the options hint. */
+    fromZap: Boolean = false,
     onGuide: () -> Unit,
     onSearch: () -> Unit,
     onEquivalent: () -> Unit,
@@ -1365,7 +1373,8 @@ private fun IptvOsd(
                 player = model.playerState,
                 tuner = com.enigmacast.live.TunerState(),
                 details = details,
-                optionsHint = !quickBar,
+                optionsHint = !fromZap && !quickBar,
+                zapHint = fromZap && !quickBar,
                 recording = false,
                 osdInfo = IptvOsdModel.INFO,
                 osdFields = IptvOsdModel.FIELDS,

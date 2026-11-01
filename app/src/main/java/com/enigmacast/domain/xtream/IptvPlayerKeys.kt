@@ -9,6 +9,8 @@ import com.enigmacast.domain.remote.PlayerAction
 sealed interface IptvKeyAction {
     data class Zap(val step: Int) : IptvKeyAction
     data object Banner : IptvKeyAction
+    /** OK on the banner a zap brought up: the info banner (Down then opens the options), no pause or list. */
+    data object OptionsBanner : IptvKeyAction
     /** Back to the live channel watched before this one (Right by default). */
     data object PreviousChannel : IptvKeyAction
     data object Details : IptvKeyAction
@@ -29,10 +31,11 @@ object IptvPlayerKeys {
     fun action(keyCode: Int, bindings: Bindings, banner: Boolean, bannerFromZap: Boolean, vod: Boolean): IptvKeyAction {
         if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && banner && !bannerFromZap) return IptvKeyAction.Options
         if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
-            return when {
-                !banner -> IptvKeyAction.Banner
-                vod -> IptvKeyAction.Pause
-                else -> IptvKeyAction.ChannelList
+            // The same decision as the own tuner (BannerOk): a zap banner turns into the info banner first.
+            return when (com.enigmacast.domain.tuner.BannerOk.decide(tunerTrouble = false, radio = vod, banner = banner, fromZap = bannerFromZap)) {
+                com.enigmacast.domain.tuner.BannerOk.Action.SHOW_BANNER -> IptvKeyAction.Banner
+                com.enigmacast.domain.tuner.BannerOk.Action.OPTIONS_BANNER -> IptvKeyAction.OptionsBanner
+                else -> if (vod) IptvKeyAction.Pause else IptvKeyAction.ChannelList
             }
         }
         return when (KeyBindings.lookup(bindings, keyCode, long = false)) {

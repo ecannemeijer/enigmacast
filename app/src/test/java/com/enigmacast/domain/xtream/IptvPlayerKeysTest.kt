@@ -28,6 +28,15 @@ class IptvPlayerKeysTest {
         assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_LEFT))
     }
 
+    @Test fun okOnTheZapBannerShowsTheInfoBannerThenDownOptionsThenOkAsBefore() {
+        assertEquals(IptvKeyAction.OptionsBanner, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = true))
+        // After that OK the banner is no longer a zap banner: Down = options, OK = the list as before.
+        assertEquals(IptvKeyAction.Options, a(KeyEvent.KEYCODE_DPAD_DOWN, banner = true, zap = false))
+        assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = false))
+        // A film or episode still pauses.
+        assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = true, vod = true))
+    }
+
     @Test fun rightGoesBackToThePreviousLiveChannel() {
         assertEquals(IptvKeyAction.PreviousChannel, a(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertEquals(IptvKeyAction.PreviousChannel, a(KeyEvent.KEYCODE_DPAD_RIGHT, banner = true, zap = true))
