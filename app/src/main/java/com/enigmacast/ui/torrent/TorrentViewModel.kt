@@ -576,10 +576,11 @@ class TorrentViewModel @Inject constructor(
             .setSelectUndeterminedTextLanguage(true)
             .build()
         EnigmaLog.subs("torrent player created")
+        val softwareAudio = com.enigmacast.playback.SoftwareAudio("torrent")
         ExoPlayer.Builder(context)
             // Read-ahead capped to the heap: Media3's default (~144 MB) does not fit many TV boxes.
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
-            .setRenderersFactory(com.enigmacast.ui.xtream.IptvRenderersFactory(context, audioSync, subtitleSync))
+            .setRenderersFactory(com.enigmacast.ui.xtream.IptvRenderersFactory(context, audioSync, subtitleSync, audio = softwareAudio))
             .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .build().also { p ->
@@ -633,6 +634,8 @@ class TorrentViewModel @Inject constructor(
                         if (externalCues == null && selectedExternalId == null) cues = if (textOn && !subtitlesHidden) cueGroup.cues else emptyList()
                     }
                     override fun onPlayerError(error: PlaybackException) {
+                        // The device cannot play this audio: FFmpeg, same position.
+                        if (softwareAudio.recover(error, p)) return
                         EnigmaLog.networkError("torrent playback: ${error.errorCodeName}")
                         // Broken off in the last seconds: the episode ended.
                         if (com.enigmacast.domain.player.UpNext.errorIsEnd(playerState.durationMs, playerState.positionMs) && advanceAtEnd()) {

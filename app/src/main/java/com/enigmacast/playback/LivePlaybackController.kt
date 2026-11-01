@@ -119,6 +119,8 @@ class LivePlaybackController @Inject constructor(
     }
 
     private var player: ExoPlayer? = null
+    /** Software audio (FFmpeg) after the device's audio path failed on this player. */
+    private var softwareAudio = SoftwareAudio("live")
     private var currentUrl: String? = null
     /** A recording file, not a live tuner stream. It must not be restarted when it ends. */
     private var filePlayback = false
@@ -898,9 +900,11 @@ class LivePlaybackController @Inject constructor(
         val compatibility = VideoOutput.compatibilityActive(settings.videoCompatibility, VideoQuirks.thisDevice)
         VideoOutput.surfaceView = surfaceView
         val decoderMode = settings.videoDecoder
+        val audio = SoftwareAudio("live").also { softwareAudio = it }
         val selector = MediaCodecSelector { mime, secure, tunneling ->
             val infos = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
-            if (!MimeTypes.isVideo(mime)) return@MediaCodecSelector infos
+            // After an audio failure: no device audio decoder, so FFmpeg decodes the track to PCM.
+            if (!MimeTypes.isVideo(mime)) return@MediaCodecSelector SoftwareAudioPolicy.audioDecoders(mime, audio.forced) { infos }
             val byName = infos.associateBy { it.name }
             val ordered = VideoOutput.order(decoderMode, infos.map { it.name to it.hardwareAccelerated }).mapNotNull { byName[it] }
             videoDecoders = maxOf(videoDecoders, ordered.size)
@@ -1264,6 +1268,8 @@ class LivePlaybackController @Inject constructor(
     private val listener = object : Player.Listener {
         override fun onPlayerError(error: PlaybackException) {
             if (StreamFailures.isCancellation(error)) return
+            // The device cannot play this audio (decoder or HDMI output failed): FFmpeg, same stream.
+            if (softwareAudio.recover(error, player)) return
             EnigmaLog.player("error ${error.errorCodeName} http=${httpStatus(error) ?: "-"}")
             ZapTiming.note("error", error.errorCodeName)
             if (internet) {
