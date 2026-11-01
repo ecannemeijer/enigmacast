@@ -1948,12 +1948,13 @@ class XtreamViewModel @Inject constructor(
             .setSelectUndeterminedTextLanguage(true)
             .setPreferredTextLanguages(*preferredText.toTypedArray())
             .build()
+        val softwareAudio = com.enigmacast.playback.SoftwareAudio("iptv")
         EnigmaLog.subs("iptv player created (text on, preferred ${preferredText.ifEmpty { listOf("-") }.joinToString()})")
         ExoPlayer.Builder(context)
             // Read-ahead capped to the heap (Media3's ~144 MB default does not fit many TV boxes,
             // and the picture-in-picture inset may play next to this player).
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
-            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync, audioBoost))
+            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync, audioBoost, softwareAudio))
             .setTrackSelector(selector)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
@@ -2017,6 +2018,8 @@ class XtreamViewModel @Inject constructor(
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
+                        // The device cannot play this audio: FFmpeg, same position.
+                        if (softwareAudio.recover(error, p)) return
                         onIptvPlaybackError(error)
                     }
                 })
@@ -2671,7 +2674,37 @@ internal class IptvRenderersFactory(
     private val subtitleSync: com.enigmacast.playback.SubtitleSyncOffset,
     /** Live audio boost; null for players that never boost (torrents). */
     private val boost: com.enigmacast.playback.AudioBoostGain? = null,
+    /** Software audio (FFmpeg) once the device's audio path failed; also used for formats no device decoder plays. */
+    audio: com.enigmacast.playback.SoftwareAudio = com.enigmacast.playback.SoftwareAudio("iptv"),
 ) : DefaultRenderersFactory(context) {
+    init {
+        // Video keeps hardware (with fallback between decoders); audio no decoder or passthrough
+        // handles (DTS, AC3, E-AC3 on e.g. Chromecast with Google TV) goes to FFmpeg.
+        setEnableDecoderFallback(true)
+        setMediaCodecSelector(audio.selector())
+        setExtensionRendererMode(EXTENSION_RENDERER_MODE_ON)
+    }
+
+    override fun buildAudioRenderers(
+        context: Context,
+        extensionRendererMode: Int,
+        mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+        enableDecoderFallback: Boolean,
+        audioSink: AudioSink,
+        eventHandler: android.os.Handler,
+        eventListener: androidx.media3.exoplayer.audio.AudioRendererEventListener,
+        out: ArrayList<Renderer>,
+    ) {
+        super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, audioSink, eventHandler, eventListener, out)
+        if (extensionRendererMode == EXTENSION_RENDERER_MODE_OFF) return
+        try {
+            // After the MediaCodec renderer: hardware decode and passthrough stay first.
+            out.add(io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer(eventHandler, eventListener, audioSink))
+        } catch (error: Exception) {
+            com.enigmacast.util.EnigmaLog.player("ffmpeg audio unavailable: ${error.javaClass.simpleName}")
+        }
+    }
+
     override fun buildTextRenderers(
         context: Context,
         output: TextOutput,
