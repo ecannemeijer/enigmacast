@@ -452,7 +452,7 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
                 EpisodeCard(e, model.resumeOf(e, show) > 0 && seen?.watched != true, seen, Modifier.focusProperties {
                     if (index == 0) left = FocusRequester.Cancel
                     if (index == list.lastIndex) right = FocusRequester.Cancel
-                    down = FocusRequester.Cancel
+                    // Down goes on to the cast row under the episodes (the info page scrolls).
                 }) {
                     model.holdEpisodes(episodes)
                     model.closeDetail()

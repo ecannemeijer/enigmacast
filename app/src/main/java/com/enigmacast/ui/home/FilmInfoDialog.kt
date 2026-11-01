@@ -36,7 +36,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -114,14 +116,19 @@ fun FilmInfoDialog(
                 ),
             )
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to EnigmaColors.Canvas)))
-            // Fixed layout, no vertical scrolling: everything fits on one 960×540 dp screen.
+            // Scrolls vertically: the header (full plot, buttons) first, then a series' seasons and
+            // episodes, then the cast. Down/Up move between those rows; the focused row is scrolled
+            // into view, and focus back on the buttons shows the whole header again.
+            val scroll = androidx.compose.foundation.rememberScrollState()
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
             Column(
                 Modifier
                     .fillMaxSize()
+                    .verticalScroll(scroll)
                     .padding(horizontal = EnigmaColors.SafeHorizontal, vertical = EnigmaColors.SafeVertical),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     Box(
                         Modifier
                             .width(150.dp)
@@ -140,13 +147,6 @@ fun FilmInfoDialog(
                         }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        // The texts give way (clipped at the bottom) when the space is short, so the
-                        // buttons under them always stay: a series page has the episodes and the cast
-                        // under this row, which pushed the buttons off the page.
-                        Column(
-                            Modifier.weight(1f, fill = false).clipToBounds(),
-                            verticalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
                         TitleOrLogo(film, height = 56.dp, fontSize = 28.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             RatingStars(movie.voteAverage, size = 13.sp)
@@ -171,10 +171,10 @@ fun FilmInfoDialog(
                         val genres = movie.genres.joinToString(" · ")
                         val line = listOf(genres, movie.tagline).filter { it.isNotBlank() }.joinToString("  —  ")
                         if (line.isNotBlank()) {
-                            Text(line, color = EnigmaColors.Cyan, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(line, color = EnigmaColors.Cyan, fontSize = 13.sp)
                         }
                         if (plot.isNotBlank()) {
-                            Text(plot, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                            Text(plot, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
                         }
                         if (movie.directors.isNotEmpty()) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -190,9 +190,8 @@ fun FilmInfoDialog(
                             if (recordingSet) Badge(stringResource(R.string.home_recording_set), LiveRed)
                         }
                         if (airing && vod == null) EnigmaProgramProgress(film.event.progress(nowSec), Modifier.width(320.dp))
-                        }
                         if (vod?.watch != null) com.enigmacast.ui.components.VodWatchLine(vod.watch)
-                        if (vod != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        if (vod != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp).onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(0) } }) {
                             if (vod.resumeLabel != null && vod.onResume != null) {
                                 EnigmaGlassButton(vod.resumeLabel, vod.onResume, Modifier.focusRequester(watchFocus))
                                 vod.onPlay?.let { EnigmaGlassButton(stringResource(R.string.iptv_play_start), it) }
@@ -211,7 +210,7 @@ fun FilmInfoDialog(
                                 if (vod.onPlay == null && vod.onResume == null) Modifier.focusRequester(watchFocus) else Modifier,
                             )
                         }
-                        if (vod == null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        if (vod == null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp).onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(0) } }) {
                             EnigmaGlassButton(
                                 stringResource(if (airing || ended) R.string.home_watch else R.string.home_watch_channel),
                                 onWatch,
@@ -297,7 +296,15 @@ private fun CastRow(cast: List<TmdbCastMember>) {
         Text(stringResource(R.string.home_cast), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
             itemsIndexed(cast, key = { _, it -> it.name + it.character }) { index, member ->
-                CastCard(member, Modifier.focusRequester(focus[index])) { actorIndex = index }
+                CastCard(
+                    member,
+                    Modifier.focusRequester(focus[index]).focusProperties {
+                        // The last row of the page: no way out sideways or down.
+                        if (index == 0) left = FocusRequester.Cancel
+                        if (index == cast.lastIndex) right = FocusRequester.Cancel
+                        down = FocusRequester.Cancel
+                    },
+                ) { actorIndex = index }
             }
         }
     }
