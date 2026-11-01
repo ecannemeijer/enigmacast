@@ -57,3 +57,9 @@ object BannerOk {
         else -> Action.SHOW_BANNER
     }
 }
+
+/** The live TV banner's hide timer. */
+object BannerTimer {
+    /** Any key pressed (key down) while the banner shows, outside the quick bar (which keeps it up), starts the timer over. */
+    fun restartsOnKey(banner: Boolean, quickBar: Boolean, keyDown: Boolean): Boolean = banner && !quickBar && keyDown
+}
