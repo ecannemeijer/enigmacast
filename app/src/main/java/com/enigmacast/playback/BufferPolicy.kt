@@ -84,3 +84,29 @@ class StarvedBuffer(private val afterMs: Long) {
 
     fun reset() { since = -1L }
 }
+
+/**
+ * Playing, but no new picture (or, without video, no position change) for [afterMs], whatever
+ * the player state does: a stream that flips between BUFFERING and READY while a trickle of
+ * unusable data comes in (e.g. a descrambling gap on the receiver) never stays starved or
+ * frozen long enough for [StarvedBuffer] / [FrozenPlayback]. True once; then it starts over.
+ */
+class StuckPlayback(private val afterMs: Long) {
+    private var since = -1L
+    private var last = Long.MIN_VALUE
+
+    /** [progress]: rendered frames with video, else the position. [active]: playing after a first start. */
+    fun update(active: Boolean, progress: Long, nowMs: Long): Boolean {
+        if (!active) { reset(); return false }
+        if (progress != last || since < 0) {
+            last = progress
+            since = nowMs
+            return false
+        }
+        if (nowMs - since < afterMs) return false
+        reset()
+        return true
+    }
+
+    fun reset() { since = -1L; last = Long.MIN_VALUE }
+}

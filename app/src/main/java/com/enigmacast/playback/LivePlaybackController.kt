@@ -430,6 +430,7 @@ class LivePlaybackController @Inject constructor(
         exo.playWhenReady = false
         exo.stop()
         exo.clearMediaItems()
+        stuck.reset()
         retireTimeshift()
         // The zap hold blocks player retries. Open the gate only now, then drop any socket
         // that is still listed, and only then ask the receiver for the new stream.
@@ -1046,6 +1047,7 @@ class LivePlaybackController @Inject constructor(
 
     private val starved = StarvedBuffer(STARVED_RECOVER_MS)
     private val frozen = FrozenPlayback(STARVED_RECOVER_MS)
+    private val stuck = StuckPlayback(STUCK_RECOVER_MS)
 
     /** One NO_PICTURE retry per request; [rescue] stays for the session once it showed a frame. */
     private var rescueTried = false
@@ -1073,9 +1075,20 @@ class LivePlaybackController @Inject constructor(
             nowMs = now,
         )
         val isStarved = starved.update(buffering, exo.isLoading, exo.totalBufferedDuration, now)
-        if (!isStarved && !isFrozen) return
+        // Picture stopped while the state flaps BUFFERING/READY (spinner on/off): a fresh start, as a zap.
+        val isStuck = !filePlayback && stuck.update(
+            active = wasReady && exo.playWhenReady && (ready || buffering),
+            progress = if (expectVideo) counters?.renderedOutputBufferCount?.toLong() ?: 0L else exo.currentPosition,
+            nowMs = now,
+        )
+        if (!isStarved && !isFrozen && !isStuck) return
         frozen.reset()
-        val what = if (isStarved) "buffer starved" else "playback frozen (ready, no progress)"
+        stuck.reset()
+        val what = when {
+            isStarved -> "buffer starved"
+            isFrozen -> "playback frozen (ready, no progress)"
+            else -> "playback stuck (no new picture, state ${if (buffering) "buffering" else "ready"})"
+        }
         EnigmaLog.player("$what (${exo.totalBufferedDuration} ms, not loading): ${if (filePlayback) "reload at position" else "reconnect"}")
         if (filePlayback) exo.seekTo(exo.currentPosition) else scheduleReconnect()
     }
@@ -1483,3 +1496,5 @@ private fun PlaybackSettings.withoutInPlaceOptions() = copy(
 
 private const val STATS_INTERVAL_MS = 1_000L
 private const val STARVED_RECOVER_MS = 6_000L
+/** No new picture this long while playing (any state): reconnect like a zap. */
+private const val STUCK_RECOVER_MS = 10_000L
