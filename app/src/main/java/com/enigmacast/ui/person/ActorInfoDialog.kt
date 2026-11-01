@@ -91,7 +91,9 @@ fun ActorInfoDialog(
         var returnTo by remember { mutableStateOf<Int?>(null) }
         val state = viewModel.state
         val person = (state as? ActorState.Ready)?.person
-        val credits = person?.credits.orEmpty()
+        // A director's page: what they directed, then (if any) what they played in; an actor's the other way round.
+        val rows = remember(person, member.director) { person?.let { PersonCredits.rows(it, member.director) }.orEmpty() }
+        val credits = remember(rows) { rows.flatMap { it.second } }
         val posterFocus = remember(credits) { List(credits.size) { FocusRequester() } }
         // Back from a title chosen on "where to watch": its poster chosen again, so that list reopens.
         LaunchedEffect(credits) {
@@ -160,19 +162,23 @@ fun ActorInfoDialog(
                         }
                     }
                 }
-                if (credits.isNotEmpty()) {
+                var offset = 0
+                rows.forEachIndexed { rowIndex, (directed, row) ->
+                    val start = offset
+                    offset += row.size
+                    val lastRow = rowIndex == rows.lastIndex
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.actor_filmography), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
+                        Text(stringResource(if (directed) R.string.actor_directed else R.string.actor_filmography), color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp, horizontal = 2.dp)) {
-                            itemsIndexed(credits, key = { _, it -> it.key }) { index, credit ->
+                            itemsIndexed(row, key = { _, it -> it.key }) { index, credit ->
                                 CreditCard(
                                     credit,
-                                    Modifier.focusRequester(posterFocus[index]).focusProperties {
+                                    Modifier.focusRequester(posterFocus[start + index]).focusProperties {
                                         if (index == 0) left = FocusRequester.Cancel
-                                        if (index == credits.lastIndex) right = FocusRequester.Cancel
-                                        down = FocusRequester.Cancel
+                                        if (index == row.lastIndex) right = FocusRequester.Cancel
+                                        if (lastRow) down = FocusRequester.Cancel
                                     },
-                                ) { chosen = index }
+                                ) { chosen = start + index }
                             }
                         }
                     }

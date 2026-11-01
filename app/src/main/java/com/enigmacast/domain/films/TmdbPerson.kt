@@ -11,7 +11,11 @@ data class TmdbPerson(
     val profilePath: String?,
     val knownFor: String?,
     val credits: List<TmdbCredit>,
-)
+    /** Films and series this person directed (combined_credits crew, job Director). */
+    val directed: List<TmdbCredit> = emptyList(),
+) {
+    val isDirector: Boolean get() = knownFor == "Directing"
+}
 
 /** One film or series an actor played in (TMDB combined_credits cast). */
 data class TmdbCredit(
@@ -35,6 +39,13 @@ data class TmdbCredit(
 }
 
 object PersonCredits {
+    /** The rows of a person page, in order: directed first for a director, else acting first; empty rows left out. */
+    fun rows(person: TmdbPerson, asDirector: Boolean): List<Pair<Boolean, List<TmdbCredit>>> {
+        val directedFirst = asDirector || person.isDirector || person.credits.isEmpty()
+        val rows = if (directedFirst) listOf(true to person.directed, false to person.credits) else listOf(false to person.credits, true to person.directed)
+        return rows.filter { it.second.isNotEmpty() }
+    }
+
     /** Talk shows and award galas list an actor "as Self": noise on the filmography. */
     private val selfRoles = Regex("""^(him|her|them)self\b|^self\b""", RegexOption.IGNORE_CASE)
 

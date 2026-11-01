@@ -1783,6 +1783,7 @@
     <string name="sync_server_reinstall_confirm">Mostra modulo di installazione</string>
     <string name="sync_server_search_again">Cerca di nuovo</string>
     <string name="actor_filmography">Film e serie</string>
+    <string name="actor_directed">Regia</string>
     <string name="actor_born">Nato il %1$s</string>
     <string name="actor_died">Morto il %1$s</string>
     <string name="actor_age">%1$d anni</string>
@@ -1803,5 +1804,5 @@
         <item quantity="one">%d fonte</item>
         <item quantity="other">%d fonti</item>
     </plurals>
-    <string name="search_actors">Attori</string>
+    <string name="search_actors">Attori e registi</string>
 </resources>

@@ -1774,6 +1774,7 @@
     <string name="sync_server_reinstall_confirm">Installatieformulier tonen</string>
     <string name="sync_server_search_again">Opnieuw zoeken</string>
     <string name="actor_filmography">Films en series</string>
+    <string name="actor_directed">Regie</string>
     <string name="actor_born">Geboren %1$s</string>
     <string name="actor_died">Overleden %1$s</string>
     <string name="actor_age">%1$d jaar</string>
@@ -1794,5 +1795,5 @@
         <item quantity="one">%d bron</item>
         <item quantity="other">%d bronnen</item>
     </plurals>
-    <string name="search_actors">Acteurs</string>
+    <string name="search_actors">Acteurs &amp; regisseurs</string>
 </resources>

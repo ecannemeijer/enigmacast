@@ -36,6 +36,8 @@ data class TmdbCastMember(
     val profilePath: String?,
     /** TMDB person id; 0 in films cached before it was stored (the actor page then searches by name). */
     val id: Int = 0,
+    /** A director (Search by name, or a film's director): the page leads with what they directed. */
+    val director: Boolean = false,
 )
 
 /** A guide film with its TMDB match. */

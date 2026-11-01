@@ -1779,6 +1779,7 @@
     <string name="sync_server_reinstall_confirm">Installationsformular anzeigen</string>
     <string name="sync_server_search_again">Erneut suchen</string>
     <string name="actor_filmography">Filme und Serien</string>
+    <string name="actor_directed">Regie</string>
     <string name="actor_born">Geboren am %1$s</string>
     <string name="actor_died">Gestorben am %1$s</string>
     <string name="actor_age">%1$d Jahre</string>
@@ -1799,5 +1800,5 @@
         <item quantity="one">%d Quelle</item>
         <item quantity="other">%d Quellen</item>
     </plurals>
-    <string name="search_actors">Schauspieler</string>
+    <string name="search_actors">Schauspieler &amp; Regisseure</string>
 </resources>
