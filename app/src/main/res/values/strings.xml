@@ -1401,6 +1401,7 @@
     <string name="search_iptv_live">IPTV Live</string>
     <string name="search_iptv_films">IPTV Films</string>
     <string name="search_iptv_series">IPTV Series</string>
+    <string name="search_torrents">Torrents</string>
     <string name="pip">Picture in picture</string>
     <string name="pip_step_source">Choose the source</string>
     <string name="pip_step_category">Choose a category</string>

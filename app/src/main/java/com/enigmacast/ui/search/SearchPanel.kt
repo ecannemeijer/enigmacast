@@ -87,6 +87,8 @@ fun SearchPanel(
     focusToken: Int = 0,
     onRetreatTo: ((FocusRequester) -> Unit)? = null,
     onXtream: (() -> Unit)? = null,
+    /** Opens the Torrent page (null: no Torrents row). */
+    onTorrent: (() -> Unit)? = null,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val fieldFocus = remember { FocusRequester() }
@@ -141,11 +143,11 @@ fun SearchPanel(
         com.enigmacast.domain.xtream.IptvLibraryRows.withWatch(viewModel.iptv.films, iptvResumes, iptvHistory)
     }
     var openActor by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.enigmacast.domain.films.TmdbCastMember?>(null) }
-    val iptvRows = if (onXtream == null) emptyList() else listOf(
+    val iptvRows = (if (onXtream == null) emptyList() else listOf(
         R.string.search_iptv_live to viewModel.iptv.live,
         R.string.search_iptv_films to iptvFilms,
         R.string.search_iptv_series to viewModel.iptv.series,
-    ).filter { it.second.isNotEmpty() }
+    ).filter { it.second.isNotEmpty() }) + torrentRow(viewModel, onTorrent)
     val people = viewModel.people
     val rowIds = remember(iptvRows, people) {
         (if (people.isEmpty()) emptyList() else listOf(ACTORS_ROW to people.map { actorKey(it) })) +
@@ -296,7 +298,10 @@ fun SearchPanel(
                         returnKey = searchReturn,
                         returnFocus = returnFocus,
                         firstFocus = firstFocus.takeIf { people.isEmpty() },
-                        onIptv = { title, card -> onXtream?.let { viewModel.openIptv(card, title.toString(), it) } },
+                        onIptv = { title, card ->
+                            if (title == R.string.search_torrents) onTorrent?.let { viewModel.openTorrent(card.key, title.toString(), it) }
+                            else onXtream?.let { viewModel.openIptv(card, title.toString(), it) }
+                        },
                         onHit = { hit ->
                             if ((hit.kind == SearchKind.NOW || hit.kind == SearchKind.LATER) && hit.event != null) viewModel.openProgramme(hit)
                             else viewModel.choose(hit, onPlayed, onBouquet, onPrepare)
@@ -488,3 +493,9 @@ internal fun SearchProgrammeDialogs(viewModel: SearchViewModel, onPlayed: () -> 
 /** Row id and card key of the Actors row in a Search origin ("search/actors/p<id>"). */
 private const val ACTORS_ROW = "actors"
 private fun actorKey(member: com.enigmacast.domain.films.TmdbCastMember): String = "p${member.id}"
+
+/** The Torrents row (after the IPTV rows) while the Torrent page is available and found something. */
+private fun torrentRow(viewModel: SearchViewModel, onTorrent: (() -> Unit)?): List<Pair<Int, List<com.enigmacast.domain.xtream.IptvLibraryCard>>> {
+    if (onTorrent == null || viewModel.torrents.isEmpty() || !viewModel.torrentsAllowed()) return emptyList()
+    return listOf(R.string.search_torrents to viewModel.torrents.map(com.enigmacast.domain.search.TorrentSearch::card))
+}
