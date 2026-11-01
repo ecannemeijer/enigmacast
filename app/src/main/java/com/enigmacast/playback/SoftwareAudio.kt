@@ -72,3 +72,31 @@ class SoftwareAudio(private val tag: String) {
         return true
     }
 }
+
+/** When encoded audio may go out over HDMI as is (passthrough / offload), and when it must be decoded. */
+object PassthroughPolicy {
+    /** Passthrough setting off, or the device's audio path already failed: decode everything to PCM. */
+    fun decodeOnly(passthroughSetting: Boolean, softwareForced: Boolean): Boolean = !passthroughSetting || softwareForced
+
+    /** The sink refuses this format as is (anything but PCM) when [decodeOnly]. */
+    fun refuses(mime: String?, decodeOnly: Boolean): Boolean = decodeOnly && mime != null && mime != MimeTypes.AUDIO_RAW
+}
+
+/**
+ * Audio output that refuses encoded audio (no passthrough or offload) while [decodeOnly] says so,
+ * read on every format check: the device decoder or FFmpeg then decodes the track to PCM.
+ */
+@OptIn(UnstableApi::class)
+class DecodeOnlyAudioOutputProvider(
+    delegate: androidx.media3.exoplayer.audio.AudioOutputProvider,
+    private val decodeOnly: () -> Boolean,
+) : androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider(delegate) {
+    override fun getFormatSupport(
+        formatConfig: androidx.media3.exoplayer.audio.AudioOutputProvider.FormatConfig,
+    ): androidx.media3.exoplayer.audio.AudioOutputProvider.FormatSupport {
+        if (PassthroughPolicy.refuses(formatConfig.format.sampleMimeType, decodeOnly())) {
+            return androidx.media3.exoplayer.audio.AudioOutputProvider.FormatSupport.UNSUPPORTED
+        }
+        return super.getFormatSupport(formatConfig)
+    }
+}

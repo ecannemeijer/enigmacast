@@ -336,7 +336,11 @@ class XtreamViewModel @Inject constructor(
     private var previousLive: XtreamItem? = null
     private var currentLive: XtreamItem? = null
 
+    /** HDMI passthrough setting for the IPTV players (off: audio decoded to PCM). */
+    @Volatile private var hdmiPassthrough = false
+
     init {
+        viewModelScope.launch { settingsRepository.settings.collect { hdmiPassthrough = it.playback.hdmiPassthrough } }
         // A level changed on another device (sync pull) applies to the channel that plays, too.
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(boostKey, boostStore.levels) { key, levels -> if (key.isBlank()) 0 else levels[key] ?: 0 }
@@ -1954,7 +1958,7 @@ class XtreamViewModel @Inject constructor(
             // Read-ahead capped to the heap (Media3's ~144 MB default does not fit many TV boxes,
             // and the picture-in-picture inset may play next to this player).
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
-            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync, audioBoost, softwareAudio))
+            .setRenderersFactory(IptvRenderersFactory(context, audioSync, subtitleSync, audioBoost, softwareAudio) { hdmiPassthrough })
             .setTrackSelector(selector)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
@@ -2675,7 +2679,9 @@ internal class IptvRenderersFactory(
     /** Live audio boost; null for players that never boost (torrents). */
     private val boost: com.enigmacast.playback.AudioBoostGain? = null,
     /** Software audio (FFmpeg) once the device's audio path failed; also used for formats no device decoder plays. */
-    audio: com.enigmacast.playback.SoftwareAudio = com.enigmacast.playback.SoftwareAudio("iptv"),
+    private val audio: com.enigmacast.playback.SoftwareAudio = com.enigmacast.playback.SoftwareAudio("iptv"),
+    /** The HDMI passthrough setting, read when a track's audio output is set up. */
+    private val passthrough: () -> Boolean = { false },
 ) : DefaultRenderersFactory(context) {
     init {
         // Video keeps hardware (with fallback between decoders); audio no decoder or passthrough
@@ -2720,9 +2726,14 @@ internal class IptvRenderersFactory(
         enableFloatOutput: Boolean,
         enableAudioOutputPlaybackParams: Boolean,
     ): AudioSink {
+        // Passthrough off (or the device's audio failed): no encoded audio to HDMI, decoded to PCM instead.
+        val output = com.enigmacast.playback.DecodeOnlyAudioOutputProvider(
+            androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider.Builder(context).build(),
+        ) { com.enigmacast.playback.PassthroughPolicy.decodeOnly(passthrough(), audio.forced) }
         val sink = DefaultAudioSink.Builder(context)
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+            .setAudioOutputProvider(output)
             .apply { boost?.let { setAudioProcessors(arrayOf(com.enigmacast.playback.BoostAudioProcessor(it))) } }
             .build()
         return com.enigmacast.playback.AudioSyncSink(sink, offsets)

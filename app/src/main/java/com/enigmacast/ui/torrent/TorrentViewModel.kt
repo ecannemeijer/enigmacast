@@ -135,7 +135,13 @@ class TorrentViewModel @Inject constructor(
 
     val scraperReady get() = scraper.status.value is ScraperStatus.Valid
 
-    init { reload(); loadGenres() }
+    /** HDMI passthrough setting for the torrent player (off: audio decoded to PCM). */
+    @Volatile private var hdmiPassthrough = false
+
+    init {
+        reload(); loadGenres()
+        viewModelScope.launch { settingsRepository.settings.collect { hdmiPassthrough = it.playback.hdmiPassthrough } }
+    }
 
     fun selectKind(k: TorrentKind) {
         if (k == kind) return
@@ -580,7 +586,7 @@ class TorrentViewModel @Inject constructor(
         ExoPlayer.Builder(context)
             // Read-ahead capped to the heap: Media3's default (~144 MB) does not fit many TV boxes.
             .setLoadControl(com.enigmacast.playback.PlayerBuffers.vod())
-            .setRenderersFactory(com.enigmacast.ui.xtream.IptvRenderersFactory(context, audioSync, subtitleSync, audio = softwareAudio))
+            .setRenderersFactory(com.enigmacast.ui.xtream.IptvRenderersFactory(context, audioSync, subtitleSync, audio = softwareAudio) { hdmiPassthrough })
             .setTrackSelector(selector)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .build().also { p ->
