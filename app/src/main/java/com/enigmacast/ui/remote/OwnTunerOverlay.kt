@@ -297,9 +297,12 @@ internal fun ChannelBanner(
     val current = events.firstOrNull { it.beginEpochSec <= nowSec && nowSec < it.beginEpochSec + it.durationSec }
         ?: guide?.currentEvent
     val next = current?.let { now -> events.firstOrNull { it.beginEpochSec >= now.beginEpochSec + now.durationSec } }
-    val loading = player.playbackState == "BUFFERING" ||
-        tuner.status == TunerStatus.CHECKING ||
-        tuner.status == TunerStatus.STARTING
+    // Debounced: a stream flapping between buffering and playing must not make the spinner flicker.
+    val loading = rememberDebouncedLoading(
+        player.playbackState == "BUFFERING" ||
+            tuner.status == TunerStatus.CHECKING ||
+            tuner.status == TunerStatus.STARTING,
+    )
     val layout = ActiveSkin.current.osd
     val info: @Composable () -> Unit = { BannerInfo(player, osdInfo, osdFields, osdSkin, optionsHint, zapHint) }
     when (layout) {

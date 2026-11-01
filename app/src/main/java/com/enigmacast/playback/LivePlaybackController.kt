@@ -1497,4 +1497,4 @@ private fun PlaybackSettings.withoutInPlaceOptions() = copy(
 private const val STATS_INTERVAL_MS = 1_000L
 private const val STARVED_RECOVER_MS = 6_000L
 /** No new picture this long while playing (any state): reconnect like a zap. */
-private const val STUCK_RECOVER_MS = 10_000L
+private const val STUCK_RECOVER_MS = 5_000L
