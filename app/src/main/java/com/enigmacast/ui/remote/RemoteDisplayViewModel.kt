@@ -1203,6 +1203,18 @@ class RemoteDisplayViewModel @Inject constructor(
         ui.ownTuner && !ui.playerState.filePlayback && ui.own.channel != null &&
             BouquetChannels.isRadioBouquet(ui.own.bouquetReference)
 
+    /** The banner's hide timer from the start, the banner itself unchanged. */
+    private fun restartBannerTimer() {
+        val ui = _ui.value
+        if (!ui.banner || ui.quickBar) return
+        bannerJob?.cancel()
+        bannerJob = viewModelScope.launch {
+            delay(if (ui.details) DETAILS_VISIBLE_MS else BANNER_VISIBLE_MS)
+            _ui.update { it.copy(banner = false, details = false) }
+            watchOsdInfo()
+        }
+    }
+
     private fun showBanner(details: Boolean = _ui.value.details, fromZap: Boolean = false) {
         if (playingRadio()) return
         ownSession.refreshGuideIfStale()
@@ -1320,6 +1332,8 @@ class RemoteDisplayViewModel @Inject constructor(
         // The quick bar is plain Compose focus (Left/Right between tiles, OK opens a picker).
         if (showPipPicker) return false
         if (pip.listOpen.value) return false
+        // Every key while the banner shows keeps it up for its full time again.
+        if (com.enigmacast.domain.tuner.BannerTimer.restartsOnKey(ui.banner, ui.quickBar, event.action == KeyEvent.ACTION_DOWN)) restartBannerTimer()
         if (ui.quickBar) {
             // Second Down on the options: recent channels, even when the row itself lost focus.
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
