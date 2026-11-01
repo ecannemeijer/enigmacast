@@ -1393,6 +1393,7 @@
     <string name="search_iptv_live">IPTV Live</string>
     <string name="search_iptv_films">IPTV Films</string>
     <string name="search_iptv_series">IPTV Series</string>
+    <string name="search_torrents">Torrents</string>
     <string name="pip">Beeld in beeld</string>
     <string name="pip_step_source">Kies de bron</string>
     <string name="pip_step_category">Kies een categorie</string>

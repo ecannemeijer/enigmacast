@@ -944,7 +944,11 @@ fun DashboardScreen(
                                 // Info page opened from Library or Home: back there, focus on that card.
                                 onLeave = { origin ->
                                     myItemsModel.returnTo(origin)
-                                    if (origin.startsWith("home/")) {
+                                    if (LibraryReturn.isSearch(origin)) {
+                                        // A Torrents result chosen in Search: Search again, focus on that card.
+                                        section = DashSection.Search
+                                        searchActive = true
+                                    } else if (origin.startsWith("home/")) {
                                         openSection(DashSection.Home)
                                     } else {
                                         myItemsListActive = true
@@ -1042,6 +1046,7 @@ fun DashboardScreen(
                         }
                         SearchPanel(
                             onXtream = onXtream,
+                            onTorrent = { enterSection(DashSection.Torrent) },
                             rowsFocusable = searchActive,
                             focusToken = searchEnterToken,
                             menuFocus = searchMenuFocus,

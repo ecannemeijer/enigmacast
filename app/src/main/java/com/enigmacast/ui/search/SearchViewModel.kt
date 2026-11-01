@@ -17,6 +17,7 @@ import com.enigmacast.live.SearchPlayer
 import com.enigmacast.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,7 +34,42 @@ class SearchViewModel @Inject constructor(
     private val gate: com.enigmacast.live.PremiumGate,
     private val tmdb: com.enigmacast.data.tmdb.TmdbHttp,
     private val country: com.enigmacast.live.CountryDetector,
+    private val scraper: com.enigmacast.data.torrent.ScraperRepository,
+    private val torrentLibrary: com.enigmacast.data.torrent.TorrentLibrary,
 ) : ViewModel() {
+    /** Torrents row: TMDB films and series for the query, only while the Torrent page is available. */
+    var torrents by mutableStateOf<List<com.enigmacast.domain.torrent.TmdbTitle>>(emptyList())
+        private set
+
+    /** Same rule as the menu: a valid scraper and Premium. */
+    fun torrentsAllowed(): Boolean = scraper.status.value is com.enigmacast.data.torrent.ScraperStatus.Valid &&
+        gate.allows(com.enigmacast.domain.account.PremiumFeature.TORRENT)
+
+    /** OK on a Torrents result: its Torrent info page; Back there comes back here, on this card. */
+    fun openTorrent(key: String, rowId: String, onTorrent: () -> Unit) {
+        val title = torrents.firstOrNull { it.key == key } ?: return
+        if (!gate.require(com.enigmacast.domain.account.PremiumFeature.TORRENT)) return
+        torrentLibrary.openRequest.value = com.enigmacast.domain.torrent.TorrentOpenRequest(
+            title, origin = com.enigmacast.domain.xtream.LibraryReturn.searchOrigin(rowId, key),
+        )
+        onTorrent()
+    }
+
+    private suspend fun findTorrents(text: String): List<com.enigmacast.domain.torrent.TmdbTitle> = try {
+        val q = text.trim()
+        if (q.length < com.enigmacast.domain.search.TorrentSearch.MIN_QUERY || !torrentsAllowed()) emptyList() else {
+            val language = java.util.Locale.getDefault().toLanguageTag()
+            kotlinx.coroutines.coroutineScope {
+                val films = async { com.enigmacast.domain.torrent.TorrentTmdb.parsePage(tmdb.searchPage(false, q, 1, language), com.enigmacast.domain.torrent.TorrentKind.MOVIE).items }
+                val series = async { com.enigmacast.domain.torrent.TorrentTmdb.parsePage(tmdb.searchPage(true, q, 1, language), com.enigmacast.domain.torrent.TorrentKind.TV).items }
+                com.enigmacast.domain.search.TorrentSearch.merge(films.await(), series.await())
+            }
+        }
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        emptyList()
+    }
     /** Actors whose name matches the query (TMDB people search); OK opens the actor page. */
     var people by mutableStateOf<List<com.enigmacast.domain.films.TmdbCastMember>>(emptyList())
         private set
@@ -130,6 +166,7 @@ class SearchViewModel @Inject constructor(
             results = SearchResults()
             iptv = com.enigmacast.domain.xtream.IptvSearchResults()
             people = emptyList()
+            torrents = emptyList()
             searching = false
             return
         }
@@ -137,6 +174,7 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             if (!immediate) delay(DEBOUNCE_MS)
             launch { iptv = iptvSearch.search(value) }
+            launch { torrents = findTorrents(SearchQuery.parse(value, nowSec).text.ifBlank { value }) }
             launch { people = findPeople(SearchQuery.parse(value, nowSec).text.ifBlank { value }) }
             val found = programmeSearch.search(value, recordings.items.value, System.currentTimeMillis() / 1000)
             results = found
