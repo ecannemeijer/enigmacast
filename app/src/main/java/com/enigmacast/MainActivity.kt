@@ -14,6 +14,9 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.platform.compositionContext
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
+import com.enigmacast.ui.animation.FastMotion
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
@@ -180,6 +183,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
+        // The window's animations run on FastMotion's clock, so Fast mode can stop all of them.
+        FastMotion.readSystem(this)
+        window.decorView.compositionContext =
+            window.decorView.createLifecycleAwareWindowRecomposer(FastMotion, lifecycle)
         setContent { EnigmaCastAppContent(appViewModel, ::chooseLanguage) }
         // A profile switch applies that profile's language (the activity restarts when it changes).
         lifecycleScope.launch {
@@ -586,6 +593,10 @@ class MainActivity : ComponentActivity() {
 private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (AppLanguage) -> Unit) {
     val navigationSounds by appViewModel.navigationSounds.collectAsState()
     val motionQuality by appViewModel.motionQuality.collectAsState()
+    val fastModeSetting by appViewModel.fastMode.collectAsState()
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    val lowEnd = androidx.compose.runtime.remember { FastMotion.isLowEnd(appContext) }
+    val fastMode = com.enigmacast.domain.device.FastModePolicy.isOn(fastModeSetting, lowEnd)
     val accessModel: com.enigmacast.ui.access.AccessViewModel = hiltViewModel()
     com.enigmacast.ui.access.AccessGate(
         model = accessModel,
@@ -599,7 +610,7 @@ private fun EnigmaCastAppContent(appViewModel: AppViewModel, onChooseLanguage: (
         },
     ) {
         CompositionLocalProvider(LocalNavigationSounds provides navigationSounds) {
-            ProvideEnigmaMotion(motionQuality) {
+            ProvideEnigmaMotion(motionQuality, fastMode) {
                 NavigationSoundsForWindow()
                 ProfileStartupGate(appViewModel) {
                     EnigmaCastAppBody(appViewModel, onChooseLanguage)

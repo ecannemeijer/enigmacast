@@ -31,8 +31,8 @@ object EnigmaMotion {
     const val OSD_MS = 220
     const val CARD_SCALE = 1.07f
 
-    fun spec(quality: MotionQuality, animatorScale: Float): MotionSpec {
-        if (animatorScale <= 0f) {
+    fun spec(quality: MotionQuality, animatorScale: Float, fast: Boolean = false): MotionSpec {
+        if (fast || animatorScale <= 0f) {
             return MotionSpec(
                 focusMs = 0,
                 cardMs = 0,

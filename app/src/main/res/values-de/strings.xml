@@ -603,6 +603,11 @@
     <string name="motion_quality_desc">Premium nutzt Leuchteffekte und volle Animation. Leistung behält dasselbe Layout mit kürzeren Bewegungen und ohne Leuchten.</string>
     <string name="motion_premium">Premium</string>
     <string name="motion_performance">Leistung</string>
+    <string name="fast_mode">Schnellmodus</string>
+    <string name="fast_mode_desc">Menüs, Fokus und Scrollen springen sofort an ihren Platz, ohne Animationen oder Leuchten. Hilft auf langsameren Fernsehern. Automatisch schaltet ihn auf einfachen Geräten ein.</string>
+    <string name="fast_mode_auto">Automatisch</string>
+    <string name="fast_mode_on">Ein</string>
+    <string name="fast_mode_off">Aus</string>
     <string name="home_continue">Weiterschauen</string>
     <string name="home_no_programme">Keine Sendungsinformationen</string>
     <string name="mini_player_fullscreen">OK: Vollbild</string>

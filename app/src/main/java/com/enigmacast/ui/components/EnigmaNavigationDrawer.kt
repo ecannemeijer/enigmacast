@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
@@ -77,18 +78,23 @@ fun EnigmaNavigationDrawer(
 ) {
     val spec = LocalMotionSpec.current
     val cursor = remember { NavCursorState() }
-    val width by animateDpAsState(
+    // Animated values are read in layout/placement only: the menu sliding open or the highlight
+    // gliding no longer recomposes the menu (and its items) on every frame.
+    val width = animateDpAsState(
         targetValue = if (expanded) 200.dp else 72.dp,
         animationSpec = if (spec.animate) tween(spec.sidebarMs) else snap(),
         label = "drawerWidth",
     )
     val travel = if (cursor.seen) spec.travelTween() else snap()
-    val top by animateFloatAsState(cursor.topPx, travel, label = "navCursorTop")
-    val pillHeight by animateFloatAsState(cursor.heightPx, travel, label = "navCursorHeight")
-    val density = LocalDensity.current
+    val top = animateFloatAsState(cursor.topPx, travel, label = "navCursorTop")
+    val pillHeight = animateFloatAsState(cursor.heightPx, travel, label = "navCursorHeight")
     Box(
         modifier
-            .width(width)
+            .layout { measurable, constraints ->
+                val w = width.value.roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
+                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                layout(w, placeable.height) { placeable.place(0, 0) }
+            }
             .fillMaxHeight()
             .clip(DrawerShape)
             // Flat skins: the gradient they always had. Glass skins: frosted glass over the photo.
@@ -98,13 +104,17 @@ fun EnigmaNavigationDrawer(
             else Modifier.skinSurface(com.enigmacast.ui.theme.EnigmaColors.Card, DrawerShape))
             .onGloballyPositioned { cursor.originY = it.positionInRoot().y },
     ) {
-        if (cursor.visible && pillHeight > 0f) {
+        if (cursor.visible && cursor.heightPx > 0f) {
             Box(
                 Modifier
-                    .offset { IntOffset(0, top.roundToInt()) }
+                    .offset { IntOffset(0, top.value.roundToInt()) }
                     .padding(horizontal = 8.dp)
                     .fillMaxWidth()
-                    .height(with(density) { pillHeight.toDp() })
+                    .layout { measurable, constraints ->
+                        val h = pillHeight.value.roundToInt().coerceAtLeast(0)
+                        val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                        layout(placeable.width, h) { placeable.place(0, 0) }
+                    }
                     .background(EnigmaColors.Focus, CursorShape),
             )
         }

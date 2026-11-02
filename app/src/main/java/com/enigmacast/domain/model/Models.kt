@@ -217,6 +217,14 @@ enum class MotionQuality {
     PERFORMANCE,
 }
 
+/** Settings › General › Fast mode: no animations. [AUTO] turns it on for low-end devices. */
+@Serializable
+enum class FastMode {
+    AUTO,
+    ON,
+    OFF,
+}
+
 /** The channel this device last watched in [StreamMode.OWN_TUNER]. */
 @Serializable
 data class LastChannel(
@@ -311,6 +319,8 @@ data class AppSettings(
      * Performance keeps the same layout with shorter motion and no glow.
      */
     val motionQuality: MotionQuality = MotionQuality.PREMIUM,
+    /** Fast mode: the menu, focus and scrolling jump instead of animating. Auto: on for low-end devices. */
+    val fastMode: FastMode = FastMode.AUTO,
     /** Settings › IPTV: where the IPTV page gets its lists. Logins of a playlist are in the SecretStore. */
     val iptvSource: IptvSourceMode = IptvSourceMode.XSTREAMITY,
     val iptvPlaylistKind: IptvPlaylistKind = IptvPlaylistKind.M3U,

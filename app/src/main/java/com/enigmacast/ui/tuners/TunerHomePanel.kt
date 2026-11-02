@@ -467,7 +467,7 @@ private fun tunerCardLook(focused: Boolean, shape: androidx.compose.ui.graphics.
     }
     return Modifier
         .then(if (dim) Modifier.alpha(0.6f) else Modifier)
-        .shadow(elevation, shape, clip = false, ambientColor = glow, spotColor = glow)
+        .then(if (com.enigmacast.ui.animation.LocalMotionSpec.current.shadows) Modifier.shadow(elevation, shape, clip = false, ambientColor = glow, spotColor = glow) else Modifier)
         .background(Brush.verticalGradient(listOf(top, bottom)), shape)
         .border(
             if (focused) 2.dp else 1.dp,

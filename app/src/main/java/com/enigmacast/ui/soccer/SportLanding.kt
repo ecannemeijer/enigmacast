@@ -214,7 +214,7 @@ private fun RegionCard(card: SportRegions.Card, modifier: Modifier, onClick: () 
             .width(180.dp)
             .height(150.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(if (focus.focused) 14.dp else 4.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .then(if (spec.shadows) Modifier.shadow(if (focus.focused) 14.dp else 4.dp, shape, ambientColor = Color.Black, spotColor = Color.Black) else Modifier)
             .clip(shape)
             // A light, slightly see-through surface over the photo: dark emblems stand out on it.
             .background(CardSurface.copy(alpha = if (focus.focused) 0.96f else 0.88f))
@@ -271,8 +271,9 @@ private fun RegionLogo(card: SportRegions.Card, size: Dp, onLight: Boolean = fal
         }
         return
     }
-    val request = remember(card.emblem) {
-        ImageRequest.Builder(context).data(card.emblem).crossfade(true).apply {
+    val fade = LocalMotionSpec.current.animate
+    val request = remember(card.emblem, fade) {
+        ImageRequest.Builder(context).data(card.emblem).crossfade(fade).apply {
             if (card.emblem.endsWith(".svg", ignoreCase = true)) decoderFactory(SvgDecoder.Factory())
         }.build()
     }

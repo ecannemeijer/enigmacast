@@ -1686,7 +1686,7 @@ private fun SettingsHub(
                     )
                     SettingPage.Appearance -> {
                         LanguageSettingsPanel(focusLanguage, onLanguageFocused, onChooseLanguage, pageContentFocus)
-                        GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, viewModel, remember { FocusRequester() })
+                        GeneralSettingsPanel(settings.navigationSounds, settings.motionQuality, settings.fastMode, viewModel, remember { FocusRequester() })
                         OsdSettingsPanel(
                             settings.osd.format,
                             settings.osd.fastPolling,
@@ -2067,6 +2067,7 @@ private fun OsdSettingsPanel(
 private fun GeneralSettingsPanel(
     navigationSounds: Boolean,
     motionQuality: com.enigmacast.domain.model.MotionQuality,
+    fastMode: com.enigmacast.domain.model.FastMode,
     viewModel: SettingsViewModel,
     contentFocus: FocusRequester,
 ) {
@@ -2089,6 +2090,18 @@ private fun GeneralSettingsPanel(
                     else com.enigmacast.domain.model.MotionQuality.PREMIUM,
                 )
             },
+        )
+        val modes = com.enigmacast.domain.model.FastMode.entries
+        ChoiceRow(
+            title = stringResource(R.string.fast_mode),
+            description = stringResource(R.string.fast_mode_desc),
+            options = listOf(
+                stringResource(R.string.fast_mode_auto),
+                stringResource(R.string.fast_mode_on),
+                stringResource(R.string.fast_mode_off),
+            ),
+            selectedIndex = modes.indexOf(fastMode),
+            onSelect = { index -> viewModel.setFastMode(modes[index]) },
         )
     }
 }
