@@ -1810,4 +1810,7 @@
         <item quantity="other">%d sources</item>
     </plurals>
     <string name="search_actors">Actors &amp; directors</string>
+    <string name="companion_app_title">Companion app</string>
+    <string name="companion_app_qr_desc">Scan this code with your phone to download and install the EnigmaCast Companion app.</string>
+    <string name="companion_app_qr_update">Updates afterwards install automatically from within the app.</string>
 </resources>

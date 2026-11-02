@@ -1802,4 +1802,7 @@
         <item quantity="other">%d bronnen</item>
     </plurals>
     <string name="search_actors">Acteurs &amp; regisseurs</string>
+    <string name="companion_app_title">Companion-app</string>
+    <string name="companion_app_qr_desc">Scan deze code met je telefoon om de EnigmaCast Companion-app te downloaden en te installeren.</string>
+    <string name="companion_app_qr_update">Updates worden daarna automatisch in de app gedownload en geïnstalleerd.</string>
 </resources>
