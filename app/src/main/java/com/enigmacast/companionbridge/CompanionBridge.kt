@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -126,6 +127,7 @@ class CompanionBridge @Inject constructor(
     private val photos: AvatarPhotos,
     private val pins: ProfilePinLock,
     private val cleanup: ProfileCleanup,
+    private val search: CompanionSearchHost,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val main = Handler(Looper.getMainLooper())
@@ -165,6 +167,8 @@ class CompanionBridge @Inject constructor(
 
     @Volatile
     private var iptvJsonState: JsonObject = emptyIptvJson()
+    @Volatile private var receiverJsonState: JsonObject? = null
+    @Volatile private var featuresJsonState: JsonObject? = null
 
     init {
         CompanionFormHub.host = formHost
@@ -197,6 +201,22 @@ class CompanionBridge @Inject constructor(
         }
         scope.launch {
             libraryHost.state.collect { server?.broadcastLibrary(libraryJson(it)) }
+        }
+        scope.launch {
+            // Premium has no flow of its own: the scraper state plus a light poll keeps the tab current.
+            kotlinx.coroutines.flow.merge(
+                search.scraperStatus.map { },
+                kotlinx.coroutines.flow.flow { while (true) { emit(Unit); kotlinx.coroutines.delay(30_000) } },
+            ).map { CompanionSearchHost.featuresJson(search.torrentsEnabled()) }.distinctUntilChanged().collect { json ->
+                featuresJsonState = json
+                server?.broadcast(CompanionProtocol.TYPE_STATE_FEATURES, json)
+            }
+        }
+        scope.launch {
+            settings.settings.map { ReceiverShare.json(it) }.distinctUntilChanged().collect { json ->
+                receiverJsonState = json
+                server?.broadcastReceiver(json)
+            }
         }
         scope.launch {
             combine(settings.settings, playlist.login, playlist.providers) { current, login, providers -> iptvJson(current, login, providers) }
@@ -313,6 +333,8 @@ class CompanionBridge @Inject constructor(
                 library = { libraryJson(libraryHost.state.value) },
                 recent = { recentJsonState },
                 iptv = { iptvJsonState },
+                receiver = { receiverJsonState },
+                features = { featuresJsonState },
                 onPhoto = { request -> savePhoto(request) },
                 onPhotoRead = { id -> readPhoto(id) },
                 onPhotoDelete = { id -> deletePhoto(id) },
@@ -972,6 +994,21 @@ class CompanionBridge @Inject constructor(
                 ack(envelope, started)
             }
             CompanionProtocol.TYPE_CMD_SYNC -> ack(envelope, started)
+            CompanionProtocol.TYPE_CMD_SEARCH -> {
+                val result = search.search(payload.string("query"), payload.string("scope").ifBlank { "all" })
+                server?.broadcast(CompanionProtocol.TYPE_STATE_SEARCH, result)
+                ack(envelope, started)
+            }
+            CompanionProtocol.TYPE_CMD_SEARCH_OPEN -> {
+                val opened = kotlinx.coroutines.withContext(Dispatchers.Main) { search.open(payload.string("key"), hooks) }
+                if (opened) ack(envelope, started) else error(envelope, CompanionProtocol.ERR_NOT_FOUND, "SEARCH_RESULT_GONE")
+            }
+            CompanionProtocol.TYPE_CMD_RECEIVER -> {
+                val json = ReceiverShare.json(settings.current())
+                receiverJsonState = json
+                server?.broadcastReceiver(json)
+                ack(envelope, started)
+            }
             else -> error(envelope, CompanionProtocol.ERR_NOT_FOUND, "Onbekend commando")
         }
     }

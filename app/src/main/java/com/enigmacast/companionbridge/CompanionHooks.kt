@@ -12,5 +12,15 @@ class CompanionHooks {
     var openSettings: () -> Unit = {}
 
     @Volatile
+    var openXtream: () -> Unit = {}
+
+    @Volatile
+    var openTorrent: () -> Unit = {}
+
+    /** Opens the TV's Search with this text (people, bouquets). */
+    @Volatile
+    var openSearch: (String) -> Unit = {}
+
+    @Volatile
     var screenName: () -> String = { "dashboard" }
 }

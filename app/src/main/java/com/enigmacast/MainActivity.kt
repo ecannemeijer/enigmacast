@@ -151,6 +151,9 @@ class MainActivity : ComponentActivity() {
             openHome = { if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.showDashboard() }
             openPlayer = { if (com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.startHotelLive() else appViewModel.openStream() }
             openSettings = { if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.openSettings() }
+            openXtream = { if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.openXtream() }
+            openTorrent = { if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.openTorrent() }
+            openSearch = { text -> if (!com.enigmacast.domain.hotel.HotelRuntime.active) appViewModel.openAssistantSearch(text) }
             screenName = { appViewModel.screen.name.lowercase() }
         }
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {

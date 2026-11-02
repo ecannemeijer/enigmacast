@@ -44,6 +44,8 @@ class CompanionServer(
     private val library: () -> JsonObject?,
     private val recent: () -> JsonObject?,
     private val iptv: () -> JsonObject?,
+    private val receiver: () -> JsonObject?,
+    private val features: () -> JsonObject?,
     private val onPhoto: suspend (PhotoRequest) -> PhotoResult,
     private val onPhotoRead: suspend (String) -> ByteArray?,
     private val onPhotoDelete: suspend (String) -> Boolean,
@@ -151,6 +153,23 @@ class CompanionServer(
     fun broadcastIptv(iptvJson: JsonObject) {
         if (!running) return
         val envelope = CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_IPTV, iptvJson)
+        clients.forEach { client ->
+            runCatching { client.send(envelope, client.nextSeq()) }.onFailure { clients.remove(client) }
+        }
+    }
+
+    /** Receiver config incl. login; only authenticated clients are in [clients]. Never logged. */
+    fun broadcastReceiver(receiverJson: JsonObject) {
+        if (!running) return
+        val envelope = CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_RECEIVER, receiverJson)
+        clients.forEach { client ->
+            runCatching { client.send(envelope, client.nextSeq()) }.onFailure { clients.remove(client) }
+        }
+    }
+
+    fun broadcast(type: String, json: JsonObject) {
+        if (!running) return
+        val envelope = CompanionProtocol.envelope(type, json)
         clients.forEach { client ->
             runCatching { client.send(envelope, client.nextSeq()) }.onFailure { clients.remove(client) }
         }
@@ -286,6 +305,8 @@ class CompanionServer(
             library()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_LIBRARY, it), 4) }
             recent()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_RECENT, it), 5) }
             iptv()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_IPTV, it), 6) }
+            receiver()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_RECEIVER, it), 7) }
+            features()?.let { client.send(CompanionProtocol.envelope(CompanionProtocol.TYPE_STATE_FEATURES, it), 8) }
         }
 
         var fragment: ByteArrayOutputStream? = null
