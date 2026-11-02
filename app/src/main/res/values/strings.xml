@@ -1819,4 +1819,6 @@
     <string name="companion_step_code">3. Open the Companion app and enter the code that appears here.</string>
     <string name="companion_popup_title">Enter this code in the Companion app</string>
     <string name="companion_paired_with">Paired with %1$s</string>
+    <string name="preview_no_picture">No picture from the receiver yet. Trying again…</string>
+    <string name="preview_no_connection">Cannot reach the receiver. Trying again…</string>
 </resources>

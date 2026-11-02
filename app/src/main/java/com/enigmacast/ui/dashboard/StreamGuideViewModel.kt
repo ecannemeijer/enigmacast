@@ -17,6 +17,7 @@ import com.enigmacast.domain.model.PowerAction
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.power.ReceiverPowerFlow
+import com.enigmacast.domain.power.StandbyCheck
 import com.enigmacast.domain.recording.forReceiver
 import com.enigmacast.domain.service.BouquetChannels
 import com.enigmacast.domain.service.LiveZapFlow
@@ -619,10 +620,11 @@ class StreamGuideViewModel @Inject constructor(
         viewModelScope.launch {
             if (shouldCheckPower) {
                 val receiver = settingsRepository.current().activeReceiver()
-                val standby = receiver?.let { box ->
-                    runCatching { infoSource.powerState(box).inStandby }.getOrNull()
-                }
+                val standby = receiver?.let { box -> confirmedStandby { infoSource.powerState(box).inStandby } }
                 if (standby == true) {
+                    // Nothing plays from a sleeping receiver: stop any stream so the preview shows no error.
+                    previewJob?.cancel()
+                    playback.stopForZap()
                     askWake = true
                     status = UiText.res(R.string.guide_receiver_off)
                     return@launch
@@ -633,6 +635,13 @@ class StreamGuideViewModel @Inject constructor(
             loadFollowing()
         }
     }
+
+    /**
+     * Standby only when `/api/powerstate` says so twice, 1.5 s apart: an error, timeout or
+     * a one-off reply while the receiver boots never opens the wake question.
+     */
+    private suspend fun confirmedStandby(read: suspend () -> Boolean): Boolean? =
+        StandbyCheck.confirmed(read)
 
     fun confirmWake() {
         if (waking) return

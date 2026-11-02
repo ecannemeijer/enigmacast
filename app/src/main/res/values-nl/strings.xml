@@ -1811,4 +1811,6 @@
     <string name="companion_step_code">3. Open de Companion-app en voer de code in die hier verschijnt.</string>
     <string name="companion_popup_title">Voer deze code in de Companion-app in</string>
     <string name="companion_paired_with">Gekoppeld met %1$s</string>
+    <string name="preview_no_picture">Nog geen beeld van de ontvanger. Opnieuw proberen…</string>
+    <string name="preview_no_connection">Ontvanger niet bereikbaar. Opnieuw proberen…</string>
 </resources>
