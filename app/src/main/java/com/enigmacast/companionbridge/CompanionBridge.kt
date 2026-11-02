@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -165,6 +166,7 @@ class CompanionBridge @Inject constructor(
 
     @Volatile
     private var iptvJsonState: JsonObject = emptyIptvJson()
+    @Volatile private var receiverJsonState: JsonObject? = null
 
     init {
         CompanionFormHub.host = formHost
@@ -197,6 +199,12 @@ class CompanionBridge @Inject constructor(
         }
         scope.launch {
             libraryHost.state.collect { server?.broadcastLibrary(libraryJson(it)) }
+        }
+        scope.launch {
+            settings.settings.map { ReceiverShare.json(it) }.distinctUntilChanged().collect { json ->
+                receiverJsonState = json
+                server?.broadcastReceiver(json)
+            }
         }
         scope.launch {
             combine(settings.settings, playlist.login, playlist.providers) { current, login, providers -> iptvJson(current, login, providers) }
@@ -313,6 +321,7 @@ class CompanionBridge @Inject constructor(
                 library = { libraryJson(libraryHost.state.value) },
                 recent = { recentJsonState },
                 iptv = { iptvJsonState },
+                receiver = { receiverJsonState },
                 onPhoto = { request -> savePhoto(request) },
                 onPhotoRead = { id -> readPhoto(id) },
                 onPhotoDelete = { id -> deletePhoto(id) },
@@ -972,6 +981,12 @@ class CompanionBridge @Inject constructor(
                 ack(envelope, started)
             }
             CompanionProtocol.TYPE_CMD_SYNC -> ack(envelope, started)
+            CompanionProtocol.TYPE_CMD_RECEIVER -> {
+                val json = ReceiverShare.json(settings.current())
+                receiverJsonState = json
+                server?.broadcastReceiver(json)
+                ack(envelope, started)
+            }
             else -> error(envelope, CompanionProtocol.ERR_NOT_FOUND, "Onbekend commando")
         }
     }

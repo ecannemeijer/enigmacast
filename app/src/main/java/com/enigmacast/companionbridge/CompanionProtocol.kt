@@ -48,6 +48,8 @@ object CompanionProtocol {
     const val TYPE_STATE_LIBRARY = "state.library"
     const val TYPE_STATE_RECENT = "state.recent"
     const val TYPE_STATE_IPTV = "state.iptv"
+    /** Enigma2 receivers incl. OpenWebif login: only to authenticated phones over TLS, never logged. */
+    const val TYPE_STATE_RECEIVER = "state.receiver"
     const val TYPE_FORM = "form"
     const val TYPE_TOAST = "toast"
     const val TYPE_CMD_KEY = "cmd.key"
@@ -62,6 +64,7 @@ object CompanionProtocol {
     const val TYPE_CMD_RECENT = "cmd.recent"
     const val TYPE_CMD_POWER = "cmd.power"
     const val TYPE_CMD_SYNC = "cmd.sync"
+    const val TYPE_CMD_RECEIVER = "cmd.receiver"
 
     const val ERR_PAIR_CODE = "PAIR_CODE_INVALID"
     const val ERR_PAIR_RATE = "PAIR_RATE_LIMITED"
@@ -85,7 +88,7 @@ object CompanionProtocol {
     }
 
     val CAPABILITIES = listOf(
-        "key", "nav", "zap", "volume", "player", "text.form", "settings", "photo", "profile", "library", "history", "iptv", "state", "power",
+        "key", "nav", "zap", "volume", "player", "text.form", "settings", "photo", "profile", "library", "history", "iptv", "state", "power", "receiver",
     )
 
     data class CompanionProfile(
