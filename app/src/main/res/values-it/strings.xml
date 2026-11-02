@@ -1811,4 +1811,7 @@
         <item quantity="other">%d fonti</item>
     </plurals>
     <string name="search_actors">Attori e registi</string>
+    <string name="companion_app_title">App Companion</string>
+    <string name="companion_app_qr_desc">Inquadra questo codice con il telefono per scaricare e installare l\'app EnigmaCast Companion.</string>
+    <string name="companion_app_qr_update">Gli aggiornamenti vengono poi scaricati e installati automaticamente dall\'app.</string>
 </resources>

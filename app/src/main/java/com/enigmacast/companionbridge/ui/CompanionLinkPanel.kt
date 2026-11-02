@@ -3,7 +3,12 @@ package com.enigmacast.companionbridge.ui
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import com.enigmacast.domain.profile.photo.QrCode
+import com.enigmacast.ui.profile.QrImage
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -46,6 +51,7 @@ fun CompanionLinkPanel(
         Modifier.focusGroup(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        CompanionDownloadCard()
         SettingsCard(stringResource(R.string.companion_title)) {
             ToggleRow(
                 title = stringResource(R.string.companion_enable),
@@ -132,6 +138,25 @@ fun CompanionLinkPanel(
             color = EnigmaColors.Subtle,
             fontSize = 11.sp,
         )
+    }
+}
+
+/** Stable link: GitHub always serves the newest Companion release under "latest". */
+internal const val COMPANION_APK_URL =
+    "https://github.com/ecannemeijer/enigmacast-companion/releases/latest/download/enigmacast-companion.apk"
+
+/** QR code to download the Companion app; not focusable, so D-pad focus is unchanged. */
+@Composable
+private fun CompanionDownloadCard() {
+    val qr = remember { runCatching { QrCode.encode(COMPANION_APK_URL.toByteArray()) }.getOrNull() } ?: return
+    SettingsCard(stringResource(R.string.companion_app_title)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            QrImage(qr, Modifier.size(170.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(stringResource(R.string.companion_app_qr_desc), color = EnigmaColors.Text, fontSize = 14.sp)
+                Text(stringResource(R.string.companion_app_qr_update), color = EnigmaColors.Subtle, fontSize = 12.sp)
+            }
+        }
     }
 }
 

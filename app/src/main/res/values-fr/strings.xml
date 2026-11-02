@@ -1811,4 +1811,7 @@
         <item quantity="other">%d sources</item>
     </plurals>
     <string name="search_actors">Acteurs et réalisateurs</string>
+    <string name="companion_app_title">Application Companion</string>
+    <string name="companion_app_qr_desc">Scannez ce code avec votre téléphone pour télécharger et installer l\'application EnigmaCast Companion.</string>
+    <string name="companion_app_qr_update">Les mises à jour sont ensuite téléchargées et installées automatiquement par l\'application.</string>
 </resources>
