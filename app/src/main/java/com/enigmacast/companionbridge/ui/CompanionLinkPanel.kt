@@ -1,6 +1,15 @@
 package com.enigmacast.companionbridge.ui
 
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.window.Dialog
+import com.enigmacast.companionbridge.CompanionDevice
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,19 +56,54 @@ fun CompanionLinkPanel(
     model: CompanionViewModel = hiltViewModel(),
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+    var popup by remember { mutableStateOf(false) }
+    var knownDevices by remember { mutableStateOf(emptySet<String>()) }
+    val codeView = remember { BringIntoViewRequester() }
     Column(
         Modifier.focusGroup(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         CompanionDownloadCard()
+        if (popup) {
+            PairingPopup(state = state, knownDevices = knownDevices, onDismiss = { popup = false })
+        }
         SettingsCard(stringResource(R.string.companion_title)) {
             ToggleRow(
                 title = stringResource(R.string.companion_enable),
                 checked = state.enabled,
-                onCheckedChange = model::setEnabled,
+                onCheckedChange = { on ->
+                    model.setEnabled(on)
+                    if (on) {
+                        knownDevices = state.devices.map { it.id }.toSet()
+                        popup = true
+                    }
+                },
                 modifier = Modifier.focusRequester(contentFocus),
                 description = stringResource(R.string.companion_enable_desc),
             )
+            if (state.running) {
+                val code = state.pairingCode
+                if (code != null) {
+                    PairingCode(code = code, expiresAt = state.pairingExpiresAt, modifier = Modifier.bringIntoViewRequester(codeView))
+                    LaunchedEffect(code) {
+                        delay(150)
+                        codeView.bringIntoView()
+                    }
+                    ValueRow(
+                        title = stringResource(R.string.companion_new_code),
+                        value = "",
+                        onClick = model::newCode,
+                        description = stringResource(R.string.companion_new_code_desc),
+                    )
+                } else {
+                    ValueRow(
+                        title = stringResource(R.string.companion_new_code),
+                        value = "",
+                        onClick = model::newCode,
+                        description = stringResource(R.string.companion_code_expired),
+                    )
+                }
+            }
             ValueRow(
                 title = stringResource(R.string.companion_status),
                 value = statusText(state),
@@ -84,23 +128,6 @@ fun CompanionLinkPanel(
                 )
             }
             if (state.running) {
-                val code = state.pairingCode
-                if (code != null) {
-                    PairingCode(code = code, expiresAt = state.pairingExpiresAt)
-                    ValueRow(
-                        title = stringResource(R.string.companion_new_code),
-                        value = "",
-                        onClick = model::newCode,
-                        description = stringResource(R.string.companion_new_code_desc),
-                    )
-                } else {
-                    ValueRow(
-                        title = stringResource(R.string.companion_new_code),
-                        value = "",
-                        onClick = model::newCode,
-                        description = stringResource(R.string.companion_code_expired),
-                    )
-                }
                 PinBlock(state.pin)
             }
             state.error?.let { message ->
@@ -149,11 +176,13 @@ internal const val COMPANION_APK_URL =
 @Composable
 private fun CompanionDownloadCard() {
     val qr = remember { runCatching { QrCode.encode(COMPANION_APK_URL.toByteArray()) }.getOrNull() } ?: return
-    SettingsCard(stringResource(R.string.companion_app_title)) {
+    SettingsCard(stringResource(R.string.companion_steps_title)) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            QrImage(qr, Modifier.size(170.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(stringResource(R.string.companion_app_qr_desc), color = EnigmaColors.Text, fontSize = 14.sp)
+            QrImage(qr, Modifier.size(130.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.companion_step_install), color = EnigmaColors.Text, fontSize = 14.sp)
+                Text(stringResource(R.string.companion_step_enable, stringResource(R.string.companion_enable)), color = EnigmaColors.Text, fontSize = 14.sp)
+                Text(stringResource(R.string.companion_step_code), color = EnigmaColors.Text, fontSize = 14.sp)
                 Text(stringResource(R.string.companion_app_qr_update), color = EnigmaColors.Subtle, fontSize = 12.sp)
             }
         }
@@ -169,7 +198,7 @@ private fun statusText(state: CompanionBridgeState): String = when {
 }
 
 @Composable
-private fun PairingCode(code: String, expiresAt: Long) {
+private fun PairingCode(code: String, expiresAt: Long, modifier: Modifier = Modifier, big: Boolean = false) {
     var remaining by remember(code) { mutableIntStateOf(0) }
     LaunchedEffect(code, expiresAt) {
         while (true) {
@@ -180,10 +209,10 @@ private fun PairingCode(code: String, expiresAt: Long) {
     Text(
         code,
         color = EnigmaColors.Text,
-        fontSize = 44.sp,
+        fontSize = if (big) 64.sp else 52.sp,
         fontWeight = FontWeight.SemiBold,
-        letterSpacing = 10.sp,
-        modifier = Modifier.padding(top = 10.dp),
+        letterSpacing = 12.sp,
+        modifier = modifier.padding(top = 10.dp),
     )
     Text(
         stringResource(R.string.companion_code_desc),
@@ -218,4 +247,59 @@ private fun PinBlock(pin: String) {
         color = EnigmaColors.Subtle,
         fontSize = 10.sp,
     )
+}
+
+/** The first phone that paired after the popup opened (not revoked, not known before). */
+internal fun newlyPaired(known: Set<String>, devices: List<CompanionDevice>): CompanionDevice? =
+    devices.firstOrNull { !it.revoked && it.id !in known }
+
+/**
+ * Popup after "allow pairing" is turned on: the code in large digits. Back or OK closes it;
+ * when a phone pairs it shows "Paired with ..." and closes by itself.
+ */
+@Composable
+private fun PairingPopup(state: CompanionBridgeState, knownDevices: Set<String>, onDismiss: () -> Unit) {
+    val paired = newlyPaired(knownDevices, state.devices)
+    val okFocus = remember { FocusRequester() }
+    LaunchedEffect(paired?.id) {
+        if (paired != null) {
+            delay(2_500)
+            onDismiss()
+        }
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .background(EnigmaColors.Card, RoundedCornerShape(16.dp))
+                .padding(28.dp)
+                .widthIn(min = 420.dp)
+                .focusGroup(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(stringResource(R.string.companion_popup_title), color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            val code = state.pairingCode
+            when {
+                paired != null -> Text(
+                    stringResource(R.string.companion_paired_with, paired.name),
+                    color = EnigmaColors.Success,
+                    fontSize = 18.sp,
+                )
+                state.running && code != null -> PairingCode(code = code, expiresAt = state.pairingExpiresAt, big = true)
+                else -> Text(stringResource(R.string.companion_starting), color = EnigmaColors.Muted, fontSize = 14.sp)
+            }
+            Box(Modifier.widthIn(max = 240.dp)) {
+                ValueRow(
+                    title = stringResource(R.string.ok),
+                    value = "",
+                    onClick = onDismiss,
+                    modifier = Modifier.focusRequester(okFocus),
+                )
+            }
+        }
+        LaunchedEffect(Unit) {
+            delay(50)
+            runCatching { okFocus.requestFocus() }
+        }
+    }
 }
