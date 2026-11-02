@@ -37,3 +37,19 @@ class ReceiverShareTest {
         assertEquals("cmd.receiver", CompanionProtocol.TYPE_CMD_RECEIVER)
     }
 }
+
+class CompanionSearchProtocolTest {
+    @Test
+    fun featuresCarryTheTorrentsFlag() {
+        assertEquals("true", CompanionSearchHost.featuresJson(true)["torrents"]!!.jsonPrimitive.content)
+        assertEquals("false", CompanionSearchHost.featuresJson(false)["torrents"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun searchTypesMatchTheCompanion() {
+        assertEquals("cmd.search", CompanionProtocol.TYPE_CMD_SEARCH)
+        assertEquals("cmd.search.open", CompanionProtocol.TYPE_CMD_SEARCH_OPEN)
+        assertEquals("state.search", CompanionProtocol.TYPE_STATE_SEARCH)
+        assertEquals("state.features", CompanionProtocol.TYPE_STATE_FEATURES)
+    }
+}
