@@ -127,6 +127,11 @@ class AppViewModel @Inject constructor(
         .map { it.motionQuality }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, MotionQuality.PREMIUM)
+    /** Settings › General › Fast mode. */
+    val fastMode: StateFlow<com.enigmacast.domain.model.FastMode> = settingsRepository.settings
+        .map { it.fastMode }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.enigmacast.domain.model.FastMode.AUTO)
     var streamRunning by mutableStateOf(false)
         private set
     var updatePrompt by mutableStateOf<UpdatePrompt?>(null)

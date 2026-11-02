@@ -120,6 +120,7 @@ class SettingsViewModel @Inject constructor(
     fun setSkin(id: com.enigmacast.domain.model.OsdSkinId) = update { it.copy(osdSkin = id) }
     fun setNavigationSounds(enabled: Boolean) = update { it.copy(navigationSounds = enabled) }
     fun setMotionQuality(quality: MotionQuality) = update { it.copy(motionQuality = quality) }
+    fun setFastMode(mode: com.enigmacast.domain.model.FastMode) = update { it.copy(fastMode = mode) }
     fun setOsdInfoFields(fields: OsdInfoFields) = update { it.copy(osdInfo = fields) }
     fun setOsdTransparency(percent: Int) = update {
         it.copy(osd = it.osd.copy(transparencyPercent = percent.coerceIn(0, 100)))

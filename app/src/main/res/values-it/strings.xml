@@ -603,6 +603,11 @@
     <string name="motion_quality_desc">Premium usa bagliori e animazioni complete. Prestazioni mantiene lo stesso layout con animazioni più brevi e senza bagliori.</string>
     <string name="motion_premium">Premium</string>
     <string name="motion_performance">Prestazioni</string>
+    <string name="fast_mode">Modalità veloce</string>
+    <string name="fast_mode_desc">Menu, focus e scorrimento saltano subito al loro posto, senza animazioni né bagliori. Aiuta sui televisori più lenti. Automatica la attiva sui dispositivi meno potenti.</string>
+    <string name="fast_mode_auto">Automatica</string>
+    <string name="fast_mode_on">Attiva</string>
+    <string name="fast_mode_off">Disattiva</string>
     <string name="home_continue">Continua a guardare</string>
     <string name="home_no_programme">Nessuna informazione sul programma</string>
     <string name="mini_player_fullscreen">OK: schermo intero</string>

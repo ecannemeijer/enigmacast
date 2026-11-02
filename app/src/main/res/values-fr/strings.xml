@@ -603,6 +603,11 @@
     <string name="motion_quality_desc">Premium utilise des halos et des animations complètes. Performance garde la même mise en page avec des animations plus courtes et sans halo.</string>
     <string name="motion_premium">Premium</string>
     <string name="motion_performance">Performance</string>
+    <string name="fast_mode">Mode rapide</string>
+    <string name="fast_mode_desc">Les menus, le focus et le défilement vont directement à leur place, sans animations ni halo. Utile sur les téléviseurs plus lents. Automatique l\'active sur les appareils d\'entrée de gamme.</string>
+    <string name="fast_mode_auto">Automatique</string>
+    <string name="fast_mode_on">Activé</string>
+    <string name="fast_mode_off">Désactivé</string>
     <string name="home_continue">Reprendre</string>
     <string name="home_no_programme">Aucune info sur le programme</string>
     <string name="mini_player_fullscreen">OK : plein écran</string>

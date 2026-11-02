@@ -607,6 +607,11 @@
     <string name="motion_quality_desc">Premium uses glow and full animation. Performance keeps the same layout with shorter motion and no glow.</string>
     <string name="motion_premium">Premium</string>
     <string name="motion_performance">Performance</string>
+    <string name="fast_mode">Fast mode</string>
+    <string name="fast_mode_desc">Menus, focus and scrolling jump straight to their place without animations or glow. Helps on slower TVs. Auto turns it on for low-end devices.</string>
+    <string name="fast_mode_auto">Auto</string>
+    <string name="fast_mode_on">On</string>
+    <string name="fast_mode_off">Off</string>
     <string name="home_continue">Continue</string>
     <string name="home_no_programme">No programme information</string>
     <string name="mini_player_fullscreen">OK: full screen</string>

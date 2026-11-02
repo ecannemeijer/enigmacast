@@ -604,6 +604,11 @@
     <string name="motion_quality_desc">Premium gebruikt gloed en volledige animatie. Prestatie houdt dezelfde indeling, met kortere beweging en zonder gloed.</string>
     <string name="motion_premium">Premium</string>
     <string name="motion_performance">Prestatie</string>
+    <string name="fast_mode">Snelle modus</string>
+    <string name="fast_mode_desc">Menu\'s, focus en scrollen springen direct naar hun plek, zonder animaties of gloed. Helpt op tragere tv\'s. Automatisch zet het aan op eenvoudige apparaten.</string>
+    <string name="fast_mode_auto">Automatisch</string>
+    <string name="fast_mode_on">Aan</string>
+    <string name="fast_mode_off">Uit</string>
     <string name="home_continue">Verder kijken</string>
     <string name="home_no_programme">Geen programmainformatie</string>
     <string name="mini_player_fullscreen">OK: volledig scherm</string>

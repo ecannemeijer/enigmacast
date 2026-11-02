@@ -530,13 +530,14 @@ internal fun PosterCard(
             if (poster != null && !failed) {
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val density = androidx.compose.ui.platform.LocalDensity.current
-                val request = remember(poster) {
+                val fade = com.enigmacast.ui.animation.LocalMotionSpec.current.animate
+                val request = remember(poster, fade) {
                     // Decoded at card size (playlist covers are often full-size originals), faded in.
                     val w = with(density) { CARD_WIDTH_DP.dp.roundToPx() }
                     coil3.request.ImageRequest.Builder(context)
                         .data(TmdbJson.image(poster, "w342"))
                         .size(w, (w * 1.5f).toInt())
-                        .crossfade(true)
+                        .crossfade(fade)
                         .build()
                 }
                 AsyncImage(
