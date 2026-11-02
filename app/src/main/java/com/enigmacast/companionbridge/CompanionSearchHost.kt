@@ -88,7 +88,7 @@ class CompanionSearchHost @Inject constructor(
             sections += "torrents" to torrents.await().map { t ->
                 val key = "t:${t.key}"
                 targets[key] = Target.Torrent(t)
-                key to item(key, t.title, listOfNotNull(t.year?.toString(), if (t.kind == TorrentKind.TV) "series" else "film").joinToString(" · "), image(t.poster))
+                key to item(key, t.title, t.year?.toString().orEmpty(), image(t.poster))
             }
         }
         return buildJsonObject {
