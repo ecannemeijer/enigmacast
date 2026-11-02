@@ -1820,4 +1820,6 @@
     <string name="companion_step_code">3. Ouvrez l\'application Companion et saisissez le code qui s\'affiche ici.</string>
     <string name="companion_popup_title">Saisissez ce code dans l\'application Companion</string>
     <string name="companion_paired_with">Connecté à %1$s</string>
+    <string name="preview_no_picture">Pas encore d\'image du récepteur. Nouvel essai…</string>
+    <string name="preview_no_connection">Récepteur injoignable. Nouvel essai…</string>
 </resources>

@@ -2235,10 +2235,10 @@ internal fun MiniStreamPlayer(
                 )
             }
         }
-        val error = ui.playerState.error
-        if (!error.isNullOrBlank()) {
+        val error = com.enigmacast.playback.PreviewErrorText.forError(ui.playerState.error)
+        if (error != null) {
             Text(
-                error,
+                stringResource(error),
                 color = EnigmaColors.Accent,
                 fontSize = 11.sp,
                 maxLines = 2,
