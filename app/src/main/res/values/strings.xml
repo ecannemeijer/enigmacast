@@ -1813,4 +1813,10 @@
     <string name="companion_app_title">Companion app</string>
     <string name="companion_app_qr_desc">Scan this code with your phone to download and install the EnigmaCast Companion app.</string>
     <string name="companion_app_qr_update">Updates afterwards install automatically from within the app.</string>
+    <string name="companion_steps_title">Connect your phone in 3 steps</string>
+    <string name="companion_step_install">1. Scan the QR code with your phone and install EnigmaCast Companion.</string>
+    <string name="companion_step_enable">2. Turn on “%1$s” below.</string>
+    <string name="companion_step_code">3. Open the Companion app and enter the code that appears here.</string>
+    <string name="companion_popup_title">Enter this code in the Companion app</string>
+    <string name="companion_paired_with">Paired with %1$s</string>
 </resources>
