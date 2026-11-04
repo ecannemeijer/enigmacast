@@ -142,7 +142,7 @@ private fun ActivityCard(view: ActivityView) {
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             when (view) {
-                is ActivityView.Running -> CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 2.5.dp, modifier = Modifier.size(20.dp))
+                is ActivityView.Running -> com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 2.5.dp, modifier = Modifier.size(20.dp))
                 ActivityView.Done -> Text("✓", color = EnigmaColors.Success, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
                 is ActivityView.Failed -> Text("!", color = EnigmaColors.Danger, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
             }
@@ -164,7 +164,7 @@ private fun ActivityCard(view: ActivityView) {
             val barModifier = Modifier.fillMaxWidth().height(4.dp)
             val fraction = view.fraction
             if (fraction == null) {
-                LinearProgressIndicator(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
+                com.enigmacast.ui.components.EnigmaIndeterminateBar(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
             } else {
                 val animated by animateFloatAsState(fraction, label = "activity")
                 LinearProgressIndicator(progress = { animated }, modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)

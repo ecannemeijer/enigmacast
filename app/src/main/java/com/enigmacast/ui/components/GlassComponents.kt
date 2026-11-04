@@ -259,26 +259,12 @@ fun EnigmaChannelCard(
 
 @Composable
 fun EnigmaLoadingIndicator(modifier: Modifier = Modifier) {
-    val spec = LocalMotionSpec.current
-    if (!spec.animate) {
-        Box(
-            modifier
-                .size(16.dp)
-                .clip(skinShape(8.dp))
-                .background(EnigmaColors.Accent),
-        )
-        return
-    }
-    val angle by rememberInfiniteTransition(label = "loading").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
-        label = "loadingSpin",
-    )
+    // Driven by the frame clock, so it keeps turning in Fast mode too (it used to become a block).
+    val angle by rememberLoadingPhase(900L)
     Box(
         modifier
             .size(18.dp)
-            .graphicsLayer { rotationZ = angle }
+            .graphicsLayer { rotationZ = angle * 360f }
             .border(2.dp, Brush.sweepGradient(listOf(Color.Transparent, EnigmaColors.Cyan, EnigmaColors.Accent)), skinShape(9.dp)),
     )
 }

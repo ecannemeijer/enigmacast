@@ -136,7 +136,7 @@ private fun AutodetectDialog(
             when (state) {
                 AutodetectState.Searching -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(24.dp))
+                        com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(24.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             if (wizard) {
                                 Text(stringResource(R.string.setup_autodetect_searching), color = EnigmaColors.Text, fontSize = lead, lineHeight = 23.sp)
