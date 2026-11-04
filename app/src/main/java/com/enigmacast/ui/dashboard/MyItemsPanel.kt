@@ -540,7 +540,7 @@ internal fun IptvCardDialogs(viewModel: MyItemsViewModel, onXtream: () -> Unit, 
 
 /**
  * An IPTV card in the recordings' poster style. OK opens it (My Items: the info page); Menu or holding OK opens
- * the options on release (Play / Info / remove from favorites or Continue watching).
+ * the options while still held (Play / Info / remove from favorites or Continue watching).
  */
 @Composable
 internal fun IptvCard(
