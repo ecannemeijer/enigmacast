@@ -1,5 +1,6 @@
 package com.enigmacast.ui.remote
 
+import androidx.compose.ui.composed
 import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
@@ -157,7 +158,9 @@ fun QuickOptionsBar(
     }
     LazyRow(
         state = rowState,
-        modifier = modifier.onPreviewKeyEvent { event ->
+        modifier = modifier
+            .then(if (interactive) Modifier.osdPanel(ui.panelTransparency) else Modifier)
+            .onPreviewKeyEvent { event ->
             if (interactive && event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
                 actions.onRecentBar()
                 true
@@ -646,3 +649,24 @@ private class AboveAnchor(private val gapPx: Int, private val marginPx: Int) : P
 private fun boostValue(level: Int): String =
     if (level <= 0) stringResource(R.string.quick_boost_off)
     else stringResource(R.string.quick_boost_level, level, com.enigmacast.domain.player.AudioBoost.MAX, com.enigmacast.domain.player.AudioBoost.db(level))
+
+
+/**
+ * The OSD's own skin panel behind the options row once it has the focus, so the icons stay
+ * readable over bright video: same fill (gradient for the glass/calm skins), transparency,
+ * edge, sheen and corner radius as the channel banner.
+ */
+private fun Modifier.osdPanel(transparencyPercent: Int): Modifier = composed {
+    val skin = com.enigmacast.ui.theme.ActiveSkin.current
+    val scrim = com.enigmacast.ui.theme.EnigmaColors.scrim(transparencyPercent)
+    val p = skin.palette
+    val shape = com.enigmacast.ui.theme.skinShape(16.dp)
+    val fill = androidx.compose.ui.graphics.Brush.linearGradient(
+        listOf(com.enigmacast.ui.theme.EnigmaColors.scrimOf(p.osdFill, scrim), com.enigmacast.ui.theme.EnigmaColors.scrimOf(p.osdFillEnd, scrim)),
+    )
+    this
+        .background(fill, shape)
+        .then(if (skin.osd == com.enigmacast.ui.theme.OsdLayout.MINIMAL) Modifier else Modifier.border(1.dp, p.osdEdge, shape))
+        .glassSheen(shape)
+        .padding(vertical = 6.dp)
+}
