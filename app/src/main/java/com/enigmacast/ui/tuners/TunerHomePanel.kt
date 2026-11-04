@@ -88,6 +88,8 @@ private val CardShape get() = skinShape(12.dp)
 /** One tuner card. Tall enough for the channel, programme and "This TV" line. Two rows set the player height. */
 private val TunerCardHeight = 96.dp
 private val TunerGap = 8.dp
+/** As DashboardScreen's MiniPlayerHeight (TV guide). */
+private val HomeMiniPlayerHeight = 158.dp
 
 /**
  * Home: one card per tuner (who uses it, which channel, programme) and what is scheduled
@@ -360,9 +362,10 @@ private fun TunersRow(
         if (showStream) {
             val streamTv = rememberTvFocus()
             val focusable = streamFocus != null
+            // Same size and frame as the TV guide's mini player: 158 dp high, 16:9, square black frame.
             Box(
                 Modifier
-                    .fillMaxHeight()
+                    .height(HomeMiniPlayerHeight)
                     .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
                     .then(
                         if (streamFocus == null) Modifier else Modifier
@@ -377,9 +380,8 @@ private fun TunersRow(
                             .then(left)
                             .tvClick(streamTv, onStreamOk),
                     )
-                    .clip(skinShape(8.dp))
                     .background(Color.Black)
-                    .border(if (focusable && streamTv.focused) 3.dp else 0.dp, if (focusable && streamTv.focused) EnigmaColors.Cyan else Color.Transparent, skinShape(8.dp)),
+                    .border(if (focusable && streamTv.focused) 3.dp else 0.dp, if (focusable && streamTv.focused) EnigmaColors.Cyan else Color.Transparent),
             ) {
                 com.enigmacast.ui.dashboard.MiniStreamPlayer(Modifier.fillMaxSize())
                 if (focusable && streamTv.focused) {
