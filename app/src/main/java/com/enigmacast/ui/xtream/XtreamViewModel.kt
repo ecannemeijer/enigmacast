@@ -2035,6 +2035,19 @@ class XtreamViewModel @Inject constructor(
      * The panel closed without a channel chosen: the category that was only browsed goes away and
      * the playing channel's one is shown again (the panel reopens there, on that channel).
      */
+    /**
+     * A live channel plays but the browser was left on Films/Series (an info page, a grid): back
+     * to the live section on the playing channel's category, so Left opens the channel list and
+     * not the film list. True when the live categories have to load first.
+     */
+    fun returnToPlayingLive(): Boolean {
+        if (playing?.item?.section != XtreamSection.LIVE) return false
+        if (detail != null) closeDetail()
+        if (section != XtreamSection.LIVE) { selectSection(XtreamSection.LIVE); return true }
+        restorePlayingCategory()
+        return false
+    }
+
     fun restorePlayingCategory() {
         if (section != XtreamSection.LIVE || series != null) return
         if (pendingCategory != null) {
