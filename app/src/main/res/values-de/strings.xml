@@ -1818,4 +1818,21 @@
     <string name="companion_paired_with">Verbunden mit %1$s</string>
     <string name="preview_no_picture">Noch kein Bild vom Receiver. Neuer Versuch…</string>
     <string name="preview_no_connection">Receiver nicht erreichbar. Neuer Versuch…</string>
+    <string name="iptv_variant_fallback">Funktioniert nicht, gewechselt zu %1$s</string>
+    <string name="iptv_variant_archive">Replay</string>
+    <string name="iptv_channel_hide">Ausblenden</string>
+    <string name="iptv_channel_move">Verschieben</string>
+    <string name="iptv_channel_quality">Qualität wählen</string>
+    <string name="iptv_channel_show">Anzeigen</string>
+    <string name="iptv_merge_channels">Sender mit mehreren Qualitäten zusammenführen</string>
+    <string name="iptv_merge_channels_desc">SD, HD, UHD… eines Senders werden eine Zeile; Replay zuerst, bei Fehler die nächste.</string>
+    <string name="iptv_quality_order">Bevorzugte Qualität</string>
+    <string name="iptv_quality_highest">Höchste</string>
+    <string name="iptv_quality_hd">HD</string>
+    <string name="iptv_quality_saver">Sparsam (SD)</string>
+    <string name="iptv_hidden_channels">Ausgeblendete Sender</string>
+    <string name="iptv_hidden_channels_desc">OK auf einem Sender gedrückt halten, um ihn auszublenden oder zu verschieben.</string>
+    <string name="iptv_hidden_channels_none">Keine ausgeblendeten Sender.</string>
+    <string name="iptv_show_all_channels">Alle anzeigen</string>
+    <string name="iptv_reset_order">Reihenfolge zurücksetzen</string>
 </resources>

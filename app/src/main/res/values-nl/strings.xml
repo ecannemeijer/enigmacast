@@ -1813,4 +1813,21 @@
     <string name="companion_paired_with">Gekoppeld met %1$s</string>
     <string name="preview_no_picture">Nog geen beeld van de ontvanger. Opnieuw proberen…</string>
     <string name="preview_no_connection">Ontvanger niet bereikbaar. Opnieuw proberen…</string>
+    <string name="iptv_variant_fallback">Werkt niet, overgeschakeld naar %1$s</string>
+    <string name="iptv_variant_archive">terugkijken</string>
+    <string name="iptv_channel_hide">Verbergen</string>
+    <string name="iptv_channel_move">Verplaatsen</string>
+    <string name="iptv_channel_quality">Kies kwaliteit</string>
+    <string name="iptv_channel_show">Tonen</string>
+    <string name="iptv_merge_channels">Kanalen met meerdere kwaliteiten samenvoegen</string>
+    <string name="iptv_merge_channels_desc">SD, HD, UHD… van één zender worden één regel; terugkijken eerst, en de volgende als hij niet speelt.</string>
+    <string name="iptv_quality_order">Voorkeurskwaliteit</string>
+    <string name="iptv_quality_highest">Hoogste</string>
+    <string name="iptv_quality_hd">HD</string>
+    <string name="iptv_quality_saver">Zuinig (SD)</string>
+    <string name="iptv_hidden_channels">Verborgen kanalen</string>
+    <string name="iptv_hidden_channels_desc">Houd OK ingedrukt op een kanaal om het te verbergen of te verplaatsen.</string>
+    <string name="iptv_hidden_channels_none">Geen verborgen kanalen.</string>
+    <string name="iptv_show_all_channels">Alles tonen</string>
+    <string name="iptv_reset_order">Volgorde herstellen</string>
 </resources>

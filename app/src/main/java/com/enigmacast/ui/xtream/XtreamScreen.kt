@@ -400,6 +400,7 @@ fun XtreamScreen(
         }
     }
     BackHandler {
+        if (model.moving) { model.cancelMove(); return@BackHandler }
         if (playingLive()) {
             liveBack()
             return@BackHandler
@@ -495,6 +496,11 @@ fun XtreamScreen(
                             if (runCatching { nextFocus.requestFocus() }.isSuccess) return@onPreviewKeyEvent true
                         }
                     }
+                }
+                // Moving a channel: Back undoes the move instead of leaving.
+                if (model.moving && code == android.view.KeyEvent.KEYCODE_BACK) {
+                    if (e.type == KeyEventType.KeyUp) model.cancelMove()
+                    return@onPreviewKeyEvent true
                 }
                 if (playingLive() && code == android.view.KeyEvent.KEYCODE_BACK) {
                     if (e.type == KeyEventType.KeyUp && e.nativeKeyEvent.repeatCount == 0) liveBack()
@@ -1000,6 +1006,9 @@ private fun SidePanel(
                 val firstFocus = remember { FocusRequester() }
                 val lastFocus = remember { FocusRequester() }
                 val lastIndex = model.items.lastIndex
+                var menuFor by remember { mutableStateOf<XtreamItem?>(null) }
+                var qualityFor by remember { mutableStateOf<XtreamItem?>(null) }
+                var held by remember { mutableStateOf(false) }
                 // itemFocus sits on the row the screen chose (remembered / playing / on screen),
                 // the playing row until it chose one.
                 val focusKey = remember(itemTargetKey, keyedItems, playingIndex) {
@@ -1013,10 +1022,40 @@ private fun SidePanel(
                         val item = k.value
                         // Only this row observes its listings: an answer recomposes this row alone.
                         val now = model.epgOf(item.id)?.let { nowNext(it, nowSec) }?.first
+                        val live = item.section == XtreamSection.LIVE
                         CompactListRow(
-                            onClick = { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() },
+                            onClick = {
+                                when {
+                                    model.moving -> model.commitMove()
+                                    else -> { model.play(item); if (item.section != XtreamSection.SERIES) onPlayed() }
+                                }
+                            },
                             selected = model.playing?.item?.id == item.id || model.guideItem?.id == item.id,
                             modifier = Modifier
+                                .onPreviewKeyEvent { e ->
+                                    if (!live) return@onPreviewKeyEvent false
+                                    val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+                                    when {
+                                        // Move mode: Up/Down move this channel, OK keeps the place, Back undoes it.
+                                        model.moving && (e.key == Key.DirectionUp || e.key == Key.DirectionDown) -> {
+                                            if (e.type == KeyEventType.KeyDown) {
+                                                model.moveChannel(item, if (e.key == Key.DirectionUp) -1 else 1)
+                                                val at = model.items.indexOfFirst { com.enigmacast.domain.xtream.IptvZapList.same(it, item) }
+                                                if (at >= 0) scope.launch { channelList.ensureVisible(at, model.items.size) }
+                                            }
+                                            true
+                                        }
+                                        model.moving && (e.key == Key.DirectionLeft || e.key == Key.DirectionRight) -> true
+                                        model.moving && e.key == Key.Back -> { if (e.type == KeyEventType.KeyUp) model.cancelMove(); true }
+                                        model.moving -> false
+                                        e.key == Key.Menu -> { if (e.type == KeyEventType.KeyUp) menuFor = item; true }
+                                        ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { held = false; false }
+                                        // Held OK: the small channel menu on release instead of playing.
+                                        ok && e.type == KeyEventType.KeyDown -> { held = true; true }
+                                        ok && e.type == KeyEventType.KeyUp && held -> { held = false; menuFor = item; true }
+                                        else -> false
+                                    }
+                                }
                                 .focusRequesterIf(k.key == focusKey, itemFocus)
                                 .focusRequesterIf(index == 0, firstFocus)
                                 .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
@@ -1028,11 +1067,14 @@ private fun SidePanel(
                                     onWrapToLast = { scope.launch { lastFocus.focusListRow(state, lastIndex) } },
                                 ),
                         ) { rowFocused ->
+                            if (model.moving && rowFocused) Text("⇅", color = EnigmaColors.OnFocus, fontSize = 14.sp, modifier = Modifier.padding(end = 6.dp))
                             IptvChannelRow(model, item, now, nowSec, rowFocused)
                         }
                     }
                 }
                 }
+                menuFor?.let { item -> ChannelMenu(model, item, onQuality = { qualityFor = item }, onDismiss = { menuFor = null }) }
+                qualityFor?.let { item -> QualityMenu(model, item, onPlayed = onPlayed, onDismiss = { qualityFor = null }) }
             }
         }
         }
@@ -1428,4 +1470,38 @@ private fun IptvOsd(
             )
         }
     }
+}
+
+
+/** Long OK on a live channel: hide, move, and (merged channels) choose the quality. */
+@Composable
+private fun ChannelMenu(model: XtreamViewModel, item: XtreamItem, onQuality: () -> Unit, onDismiss: () -> Unit) {
+    val variants = model.variantsOf(item)
+    val actions = buildList {
+        add(stringResource(R.string.iptv_channel_hide) to { model.hideChannel(item) })
+        add(stringResource(R.string.iptv_channel_move) to { model.moving = true })
+        if (variants.size > 1) add(stringResource(R.string.iptv_channel_quality) to onQuality)
+    }
+    com.enigmacast.ui.theme.OptionListDialog(
+        title = item.name,
+        options = actions.map { it.first },
+        selectedIndex = 0,
+        onSelect = { index -> onDismiss(); actions.getOrNull(index)?.second?.invoke() },
+        onDismiss = onDismiss,
+    )
+}
+
+/** The quality variants of a merged channel; the choice plays now and is kept (synced). */
+@Composable
+private fun QualityMenu(model: XtreamViewModel, item: XtreamItem, onPlayed: () -> Unit, onDismiss: () -> Unit) {
+    val variants = model.variantsOf(item)
+    if (variants.size < 2) { onDismiss(); return }
+    val playing = model.playing?.item
+    com.enigmacast.ui.theme.OptionListDialog(
+        title = stringResource(R.string.iptv_channel_quality),
+        options = variants.map { v -> if (v.hasArchive) v.name + "  ·  " + stringResource(R.string.iptv_variant_archive) else v.name },
+        selectedIndex = variants.indexOfFirst { playing != null && com.enigmacast.domain.xtream.IptvZapList.same(it, playing) }.coerceAtLeast(0),
+        onSelect = { index -> onDismiss(); variants.getOrNull(index)?.let { model.chooseVariant(it); onPlayed() } },
+        onDismiss = onDismiss,
+    )
 }

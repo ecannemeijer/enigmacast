@@ -1113,6 +1113,7 @@ class XtreamViewModel @Inject constructor(
     }
 
     private fun trySatelliteFallback() {
+        if (tryNextVariant()) return
         if (fallbackLatched || catchup) return
         val name = playing?.item?.name ?: return
         if (playing?.item?.section != XtreamSection.LIVE && !mediaLive) return
@@ -1267,7 +1268,20 @@ class XtreamViewModel @Inject constructor(
         }
         // Categories changed in Settings: the open section is read again (from the cache).
         viewModelScope.launch {
-            hiddenCategories.changes.drop(1).collect { if (account != null && categories.isNotEmpty()) selectSection(section, force = true) }
+            hiddenCategories.changes.drop(1).collect {
+                if (hiddenCategories.takeChannelOnly()) {
+                    // Hidden channels, own order or picks: only the open live list is read again.
+                    channelVariants.clear()
+                    val shown = category
+                    val login = account
+                    if (section == XtreamSection.LIVE && shown != null && login != null && !moving) {
+                        loadJob?.cancel()
+                        loadJob = viewModelScope.launch { loadCategory(login, shown, announce = false) }
+                    }
+                    return@collect
+                }
+                if (account != null && categories.isNotEmpty()) selectSection(section, force = true)
+            }
         }
         // Hotel mode's category whitelist (or hotel mode itself) changed: read the section again.
         viewModelScope.launch {
@@ -1404,9 +1418,105 @@ class XtreamViewModel @Inject constructor(
         return guest.items
     }
 
-    private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, category: XtreamCategory, force: Boolean) =
-        if (playlist != null) playlistSync.items(section, category.id, category.providerId)
+    private suspend fun itemsOf(account: XtreamAccount, section: XtreamSection, category: XtreamCategory, force: Boolean): List<XtreamItem> {
+        val raw = if (playlist != null) playlistSync.items(section, category.id, category.providerId)
         else repository.items(account, section, category.id, force)
+        return if (section == XtreamSection.LIVE) curate(raw, category) else raw
+    }
+
+    /** Channel key → its quality variants (playing one first), for the lists read so far. */
+    private val channelVariants = java.util.concurrent.ConcurrentHashMap<String, List<XtreamItem>>()
+
+    /** Where hidden channels, own order and picks are kept: the provider, like hidden categories. */
+    fun channelSource(providerId: String): String =
+        if (playlist != null) com.enigmacast.data.xtream.IptvProvider.sourceKey(providerId)
+        else com.enigmacast.domain.xtream.IptvCategoryFilter.sourceKey(null, account?.key.orEmpty())
+
+    private fun variantKey(item: XtreamItem) = item.providerId + "#" + com.enigmacast.domain.xtream.ChannelVariants.key(item)
+
+    /** Live rows as shown everywhere (list, zapping, guide): merged, without hidden ones, in the own order. */
+    private fun curate(raw: List<XtreamItem>, category: XtreamCategory): List<XtreamItem> {
+        val source = channelSource(category.providerId)
+        val rows = if (hiddenCategories.mergeEnabled()) {
+            val merged = com.enigmacast.domain.xtream.ChannelVariants.merge(raw, hiddenCategories.qualityOrder(), hiddenCategories.picks(source))
+            merged.variants.forEach { (key, list) -> channelVariants[list.first().providerId + "#" + key] = list }
+            merged.rows
+        } else raw
+        return com.enigmacast.domain.xtream.ChannelVariants.arrange(
+            rows, hiddenCategories.hiddenChannels(source).keys, hiddenCategories.order(source, category.id),
+        )
+    }
+
+    /** The quality variants of [item] (two or more), or empty. */
+    fun variantsOf(item: XtreamItem): List<XtreamItem> = channelVariants[variantKey(item)].orEmpty()
+
+    /** Variants already tried for the channel that plays, so a failing one is not started again. */
+    private val triedVariants = mutableSetOf<String>()
+
+    /** The playing channel failed: start its next quality variant. True when one was started. */
+    private fun tryNextVariant(): Boolean {
+        if (catchup) return false
+        val now = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return false
+        val variants = variantsOf(now)
+        if (variants.size < 2) return false
+        triedVariants += now.providerId + "/" + now.id
+        val next = variants.firstOrNull { (it.providerId + "/" + it.id) !in triedVariants } ?: return false
+        EnigmaLog.player("iptv variant fallback: ${now.id} -> ${next.id}")
+        showNotice(context.getString(com.enigmacast.R.string.iptv_variant_fallback, next.name))
+        playVariant(next)
+        return true
+    }
+
+    private fun playVariant(item: XtreamItem) {
+        val keep = triedVariants.toSet()
+        play(item)
+        triedVariants += keep
+    }
+
+    /** Long-press › Choose quality: play [variant] and keep it as this channel's choice (synced). */
+    fun chooseVariant(variant: XtreamItem) {
+        val key = com.enigmacast.domain.xtream.ChannelVariants.key(variant)
+        hiddenCategories.setPick(channelSource(variant.providerId), key, com.enigmacast.domain.xtream.ChannelVariants.label(variant))
+        play(variant)
+    }
+
+    fun hideChannel(item: XtreamItem) {
+        hiddenCategories.hideChannel(channelSource(item.providerId), com.enigmacast.domain.xtream.ChannelVariants.key(item), item.name)
+    }
+
+    /** Move mode: the shown live list with [item] moved one place by [step]; saved on [commitMove]. */
+    /** True while the list is in move mode (Up/Down move the channel). */
+    var moving by mutableStateOf(false)
+
+    fun moveChannel(item: XtreamItem, step: Int) {
+        val index = items.indexOfFirst { com.enigmacast.domain.xtream.IptvZapList.same(it, item) }
+        if (index < 0) return
+        val to = (index + step).coerceIn(0, items.lastIndex)
+        if (to == index) return
+        items = items.toMutableList().apply { add(to, removeAt(index)) }
+    }
+
+    fun commitMove() {
+        moving = false
+        val shown = category ?: return
+        val keys = items.filter { it.section == XtreamSection.LIVE }.map { com.enigmacast.domain.xtream.ChannelVariants.key(it) }
+        hiddenCategories.setOrder(channelSource(shown.providerId), shown.id, keys)
+    }
+
+    fun cancelMove() {
+        moving = false
+        val shown = category ?: return
+        val account = account ?: return
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { loadCategory(account, shown, announce = false) }
+    }
+
+    /** The zap list row of [current]: itself, or the merged row when a variant of it plays. */
+    private fun zapAnchor(list: List<XtreamItem>, current: XtreamItem): XtreamItem {
+        if (com.enigmacast.domain.xtream.IptvZapList.holds(list, current)) return current
+        val key = variantKey(current)
+        return list.firstOrNull { it.section == XtreamSection.LIVE && variantKey(it) == key } ?: current
+    }
 
     /**
      * Films or series inside the dashboard: pick the playlist and the requested section,
@@ -1774,6 +1884,7 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun play(item: XtreamItem) {
+        triedVariants.clear()
         catchup = false
         catchupDurationMs = 0L
         fallbackLatched = false
@@ -1835,8 +1946,8 @@ class XtreamViewModel @Inject constructor(
         catchup = false
         val current = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return
         // The playing channel's category, also while another one is only browsed in the panel.
-        val next = com.enigmacast.domain.xtream.IptvZapList.step(zapItems, current, step)
-            ?: com.enigmacast.domain.xtream.IptvZapList.step(items, current, step)
+        val next = com.enigmacast.domain.xtream.IptvZapList.step(zapItems, zapAnchor(zapItems, current), step)
+            ?: com.enigmacast.domain.xtream.IptvZapList.step(items, zapAnchor(items, current), step)
         if (next != null) {
             play(next)
             return

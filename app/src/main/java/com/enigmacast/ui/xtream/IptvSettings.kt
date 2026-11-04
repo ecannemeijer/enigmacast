@@ -65,6 +65,8 @@ import com.enigmacast.ui.theme.NavigationSoundsForWindow
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.ui.theme.ValueRow
+import com.enigmacast.ui.theme.ToggleRow
+import androidx.compose.foundation.focusable
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.requestWhenReady
@@ -161,6 +163,28 @@ class IptvSettingsViewModel @Inject constructor(
     fun showAllCategories() = saveHidden(com.enigmacast.domain.xtream.IptvCategoryFilter.all())
     fun hideAllCategories() = _categories.value?.let { saveHidden(com.enigmacast.domain.xtream.IptvCategoryFilter.none(it.categories)) }
     fun closeCategories() { categoryJob?.cancel(); _categories.value = null }
+
+    /** Settings › IPTV › channels: merged qualities, hidden channels and own order. */
+    data class HiddenChannel(val source: String, val key: String, val name: String)
+    private val _channelOptions = MutableStateFlow(Triple(hidden.mergeEnabled(), hidden.qualityOrder(), hidden.hasOrders()))
+    val channelOptions: StateFlow<Triple<Boolean, com.enigmacast.domain.xtream.ChannelVariants.QualityOrder, Boolean>> = _channelOptions
+    private val _hiddenChannels = MutableStateFlow<List<HiddenChannel>?>(null)
+    val hiddenChannelsPage: StateFlow<List<HiddenChannel>?> = _hiddenChannels
+    private fun refreshChannels() {
+        _channelOptions.value = Triple(hidden.mergeEnabled(), hidden.qualityOrder(), hidden.hasOrders())
+        if (_hiddenChannels.value != null) _hiddenChannels.value = hiddenChannelList()
+    }
+    private fun hiddenChannelList() = hidden.sourcesWithHiddenChannels().flatMap { source ->
+        hidden.hiddenChannels(source).map { (key, name) -> HiddenChannel(source, key, name) }
+    }.sortedBy { it.name.lowercase() }
+    fun hiddenChannelCount(): Int = hiddenChannelList().size
+    fun setMergeChannels(on: Boolean) { hidden.setMergeEnabled(on); refreshChannels() }
+    fun setQualityOrder(order: com.enigmacast.domain.xtream.ChannelVariants.QualityOrder) { hidden.setQualityOrder(order); refreshChannels() }
+    fun resetChannelOrder() { hidden.resetOrders(); refreshChannels() }
+    fun openHiddenChannels() { _hiddenChannels.value = hiddenChannelList() }
+    fun closeHiddenChannels() { _hiddenChannels.value = null; refreshChannels() }
+    fun showChannel(channel: HiddenChannel) { hidden.showChannel(channel.source, channel.key); refreshChannels() }
+    fun showAllChannels() { hidden.sourcesWithHiddenChannels().forEach { hidden.showAllChannels(it) }; refreshChannels() }
 
     /** Saved SubSource slugs. Null until the viewer saves a choice. */
     val subtitleLanguages: StateFlow<List<String>?> = settingsRepository.settings
@@ -374,6 +398,38 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                 description = stringResource(R.string.iptv_categories_desc),
                 onClick = model::openCategories,
             )
+            val channelOptions by model.channelOptions.collectAsStateWithLifecycle()
+            val hiddenPage by model.hiddenChannelsPage.collectAsStateWithLifecycle()
+            ToggleRow(
+                title = stringResource(R.string.iptv_merge_channels),
+                description = stringResource(R.string.iptv_merge_channels_desc),
+                checked = channelOptions.first,
+                onCheckedChange = model::setMergeChannels,
+            )
+            if (channelOptions.first) {
+                val orders = com.enigmacast.domain.xtream.ChannelVariants.QualityOrder.entries
+                ChoiceRow(
+                    title = stringResource(R.string.iptv_quality_order),
+                    options = listOf(stringResource(R.string.iptv_quality_highest), stringResource(R.string.iptv_quality_hd), stringResource(R.string.iptv_quality_saver)),
+                    selectedIndex = orders.indexOf(channelOptions.second),
+                    onSelect = { model.setQualityOrder(orders[it]) },
+                )
+            }
+            val hiddenCount = remember(hiddenPage, channelOptions) { model.hiddenChannelCount() }
+            ValueRow(
+                title = stringResource(R.string.iptv_hidden_channels),
+                value = if (hiddenCount > 0) "$hiddenCount  ›" else "›",
+                description = stringResource(R.string.iptv_hidden_channels_desc),
+                onClick = model::openHiddenChannels,
+            )
+            if (channelOptions.third) {
+                ValueRow(
+                    title = stringResource(R.string.iptv_reset_order),
+                    value = "›",
+                    onClick = model::resetChannelOrder,
+                )
+            }
+            hiddenPage?.let { IptvHiddenChannelsDialog(it, model) }
             ValueRow(
                 title = stringResource(R.string.iptv_subtitles_manage),
                 value = "›",
@@ -844,6 +900,61 @@ private fun IptvSubtitlesDialog(saved: List<String>?, model: IptvSettingsViewMod
                                 if (index == languages.lastIndex) down = Cancel
                             },
                     )
+                }
+            }
+        }
+    }
+}
+
+
+/** Settings › IPTV › Hidden channels: show one again (OK) or all of them. */
+@Composable
+private fun IptvHiddenChannelsDialog(channels: List<IptvSettingsViewModel.HiddenChannel>, model: IptvSettingsViewModel) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = model::closeHiddenChannels,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        com.enigmacast.ui.theme.NavigationSoundsForWindow()
+        val allFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val listFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+        val Cancel = androidx.compose.ui.focus.FocusRequester.Cancel
+        androidx.compose.runtime.LaunchedEffect(channels.isEmpty()) {
+            if (channels.isNotEmpty()) allFocus.requestWhenReady()
+        }
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .width(460.dp)
+                .heightIn(max = 520.dp)
+                .skinSurface(EnigmaColors.Selected, com.enigmacast.ui.theme.skinShape(14.dp))
+                .padding(16.dp)
+                .focusable(channels.isEmpty()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(stringResource(R.string.iptv_hidden_channels), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
+            if (channels.isEmpty()) {
+                Text(stringResource(R.string.iptv_hidden_channels_none), color = EnigmaColors.Muted, fontSize = 13.sp)
+            } else {
+                com.enigmacast.ui.theme.CompactButton(
+                    stringResource(R.string.iptv_show_all_channels),
+                    model::showAllChannels,
+                    modifier = Modifier.focusRequester(allFocus).focusProperties { up = Cancel; left = Cancel; right = Cancel; down = listFocus },
+                    icon = androidx.compose.material.icons.Icons.Filled.Check,
+                )
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                    itemsIndexed(channels, key = { _, c -> c.source + "\u0000" + c.key }) { index, c ->
+                        ValueRow(
+                            title = c.name,
+                            value = stringResource(R.string.iptv_channel_show),
+                            onClick = { model.showChannel(c) },
+                            modifier = Modifier
+                                .then(if (index == 0) Modifier.focusRequester(listFocus) else Modifier)
+                                .focusProperties {
+                                    left = Cancel; right = Cancel
+                                    if (index == 0) up = allFocus
+                                    if (index == channels.lastIndex) down = Cancel
+                                },
+                        )
+                    }
                 }
             }
         }
