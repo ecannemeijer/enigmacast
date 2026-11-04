@@ -88,8 +88,6 @@ private val CardShape get() = skinShape(12.dp)
 /** One tuner card. Tall enough for the channel, programme and "This TV" line. Two rows set the player height. */
 private val TunerCardHeight = 96.dp
 private val TunerGap = 8.dp
-/** As DashboardScreen's MiniPlayerHeight (TV guide). */
-private val HomeMiniPlayerHeight = 158.dp
 
 /**
  * Home: one card per tuner (who uses it, which channel, programme) and what is scheduled
@@ -362,10 +360,11 @@ private fun TunersRow(
         if (showStream) {
             val streamTv = rememberTvFocus()
             val focusable = streamFocus != null
-            // Same size and frame as the TV guide's mini player: 158 dp high, 16:9, square black frame.
+            // TV guide frame (square, black, 16:9), but exactly as tall as the 2x2 tuner block so
+            // top and bottom line up; the tuner cards keep their size, so no line drops out.
             Box(
                 Modifier
-                    .height(HomeMiniPlayerHeight)
+                    .fillMaxHeight()
                     .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
                     .then(
                         if (streamFocus == null) Modifier else Modifier
