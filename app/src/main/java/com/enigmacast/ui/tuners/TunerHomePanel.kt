@@ -342,7 +342,7 @@ private fun TunersRow(
     nextDown: FocusRequester,
     showStream: Boolean,
     status: Color,
-    /** Set when the mini player can take focus (something plays): Right from the cards reaches it. */
+    /** Set when the mini player can take focus (something plays): Left from the first tuners reaches it. */
     streamFocus: FocusRequester?,
     onStreamOk: () -> Unit,
     onOpen: (TunerCard) -> Unit,
@@ -357,60 +357,6 @@ private fun TunersRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(TunerGap)) {
-            if (model.cards.isEmpty()) {
-                val focus = rememberTvFocus()
-                Box(
-                    Modifier.focusProperties {
-                        down = nextDown
-                        up = FocusRequester.Cancel
-                        this.left = menuFocus
-                    }
-                        .then(left)
-                        .fillMaxSize()
-                        .focusRequester(foci[0])
-                        .then(tunerCardLook(focus.focused, CardShape))
-                        .tvClick(focus) { model.message = null },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (model.loading) "…" else stringResource(R.string.home_unreachable),
-                        color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
-                    )
-                }
-            } else {
-                for (row in 0..1) {
-                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TunerGap)) {
-                        for (col in 0..1) {
-                            val index = row * 2 + col
-                            val card = byIndex[index]
-                            if (card == null) {
-                                AbsentTuner(('A' + index).toString(), Modifier.weight(1f).fillMaxHeight())
-                            } else {
-                                val leftTarget = if (col == 0 || !present(index - 1)) menuFocus else foci[index - 1]
-                                val rightTarget = if (col == 1 || !present(index + 1)) streamFocus ?: FocusRequester.Cancel else foci[index + 1]
-                                val downTarget = if (index + 2 < 4 && present(index + 2)) foci[index + 2] else nextDown
-                                val upTarget = if (index >= 2 && present(index - 2)) foci[index - 2] else FocusRequester.Cancel
-                                TunerCardView(
-                                    card,
-                                    model,
-                                    Modifier.focusProperties {
-                                        this.left = leftTarget
-                                        right = rightTarget
-                                        down = downTarget
-                                        up = upTarget
-                                    }
-                                        .then(if (leftTarget == menuFocus) left else Modifier)
-                                        .weight(1f)
-                                        .focusRequester(foci[index]),
-                                    stretch = true,
-                                ) { onOpen(card) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
         if (showStream) {
             val streamTv = rememberTvFocus()
             val focusable = streamFocus != null
@@ -422,11 +368,13 @@ private fun TunersRow(
                         if (streamFocus == null) Modifier else Modifier
                             .focusRequester(streamFocus)
                             .focusProperties {
-                                this.left = if (present(1)) foci[1] else foci[0]
-                                right = FocusRequester.Cancel
+                                // Top-left like the TV guide: Left to the menu, Right to the first tuner.
+                                this.left = menuFocus
+                                right = foci[(0..3).firstOrNull { present(it) } ?: 0]
                                 up = FocusRequester.Cancel
                                 down = nextDown
                             }
+                            .then(left)
                             .tvClick(streamTv, onStreamOk),
                     )
                     .clip(skinShape(8.dp))
@@ -456,6 +404,61 @@ private fun TunersRow(
             }
         } else {
             Box(Modifier.padding(top = 4.dp).size(10.dp).background(status, CircleShape))
+        }
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(TunerGap)) {
+            if (model.cards.isEmpty()) {
+                val focus = rememberTvFocus()
+                Box(
+                    Modifier.focusProperties {
+                        down = nextDown
+                        up = FocusRequester.Cancel
+                        this.left = streamFocus ?: menuFocus
+                    }
+                        .then(left)
+                        .fillMaxSize()
+                        .focusRequester(foci[0])
+                        .then(tunerCardLook(focus.focused, CardShape))
+                        .tvClick(focus) { model.message = null },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (model.loading) "…" else stringResource(R.string.home_unreachable),
+                        color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(16.dp),
+                    )
+                }
+            } else {
+                for (row in 0..1) {
+                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TunerGap)) {
+                        for (col in 0..1) {
+                            val index = row * 2 + col
+                            val card = byIndex[index]
+                            if (card == null) {
+                                AbsentTuner(('A' + index).toString(), Modifier.weight(1f).fillMaxHeight())
+                            } else {
+                                // The mini player sits left of the tuners (as in the TV guide).
+                                val leftTarget = if (col == 0 || !present(index - 1)) streamFocus ?: menuFocus else foci[index - 1]
+                                val rightTarget = if (col == 1 || !present(index + 1)) FocusRequester.Cancel else foci[index + 1]
+                                val downTarget = if (index + 2 < 4 && present(index + 2)) foci[index + 2] else nextDown
+                                val upTarget = if (index >= 2 && present(index - 2)) foci[index - 2] else FocusRequester.Cancel
+                                TunerCardView(
+                                    card,
+                                    model,
+                                    Modifier.focusProperties {
+                                        this.left = leftTarget
+                                        right = rightTarget
+                                        down = downTarget
+                                        up = upTarget
+                                    }
+                                        .then(if (leftTarget == menuFocus) left else Modifier)
+                                        .weight(1f)
+                                        .focusRequester(foci[index]),
+                                    stretch = true,
+                                ) { onOpen(card) }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
