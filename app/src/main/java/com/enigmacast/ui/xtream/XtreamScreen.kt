@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import com.enigmacast.ui.theme.requestWhenAttached
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -1009,6 +1010,20 @@ private fun SidePanel(
                 var menuFor by remember { mutableStateOf<XtreamItem?>(null) }
                 var qualityFor by remember { mutableStateOf<XtreamItem?>(null) }
                 var held by remember { mutableStateOf(false) }
+                // Verbergen: the focus moves to the next channel (the previous one at the end) once the list reloaded.
+                val hideFocus = remember { FocusRequester() }
+                var hidden by remember { mutableStateOf<Pair<String, String?>?>(null) }
+                LaunchedEffect(hidden, keyedItems) {
+                    val (gone, target) = hidden ?: return@LaunchedEffect
+                    if (keyedItems.any { it.key == gone }) return@LaunchedEffect
+                    val i = keyedItems.indexOfFirst { it.key == target }
+                    if (i >= 0) {
+                        if (state.layoutInfo.visibleItemsInfo.none { it.index == i }) state.scrollToItem(i)
+                        hideFocus.requestWhenAttached()
+                    } else if (keyedItems.isNotEmpty()) itemFocus.requestWhenAttached()
+                    else categoryFocus.requestWhenAttached()
+                    hidden = null
+                }
                 // itemFocus sits on the row the screen chose (remembered / playing / on screen),
                 // the playing row until it chose one.
                 val focusKey = remember(itemTargetKey, keyedItems, playingIndex) {
@@ -1058,6 +1073,7 @@ private fun SidePanel(
                                     }
                                 }
                                 .focusRequesterIf(k.key == focusKey, itemFocus)
+                                .focusRequesterIf(k.key == hidden?.second, hideFocus)
                                 .focusRequesterIf(index == 0, firstFocus)
                                 .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
                                 .onFocusChanged { if (it.isFocused) { focused = k; onChannelFocused(k.key) } }
@@ -1074,7 +1090,11 @@ private fun SidePanel(
                     }
                 }
                 }
-                menuFor?.let { item -> ChannelMenu(model, item, onQuality = { qualityFor = item }, onDismiss = { menuFor = null }) }
+                menuFor?.let { item -> ChannelMenu(model, item, onQuality = { qualityFor = item }, onDismiss = { menuFor = null }, onHide = {
+                    val keys = keyedItems.map { it.key }
+                    val gone = keyedItems.firstOrNull { it.value === item }?.key
+                    if (gone != null) hidden = gone to com.enigmacast.domain.ui.FocusAfterRemove.next(listOf(keys), gone)
+                }) }
                 qualityFor?.let { item -> QualityMenu(model, item, onPlayed = onPlayed, onDismiss = { qualityFor = null }) }
             }
         }
@@ -1476,10 +1496,10 @@ private fun IptvOsd(
 
 /** Long OK on a live channel: hide, move, and (merged channels) choose the quality. */
 @Composable
-private fun ChannelMenu(model: XtreamViewModel, item: XtreamItem, onQuality: () -> Unit, onDismiss: () -> Unit) {
+private fun ChannelMenu(model: XtreamViewModel, item: XtreamItem, onQuality: () -> Unit, onDismiss: () -> Unit, onHide: () -> Unit = {}) {
     val variants = model.variantsOf(item)
     val actions = buildList {
-        add(stringResource(R.string.iptv_channel_hide) to { model.hideChannel(item) })
+        add(stringResource(R.string.iptv_channel_hide) to { onHide(); model.hideChannel(item) })
         add(stringResource(R.string.iptv_channel_move) to { model.moving = true })
         if (variants.size > 1) add(stringResource(R.string.iptv_channel_quality) to onQuality)
     }

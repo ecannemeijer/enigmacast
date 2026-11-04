@@ -128,6 +128,39 @@ fun MyItemsPanel(
             .let { if (it < 0) -1 else it + iptvRowCount }
         if (index >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
     }
+    // Every card and row by key, so a removal can hand the focus to its neighbour.
+    val keyRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    fun keyFocus(key: String) = keyRequesters.getOrPut(key) { FocusRequester() }
+    val pageRows = myItemsPageRows(iptvBlocks.map { (h, cards) -> h to cards.map { "$h/${it.key}" } }, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
+    val currentPage by androidx.compose.runtime.rememberUpdatedState(pageRows)
+    var removal by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    val removeFocus: (String?) -> Unit = { removed ->
+        if (removed != null) removal = removed to com.enigmacast.domain.ui.FocusAfterRemove.next(currentPage.map { it.keys }, removed)
+    }
+    LaunchedEffect(removal) {
+        val (removed, target) = removal ?: return@LaunchedEffect
+        // Wait until the list dropped the item (a box delete takes a moment), then focus the neighbour.
+        kotlinx.coroutines.withTimeoutOrNull(8_000) {
+            androidx.compose.runtime.snapshotFlow { currentPage.none { removed in it.keys } }.first { it }
+        }
+        val goal = target?.takeIf { t -> currentPage.any { t in it.keys } }
+            ?: currentPage.firstOrNull { it.keys.isNotEmpty() }?.keys?.first()
+        val row = goal?.let { g -> currentPage.first { g in it.keys } }
+        if (row != null && goal != null) {
+            row.lazyIndex?.let { i -> if (listState.layoutInfo.visibleItemsInfo.none { it.index == i }) listState.scrollToItem(i) }
+            val rowState = when {
+                row.iptvHeader != null -> iptvRowStates[row.iptvHeader]
+                row.section != null -> rowStates[row.section]
+                else -> null
+            }
+            rowState?.let { s -> val i = row.keys.indexOf(goal); if (s.layoutInfo.visibleItemsInfo.none { it.index == i }) s.scrollToItem(i) }
+            if (!keyFocus(goal).requestWhenAttached(maxFrames = 60)) listFocus.requestWhenAttached()
+        } else {
+            listFocus.requestWhenAttached()
+        }
+        viewModel.releaseList()
+        removal = null
+    }
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
     Column(
         modifier
@@ -160,6 +193,7 @@ fun MyItemsPanel(
                                 // The page's entry is the first card of the first row (see entryOnIptv).
                                 .trackedFocusRequesterIf(entryOnIptv && i == 0 && header == iptvBlocks.first().first, listFocus)
                                 .then(if (iptvReturnKey == "$header/${card.key}") Modifier.trackedFocusRequester(iptvReturnFocus) else Modifier)
+                                .focusRequester(keyFocus("$header/${card.key}"))
                                 .focusProperties {
                                     canFocus = rowsFocusable
                                     if (i == 0) left = menuFocus
@@ -226,6 +260,7 @@ fun MyItemsPanel(
                                     progress = com.enigmacast.domain.resume.ResumePolicy.fraction(resumeMap[item.id], (item.endEpochSec - item.beginEpochSec) * 1000),
                                     modifier = Modifier
                                         .trackedFocusRequesterIf(!entryOnIptv && item.id == focusOn, listFocus)
+                                        .focusRequester(keyFocus(item.id))
                                         .focusProperties {
                                             canFocus = rowsFocusable
                                             if (i == 0) left = menuFocus
@@ -240,6 +275,7 @@ fun MyItemsPanel(
                             item = item,
                             modifier = Modifier
                                 .trackedFocusRequesterIf(!entryOnIptv && item.id == focusOn, listFocus)
+                                .focusRequester(keyFocus(item.id))
                                 .focusProperties {
                                     canFocus = rowsFocusable
                                     left = menuFocus
@@ -342,14 +378,14 @@ fun MyItemsPanel(
             compact = true,
         )
     }
-    IptvCardDialogs(viewModel, onXtream, onTorrent)
+    IptvCardDialogs(viewModel, onXtream, onTorrent, onRemove = removeFocus)
     viewModel.pendingDelete?.let { item ->
         TvConfirmDialog(
             title = stringResource(R.string.my_items_delete_title),
             message = stringResource(R.string.my_items_delete_message, item.title),
             confirmLabel = stringResource(R.string.my_items_delete),
             dismissLabel = stringResource(R.string.cancel),
-            onConfirm = viewModel::confirmDelete,
+            onConfirm = { removeFocus(item.id); viewModel.confirmDelete(restoreFocus = false) },
             onDismiss = viewModel::dismissDelete,
             destructive = true,
             compact = true,
@@ -504,7 +540,13 @@ private fun actionsFor(item: Recording, box: Boolean, boxTimer: Boolean): List<I
  * confirmation of the removal.
  */
 @Composable
-internal fun IptvCardDialogs(viewModel: MyItemsViewModel, onXtream: () -> Unit, onTorrent: () -> Unit) {
+internal fun IptvCardDialogs(
+    viewModel: MyItemsViewModel,
+    onXtream: () -> Unit,
+    onTorrent: () -> Unit,
+    /** Called with the removed card's origin just before it goes, so the page can focus its neighbour. */
+    onRemove: (String?) -> Unit = {},
+) {
     viewModel.iptvOptions?.let { card ->
         val play = stringResource(R.string.iptv_play)
         val info = stringResource(R.string.iptv_info)
@@ -530,7 +572,7 @@ internal fun IptvCardDialogs(viewModel: MyItemsViewModel, onXtream: () -> Unit, 
             message = stringResource(R.string.library_remove_message, card.title),
             confirmLabel = stringResource(R.string.library_remove),
             dismissLabel = stringResource(R.string.cancel),
-            onConfirm = viewModel::confirmRemoveIptv,
+            onConfirm = { onRemove(viewModel.iptvRemoveOrigin); viewModel.confirmRemoveIptv() },
             onDismiss = viewModel::dismissRemoveIptv,
             destructive = true,
             compact = true,
@@ -595,4 +637,30 @@ internal fun IptvCard(
         val subtitle = if (card.upNext) listOf(stringResource(R.string.library_up_next), card.subtitle).filter { it.isNotBlank() }.joinToString(" · ") else card.subtitle
         if (subtitle.isNotBlank()) Text(subtitle, color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+}
+
+
+/** One focus row of My items: an IPTV row, a section's poster row, or a single recording row. */
+internal data class MyItemsPageRow(val keys: List<String>, val lazyIndex: Int?, val iptvHeader: Int? = null, val section: String? = null)
+
+/** The page as rows of focus keys, in the order and LazyColumn positions MyItemsPanel draws them. */
+internal fun myItemsPageRows(
+    iptv: List<Pair<Int, List<String>>>,
+    app: List<Recording>,
+    movies: List<Recording>,
+    timers: List<Recording>,
+    poster: (Recording) -> Boolean,
+): List<MyItemsPageRow> {
+    val recordings = app.isNotEmpty() || movies.isNotEmpty() || timers.isNotEmpty()
+    val out = iptv.mapIndexed { i, (h, keys) -> MyItemsPageRow(keys, if (recordings) i else null, iptvHeader = h) }.toMutableList()
+    var index = iptv.size
+    val headers = movies.isNotEmpty() || timers.isNotEmpty()
+    for ((key, list) in listOf("app" to app, "movies" to movies, "timers" to timers)) {
+        if (list.isEmpty()) continue
+        if (key != "app" || headers) index++
+        val posters = list.filter(poster)
+        if (posters.isNotEmpty()) out += MyItemsPageRow(posters.map { it.id }, index++, section = key)
+        list.filterNot(poster).forEach { out += MyItemsPageRow(listOf(it.id), index++) }
+    }
+    return out
 }

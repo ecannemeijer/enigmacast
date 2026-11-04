@@ -142,6 +142,8 @@ class MyItemsViewModel @Inject constructor(
 
     /** Long press (or Menu) on a My items card: play, the info page, or remove. */
     private var iptvOrigin: String? = null
+    /** The card the options were opened on ("<row>/<card key>"), for the focus after a removal. */
+    val iptvRemoveOrigin: String? get() = iptvOrigin
     fun optionsIptv(card: com.enigmacast.domain.xtream.IptvLibraryCard, origin: String) {
         iptvOrigin = origin
         iptvOptions = card
@@ -370,7 +372,8 @@ class MyItemsViewModel @Inject constructor(
         restore(id)
     }
 
-    fun confirmDelete() {
+    /** [restoreFocus] false: the page puts the focus on the neighbour itself (then [releaseList]). */
+    fun confirmDelete(restoreFocus: Boolean = true) {
         val item = pendingDelete ?: return
         if (deleting) return
         deleting = true
@@ -385,7 +388,7 @@ class MyItemsViewModel @Inject constructor(
             resume.forget(item.id)
             deleting = false
             pendingDelete = null
-            restore(items.value.firstOrNull()?.id)
+            if (restoreFocus) restore(items.value.firstOrNull()?.id)
         }
     }
 }
