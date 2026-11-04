@@ -561,10 +561,10 @@ internal fun IptvCard(
                     e.key == Key.Menu -> { if (e.type == KeyEventType.KeyUp) onOptions(); true }
                     // A new press starts clean (a hold whose release went elsewhere is forgotten).
                     ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { held = false; false }
-                    // Held OK: no click on release, the options instead. They open on the release, so
-                    // the key's repeats and release do not reach the dialog and pick its first answer.
-                    ok && e.type == KeyEventType.KeyDown -> { held = true; focus.pressed = false; true }
-                    ok && e.type == KeyEventType.KeyUp && held -> { held = false; focus.pressed = false; onOptions(); true }
+                    // Held OK: the options open while the key is still held; the dialog eats the rest
+                    // of the press (swallowHeldOk), so nothing is played or picked.
+                    ok && e.type == KeyEventType.KeyDown -> { if (!held) { held = true; focus.pressed = false; onOptions() }; true }
+                    ok && e.type == KeyEventType.KeyUp && held -> { held = false; focus.pressed = false; true }
                     else -> false
                 }
             }

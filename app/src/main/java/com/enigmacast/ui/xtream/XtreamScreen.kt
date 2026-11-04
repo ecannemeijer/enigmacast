@@ -1050,9 +1050,10 @@ private fun SidePanel(
                                         model.moving -> false
                                         e.key == Key.Menu -> { if (e.type == KeyEventType.KeyUp) menuFor = item; true }
                                         ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { held = false; false }
-                                        // Held OK: the small channel menu on release instead of playing.
-                                        ok && e.type == KeyEventType.KeyDown -> { held = true; true }
-                                        ok && e.type == KeyEventType.KeyUp && held -> { held = false; menuFor = item; true }
+                                        // Held OK: the small channel menu as soon as the key repeats (still held);
+                                        // the rest of the press is eaten, so it does not play.
+                                        ok && e.type == KeyEventType.KeyDown -> { if (!held) { held = true; menuFor = item }; true }
+                                        ok && e.type == KeyEventType.KeyUp && held -> { held = false; true }
                                         else -> false
                                     }
                                 }

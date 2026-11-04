@@ -647,6 +647,7 @@ fun TvConfirmDialog(
         }
         Column(
             modifier = Modifier
+                .swallowHeldOk()
                 .widthIn(min = if (compact) 240.dp else 320.dp, max = if (compact) 400.dp else 480.dp)
                 .skinSurface(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
                 .padding(if (compact) 12.dp else 16.dp),
@@ -704,6 +705,7 @@ fun TvChoiceDialog(
         LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
         Column(
             modifier = Modifier
+                .swallowHeldOk()
                 .widthIn(min = if (compact) 240.dp else 320.dp, max = if (compact) 420.dp else 480.dp)
                 .skinSurface(EnigmaColors.Selected, RoundedCornerShape(if (compact) 10.dp else 14.dp))
                 .padding(if (compact) 12.dp else 16.dp),
@@ -736,6 +738,7 @@ private fun StackedChoiceDialog(title: String, message: String, choices: List<St
         LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
         Column(
             modifier = Modifier
+                .swallowHeldOk()
                 .widthIn(min = 220.dp, max = 420.dp)
                 .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
                 .skinSurface(EnigmaColors.Selected, skinShape(10.dp))
@@ -905,6 +908,7 @@ fun OptionListDialog(
         LaunchedEffect(Unit) { current.requestWhenReady() }
         Column(
             modifier = Modifier
+                .swallowHeldOk()
                 .widthIn(min = 280.dp, max = 380.dp)
                 .heightIn(max = 470.dp)
                 .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
