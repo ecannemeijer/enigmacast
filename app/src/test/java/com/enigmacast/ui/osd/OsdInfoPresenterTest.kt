@@ -97,7 +97,7 @@ class OsdInfoPresenterTest {
     }
 
     @Test
-    fun anotherTunersSignalIsNotShown() {
+    fun anAwakeReceiversLiveTunerIsShownForTheSameDish() {
         val view = present(
             OsdInfoInput(
                 reference = astra1,
@@ -107,7 +107,8 @@ class OsdInfoPresenterTest {
                 ),
             ),
         )
-        assertNull(view.signal)
+        assertEquals(90, view.signal?.strengthPercent)
+        assertEquals(90, view.signal?.qualityPercent)
     }
 
     @Test

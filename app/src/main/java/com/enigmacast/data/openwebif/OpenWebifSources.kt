@@ -178,6 +178,25 @@ class OpenWebifOsdInfoSource @Inject constructor(
     private val lockedTuner = ConcurrentHashMap<String, Int>()
 
     override suspend fun signal(config: ReceiverConfig): SignalReading? {
+        val api = try {
+            apiSignal(config)
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            return webSignal(config) ?: throw error
+        }
+        if (api?.hasValues == true || api?.inStandby == true) return api
+        return webSignal(config) ?: api
+    }
+
+    /** Enigma2's own `/web/signal`: the fallback when the OpenWebif JSON has no levels or fails. */
+    private suspend fun webSignal(config: ReceiverConfig): SignalReading? = try {
+        OsdInfoJson.parseWebSignal(api.body(config, endpoints.webSignal(config)))
+    } catch (error: Exception) {
+        if (error is kotlinx.coroutines.CancellationException) throw error
+        null
+    }
+
+    private suspend fun apiSignal(config: ReceiverConfig): SignalReading? {
         val key = "${config.id}@${config.host}:${config.httpPort}"
         val known = signalUrl[key]
         if (known == "") return null
