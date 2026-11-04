@@ -26,6 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,21 +51,40 @@ import com.enigmacast.ui.theme.skinShape
  */
 @Composable
 fun SkinChooser(selected: OsdSkinId, onSelect: (OsdSkinId) -> Unit, modifier: Modifier = Modifier) {
-    Row(
+    val skins = Skins.all
+    val requesters = remember(skins.size) { List(skins.size) { FocusRequester() } }
+    // A grid of [SkinColumns] per row, so every name fits; Up/Down keep the column, Right stops at the row's end.
+    Column(
         modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        // Equal tiles (seven) that share the content width, so all of them are always on screen.
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Skins.all.forEachIndexed { index, skin ->
-            SkinTile(
-                skin,
-                selected = skin.id == selected,
-                onClick = { onSelect(skin.id) },
-                modifier = Modifier.weight(1f).then(if (index == 0) Modifier.edgeLeft() else Modifier),
-            )
+        skins.chunked(SkinColumns).forEachIndexed { row, rowSkins ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowSkins.forEachIndexed { col, skin ->
+                    val index = row * SkinColumns + col
+                    SkinTile(
+                        skin,
+                        selected = skin.id == selected,
+                        onClick = { onSelect(skin.id) },
+                        modifier = Modifier.weight(1f)
+                            .focusRequester(requesters[index])
+                            .then(if (col == 0) Modifier.edgeLeft() else Modifier)
+                            .focusProperties {
+                                if (col == rowSkins.lastIndex) right = FocusRequester.Cancel
+                                if (row > 0) up = requesters[index - SkinColumns]
+                                val below = (row + 1) * SkinColumns
+                                if (below < skins.size) down = requesters[minOf(index + SkinColumns, skins.lastIndex)]
+                            },
+                    )
+                }
+                // Keep the tiles of a short last row as wide as the others.
+                repeat(SkinColumns - rowSkins.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
+
+private const val SkinColumns = 4
 
 @Composable
 private fun SkinTile(skin: Skin, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
@@ -85,7 +107,7 @@ private fun SkinTile(skin: Skin, selected: Boolean, onClick: () -> Unit, modifie
                 color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Text,
                 fontSize = 13.sp,
                 fontWeight = EnigmaType.Strong,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
@@ -151,7 +173,7 @@ internal fun SkinThumbnail(skin: Skin, modifier: Modifier = Modifier) {
             else -> Box(
                 bar.padding(5.dp).fillMaxWidth().height(20.dp)
                     .background(
-                        if (skin.osd == OsdLayout.GLASS) Brush.linearGradient(listOf(p.osdFill, p.osdFillEnd)) else Brush.linearGradient(listOf(p.osdFill, p.osdFill)),
+                        if (skin.osd == OsdLayout.GLASS || skin.osd == OsdLayout.CALM) Brush.linearGradient(listOf(p.osdFill, p.osdFillEnd)) else Brush.linearGradient(listOf(p.osdFill, p.osdFill)),
                         skinShape(6.dp, skin),
                     )
                     .border(1.dp, if (skin.osd == OsdLayout.MINIMAL) p.osdFill else p.osdEdge, skinShape(6.dp, skin)),

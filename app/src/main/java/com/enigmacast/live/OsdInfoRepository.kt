@@ -76,7 +76,8 @@ class OsdInfoRepository @Inject constructor(
             data = next
             last = reference to data
             emit(data)
-            delay(SIGNAL_INTERVAL_MS)
+            // No level to show (standby without frontend files, IPTV, no endpoint): ask much less often.
+            delay(if (data.signal?.hasValues == true) SIGNAL_INTERVAL_MS else IDLE_SIGNAL_INTERVAL_MS)
         }
     }
 
@@ -119,6 +120,7 @@ class OsdInfoRepository @Inject constructor(
 
     companion object {
         const val SIGNAL_INTERVAL_MS = 2_500L
+        const val IDLE_SIGNAL_INTERVAL_MS = 10_000L
         const val STATIC_INTERVAL_MS = 15_000L
         const val QUICK_RETRY_MS = 2_000L
         const val QUICK_RETRIES = 3
