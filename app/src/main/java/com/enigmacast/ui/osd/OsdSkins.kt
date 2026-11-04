@@ -56,7 +56,8 @@ object StandardOsdSkin : OsdSkin {
             maxLines = 2,
         ) {
             view.signal?.let { signal ->
-                signal.strengthPercent?.let { Pill(stringResource(R.string.osd_signal_pill, stringResource(R.string.osd_signal_strength), it)) }
+                // Dish strength with a small bar meter, then the quality.
+                signal.strengthPercent?.let { SignalPill(stringResource(R.string.osd_signal_pill, stringResource(R.string.osd_signal_strength), it), it) }
                 when {
                     signal.qualityPercent != null -> Pill(stringResource(R.string.osd_signal_pill, stringResource(R.string.osd_signal_quality), signal.qualityPercent))
                     signal.qualityDb != null -> Pill(stringResource(R.string.osd_signal_quality_db, signal.qualityDb))
@@ -89,6 +90,18 @@ private fun Pill(text: String, color: Color = Color.White) {
     )
 }
 
+@Composable
+private fun SignalPill(text: String, percent: Int) {
+    androidx.compose.foundation.layout.Row(
+        Modifier.background(EnigmaColors.Raised, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        MiniBars(percent)
+        Text(text, color = Color.White, fontSize = 11.sp, maxLines = 1)
+    }
+}
+
 private fun cryptColor(tone: CryptTone): Color = when (tone) {
     CryptTone.FREE, CryptTone.OPEN -> EnigmaColors.Success
     CryptTone.LOCKED -> EnigmaColors.Accent
@@ -102,14 +115,12 @@ object OrbitOsdSkin : OsdSkin {
     override fun Strip(view: OsdInfoView, modifier: Modifier, trailing: @Composable () -> Unit) {
         FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(5.dp), maxLines = 2) {
             view.signal?.let { s ->
-                val q = s.qualityPercent ?: s.strengthPercent
-                val text = when {
-                    s.qualityPercent != null -> "${s.qualityPercent}%"
-                    s.qualityDb != null -> s.qualityDb
-                    s.strengthPercent != null -> "${s.strengthPercent}%"
-                    else -> null
+                // Strength (bars) and quality as their own chips, so the dish level is always visible.
+                s.strengthPercent?.let { IconChip(stringResource(R.string.osd_signal_pill, stringResource(R.string.osd_signal_strength), it)) { MiniBars(it) } }
+                when {
+                    s.qualityPercent != null -> IconChip(stringResource(R.string.osd_signal_pill, stringResource(R.string.osd_signal_quality), s.qualityPercent)) { MiniBars(s.qualityPercent) }
+                    s.qualityDb != null -> IconChip(stringResource(R.string.osd_signal_quality_db, s.qualityDb))
                 }
-                if (text != null) IconChip(text) { MiniBars(q ?: 0) }
             }
             view.crypt?.let { badge ->
                 val label = badge.systems?.let { "${badge.text.asString()} · $it" } ?: badge.text.asString()
