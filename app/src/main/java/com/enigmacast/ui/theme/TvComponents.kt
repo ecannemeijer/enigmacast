@@ -575,7 +575,7 @@ fun ChannelsLoadingDialog(message: String, progress: Float = 0f) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
+                com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
                 Text(
                     message,
                     color = EnigmaColors.Text,

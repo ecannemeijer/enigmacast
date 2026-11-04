@@ -150,7 +150,7 @@ fun ActorInfoDialog(
                             )
                         }
                         when (state) {
-                            ActorState.Loading -> CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(26.dp))
+                            ActorState.Loading -> com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(26.dp))
                             ActorState.Failed -> Text(stringResource(R.string.actor_failed), color = EnigmaColors.Muted, fontSize = 14.sp)
                             is ActorState.Ready -> Unit
                         }

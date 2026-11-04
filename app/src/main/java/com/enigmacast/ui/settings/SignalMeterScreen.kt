@@ -93,7 +93,7 @@ fun SignalMeterScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(42.dp))
+                com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(42.dp))
                 Text(
                     stringResource(R.string.signal_loading),
                     color = EnigmaColors.Muted,
@@ -152,7 +152,7 @@ fun SignalMeterScreen(
                     Meter(state.reading)
                     if (state.busy) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(22.dp))
+                            com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(22.dp))
                             state.message?.let { Text(it.asString(), color = EnigmaColors.Muted, fontSize = 16.sp) }
                         }
                     } else {

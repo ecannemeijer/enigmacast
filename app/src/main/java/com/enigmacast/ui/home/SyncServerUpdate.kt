@@ -162,7 +162,7 @@ fun SyncBusyRow(text: String, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        androidx.compose.material3.CircularProgressIndicator(
+        com.enigmacast.ui.components.EnigmaSpinner(
             color = EnigmaColors.Accent,
             strokeWidth = 3.dp,
             modifier = Modifier.size(22.dp),

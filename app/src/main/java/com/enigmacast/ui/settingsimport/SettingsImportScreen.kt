@@ -491,7 +491,7 @@ private fun ProgressLine(fraction: Float?, text: String) {
         Text(text, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val barModifier = Modifier.fillMaxWidth().height(6.dp).clip(skinShape(3.dp))
         if (fraction == null) {
-            LinearProgressIndicator(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
+            com.enigmacast.ui.components.EnigmaIndeterminateBar(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
         } else {
             val animated by animateFloatAsState(fraction.coerceIn(0f, 1f), label = "importProgress")
             LinearProgressIndicator(progress = { animated }, modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)

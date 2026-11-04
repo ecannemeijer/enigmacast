@@ -416,7 +416,7 @@ internal fun SearchSpinner() {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
     ) {
-        CircularProgressIndicator(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(22.dp))
+        com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(22.dp))
     }
 }
 
