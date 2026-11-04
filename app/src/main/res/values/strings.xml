@@ -1821,4 +1821,21 @@
     <string name="companion_paired_with">Paired with %1$s</string>
     <string name="preview_no_picture">No picture from the receiver yet. Trying again…</string>
     <string name="preview_no_connection">Cannot reach the receiver. Trying again…</string>
+    <string name="iptv_variant_fallback">Not working, switched to %1$s</string>
+    <string name="iptv_variant_archive">replay</string>
+    <string name="iptv_channel_hide">Hide</string>
+    <string name="iptv_channel_move">Move</string>
+    <string name="iptv_channel_quality">Choose quality</string>
+    <string name="iptv_channel_show">Show</string>
+    <string name="iptv_merge_channels">Merge channels with multiple qualities</string>
+    <string name="iptv_merge_channels_desc">SD, HD, UHD… of one channel become one row; replay first, and the next one if it does not play.</string>
+    <string name="iptv_quality_order">Preferred quality</string>
+    <string name="iptv_quality_highest">Highest</string>
+    <string name="iptv_quality_hd">HD</string>
+    <string name="iptv_quality_saver">Saver (SD)</string>
+    <string name="iptv_hidden_channels">Hidden channels</string>
+    <string name="iptv_hidden_channels_desc">Hold OK on a channel to hide or move it.</string>
+    <string name="iptv_hidden_channels_none">No hidden channels.</string>
+    <string name="iptv_show_all_channels">Show all</string>
+    <string name="iptv_reset_order">Reset channel order</string>
 </resources>

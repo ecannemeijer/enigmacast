@@ -1822,4 +1822,21 @@
     <string name="companion_paired_with">Collegato a %1$s</string>
     <string name="preview_no_picture">Ancora nessuna immagine dal ricevitore. Nuovo tentativo…</string>
     <string name="preview_no_connection">Ricevitore non raggiungibile. Nuovo tentativo…</string>
+    <string name="iptv_variant_fallback">Non funziona, passato a %1$s</string>
+    <string name="iptv_variant_archive">replay</string>
+    <string name="iptv_channel_hide">Nascondi</string>
+    <string name="iptv_channel_move">Sposta</string>
+    <string name="iptv_channel_quality">Scegli qualità</string>
+    <string name="iptv_channel_show">Mostra</string>
+    <string name="iptv_merge_channels">Unisci canali con più qualità</string>
+    <string name="iptv_merge_channels_desc">SD, HD, UHD… di un canale diventano una riga; prima il replay, poi il successivo se non funziona.</string>
+    <string name="iptv_quality_order">Qualità preferita</string>
+    <string name="iptv_quality_highest">Massima</string>
+    <string name="iptv_quality_hd">HD</string>
+    <string name="iptv_quality_saver">Risparmio (SD)</string>
+    <string name="iptv_hidden_channels">Canali nascosti</string>
+    <string name="iptv_hidden_channels_desc">Tieni premuto OK su un canale per nasconderlo o spostarlo.</string>
+    <string name="iptv_hidden_channels_none">Nessun canale nascosto.</string>
+    <string name="iptv_show_all_channels">Mostra tutti</string>
+    <string name="iptv_reset_order">Ripristina ordine</string>
 </resources>
