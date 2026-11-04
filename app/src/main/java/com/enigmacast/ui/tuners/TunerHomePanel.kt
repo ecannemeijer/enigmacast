@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -142,6 +143,26 @@ fun TunerHomePanel(
     var openItem by remember { mutableStateOf<ScheduleItem?>(null) }
     var confirmCancel by remember { mutableStateOf<ScheduleItem?>(null) }
 
+    // Removing a Continue watching card: the focus goes to its neighbour, or the next row when it was the only one.
+    val cardFocus = remember { mutableMapOf<String, FocusRequester>() }
+    fun cardRequester(key: String) = cardFocus.getOrPut(key) { FocusRequester() }
+    var removedCard by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    val afterRow = remember { arrayOfNulls<FocusRequester>(1) }
+    val currentContinue by androidx.compose.runtime.rememberUpdatedState(iptvContinue.map { "home/${it.key}" })
+    LaunchedEffect(removedCard) {
+        val (removed, target) = removedCard ?: return@LaunchedEffect
+        kotlinx.coroutines.withTimeoutOrNull(3_000) {
+            androidx.compose.runtime.snapshotFlow { removed !in currentContinue }.first { it: Boolean -> it }
+        }
+        val goal = target?.takeIf { it in currentContinue }
+        val ok = if (goal != null) {
+            val i = currentContinue.indexOf(goal)
+            if (iptvRowState.layoutInfo.visibleItemsInfo.none { it.index == i }) iptvRowState.scrollToItem(i)
+            cardRequester(goal).requestWhenAttached(maxFrames = 60)
+        } else afterRow[0]?.let { runCatching { it.requestFocus() }.isSuccess } ?: false
+        if (!ok) contentFocus.requestWhenAttached()
+        removedCard = null
+    }
     CompositionLocalProvider(LocalEdgeLeft provides menuFocus) {
         Box(
             Modifier
@@ -182,6 +203,7 @@ fun TunerHomePanel(
                                     card = card,
                                     modifier = (if (i == 0) left else Modifier).then(rowNav("iptv"))
                                         .then(if (iptvReturn == "home/${card.key}") Modifier.trackedFocusRequester(iptvReturnFocus) else Modifier)
+                                        .focusRequester(cardRequester("home/${card.key}"))
                                         .focusProperties { if (i == iptvContinue.lastIndex) right = FocusRequester.Cancel },
                                     // As in My Items: OK the info page (Back returns to this card), long press the options.
                                     onClick = { library.okIptv(card, "home/${card.key}", onXtream, onTorrent) },
@@ -200,6 +222,8 @@ fun TunerHomePanel(
                 })
             }
             chain.keys = list.map { it.key }
+            // Row below the Continue watching row, else the one above: where the focus goes once it is empty.
+            if ("iptv" in chain.keys) afterRow[0] = (chain.neighbourKey("iptv", 1) ?: chain.neighbourKey("iptv", -1))?.let(chain::requester)
             PivotColumn(sections, Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp)) {
                 list.forEachIndexed { i, section ->
                     key(section.key) {
@@ -211,7 +235,11 @@ fun TunerHomePanel(
         }
     }
 
-    com.enigmacast.ui.dashboard.IptvCardDialogs(library, onXtream, onTorrent)
+    com.enigmacast.ui.dashboard.IptvCardDialogs(library, onXtream, onTorrent, onRemove = { origin ->
+        if (origin != null && origin.startsWith("home/")) {
+            removedCard = origin to com.enigmacast.domain.ui.FocusAfterRemove.next(listOf(currentContinue), origin)
+        }
+    })
     chosen?.let { card ->
         val use = card.primary
         val canWatch = card.uses.any { it.reference.isNotBlank() }
