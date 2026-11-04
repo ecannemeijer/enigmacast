@@ -1835,4 +1835,5 @@
     <string name="iptv_hidden_channels_none">Keine ausgeblendeten Sender.</string>
     <string name="iptv_show_all_channels">Alle anzeigen</string>
     <string name="iptv_reset_order">Reihenfolge zurücksetzen</string>
+    <string name="skin_slate_calm">Ruhiger Schiefer</string>
 </resources>

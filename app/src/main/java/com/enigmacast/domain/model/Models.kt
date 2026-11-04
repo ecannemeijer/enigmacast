@@ -168,6 +168,7 @@ enum class OsdSkinId(@StringRes val label: Int) {
     /** Frosted glass over a full-screen photo; added last so stored values keep their meaning. */
     GLASS_EARTH(R.string.skin_glass_earth),
     GLASS_WAVE(R.string.skin_glass_wave),
+    SLATE_CALM(R.string.skin_slate_calm),
     ;
 
     companion object {

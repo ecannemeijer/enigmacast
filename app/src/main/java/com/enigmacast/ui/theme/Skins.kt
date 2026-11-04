@@ -68,6 +68,8 @@ enum class OsdLayout {
     ORBIT,
     /** Edge-to-edge glass sheet with now/next columns and a glow progress bar (Glass Wave). */
     WAVE,
+    /** Soft card with a quiet slate-to-sage gradient and a hairline edge (Slate Calm). */
+    CALM,
 }
 
 data class Skin(
@@ -231,7 +233,22 @@ object Skins {
         fontFamily = Inter,
     )
 
-    val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora, GlassEarth, GlassWave)
+    /** Restful but professional: muted slate with sage and blue-grey accents, low contrast, a soft focus ring. */
+    val SlateCalm = Skin(
+        id = OsdSkinId.SLATE_CALM,
+        palette = SkinPalette(
+            canvas = Color(0xFF161C22), card = Color(0xFF1E262D), cardBorder = Color(0xFF2C3740),
+            raised = Color(0xFF242D35), selected = Color(0xFF2A3540), focus = Color(0xFF3A4B55),
+            onFocus = Color(0xFFF1F4F2), accent = Color(0xFF8FB3A0), highlight = Color(0xFFA9C4CF),
+            secondary = Color(0xFF9AA8B8), onAccent = Color(0xFF12181D), text = Color(0xFFE6EBEE),
+            muted = Color(0xFFB2BCC4), subtle = Color(0xFF7B8790), success = Color(0xFF8CC7A1),
+            danger = Color(0xFFE08F86), dangerFocus = Color(0xFF8A3B34),
+            osdFill = Color(0xFF1C252C), osdFillEnd = Color(0xFF1F2C2A), osdEdge = Color(0x408FB3A0),
+        ),
+        cornerScale = 1.1f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.GLOW, osd = OsdLayout.CALM,
+    )
+
+    val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora, GlassEarth, GlassWave, SlateCalm)
 
     fun of(id: OsdSkinId): Skin = all.firstOrNull { it.id == id } ?: EnigmaCast
 }

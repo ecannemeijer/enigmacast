@@ -1838,4 +1838,5 @@
     <string name="iptv_hidden_channels_none">No hidden channels.</string>
     <string name="iptv_show_all_channels">Show all</string>
     <string name="iptv_reset_order">Reset channel order</string>
+    <string name="skin_slate_calm">Slate Calm</string>
 </resources>

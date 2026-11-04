@@ -325,7 +325,7 @@ internal fun ChannelBanner(
         else -> Unit
     }
     val cardShape = skinShape(16.dp)
-    val fill = if (layout == OsdLayout.GLASS) {
+    val fill = if (layout == OsdLayout.GLASS || layout == OsdLayout.CALM) {
         Brush.linearGradient(listOf(EnigmaColors.scrimOf(ActiveSkin.current.palette.osdFill, scrim), EnigmaColors.scrimOf(ActiveSkin.current.palette.osdFillEnd, scrim)))
     } else {
         androidx.compose.ui.graphics.SolidColor(scrim)

@@ -1839,4 +1839,5 @@
     <string name="iptv_hidden_channels_none">Aucune chaîne masquée.</string>
     <string name="iptv_show_all_channels">Tout afficher</string>
     <string name="iptv_reset_order">Rétablir l\'ordre</string>
+    <string name="skin_slate_calm">Ardoise Calme</string>
 </resources>

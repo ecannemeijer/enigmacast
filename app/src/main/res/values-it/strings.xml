@@ -1839,4 +1839,5 @@
     <string name="iptv_hidden_channels_none">Nessun canale nascosto.</string>
     <string name="iptv_show_all_channels">Mostra tutti</string>
     <string name="iptv_reset_order">Ripristina ordine</string>
+    <string name="skin_slate_calm">Ardesia Calma</string>
 </resources>

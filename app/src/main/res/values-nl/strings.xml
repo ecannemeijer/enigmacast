@@ -1830,4 +1830,5 @@
     <string name="iptv_hidden_channels_none">Geen verborgen kanalen.</string>
     <string name="iptv_show_all_channels">Alles tonen</string>
     <string name="iptv_reset_order">Volgorde herstellen</string>
+    <string name="skin_slate_calm">Rustig Leisteen</string>
 </resources>
