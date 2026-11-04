@@ -173,7 +173,24 @@ internal object OsdInfoJson {
         return primitive.contentOrNull?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
     }
 
-    private fun JsonObject.int(key: String): Int? = text(key)?.let { it.toIntOrNull() ?: it.toDoubleOrNull()?.toInt() }
+    private fun JsonObject.int(key: String): Int? = text(key)?.let(::number)
+
+    /** 94, "94", "94 %", "15.25 dB" → the number; null when there is none. */
+    internal fun number(raw: String): Int? {
+        val s = raw.trim().replace(',', '.')
+        s.toIntOrNull()?.let { return it }
+        return Regex("^-?[0-9]+(?:[.][0-9]+)?").find(s)?.value?.toDoubleOrNull()?.toInt()
+    }
+
+    /** Enigma2's `/web/signal` XML (e2snrdb, e2snr, e2acg, e2ber); null when it has no levels. */
+    fun parseWebSignal(xml: String): SignalReading? {
+        fun tag(name: String) = Regex("<$name>([^<]*)</$name>").find(xml)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() && !it.equals("N/A", true) }
+        val snr = tag("e2snr")?.let(::number)?.takeIf { it in 0..100 }
+        val agc = tag("e2acg")?.let(::number)?.takeIf { it in 0..100 }
+        val db = tag("e2snrdb")?.replace(',', '.')?.let { Regex("^-?[0-9]+(?:[.][0-9]+)?").find(it)?.value?.toFloatOrNull() }
+        if (snr == null && agc == null && db == null) return null
+        return SignalReading(snrPercent = snr, snrDb = db, agcPercent = agc, ber = tag("e2ber")?.let(::number)?.takeIf { it >= 0 })
+    }
 
     private fun JsonObject.bool(key: String): Boolean? = when (text(key)?.lowercase()) {
         "true", "1" -> true

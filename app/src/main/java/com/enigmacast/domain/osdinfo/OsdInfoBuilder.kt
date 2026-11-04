@@ -104,6 +104,9 @@ object OsdInfoBuilder {
         val ours = belongsToStream(reading, readingTuner, client, receiver.streamTunerSignal)
         return when {
             reading != null && ours -> SignalInfo.Measured(reading)
+            // Receiver awake: its live tuner hangs on the same dish/LNB, so its level is shown even
+            // when our stream uses another tuner (the box only reports the live frontend).
+            reading != null && !standby && reading.inStandby != true -> SignalInfo.Measured(reading)
             reading != null && client?.tunerNumber != null && readingTuner != null && readingTuner != client.tunerNumber ->
                 SignalInfo.Missing(Unavailable.OTHER_TUNER)
             standby -> SignalInfo.Missing(Unavailable.STANDBY)

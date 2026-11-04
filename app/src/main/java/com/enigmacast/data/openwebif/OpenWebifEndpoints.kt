@@ -39,6 +39,8 @@ class OpenWebifEndpoints @javax.inject.Inject constructor() {
     fun current(config: ReceiverConfig): String = api(config, "/api/getcurrent")
 
     /** Signal of the receiver's current frontend: `tunersignal` on openATV and OpenPLi, `signal` on some images. */
+    fun webSignal(config: ReceiverConfig): String = api(config, "/web/signal")
+
     fun signalPaths(config: ReceiverConfig): List<String> = listOf(api(config, "/api/tunersignal"), api(config, "/api/signal"))
 
     /** One frontend file (`snr`, `signal`, `snr_db`, `lock`) via OpenWebif's file download. */
