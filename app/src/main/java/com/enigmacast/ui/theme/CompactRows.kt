@@ -216,3 +216,20 @@ object FocusEdges {
     fun blocks(direction: androidx.compose.ui.focus.FocusDirection): Boolean =
         direction == androidx.compose.ui.focus.FocusDirection.Up || direction == androidx.compose.ui.focus.FocusDirection.Down
 }
+
+/**
+ * For a window opened by a held OK: the rest of that press (its repeats and its release) is
+ * eaten here, so it neither picks the first answer nor plays anything. A new press works as usual.
+ */
+fun Modifier.swallowHeldOk(): Modifier = composed {
+    var fresh by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    onPreviewKeyEvent { e ->
+        val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+        if (!ok || !fresh) return@onPreviewKeyEvent false
+        when {
+            e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 -> { fresh = false; false }
+            e.type == KeyEventType.KeyUp -> { fresh = false; true }
+            else -> true
+        }
+    }
+}
