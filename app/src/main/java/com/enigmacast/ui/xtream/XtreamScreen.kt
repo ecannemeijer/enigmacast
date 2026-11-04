@@ -248,6 +248,14 @@ fun XtreamScreen(
         return tryRow(null, -1)
     }
     fun openPanel() {
+        // Live on screen: Left always opens the channel list, never a film/series page browsed meanwhile.
+        if (model.playing?.item?.section == XtreamSection.LIVE && model.returnToPlayingLive()) {
+            column = PanelColumn.CATEGORIES
+            model.closeGuide()
+            panelOpen = true
+            openRequest++
+            return
+        }
         val vod = model.section != XtreamSection.LIVE
         column = when {
             vod && model.items.isNotEmpty() -> PanelColumn.VOD_GRID
@@ -387,7 +395,7 @@ fun XtreamScreen(
             panelOpen -> {
                 panelOpen = false
                 model.closeGuide()
-                model.restorePlayingCategory()
+                model.returnToPlayingLive()
                 openRequest++
             }
             // The info bar (OSD) up: Back only closes it and the channel stays full screen. Back on
