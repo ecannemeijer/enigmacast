@@ -403,6 +403,18 @@ class XtreamViewModel @Inject constructor(
     /** The live choice was applied to this channel's tracks, or the viewer picked one himself. */
     private var livePreferenceApplied = false
     private fun liveChannelPlays() = mediaLive && !catchup
+    /** The profile's subtitle choice per series (synced with its settings). */
+    private var seriesSubtitleMap = emptyMap<String, com.enigmacast.domain.player.LiveSubtitles>()
+    /** The playing episode's series, and its remembered choice (null: none yet, Settings › Playback rules). */
+    private var seriesKey: String? = null
+    private var seriesPref: com.enigmacast.domain.player.LiveSubtitles? = null
+    /** The series choice was applied to this episode, or the viewer picked one himself. */
+    private var seriesPrefApplied = false
+    private fun seriesKeyOf(what: XtreamPlaying): String? {
+        val item = what.item ?: return null
+        if (what.episode == null) return null
+        return com.enigmacast.domain.player.SeriesSubtitles.iptvKey(item.providerId, item.id)
+    }
     private fun liveChoiceMade() = liveSubtitles.mode != com.enigmacast.domain.player.LiveSubtitles.Mode.AUTO
     private var subtitleJob: Job? = null
     private var downloadJob: Job? = null
@@ -1230,6 +1242,12 @@ class XtreamViewModel @Inject constructor(
             subtitleSync.set(playback.subtitleDelayMs)
         }
         viewModelScope.launch { sleepTimer.endsAtMs.collect { sleepEndsAtMs = it } }
+        viewModelScope.launch {
+            settingsRepository.settings
+                .map { it.seriesSubtitles }
+                .distinctUntilChanged()
+                .collect { map -> seriesSubtitleMap = map }
+        }
         viewModelScope.launch {
             settingsRepository.settings
                 .map { it.liveSubtitles }
@@ -2125,7 +2143,11 @@ class XtreamViewModel @Inject constructor(
                             applyEmbeddedSubtitles(p, pending)
                             holdAutoText = false
                         } else if (selectedExternalId == null && !holdAutoText) {
-                            if (!applyLiveSubtitles(p)) selectFirstTextTrack(p)
+                            if (!applyLiveSubtitles(p) && !applySeriesSubtitles(p)) {
+                                // A series whose language is a SubSource file (or not in this episode): no automatic first track.
+                                val waitForFile = seriesPref?.let { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON } == true && !seriesPrefApplied
+                                if (!waitForFile) selectFirstTextTrack(p) else applySeriesExternal()
+                            }
                         }
                         publishTracks(p)
                     }
@@ -2323,15 +2345,19 @@ class XtreamViewModel @Inject constructor(
         playerState = com.enigmacast.domain.model.PlayerState(filePlayback = !live)
         val liveChannel = live && !archive
         livePreferenceApplied = false
+        seriesKey = if (live) null else seriesKeyOf(what)
+        seriesPref = seriesKey?.let { seriesSubtitleMap[it] }
+        seriesPrefApplied = false
         subtitlesHidden = if (liveChannel && liveChoiceMade()) liveSubtitles.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF
-        else !playbackSubtitles
+        else seriesPref?.let { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF } ?: !playbackSubtitles
         lastDurationMs = 0L
         guardJob?.cancel()
         if (!live) player().let { pl ->
             pl.trackSelectionParameters = pl.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .setPreferredTextLanguages(*preferredText.toTypedArray())
+                // The series' remembered language is the player's first pick for the next episode.
+                .setPreferredTextLanguages(*(listOfNotNull(seriesPref?.takeIf { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON }?.language?.takeIf { it.isNotBlank() }) + preferredText).distinct().toTypedArray())
                 .build()
         } else if (liveChannel) player().let { pl ->
             // The remembered live language is the player's first pick, so mostly no switch is needed.
@@ -2388,6 +2414,7 @@ class XtreamViewModel @Inject constructor(
     fun chooseSubtitles(id: String?) {
         val p = player ?: return
         if (liveChannelPlays() && id?.startsWith(EXTERNAL_PREFIX) != true) rememberLiveSubtitles(p, id)
+        if (!liveChannelPlays()) rememberSeriesSubtitles(p, id)
         val before = snapshot(p)
         EnigmaLog.subs("iptv choose ${id ?: "off"} at ${com.enigmacast.playback.SubtitleSafety.describe(before)} live=$mediaLive")
         if (id == null) {
@@ -2676,6 +2703,7 @@ class XtreamViewModel @Inject constructor(
             if (playing != what) return@launch
             externalHits = hits
             player?.let(::publishTracks)
+            applySeriesExternal()
         }
     }
 
@@ -2720,6 +2748,59 @@ class XtreamViewModel @Inject constructor(
         livePreferenceApplied = true
         EnigmaLog.subs("iptv live subtitles remembered: ${if (track == null) "off" else choice.language.ifBlank { "-" }}")
         viewModelScope.launch { settingsRepository.update { it.copy(liveSubtitles = choice) } }
+    }
+
+    /** An episode: off, or the language/kind chosen, for every later episode of the series (and a resume). */
+    private fun rememberSeriesSubtitles(p: ExoPlayer, id: String?) {
+        val key = seriesKey ?: return
+        val choice = when {
+            id == null -> com.enigmacast.domain.player.LiveSubtitles.OFF
+            id.startsWith(EXTERNAL_PREFIX) -> {
+                val hit = externalHits.firstOrNull { it.id == id.removePrefix(EXTERNAL_PREFIX).toLongOrNull() } ?: return
+                com.enigmacast.domain.player.SeriesSubtitles.ofExternal(hit)
+            }
+            else -> com.enigmacast.domain.player.LiveSubtitles.of(com.enigmacast.playback.TrackMenus.textTrack(p.currentTracks, id) ?: return)
+        }
+        seriesPref = choice
+        seriesPrefApplied = true
+        seriesSubtitleMap = com.enigmacast.domain.player.SeriesSubtitles.remember(seriesSubtitleMap, key, choice)
+        EnigmaLog.subs("iptv series subtitles remembered: ${if (choice.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF) "off" else choice.language.ifBlank { "-" } + " " + choice.mime}")
+        viewModelScope.launch { settingsRepository.update { it.copy(seriesSubtitles = com.enigmacast.domain.player.SeriesSubtitles.remember(it.seriesSubtitles, key, choice)) } }
+    }
+
+    /** An episode: the embedded track of the series' choice. False leaves the usual automatic pick. */
+    private fun applySeriesSubtitles(p: ExoPlayer): Boolean {
+        val pref = seriesPref ?: return false
+        if (liveChannelPlays() || seriesPrefApplied) return false
+        if (pref.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF) return false
+        if (p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)) return false
+        val tracks = com.enigmacast.playback.TrackMenus.textTracks(p.currentTracks) { it.id?.startsWith(EXTERNAL_PREFIX) == true }
+        if (tracks.isEmpty()) return false
+        val track = com.enigmacast.domain.player.SeriesSubtitles.pickEmbedded(pref, tracks) ?: return false
+        seriesPrefApplied = true
+        if (com.enigmacast.playback.TrackMenus.textSelected(p.currentTracks, track.id)) return true
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(p.isCurrentMediaItemSeekable, p.currentPosition)) {
+            EnigmaLog.subs("iptv series subtitles: switch skipped at ${p.currentPosition}ms, not seekable")
+            return true
+        }
+        EnigmaLog.subs("iptv series subtitles: remembered track ${track.id}")
+        holdAutoText = true
+        applyEmbeddedSubtitles(p, track.id)
+        holdAutoText = false
+        return true
+    }
+
+    /** SubSource files arrived: the series' file language when no embedded track was taken for it. */
+    private fun applySeriesExternal() {
+        val p = player ?: return
+        val pref = seriesPref ?: return
+        if (seriesPrefApplied || selectedExternalId != null || pref.mode != com.enigmacast.domain.player.LiveSubtitles.Mode.ON) return
+        val tracks = com.enigmacast.playback.TrackMenus.textTracks(p.currentTracks) { it.id?.startsWith(EXTERNAL_PREFIX) == true }
+        if (pref.mime != com.enigmacast.domain.player.SeriesSubtitles.SUBSOURCE && com.enigmacast.domain.player.SeriesSubtitles.pickEmbedded(pref, tracks) != null) return
+        val hit = com.enigmacast.domain.player.SeriesSubtitles.pickExternal(pref, externalHits) ?: return
+        seriesPrefApplied = true
+        EnigmaLog.subs("iptv series subtitles: remembered SubSource ${hit.id}")
+        chooseSubtitles("$EXTERNAL_PREFIX${hit.id}")
     }
 
     /** A new live channel: its track for the remembered choice. False leaves the old automatic pick. */

@@ -763,10 +763,15 @@ class EnigmaSyncEngine @Inject constructor(
         val keepSubtitles = if (profile.id == profiles.state.value.activeId) settings.current().liveSubtitles
         else profiles.state.value.scopes[profile.id]?.liveSubtitles ?: com.enigmacast.domain.player.LiveSubtitles()
         val withStartup = ProfileCloud.keepStartupWhenMissing(decoded, raw, keepStartup)
-        val snapshot = ProfileCloud.keepLiveSubtitlesWhenMissing(withStartup, raw, keepSubtitles)
+        val keepSeries = if (profile.id == profiles.state.value.activeId) settings.current().seriesSubtitles
+        else profiles.state.value.scopes[profile.id]?.seriesSubtitles ?: emptyMap()
+        val snapshot = ProfileCloud.keepSeriesSubtitlesWhenMissing(
+            ProfileCloud.keepLiveSubtitlesWhenMissing(withStartup, raw, keepSubtitles), raw, keepSeries,
+        )
         // A document from an older version lacks these fields: the local value stays and is sent back up.
         val startupWasMissing = (!ProfileCloud.includesStartupLive(raw) && snapshot.scope.startupLive != decoded.scope.startupLive) ||
-            (!ProfileCloud.includesLiveSubtitles(raw) && snapshot.scope.liveSubtitles != decoded.scope.liveSubtitles)
+            (!ProfileCloud.includesLiveSubtitles(raw) && snapshot.scope.liveSubtitles != decoded.scope.liveSubtitles) ||
+            (!ProfileCloud.includesSeriesSubtitles(raw) && snapshot.scope.seriesSubtitles != decoded.scope.seriesSubtitles)
         meta.applying = true
         meta.quietFingerprint = ProfileCloud.encode(snapshot)
         try {

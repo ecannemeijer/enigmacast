@@ -511,6 +511,7 @@ class TorrentViewModel @Inject constructor(
         resumeTarget = com.enigmacast.domain.torrent.TorrentLibraryRows.resumeRow(o.title, streamSeason, streamEpisode, streamEpisodeName, 0, 0, 0)
         val rememberKey = resumeTarget?.let { LastStream.key(it.kind, it.id) }
         // SubSource: TMDB title and year, season/episode, and the file name for the release.
+        seriesKey = streamSeason?.let { com.enigmacast.domain.player.SeriesSubtitles.torrentKey("tv", o.title.id.toString()) }
         subtitleTarget = TorrentSubtitleTarget(
             title = o.title.title,
             originalTitle = streamOriginalTitle,
@@ -623,7 +624,10 @@ class TorrentViewModel @Inject constructor(
                             // Once per file: a new override while playing makes progressive media re-read
                             // from the current place (a codec flush and a new Range request).
                             autoTextDone = true
-                            selectFirstTextTrack(p)
+                            if (!applySeriesSubtitles(p)) {
+                                val waitForFile = seriesPref?.let { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON } == true && !seriesPrefApplied
+                                if (!waitForFile) selectFirstTextTrack(p) else applySeriesExternal()
+                            }
                         }
                         publishTracks(p)
                     }
@@ -658,6 +662,10 @@ class TorrentViewModel @Inject constructor(
     private var resumeOffered = false
     /** The first embedded subtitle was picked for this file (or there was none to pick). */
     private var autoTextDone = false
+    /** The playing episode's series and its remembered subtitle choice (see SeriesSubtitles). */
+    private var seriesKey: String? = null
+    private var seriesPref: com.enigmacast.domain.player.LiveSubtitles? = null
+    private var seriesPrefApplied = false
 
     private fun play(url: String, title: String) {
         // The info page closes once playback starts; Back from the player lands on the grid card.
@@ -694,7 +702,13 @@ class TorrentViewModel @Inject constructor(
                     .setPreferredTextLanguages(*preferred.toTypedArray())
                     .setSelectUndeterminedTextLanguage(true)
                     .build()
-                subtitlesHidden = !playbackSubtitles
+                seriesPref = seriesKey?.let { settingsRepository.current().seriesSubtitles[it] }
+                seriesPrefApplied = false
+                subtitlesHidden = seriesPref?.let { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.OFF } ?: !playbackSubtitles
+                seriesPref?.takeIf { it.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON && it.language.isNotBlank() }?.let { pref ->
+                    trackSelectionParameters = trackSelectionParameters.buildUpon()
+                        .setPreferredTextLanguages(*(listOf(pref.language) + preferred).distinct().toTypedArray()).build()
+                }
                 lastDurationMs = 0L
                 guardJob?.cancel()
                 EnigmaLog.subs("torrent setMediaItem+prepare (new item) at ${seekOnStart ?: 0}ms, preferred ${preferred.ifEmpty { listOf("-") }.joinToString()}")
@@ -889,6 +903,7 @@ class TorrentViewModel @Inject constructor(
         val p = player ?: return
         val before = snapshot(p)
         EnigmaLog.subs("torrent choose ${id ?: "off"} at ${com.enigmacast.playback.SubtitleSafety.describe(before)}")
+        rememberSeriesSubtitles(p, id)
         if (id == null) {
             // Off only hides the lines: no track change, so switching on again never re-reads the file.
             selectedExternalId = null
@@ -943,6 +958,50 @@ class TorrentViewModel @Inject constructor(
     }
 
     private var subtitlesHidden = false
+
+    /** An episode: off, or the language/kind chosen, for every later episode of the series (and a resume). */
+    private fun rememberSeriesSubtitles(p: ExoPlayer, id: String?) {
+        val key = seriesKey ?: return
+        val choice = when {
+            id == null -> com.enigmacast.domain.player.LiveSubtitles.OFF
+            id.startsWith(EXTERNAL_PREFIX) -> {
+                val hit = externalHits.firstOrNull { it.id == id.removePrefix(EXTERNAL_PREFIX).toLongOrNull() } ?: return
+                com.enigmacast.domain.player.SeriesSubtitles.ofExternal(hit)
+            }
+            else -> com.enigmacast.domain.player.LiveSubtitles.of(TrackMenus.textTrack(p.currentTracks, id) ?: return)
+        }
+        seriesPref = choice
+        seriesPrefApplied = true
+        viewModelScope.launch { settingsRepository.update { it.copy(seriesSubtitles = com.enigmacast.domain.player.SeriesSubtitles.remember(it.seriesSubtitles, key, choice)) } }
+    }
+
+    private fun applySeriesSubtitles(p: ExoPlayer): Boolean {
+        val pref = seriesPref ?: return false
+        if (seriesPrefApplied || pref.mode != com.enigmacast.domain.player.LiveSubtitles.Mode.ON) return false
+        if (p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)) return false
+        val tracks = TrackMenus.textTracks(p.currentTracks) { it.id?.startsWith(EXTERNAL_PREFIX) == true }
+        val track = com.enigmacast.domain.player.SeriesSubtitles.pickEmbedded(pref, tracks) ?: return false
+        seriesPrefApplied = true
+        if (TrackMenus.textSelected(p.currentTracks, track.id)) return true
+        if (!com.enigmacast.playback.SubtitleSafety.canSwitchEmbedded(p.isCurrentMediaItemSeekable, p.currentPosition)) return true
+        EnigmaLog.subs("torrent series subtitles: remembered track ${track.id}")
+        holdAutoText = true
+        applyEmbeddedSubtitles(p, track.id)
+        holdAutoText = false
+        return true
+    }
+
+    private fun applySeriesExternal() {
+        val p = player ?: return
+        val pref = seriesPref ?: return
+        if (seriesPrefApplied || selectedExternalId != null || pref.mode != com.enigmacast.domain.player.LiveSubtitles.Mode.ON) return
+        val tracks = TrackMenus.textTracks(p.currentTracks) { it.id?.startsWith(EXTERNAL_PREFIX) == true }
+        if (pref.mime != com.enigmacast.domain.player.SeriesSubtitles.SUBSOURCE && com.enigmacast.domain.player.SeriesSubtitles.pickEmbedded(pref, tracks) != null) return
+        val hit = com.enigmacast.domain.player.SeriesSubtitles.pickExternal(pref, externalHits) ?: return
+        seriesPrefApplied = true
+        EnigmaLog.subs("torrent series subtitles: remembered SubSource ${hit.id}")
+        chooseSubtitles("$EXTERNAL_PREFIX${hit.id}")
+    }
     private var lastDurationMs = 0L
     private var guardJob: Job? = null
     /** A short notice over the player (string resource), cleared after a few seconds. */
@@ -1049,6 +1108,7 @@ class TorrentViewModel @Inject constructor(
             if (mediaUrl != url || playing == null) return@launch
             externalHits = com.enigmacast.domain.subsource.SubSourceMatch.byRelease(hits, target.fileName)
             player?.let(::publishTracks)
+            applySeriesExternal()
         }
     }
 

@@ -49,6 +49,8 @@ data class ProfileScope(
     val skinDefaults: Int = com.enigmacast.domain.model.SkinDefaults.CURRENT,
     /** Live TV subtitle choice; missing in documents from older versions (see [ProfileCloud.keepLiveSubtitlesWhenMissing]). */
     val liveSubtitles: com.enigmacast.domain.player.LiveSubtitles = com.enigmacast.domain.player.LiveSubtitles(),
+    /** Series subtitle choices; missing in older documents (see [ProfileCloud.keepSeriesSubtitlesWhenMissing]). */
+    val seriesSubtitles: Map<String, com.enigmacast.domain.player.LiveSubtitles> = emptyMap(),
 ) {
     fun applyTo(settings: AppSettings): AppSettings = settings.copy(
         lastChannels = lastChannels,
@@ -62,13 +64,14 @@ data class ProfileScope(
         motionQuality = motionQuality,
         startupLive = startupLive,
         liveSubtitles = liveSubtitles,
+        seriesSubtitles = seriesSubtitles,
     )
 
     companion object {
         fun of(settings: AppSettings) = ProfileScope(
             settings.lastChannels, settings.recentByReceiver, settings.lastLiveSource, settings.lastIptvChannels,
             settings.pictureModes, settings.osdSkin, settings.osdInfo, settings.navigationSounds, settings.motionQuality,
-            settings.startupLive, liveSubtitles = settings.liveSubtitles,
+            settings.startupLive, liveSubtitles = settings.liveSubtitles, seriesSubtitles = settings.seriesSubtitles,
         )
     }
 }
