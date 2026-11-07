@@ -112,9 +112,9 @@ class AboutProbe(
         private const val MAX_BODY = 512L * 1024
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(1_500, TimeUnit.MILLISECONDS)
-            .readTimeout(2_500, TimeUnit.MILLISECONDS)
-            .callTimeout(4_000, TimeUnit.MILLISECONDS)
+            .connectTimeout(3_000, TimeUnit.MILLISECONDS)
+            .readTimeout(4_000, TimeUnit.MILLISECONDS)
+            .callTimeout(7_000, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(false)
             .build()
     }

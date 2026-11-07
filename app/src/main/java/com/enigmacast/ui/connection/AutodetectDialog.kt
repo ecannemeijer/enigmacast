@@ -175,6 +175,7 @@ private fun AutodetectDialog(
                     }
                 }
                 is AutodetectState.NothingFound -> {
+                    Text(stringResource(R.string.autodetect_vpn_hint), color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
                     if (wizard) {
                         Text(stringResource(R.string.setup_autodetect_none), color = EnigmaColors.Text, fontSize = lead, lineHeight = 23.sp)
                         RetryManual(primary, onRetry, onManual)
@@ -191,6 +192,7 @@ private fun AutodetectDialog(
                 }
                 AutodetectState.NoNetwork -> {
                     Text(stringResource(R.string.autodetect_no_network), color = EnigmaColors.Text, fontSize = if (wizard) lead else 14.sp, lineHeight = if (wizard) 23.sp else 19.sp)
+                    Text(stringResource(R.string.autodetect_vpn_hint), color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
                     if (wizard) RetryManual(primary, onRetry, onManual) else RetryClose(primary, onRetry, onClose)
                 }
                 AutodetectState.AlreadyAdded -> {

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.widthIn
 import com.enigmacast.ui.theme.ValueRow
 import com.enigmacast.ui.theme.NavIconStyle
 import com.enigmacast.ui.theme.NavIconMotion
@@ -1125,6 +1126,23 @@ fun DashboardScreen(
             ChannelsLoadingDialog(
                 guideModel.loadingLabel.asString().ifBlank { stringResource(R.string.load_channels) },
                 guideModel.loadingProgress,
+            )
+        }
+        val unreachable by guideModel.unreachable.collectAsState()
+        unreachable?.let { lost ->
+            ReceiverUnreachableDialog(
+                host = lost.host,
+                port = lost.port,
+                onRetry = guideModel::retryReceiver,
+                onSetup = {
+                    guideModel.dismissUnreachable()
+                    onRunSetup()
+                },
+                onIptv = {
+                    guideModel.dismissUnreachable()
+                    onXtream()
+                },
+                onClose = guideModel::dismissUnreachable,
             )
         }
         guideModel.recordAsk?.let { ask ->
@@ -2432,6 +2450,50 @@ private fun MiniSourceLabel(
         Column(Modifier.padding(start = 5.dp).weight(1f)) {
             Text(name, color = EnigmaColors.Text, fontSize = 10.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (title != null) Text(title, color = EnigmaColors.Muted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * The receiver did not answer before the first channel load: say so plainly instead of a stuck
+ * loading bar. Retry, open the receiver setup (address), or carry on with IPTV.
+ */
+@Composable
+private fun ReceiverUnreachableDialog(
+    host: String,
+    port: Int,
+    onRetry: () -> Unit,
+    onSetup: () -> Unit,
+    onIptv: () -> Unit,
+    onClose: () -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        val first = remember { androidx.compose.ui.focus.FocusRequester() }
+        Column(
+            Modifier
+                .widthIn(min = 420.dp, max = 620.dp)
+                .background(com.enigmacast.ui.theme.EnigmaColors.Card, com.enigmacast.ui.theme.skinShape(16.dp))
+                .padding(24.dp)
+                .focusGroup(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.receiver_unreachable_title), color = com.enigmacast.ui.theme.EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                stringResource(R.string.receiver_unreachable_message, "$host:$port"),
+                color = com.enigmacast.ui.theme.EnigmaColors.Muted,
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                com.enigmacast.ui.theme.TvButton(stringResource(R.string.receiver_unreachable_retry), onRetry, modifier = Modifier.focusRequester(first))
+                com.enigmacast.ui.theme.TvButton(stringResource(R.string.receiver_unreachable_setup), onSetup)
+                com.enigmacast.ui.theme.TvButton(stringResource(R.string.receiver_unreachable_iptv), onIptv)
+                com.enigmacast.ui.theme.TvButton(stringResource(R.string.close), onClose)
+            }
+        }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(50)
+            runCatching { first.requestFocus() }
         }
     }
 }
