@@ -1020,7 +1020,7 @@
     <string name="sync_server_status">Status</string>
     <string name="sync_server_recovery">Recovery code</string>
     <string name="sync_server_claim">Take over admin</string>
-    <string name="sync_server_claimed">This device is now the only admin. Save the new recovery code: %1$s. The previous code no longer works.</string>
+    <string name="sync_server_claimed">Management taken over. All other devices were disconnected and must pair again (Companion with a new code). Save the new recovery code: %1$s. The previous code no longer works.</string>
     <string name="sync_server_connected">Connected to %1$s as %2$s. Choosing a profile syncs it.</string>
     <string name="sync_server_last_sync">Last sync</string>
     <string name="sync_server_incomplete_profiles">Incomplete: %1$d of %2$d profiles could not be updated. Retrying automatically.</string>

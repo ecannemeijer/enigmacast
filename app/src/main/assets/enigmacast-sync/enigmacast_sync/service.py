@@ -68,7 +68,7 @@ def server_info(db) -> dict:
 
 
 def join(db, body: dict) -> dict:
-    """A TV running EnigmaCast joins without a pairing code. The first one is the only admin."""
+    """A TV running EnigmaCast joins without a pairing code. Every TV may manage the server."""
     name = str(body.get("name", "EnigmaCast"))[:64]
     pubkey = _b64(body.get("publicKey", ""))
     if not pubkey:
@@ -77,11 +77,10 @@ def join(db, body: dict) -> dict:
     token = secrets.token_urlsafe(32)
     existing = db.execute("SELECT * FROM devices WHERE pubkey=? AND revoked=0", (pubkey,)).fetchone()
     if existing is not None:
-        db.execute("UPDATE devices SET token_hash=?, name=? WHERE id=?", (token_hash(token), name, existing["id"]))
+        db.execute("UPDATE devices SET token_hash=?, name=?, role='admin' WHERE id=?", (token_hash(token), name, existing["id"]))
         db.commit()
-        return {"deviceId": existing["id"], "token": token, "role": existing["role"]}
-    admins = db.execute("SELECT COUNT(*) AS n FROM devices WHERE role='admin' AND revoked=0").fetchone()["n"]
-    role = "admin" if admins == 0 else "member"
+        return {"deviceId": existing["id"], "token": token, "role": "admin"}
+    role = "admin"
     device_id = secrets.token_hex(16)
     db.execute(
         "INSERT INTO devices (id, name, pubkey, token_hash, role, revoked, created_ms) VALUES (?,?,?,?,?,0,?)",
@@ -105,8 +104,7 @@ def pair(db, body: dict) -> dict:
     if row is None:
         raise ApiError(401, "pairing code rejected")
     db.execute("UPDATE pairing SET used=1 WHERE code_hash=?", (row["code_hash"],))
-    admins = db.execute("SELECT COUNT(*) AS n FROM devices WHERE role='admin' AND revoked=0").fetchone()["n"]
-    role = "admin" if admins == 0 else "member"
+    role = "admin"
     device_id = secrets.token_hex(16)
     token = secrets.token_urlsafe(32)
     db.execute(
@@ -162,8 +160,9 @@ def authenticate(db, headers: dict, method: str, path: str, body: bytes) -> dict
 
 
 def require_admin(device: dict) -> None:
-    if device.get("role") != "admin" or device.get("revoked"):
-        raise ApiError(403, "admin only")
+    """Any paired, not revoked device may manage the server (no single owner)."""
+    if device.get("revoked"):
+        raise ApiError(403, "device revoked")
 
 
 def issue_pairing(db, device: dict) -> dict:
@@ -291,9 +290,20 @@ def make_backup(db, device: dict) -> dict:
     return {"path": str(target)}
 
 
+def list_backups(db, device: dict) -> dict:
+    require_admin(device)
+    root = _dir(db) / "backups"
+    folders = sorted((p for p in root.glob("enigmacast-sync-*") if (p / "sync.db").is_file()), reverse=True) if root.is_dir() else []
+    return {"backups": [str(p) for p in folders]}
+
+
 def restore_backup(db, device: dict, folder: str) -> dict:
     require_admin(device)
     data = _dir(db)
+    root = (data / "backups").resolve()
+    target = Path(folder).resolve()
+    if target.parent != root or not (target / "sync.db").is_file():
+        raise ApiError(400, "unknown backup")
     restore(Path(folder), data / "sync.db", data / "master.key")
     return {"restored": folder}
 

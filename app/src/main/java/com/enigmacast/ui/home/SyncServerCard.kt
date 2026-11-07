@@ -351,7 +351,7 @@ class SyncServerViewModel @Inject constructor(
         engine.syncInBackground("herstel backup")
     }
 
-    /** Frees the single admin slot with the recovery code, then pairs this device as that admin. */
+    /** Resets the device list with the recovery code, then pairs this device again. */
     fun disconnect() {
         client.clear()
         linkedHost = ""
