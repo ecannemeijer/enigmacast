@@ -150,11 +150,14 @@ class ReceiverRouter @Inject constructor(
         invalidate()
     }
 
+    /** Two tries: a quick one for the LAN, a longer one for a home network reached over a VPN. */
     private suspend fun probe(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            Socket().use { socket -> socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS) }
-            true
-        }.getOrDefault(false)
+        PROBE_TIMEOUTS_MS.any { timeout ->
+            runCatching {
+                Socket().use { socket -> socket.connect(InetSocketAddress(host, port), timeout) }
+                true
+            }.getOrDefault(false)
+        }
     }
 
     private fun key(config: ReceiverConfig) =
@@ -162,6 +165,7 @@ class ReceiverRouter @Inject constructor(
 
     private companion object {
         const val TTL_MS = 5 * 60 * 1000L
-        const val PROBE_TIMEOUT_MS = 1_200
+        /** 1.2 s was too short for OpenVPN: the home address looked unreachable and the remote route was taken. */
+        val PROBE_TIMEOUTS_MS = listOf(1_500, 4_000)
     }
 }

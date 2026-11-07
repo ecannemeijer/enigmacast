@@ -1869,4 +1869,11 @@
     <string name="sync_tv_restore_done">%1$s teruggezet. Deze tv is opnieuw gekoppeld; andere tv\'s verbinden vanzelf opnieuw.</string>
     <string name="sync_tv_backup_exported">Geëxporteerd naar %1$s. Houd het privé: het bevat de sleutel van de server.</string>
     <string name="sync_tv_restore_message">%1$s terugzetten op de syncserver van de ontvanger? De huidige gegevens worden vervangen (een veiligheidskopie blijft op de ontvanger). Installeer op een nieuwe ontvanger eerst de syncserver.</string>
+    <string name="receiver_unreachable_short">Receiver niet bereikbaar</string>
+    <string name="receiver_unreachable_title">Receiver niet bereikbaar</string>
+    <string name="receiver_unreachable_message">EnigmaCast kan de receiver op %1$s niet bereiken. Controleer of hij aan staat en op hetzelfde netwerk zit, of dat je VPN naar huis verbonden is. Je kunt het opnieuw proberen, het adres van de receiver wijzigen of verdergaan met IPTV.</string>
+    <string name="receiver_unreachable_retry">Opnieuw proberen</string>
+    <string name="receiver_unreachable_setup">Receiveradres</string>
+    <string name="receiver_unreachable_iptv">Verder met IPTV</string>
+    <string name="autodetect_vpn_hint">Zoeken werkt niet via een VPN (bijvoorbeeld OpenVPN naar huis): vul zelf het thuisadres van de receiver in, bijvoorbeeld 192.168.1.10. Een opgeslagen adres wordt altijd direct geprobeerd.</string>
 </resources>

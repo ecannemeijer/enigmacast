@@ -110,6 +110,7 @@ class OwnTunerSession @Inject constructor(
     private val listEvents: com.enigmacast.sync.ChannelListEvents,
     private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val owner: com.enigmacast.playback.PlaybackOwner,
+    private val reachability: com.enigmacast.data.network.ReceiverReachability,
 ) {
     /**
      * IPTV live (continuing in the mini player) or a torrent holds the output: starts nobody
@@ -388,10 +389,17 @@ class OwnTunerSession @Inject constructor(
         startAfterLoad = startPlayback
         val dialog = !channelLoadFailed
         startJob = scope.launch {
-            if (dialog) showLoad(UiText.res(R.string.load_channels), 0.05f)
             try {
                 val settings = settingsRepository.current()
                 val receiver = settings.activeReceiver() ?: return@launch
+                // No progress bar for a receiver that does not answer: the notice says so instead.
+                if (!reachability.check(receiver)) {
+                    channelLoadFailed = true
+                    hideLoad()
+                    _state.update { it.copy(tuner = TunerState(TunerStatus.PROBLEM, UiText.res(R.string.receiver_unreachable_short))) }
+                    return@launch
+                }
+                if (dialog) showLoad(UiText.res(R.string.load_channels), 0.05f)
                 boundReceiverId = receiver.id
                 val last = ChannelMemory.lastFor(settings, receiver.id)
                 val list = runCatching {

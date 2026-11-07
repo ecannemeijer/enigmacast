@@ -77,7 +77,24 @@ class StreamGuideViewModel @Inject constructor(
     private val reminders: ReminderScheduler,
     private val recordings: com.enigmacast.live.RecordingBook,
     private val playbackLifecycle: com.enigmacast.live.PlaybackLifecycle,
+    private val reachability: com.enigmacast.data.network.ReceiverReachability,
 ) : ViewModel() {
+    /** The receiver did not answer before the first load (shown as a notice with actions). */
+    val unreachable = reachability.state
+
+    init {
+        viewModelScope.launch {
+            reachability.retries.collect {
+                session.reloadChannels()
+                refresh()
+            }
+        }
+    }
+
+    fun retryReceiver() = reachability.retry()
+
+    fun dismissUnreachable() = reachability.dismiss()
+
     private var medium = GuideMedium.Television
     private val remembered = mutableMapOf<GuideMedium, GuideSide>()
     private var mediumJob: Job? = null
@@ -973,6 +990,13 @@ class StreamGuideViewModel @Inject constructor(
     /** First follow-mode load keeps the wait dialog up and names each step. Later refreshes stay quiet. */
     private suspend fun loadFollowing() {
         val initial = mode != StreamMode.OWN_TUNER && (!bouquetLoaded || channels.isEmpty())
+        if (initial) {
+            val receiver = settingsRepository.current().activeReceiver()
+            if (receiver != null && !reachability.check(receiver)) {
+                status = UiText.res(R.string.receiver_unreachable_short)
+                return
+            }
+        }
         if (initial) {
             sideLoading = true
             loadingChannels = true

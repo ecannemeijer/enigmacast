@@ -1877,4 +1877,11 @@
     <string name="sync_tv_restore_done">Restored %1$s. This TV is paired again; other TVs reconnect by themselves.</string>
     <string name="sync_tv_backup_exported">Exported to %1$s. Keep it private: it contains the server key.</string>
     <string name="sync_tv_restore_message">Restore %1$s onto the sync server on the receiver? Its current data is replaced (a safety copy stays on the receiver). Install the sync server first on a new receiver.</string>
+    <string name="receiver_unreachable_short">Receiver not reachable</string>
+    <string name="receiver_unreachable_title">Receiver not reachable</string>
+    <string name="receiver_unreachable_message">EnigmaCast cannot reach the receiver at %1$s. Check that it is switched on and on the same network, or that your VPN to home is connected. You can try again, change the receiver address, or carry on with IPTV.</string>
+    <string name="receiver_unreachable_retry">Try again</string>
+    <string name="receiver_unreachable_setup">Receiver address</string>
+    <string name="receiver_unreachable_iptv">Continue with IPTV</string>
+    <string name="autodetect_vpn_hint">Searching does not work over a VPN (for example OpenVPN to home): enter the receiver\'s home address yourself, for example 192.168.1.10. A saved address is always tried directly.</string>
 </resources>
