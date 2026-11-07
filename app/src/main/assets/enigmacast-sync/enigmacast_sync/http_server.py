@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from enigmacast_sync.service import (
     ApiError, assign_profiles, authenticate, health, issue_pairing, join, list_devices, list_profiles,
-    get_playlist, make_backup, pair, push, put_playlist, recover, require_admin, revoke_device, server_info, sync_pull, upsert_profile,
+    get_playlist, list_backups, make_backup, restore_backup, pair, push, put_playlist, recover, require_admin, revoke_device, server_info, sync_pull, upsert_profile,
 )
 
 PORT = 8740
@@ -83,6 +83,10 @@ def make_handler(db):
                 return self._json(200, sync_pull(db, device, profile_id, cursor))
             if path == "/api/v1/backups" and method == "POST":
                 return self._json(200, make_backup(db, device))
+            if path == "/api/v1/backups" and method == "GET":
+                return self._json(200, list_backups(db, device))
+            if path == "/api/v1/backups/restore" and method == "POST":
+                return self._json(200, restore_backup(db, device, str(body.get("folder", ""))))
             if path == "/api/v1/status" and method == "GET":
                 require_admin(device)
                 return self._json(200, server_info(db))
