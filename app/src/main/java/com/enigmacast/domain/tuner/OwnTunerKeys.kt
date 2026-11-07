@@ -52,7 +52,8 @@ object BannerOk {
      */
     fun decide(tunerTrouble: Boolean, radio: Boolean, banner: Boolean, fromZap: Boolean): Action = when {
         tunerTrouble -> Action.RETRY
-        !radio && banner && fromZap -> Action.OPTIONS_BANNER
+        // Any banner (a zap's or Info's): OK goes to the mini OSD with the recent channels.
+        !radio && banner -> Action.OPTIONS_BANNER
         radio || banner -> Action.PAUSE_OR_LIST
         else -> Action.SHOW_BANNER
     }

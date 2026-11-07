@@ -360,9 +360,9 @@
     <string name="conn_receiver_offline">Ontvanger niet bereikbaar: %s</string>
     <string name="conn_receiver_offline_plain">Ontvanger niet bereikbaar</string>
     <string name="skin_standard">Standaard</string>
-    <string name="osd_banner_hint_zap">OK: opties · ▲▼: zappen</string>
-    <string name="osd_banner_hint_options">OK: pauze · Links: zenderlijst · ▼ opties · Info: details</string>
-    <string name="osd_banner_hint_options_paused">OK: verder · Links: zenderlijst · ▼ opties · Info: details</string>
+    <string name="osd_banner_hint_zap">OK: recente zenders · ▲▼: zappen</string>
+    <string name="osd_banner_hint_options">OK: recente zenders · Links: zenderlijst · ▼ opties · Info: details</string>
+    <string name="osd_banner_hint_options_paused">OK: recente zenders · Links: zenderlijst · ▼ opties · Info: details</string>
     <string name="timeshift_full">Timeshift is vol. Terug naar live.</string>
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Beeld</string>

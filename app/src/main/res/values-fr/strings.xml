@@ -360,9 +360,9 @@
     <string name="conn_receiver_offline">Récepteur injoignable : %s</string>
     <string name="conn_receiver_offline_plain">Récepteur injoignable</string>
     <string name="skin_standard">Standard</string>
-    <string name="osd_banner_hint_zap">OK : options · ▲▼ : zapper</string>
-    <string name="osd_banner_hint_options">OK : pause · Gauche : liste des chaînes · ▼ options · Info : détails</string>
-    <string name="osd_banner_hint_options_paused">OK : reprendre · Gauche : liste des chaînes · ▼ options · Info : détails</string>
+    <string name="osd_banner_hint_zap">OK : chaînes récentes · ▲▼ : zapper</string>
+    <string name="osd_banner_hint_options">OK : chaînes récentes · Gauche : liste des chaînes · ▼ options · Info : détails</string>
+    <string name="osd_banner_hint_options_paused">OK : chaînes récentes · Gauche : liste des chaînes · ▼ options · Info : détails</string>
     <string name="timeshift_full">Le timeshift est plein. Retour au direct.</string>
     <string name="quick_audio">Audio</string>
     <string name="quick_picture">Image</string>

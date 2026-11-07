@@ -23,16 +23,16 @@ class IptvPlayerKeysTest {
     @Test fun okShowsBannerThenDownOpensOptions() {
         assertEquals(IptvKeyAction.Banner, a(KeyEvent.KEYCODE_DPAD_CENTER))
         assertEquals(IptvKeyAction.Options, a(KeyEvent.KEYCODE_DPAD_DOWN, banner = true))
-        assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true))
+        assertEquals(IptvKeyAction.OptionsBanner, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true))
         assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, vod = true))
         assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_LEFT))
     }
 
     @Test fun okOnTheZapBannerShowsTheInfoBannerThenDownOptionsThenOkAsBefore() {
         assertEquals(IptvKeyAction.OptionsBanner, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = true))
-        // After that OK the banner is no longer a zap banner: Down = options, OK = the list as before.
+        // Any live banner: Down = options, OK = the mini OSD with the recent channels.
         assertEquals(IptvKeyAction.Options, a(KeyEvent.KEYCODE_DPAD_DOWN, banner = true, zap = false))
-        assertEquals(IptvKeyAction.ChannelList, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = false))
+        assertEquals(IptvKeyAction.OptionsBanner, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = false))
         // A film or episode still pauses.
         assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_DPAD_CENTER, banner = true, zap = true, vod = true))
     }

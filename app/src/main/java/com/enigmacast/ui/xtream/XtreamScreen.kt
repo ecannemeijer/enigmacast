@@ -768,7 +768,7 @@ fun XtreamScreen(
                     model, playing, quickBar, quickToken, details,
                     Modifier.align(Alignment.BottomCenter),
                     showChannelBanner = !quickBar,
-                    showIcons = !bannerFromZap || quickBar,
+                    showIcons = quickBar,
                     fromZap = bannerFromZap,
                     onGuide = openPlayingGuide,
                     onSearch = onSearch,

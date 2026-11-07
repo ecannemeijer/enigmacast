@@ -253,7 +253,8 @@ fun OwnTunerOverlay(
                     scrim = scrim,
                     docked = !ui.bannerFromZap,
                 )
-                if (!ui.bannerFromZap) {
+                // The options row only once it is opened (Down on a banner, or from the mini OSD).
+                if (ui.quickBar) {
                     QuickOptionsBar(
                         ui = ui,
                         actions = quickBarActions,
