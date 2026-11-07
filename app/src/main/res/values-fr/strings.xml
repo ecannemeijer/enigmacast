@@ -1843,4 +1843,21 @@
     <string name="quick_pause">Pause</string>
     <string name="quick_paused">En pause</string>
     <string name="quick_pause_unavailable">Impossible de mettre cette chaîne en pause</string>
+    <string name="sync_manage_button">Gérer le serveur</string>
+    <string name="sync_manage_title">Gestion du serveur</string>
+    <string name="sync_manage_busy">Opération sur le serveur de synchronisation…</string>
+    <string name="sync_manage_server">Serveur</string>
+    <string name="sync_manage_this_device">ce téléviseur</string>
+    <string name="sync_manage_revoked_tag">révoqué</string>
+    <string name="sync_manage_revoke">Révoquer</string>
+    <string name="sync_manage_refresh">Actualiser</string>
+    <string name="sync_manage_backup">Créer une sauvegarde</string>
+    <string name="sync_manage_restore">Restaurer</string>
+    <string name="sync_manage_restore_message">Restaurer la sauvegarde %1$s ? Les profils et réglages actuels du serveur de synchronisation seront remplacés. Tous les appareils se synchronisent ensuite à nouveau.</string>
+    <string name="sync_manage_needs_server">Ce serveur de synchronisation ne peut être géré que par le premier téléviseur. Mettez-le à jour pour le gérer depuis chaque téléviseur.</string>
+    <string name="sync_manage_not_supported">Ce serveur de synchronisation ne le prend pas encore en charge. Mettez-le à jour.</string>
+    <string name="sync_manage_failed">Échec de la gestion : %1$s</string>
+    <string name="sync_manage_revoked">Appareil révoqué. Il doit être réassocié pour synchroniser.</string>
+    <string name="sync_manage_backup_done">Sauvegarde créée : %1$s</string>
+    <string name="sync_manage_restored">Sauvegarde restaurée : %1$s</string>
 </resources>

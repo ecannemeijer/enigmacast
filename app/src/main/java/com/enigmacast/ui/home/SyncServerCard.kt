@@ -265,6 +265,92 @@ class SyncServerViewModel @Inject constructor(
         }
     }
 
+
+    // ------------------------------------------------------------ server management (every TV)
+
+    /** One device the sync server knows. */
+    data class ServerDevice(val id: String, val name: String, val role: String, val revoked: Boolean, val self: Boolean)
+
+    var manageOpen by mutableStateOf(false)
+    var manageBusy by mutableStateOf(false)
+        private set
+    /** Text resource for the last management result or problem (null = nothing to say). */
+    var manageMessage by mutableStateOf<Int?>(null)
+        private set
+    var manageDetail by mutableStateOf("")
+        private set
+    var serverDevices by mutableStateOf<List<ServerDevice>>(emptyList())
+        private set
+    var serverStatus by mutableStateOf("")
+        private set
+    var backups by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** 403 = this server only lets its first device manage (servers without the open-admin change). */
+    private fun manageFailure(error: Throwable) {
+        val text = error.message.orEmpty()
+        manageMessage = when {
+            text.contains("sync 403") -> R.string.sync_manage_needs_server
+            text.contains("sync 404") -> R.string.sync_manage_not_supported
+            else -> R.string.sync_manage_failed
+        }
+        manageDetail = if (manageMessage == R.string.sync_manage_failed) text else ""
+    }
+
+    private fun manage(work: suspend (com.enigmacast.data.enigmasync.SyncServerConfig) -> Unit) {
+        val config = client.config() ?: return
+        if (manageBusy) return
+        manageBusy = true
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { work(config) } }
+            manageBusy = false
+            result.onFailure { manageFailure(it) }
+        }
+    }
+
+    fun openManage() {
+        manageOpen = true
+        refreshManage()
+    }
+
+    fun refreshManage() = manage { config ->
+        manageMessage = null
+        manageDetail = ""
+        val info = JSONObject(client.request(config, "GET", "/api/v1/status"))
+        serverStatus = "API ${info.optString("api")}, admin ${info.optInt("adminDevices")}"
+        val rows = JSONObject(client.request(config, "GET", "/api/v1/devices")).getJSONArray("devices")
+        serverDevices = (0 until rows.length()).map { i ->
+            val row = rows.getJSONObject(i)
+            val id = row.getString("id")
+            ServerDevice(id, row.optString("name"), row.optString("role"), row.optInt("revoked") != 0, id == config.deviceId)
+        }
+        // Listing backups needs the newer server; an older one answers 404 and only Backup works.
+        backups = runCatching {
+            val list = JSONObject(client.request(config, "GET", "/api/v1/backups")).getJSONArray("backups")
+            (0 until list.length()).map { list.getString(it) }
+        }.getOrDefault(emptyList())
+    }
+
+    fun revokeDevice(id: String) = manage { config ->
+        client.request(config, "POST", "/api/v1/devices/revoke", """{"deviceId":${json(id)}}""".toByteArray())
+        manageMessage = R.string.sync_manage_revoked
+        serverDevices = serverDevices.map { if (it.id == id) it.copy(revoked = true) else it }
+    }
+
+    fun makeBackup() = manage { config ->
+        val path = JSONObject(client.request(config, "POST", "/api/v1/backups")).optString("path")
+        manageMessage = R.string.sync_manage_backup_done
+        manageDetail = path
+        if (path.isNotBlank() && path !in backups) backups = listOf(path) + backups
+    }
+
+    fun restoreBackup(folder: String) = manage { config ->
+        client.request(config, "POST", "/api/v1/backups/restore", """{"folder":${json(folder)}}""".toByteArray())
+        manageMessage = R.string.sync_manage_restored
+        manageDetail = folder
+        engine.syncInBackground("herstel backup")
+    }
+
     /** Frees the single admin slot with the recovery code, then pairs this device as that admin. */
     fun disconnect() {
         client.clear()
@@ -382,7 +468,9 @@ fun SyncServerCard(
                         enabled = updateState !is SyncServerUpdater.State.Checking && updateState !is SyncServerUpdater.State.Updating,
                     )
                     TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() }, enabled = !linkedUpdating)
+                    TvButton(stringResource(R.string.sync_manage_button), { if (model.manageOpen) model.manageOpen = false else model.openManage() }, enabled = !linkedUpdating)
                 }
+                if (model.manageOpen) SyncManageSection(model)
                 // Paired from this card: the Pair button is gone, keep D-pad focus inside the card.
                 LaunchedEffect(model.justPaired) {
                     if (model.justPaired) {
@@ -474,4 +562,52 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
     }
     if (updates.dialog) SyncServerUpdateDialog(updates)
 
+}
+
+/** Device list, revoke, backup and restore. Every paired TV may use it (servers with the open-admin change). */
+@Composable
+private fun SyncManageSection(model: SyncServerViewModel) {
+    var confirmRestore by remember { mutableStateOf<String?>(null) }
+    Text(stringResource(R.string.sync_manage_title), color = EnigmaColors.Text, fontSize = 16.sp)
+    if (model.manageBusy) SyncBusyRow(stringResource(R.string.sync_manage_busy))
+    model.manageMessage?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(it, model.manageDetail)) }
+    if (model.serverStatus.isNotBlank()) InfoRow(stringResource(R.string.sync_manage_server), model.serverStatus)
+    model.serverDevices.forEach { device ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            val label = buildString {
+                append(device.name.ifBlank { device.id.take(8) })
+                append(" · ").append(device.role)
+                if (device.self) append(" · ").append(stringResource(R.string.sync_manage_this_device))
+                if (device.revoked) append(" · ").append(stringResource(R.string.sync_manage_revoked_tag))
+            }
+            Text(label, color = if (device.revoked) EnigmaColors.Subtle else EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            if (!device.self && !device.revoked) {
+                TvButton(stringResource(R.string.sync_manage_revoke), { model.revokeDevice(device.id) }, enabled = !model.manageBusy)
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        TvButton(stringResource(R.string.sync_manage_refresh), { model.refreshManage() }, enabled = !model.manageBusy)
+        TvButton(stringResource(R.string.sync_manage_backup), { model.makeBackup() }, enabled = !model.manageBusy)
+    }
+    model.backups.take(5).forEach { folder ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(folder.substringAfterLast('/'), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            TvButton(stringResource(R.string.sync_manage_restore), { confirmRestore = folder }, enabled = !model.manageBusy)
+        }
+    }
+    confirmRestore?.let { folder ->
+        TvConfirmDialog(
+            title = stringResource(R.string.sync_manage_restore),
+            message = stringResource(R.string.sync_manage_restore_message, folder.substringAfterLast('/')),
+            confirmLabel = stringResource(R.string.sync_manage_restore),
+            dismissLabel = stringResource(R.string.cancel),
+            onConfirm = {
+                confirmRestore = null
+                model.restoreBackup(folder)
+            },
+            onDismiss = { confirmRestore = null },
+            destructive = true,
+        )
+    }
 }
