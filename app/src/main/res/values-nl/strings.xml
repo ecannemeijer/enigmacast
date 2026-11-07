@@ -996,7 +996,7 @@
     <string name="profile_receiver_wake">Ontvanger aanzetten</string>
     <string name="settings_profiles">Profielen</string>
     <string name="settings_viewing">Kijkmodus</string>
-    <string name="settings_keys">Afstandsbedieningtoetsen</string>
+    <string name="settings_keys">Knoptoewijzing</string>
     <string name="settings_guide_home">Gids &amp; Home</string>
     <string name="settings_sync_server">Syncserver</string>
     <string name="settings_recordings">Opnames</string>
