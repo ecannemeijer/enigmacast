@@ -1840,6 +1840,10 @@
     <string name="iptv_show_all_channels">Tout afficher</string>
     <string name="iptv_reset_order">Rétablir l\'ordre</string>
     <string name="skin_slate_calm">Ardoise Calme</string>
+    <string name="skin_lumen">Lumen</string>
+    <string name="skin_cinema_black">Cinéma Noir</string>
+    <string name="skin_arena">Arena</string>
+    <string name="skin_starbridge">Starbridge</string>
     <string name="quick_pause">Pause</string>
     <string name="quick_paused">En pause</string>
     <string name="quick_pause_unavailable">Impossible de mettre cette chaîne en pause</string>

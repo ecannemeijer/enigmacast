@@ -2,6 +2,7 @@ package com.enigmacast.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -70,7 +71,77 @@ enum class OsdLayout {
     WAVE,
     /** Soft card with a quiet slate-to-sage gradient and a hairline edge (Slate Calm). */
     CALM,
+    /** Big rounded floating card, graphite-to-plum gradient, a glowing rose underline (Lumen). */
+    LUMEN,
+    /** Borderless cinema-black card fading in from below, a light-blue hairline on top (Cinema Black). */
+    CINEMA,
+    /** Square scoreboard: bold top stripe, channel number in a solid block (Arena). */
+    SCOREBOARD,
+    /** Bridge-console panel: coloured rounded elbow on the left and a segment bar on top (Starbridge). */
+    ELBOW,
 }
+
+/** Layouts whose OSD panels use the two-colour [SkinPalette.osdFill] → [SkinPalette.osdFillEnd] gradient. */
+val OsdLayout.gradientFill: Boolean
+    get() = this == OsdLayout.GLASS || this == OsdLayout.CALM || this == OsdLayout.LUMEN || this == OsdLayout.CINEMA || this == OsdLayout.ELBOW
+
+/** Layouts whose OSD panels have no edge line. */
+val OsdLayout.borderless: Boolean
+    get() = this == OsdLayout.MINIMAL || this == OsdLayout.CINEMA
+
+/**
+ * The drawn-in-code ornaments of the newer layouts on any OSD panel (banner, mini OSD, options
+ * row, preview): no images, only shapes and the palette. Nothing for the other layouts.
+ * [scale] shrinks the ornaments for the small skin preview.
+ */
+fun androidx.compose.ui.Modifier.osdOrnament(layout: OsdLayout, p: SkinPalette, scale: Float = 1f): androidx.compose.ui.Modifier =
+    when (layout) {
+        OsdLayout.LUMEN -> drawWithContent {
+            drawContent()
+            val h = 3.dp.toPx() * scale
+            drawRoundRect(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(p.accent.copy(alpha = 0f), p.accent, p.highlight, p.accent.copy(alpha = 0f))),
+                topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.08f, size.height - h * 2),
+                size = androidx.compose.ui.geometry.Size(size.width * 0.84f, h),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(h, h),
+            )
+        }
+        OsdLayout.CINEMA -> drawWithContent {
+            drawContent()
+            drawRect(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(p.highlight.copy(alpha = 0f), p.highlight.copy(alpha = 0.55f), p.highlight.copy(alpha = 0f))),
+                size = androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx().coerceAtLeast(1f)),
+            )
+        }
+        OsdLayout.SCOREBOARD -> drawWithContent {
+            drawContent()
+            val h = 4.dp.toPx() * scale
+            val w = size.width
+            drawRect(p.accent, size = androidx.compose.ui.geometry.Size(w * 0.6f, h))
+            drawRect(p.highlight, topLeft = androidx.compose.ui.geometry.Offset(w * 0.6f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.25f, h))
+            drawRect(p.secondary, topLeft = androidx.compose.ui.geometry.Offset(w * 0.85f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.15f, h))
+        }
+        OsdLayout.ELBOW -> drawWithContent {
+            drawContent()
+            val bar = 9.dp.toPx() * scale
+            val top = 6.dp.toPx() * scale
+            val gap = 4.dp.toPx() * scale
+            val r = androidx.compose.ui.geometry.CornerRadius(bar, bar)
+            // The elbow: a rounded vertical bar on the left joined to a bar along the top.
+            drawRoundRect(p.accent, size = androidx.compose.ui.geometry.Size(bar, size.height), cornerRadius = r)
+            drawRect(p.accent, topLeft = androidx.compose.ui.geometry.Offset(bar / 2, 0f), size = androidx.compose.ui.geometry.Size(size.width * 0.32f, top))
+            // Segments after the elbow, separated by small gaps.
+            val segments = listOf(0.18f to p.secondary, 0.12f to p.highlight, 0.30f to p.secondary)
+            var x = bar / 2 + size.width * 0.32f + gap
+            segments.forEach { (fraction, colour) ->
+                val w = size.width * fraction
+                drawRoundRect(colour, topLeft = androidx.compose.ui.geometry.Offset(x, 0f), size = androidx.compose.ui.geometry.Size(w, top), cornerRadius = androidx.compose.ui.geometry.CornerRadius(top / 2, top / 2))
+                x += w + gap
+            }
+        }
+        else -> this
+    }
+
 
 data class Skin(
     val id: OsdSkinId,
@@ -248,7 +319,79 @@ object Skins {
         cornerScale = 1.1f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.GLOW, osd = OsdLayout.CALM,
     )
 
-    val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora, GlassEarth, GlassWave, SlateCalm)
+    /**
+     * In the style of a modern smart-TV home screen: deep graphite to plum, rose-magenta accent,
+     * big rounded cards and a soft glow on focus. Original colours and shapes only.
+     */
+    val Lumen = Skin(
+        id = OsdSkinId.LUMEN,
+        palette = SkinPalette(
+            canvas = Color(0xFF121016), card = Color(0xFF1E1A24), cardBorder = Color(0xFF332C3B),
+            raised = Color(0xFF26212E), selected = Color(0xFF332A3D), focus = Color(0xFFC2255F),
+            onFocus = Color.White, accent = Color(0xFFFF4F8B), highlight = Color(0xFFFFA3C4),
+            secondary = Color(0xFFB7A3FF), onAccent = Color.White, text = Color.White,
+            muted = Color(0xFFC9C1D3), subtle = Color(0xFF8E8599), success = Color(0xFF63D69A),
+            danger = Color(0xFFFF7A70), dangerFocus = Color(0xFFB3261E),
+            osdFill = Color(0xFF1C1822), osdFillEnd = Color(0xFF2E1830), osdEdge = Color(0x40FF4F8B),
+        ),
+        cornerScale = 1.6f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.LUMEN,
+    )
+
+    /**
+     * Cinema black in the style of a big-screen TV launcher: true black, soft grey cards, light
+     * blue focus with dark text, medium radii, a quiet outline. Original colours and shapes only.
+     */
+    val CinemaBlack = Skin(
+        id = OsdSkinId.CINEMA_BLACK,
+        palette = SkinPalette(
+            canvas = Color(0xFF000000), card = Color(0xFF16181C), cardBorder = Color(0xFF2A2D33),
+            raised = Color(0xFF1E2126), selected = Color(0xFF282C33), focus = Color(0xFFD3E3FD),
+            onFocus = Color(0xFF0B1A2E), accent = Color(0xFF8AB8F5), highlight = Color(0xFFC4DBFB),
+            secondary = Color(0xFFA9B4C2), onAccent = Color(0xFF0B1A2E), text = Color(0xFFF1F3F4),
+            muted = Color(0xFFBDC1C6), subtle = Color(0xFF80868B), success = Color(0xFF81C995),
+            danger = Color(0xFFF28B82), dangerFocus = Color(0xFF8C1D18),
+            osdFill = Color(0xFF0B0C0E), osdFillEnd = Color(0xFF16181C), osdEdge = Color(0x338AB8F5),
+        ),
+        cornerScale = 1.2f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.FILL, osd = OsdLayout.CINEMA,
+    )
+
+    /**
+     * Sport: stadium night with a pitch-green tint, a floodlight-yellow scoreboard accent, a red
+     * "live" secondary, square corners and bold labels. Focus is yellow with black text.
+     */
+    val Arena = Skin(
+        id = OsdSkinId.ARENA,
+        palette = SkinPalette(
+            canvas = Color(0xFF0B110D), card = Color(0xFF141C16), cardBorder = Color(0xFF26342A),
+            raised = Color(0xFF1A241C), selected = Color(0xFF223024), focus = Color(0xFFFFD60A),
+            onFocus = Color(0xFF0B0B0B), accent = Color(0xFFFFD60A), highlight = Color(0xFF3DDC84),
+            secondary = Color(0xFFFF4D3D), onAccent = Color(0xFF0B0B0B), text = Color.White,
+            muted = Color(0xFFC2CCC4), subtle = Color(0xFF85928A), success = Color(0xFF3DDC84),
+            danger = Color(0xFFFF6B5E), dangerFocus = Color(0xFFA3221A),
+            osdFill = Color(0xFF0E1510), osdFillEnd = Color(0xFF0E1510), osdEdge = Color(0xFF26342A),
+        ),
+        cornerScale = 0.15f, strongWeight = FontWeight.Bold, focusStyle = FocusStyle.FILL, osd = OsdLayout.SCOREBOARD,
+    )
+
+    /**
+     * A starship bridge console: black, warm peach/orange and lavender panels, pill-shaped
+     * controls, a rounded elbow on the OSD. Focus is peach with black text. Original shapes only.
+     */
+    val Starbridge = Skin(
+        id = OsdSkinId.STARBRIDGE,
+        palette = SkinPalette(
+            canvas = Color(0xFF000000), card = Color(0xFF0E0C14), cardBorder = Color(0xFF3A3150),
+            raised = Color(0xFF17141F), selected = Color(0xFF221D30), focus = Color(0xFFFF9966),
+            onFocus = Color.Black, accent = Color(0xFFFF9C4A), highlight = Color(0xFFFFCC99),
+            secondary = Color(0xFFA9A3FF), onAccent = Color.Black, text = Color(0xFFF5EDE4),
+            muted = Color(0xFFD5C9E6), subtle = Color(0xFF948AA8), success = Color(0xFF99CC99),
+            danger = Color(0xFFFF6E5A), dangerFocus = Color(0xFFA8301F),
+            osdFill = Color(0xFF07060B), osdFillEnd = Color(0xFF130F1D), osdEdge = Color(0x66A9A3FF),
+        ),
+        cornerScale = 2f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.FILL, osd = OsdLayout.ELBOW,
+    )
+
+    val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora, GlassEarth, GlassWave, SlateCalm, Lumen, CinemaBlack, Arena, Starbridge)
 
     fun of(id: OsdSkinId): Skin = all.firstOrNull { it.id == id } ?: EnigmaCast
 }

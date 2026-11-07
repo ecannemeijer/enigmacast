@@ -169,6 +169,12 @@ enum class OsdSkinId(@StringRes val label: Int) {
     GLASS_EARTH(R.string.skin_glass_earth),
     GLASS_WAVE(R.string.skin_glass_wave),
     SLATE_CALM(R.string.skin_slate_calm),
+
+    /** Original skins in the style of TV platforms, a sport and a sci-fi bridge; added last (stored by name). */
+    LUMEN(R.string.skin_lumen),
+    CINEMA_BLACK(R.string.skin_cinema_black),
+    ARENA(R.string.skin_arena),
+    STARBRIDGE(R.string.skin_starbridge),
     ;
 
     companion object {

@@ -1,5 +1,8 @@
 package com.enigmacast.ui.remote
 
+import androidx.compose.ui.draw.clip
+import com.enigmacast.ui.theme.borderless
+import com.enigmacast.ui.theme.osdOrnament
 import androidx.compose.ui.composed
 import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.EnigmaType
@@ -674,9 +677,13 @@ private fun Modifier.osdPanel(transparencyPercent: Int): Modifier = composed {
     val fill = androidx.compose.ui.graphics.Brush.linearGradient(
         listOf(com.enigmacast.ui.theme.EnigmaColors.scrimOf(p.osdFill, scrim), com.enigmacast.ui.theme.EnigmaColors.scrimOf(p.osdFillEnd, scrim)),
     )
+    // Starbridge's elbow sits at the left edge: keep the first icon clear of it.
+    val start = if (skin.osd == com.enigmacast.ui.theme.OsdLayout.ELBOW) 14.dp else 0.dp
     this
         .background(fill, shape)
-        .then(if (skin.osd == com.enigmacast.ui.theme.OsdLayout.MINIMAL) Modifier else Modifier.border(1.dp, p.osdEdge, shape))
+        .then(if (skin.osd.borderless) Modifier else Modifier.border(1.dp, p.osdEdge, shape))
         .glassSheen(shape)
-        .padding(vertical = 6.dp)
+        .clip(shape)
+        .osdOrnament(skin.osd, p)
+        .padding(start = start, top = 6.dp, bottom = 6.dp)
 }

@@ -1839,6 +1839,10 @@
     <string name="iptv_show_all_channels">Show all</string>
     <string name="iptv_reset_order">Reset channel order</string>
     <string name="skin_slate_calm">Slate Calm</string>
+    <string name="skin_lumen">Lumen</string>
+    <string name="skin_cinema_black">Cinema Black</string>
+    <string name="skin_arena">Arena</string>
+    <string name="skin_starbridge">Starbridge</string>
     <string name="quick_pause">Pause</string>
     <string name="quick_paused">Paused</string>
     <string name="quick_pause_unavailable">Pausing is not possible on this channel</string>
