@@ -1834,4 +1834,21 @@
     <string name="quick_pause">Pauze</string>
     <string name="quick_paused">Gepauzeerd</string>
     <string name="quick_pause_unavailable">Pauzeren kan niet op deze zender</string>
+    <string name="sync_manage_button">Server beheren</string>
+    <string name="sync_manage_title">Serverbeheer</string>
+    <string name="sync_manage_busy">Bezig met de syncserver…</string>
+    <string name="sync_manage_server">Server</string>
+    <string name="sync_manage_this_device">deze tv</string>
+    <string name="sync_manage_revoked_tag">ingetrokken</string>
+    <string name="sync_manage_revoke">Intrekken</string>
+    <string name="sync_manage_refresh">Vernieuwen</string>
+    <string name="sync_manage_backup">Backup maken</string>
+    <string name="sync_manage_restore">Terugzetten</string>
+    <string name="sync_manage_restore_message">Backup %1$s terugzetten? De huidige profielen en instellingen op de syncserver worden vervangen. Alle toestellen synchroniseren daarna opnieuw.</string>
+    <string name="sync_manage_needs_server">Deze syncserver laat alleen de eerste tv beheren. Werk de syncserver bij om vanaf elke tv te beheren.</string>
+    <string name="sync_manage_not_supported">Deze syncserver ondersteunt dit nog niet. Werk de syncserver bij.</string>
+    <string name="sync_manage_failed">Beheer mislukt: %1$s</string>
+    <string name="sync_manage_revoked">Toestel ingetrokken. Het moet opnieuw koppelen om te synchroniseren.</string>
+    <string name="sync_manage_backup_done">Backup gemaakt: %1$s</string>
+    <string name="sync_manage_restored">Backup teruggezet: %1$s</string>
 </resources>

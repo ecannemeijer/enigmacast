@@ -1839,4 +1839,21 @@
     <string name="quick_pause">Pause</string>
     <string name="quick_paused">Pausiert</string>
     <string name="quick_pause_unavailable">Pausieren ist auf diesem Sender nicht möglich</string>
+    <string name="sync_manage_button">Server verwalten</string>
+    <string name="sync_manage_title">Serververwaltung</string>
+    <string name="sync_manage_busy">Sync-Server wird bearbeitet…</string>
+    <string name="sync_manage_server">Server</string>
+    <string name="sync_manage_this_device">dieser Fernseher</string>
+    <string name="sync_manage_revoked_tag">widerrufen</string>
+    <string name="sync_manage_revoke">Widerrufen</string>
+    <string name="sync_manage_refresh">Aktualisieren</string>
+    <string name="sync_manage_backup">Backup erstellen</string>
+    <string name="sync_manage_restore">Wiederherstellen</string>
+    <string name="sync_manage_restore_message">Backup %1$s wiederherstellen? Die aktuellen Profile und Einstellungen auf dem Sync-Server werden ersetzt. Danach synchronisieren alle Geräte erneut.</string>
+    <string name="sync_manage_needs_server">Dieser Sync-Server lässt nur den ersten Fernseher verwalten. Aktualisiere den Sync-Server, um ihn von jedem Fernseher aus zu verwalten.</string>
+    <string name="sync_manage_not_supported">Dieser Sync-Server unterstützt das noch nicht. Aktualisiere den Sync-Server.</string>
+    <string name="sync_manage_failed">Verwaltung fehlgeschlagen: %1$s</string>
+    <string name="sync_manage_revoked">Gerät widerrufen. Es muss sich zum Synchronisieren neu koppeln.</string>
+    <string name="sync_manage_backup_done">Backup erstellt: %1$s</string>
+    <string name="sync_manage_restored">Backup wiederhergestellt: %1$s</string>
 </resources>
