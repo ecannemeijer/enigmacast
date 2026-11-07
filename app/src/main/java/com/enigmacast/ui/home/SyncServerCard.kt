@@ -1,8 +1,12 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.enigmacast.ui.home
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -550,18 +554,18 @@ fun SyncServerCard(
                 val progress by model.syncProgress.collectAsState()
                 progress?.let { SyncBusyRow(stringResource(R.string.sync_progress, it.items, it.profile, it.profiles)) }
                 val linkedFocus = remember { FocusRequester() }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TvButton(
                         stringResource(R.string.sync_update_button),
                         { updates.checkAndOffer() },
                         modifier = Modifier.focusRequester(linkedFocus),
-                        enabled = updateState !is SyncServerUpdater.State.Checking && updateState !is SyncServerUpdater.State.Updating,
+                        enabled = updateState !is SyncServerUpdater.State.Checking && updateState !is SyncServerUpdater.State.Updating, compact = true,
                     )
-                    TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() }, enabled = !linkedUpdating)
-                    TvButton(stringResource(R.string.sync_manage_button), { if (model.manageOpen) model.manageOpen = false else model.openManage() }, enabled = !linkedUpdating)
+                    TvButton(stringResource(R.string.sync_server_disconnect), { model.disconnect() }, enabled = !linkedUpdating, compact = true)
+                    TvButton(stringResource(R.string.sync_manage_button), { if (model.manageOpen) model.manageOpen = false else model.openManage() }, enabled = !linkedUpdating, compact = true)
                 }
                 if (model.manageOpen) SyncManageSection(model)
-                TvButton(stringResource(R.string.sync_tv_backup_button), { model.openTvBackup() }, enabled = !linkedUpdating)
+                TvButton(stringResource(R.string.sync_tv_backup_button), { model.openTvBackup() }, enabled = !linkedUpdating, compact = true)
                 if (model.tvBackupOpen) SyncTvBackupSection(model)
                 // Paired from this card: the Pair button is gone, keep D-pad focus inside the card.
                 LaunchedEffect(model.justPaired) {
@@ -613,17 +617,17 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
         syncUpdateStatus(updateState)?.let { if (updating) SyncBusyRow(it) else InfoRow(stringResource(R.string.sync_update_title), it) }
     }
     val actions = SyncServerOffer.actions(server != null, server?.version, check?.latest)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (SyncServerOffer.Action.PAIR in actions) {
-            TvButton(stringResource(R.string.sync_server_pair_existing), { model.pairExisting() }, enabled = !model.busy && !updating)
+            TvButton(stringResource(R.string.sync_server_pair_existing), { model.pairExisting() }, enabled = !model.busy && !updating, compact = true)
         }
         if (SyncServerOffer.Action.UPDATE in actions && server != null) {
-            TvButton(stringResource(R.string.sync_update_button), { updates.checkAndOffer(server.host) }, enabled = !model.busy && !updating)
+            TvButton(stringResource(R.string.sync_update_button), { updates.checkAndOffer(server.host) }, enabled = !model.busy && !updating, compact = true)
         }
         if (SyncServerOffer.Action.REINSTALL in actions) {
-            TvButton(stringResource(R.string.sync_server_reinstall), { confirmReinstall = true }, enabled = !model.busy && !updating)
+            TvButton(stringResource(R.string.sync_server_reinstall), { confirmReinstall = true }, enabled = !model.busy && !updating, compact = true)
         }
-        TvButton(stringResource(R.string.sync_server_search_again), { model.search() }, enabled = !model.probing && !model.busy && !updating)
+        TvButton(stringResource(R.string.sync_server_search_again), { model.search() }, enabled = !model.probing && !model.busy && !updating, compact = true)
     }
     if (server == null || model.reinstallForm) {
         if (server == null) {
@@ -633,12 +637,12 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
         TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it })
         TvTextField(stringResource(R.string.sync_server_password), model.password, { model.password = it }, visualTransformation = PasswordVisualTransformation())
         TvTextField(stringResource(R.string.sync_server_recovery), model.recoveryCode, { model.recoveryCode = it })
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton(stringResource(R.string.sync_server_install), { model.install() }, enabled = !model.busy && !model.probing && !updating)
-            TvButton(stringResource(R.string.sync_server_claim), { model.claim() }, enabled = !model.busy && !updating && model.recoveryCode.isNotBlank())
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TvButton(stringResource(R.string.sync_server_install), { model.install() }, enabled = !model.busy && !model.probing && !updating, compact = true)
+            TvButton(stringResource(R.string.sync_server_claim), { model.claim() }, enabled = !model.busy && !updating && model.recoveryCode.isNotBlank(), compact = true)
         }
     }
-    TvButton(stringResource(R.string.sync_tv_backup_button), { model.openTvBackup() }, enabled = !model.busy && !updating)
+    TvButton(stringResource(R.string.sync_tv_backup_button), { model.openTvBackup() }, enabled = !model.busy && !updating, compact = true)
     if (model.tvBackupOpen) SyncTvBackupSection(model)
     if (confirmReinstall && server != null) {
         TvConfirmDialog(
@@ -667,7 +671,7 @@ private fun SyncManageSection(model: SyncServerViewModel) {
     model.manageMessage?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(it, model.manageDetail)) }
     if (model.serverStatus.isNotBlank()) InfoRow(stringResource(R.string.sync_manage_server), model.serverStatus)
     model.serverDevices.forEach { device ->
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             val label = buildString {
                 append(device.name.ifBlank { device.id.take(8) })
                 append(" · ").append(device.role)
@@ -676,18 +680,18 @@ private fun SyncManageSection(model: SyncServerViewModel) {
             }
             Text(label, color = if (device.revoked) EnigmaColors.Subtle else EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
             if (!device.self && !device.revoked) {
-                TvButton(stringResource(R.string.sync_manage_revoke), { model.revokeDevice(device.id) }, enabled = !model.manageBusy)
+                TvButton(stringResource(R.string.sync_manage_revoke), { model.revokeDevice(device.id) }, enabled = !model.manageBusy, compact = true)
             }
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        TvButton(stringResource(R.string.sync_manage_refresh), { model.refreshManage() }, enabled = !model.manageBusy)
-        TvButton(stringResource(R.string.sync_manage_backup), { model.makeBackup() }, enabled = !model.manageBusy)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TvButton(stringResource(R.string.sync_manage_refresh), { model.refreshManage() }, enabled = !model.manageBusy, compact = true)
+        TvButton(stringResource(R.string.sync_manage_backup), { model.makeBackup() }, enabled = !model.manageBusy, compact = true)
     }
     model.backups.take(5).forEach { folder ->
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text(folder.substringAfterLast('/'), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            TvButton(stringResource(R.string.sync_manage_restore), { confirmRestore = folder }, enabled = !model.manageBusy)
+            TvButton(stringResource(R.string.sync_manage_restore), { confirmRestore = folder }, enabled = !model.manageBusy, compact = true)
         }
     }
     confirmRestore?.let { folder ->
@@ -728,13 +732,13 @@ private fun SyncTvBackupSection(model: SyncServerViewModel) {
     TvButton(
         stringResource(R.string.sync_tv_backup_make),
         { model.backupToTv() },
-        enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(),
+        enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(), compact = true,
     )
     if (model.tvBackups.isEmpty()) {
         Text(stringResource(R.string.sync_tv_backup_none), color = EnigmaColors.Subtle, fontSize = 14.sp)
     }
     model.tvBackups.take(5).forEach { item ->
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text(
                 "${format.format(java.util.Date(item.createdMs))} · ${item.sizeBytes / 1024} KB",
                 color = EnigmaColors.Muted,
@@ -744,10 +748,10 @@ private fun SyncTvBackupSection(model: SyncServerViewModel) {
             TvButton(
                 stringResource(R.string.sync_tv_backup_restore),
                 { confirmRestore = item.file },
-                enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(),
+                enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(), compact = true,
             )
-            TvButton(stringResource(R.string.sync_tv_backup_export), { model.exportTvBackup(item.file) }, enabled = !model.tvBackupBusy)
-            TvButton(stringResource(R.string.sync_tv_backup_delete), { model.deleteTvBackup(item.file) }, enabled = !model.tvBackupBusy)
+            TvButton(stringResource(R.string.sync_tv_backup_export), { model.exportTvBackup(item.file) }, enabled = !model.tvBackupBusy, compact = true)
+            TvButton(stringResource(R.string.sync_tv_backup_delete), { model.deleteTvBackup(item.file) }, enabled = !model.tvBackupBusy, compact = true)
         }
     }
     confirmRestore?.let { file ->
