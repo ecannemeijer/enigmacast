@@ -1860,4 +1860,18 @@
     <string name="sync_manage_revoked">Appareil révoqué. Il doit être réassocié pour synchroniser.</string>
     <string name="sync_manage_backup_done">Sauvegarde créée : %1$s</string>
     <string name="sync_manage_restored">Sauvegarde restaurée : %1$s</string>
+    <string name="sync_tv_backup_button">Sauvegarde sur ce téléviseur</string>
+    <string name="sync_tv_backup_title">Sauvegarde du serveur de synchronisation sur ce téléviseur</string>
+    <string name="sync_tv_backup_hint">Copie tout le serveur de synchronisation (profils, historique, identifiants IPTV, appareils associés, certificat, connexion au tableau de bord) sur ce téléviseur via SSH. Après un nouveau récepteur ou une réinstallation : installez le serveur, puis restaurez ici. Utilise l\'identifiant root du récepteur ; le mot de passe n\'est pas enregistré.</string>
+    <string name="sync_tv_backup_make">Sauvegarder sur le téléviseur</string>
+    <string name="sync_tv_backup_restore">Restaurer sur le récepteur</string>
+    <string name="sync_tv_backup_export">Exporter</string>
+    <string name="sync_tv_backup_delete">Supprimer</string>
+    <string name="sync_tv_backup_busy">Sauvegarde via SSH en cours…</string>
+    <string name="sync_tv_backup_none">Aucune sauvegarde sur ce téléviseur.</string>
+    <string name="sync_tv_backup_done">Sauvegarde enregistrée sur ce téléviseur : %1$s</string>
+    <string name="sync_tv_backup_failed">Échec de la sauvegarde : %1$s</string>
+    <string name="sync_tv_restore_done">%1$s restauré. Ce téléviseur est de nouveau associé ; les autres se reconnectent seuls.</string>
+    <string name="sync_tv_backup_exported">Exporté vers %1$s. Gardez-le privé : il contient la clé du serveur.</string>
+    <string name="sync_tv_restore_message">Restaurer %1$s sur le serveur de synchronisation du récepteur ? Les données actuelles sont remplacées (une copie de sécurité reste sur le récepteur). Sur un nouveau récepteur, installez d\'abord le serveur.</string>
 </resources>

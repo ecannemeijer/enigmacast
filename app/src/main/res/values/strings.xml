@@ -1859,4 +1859,18 @@
     <string name="sync_manage_revoked">Device revoked. It has to pair again to sync.</string>
     <string name="sync_manage_backup_done">Backup made: %1$s</string>
     <string name="sync_manage_restored">Backup restored: %1$s</string>
+    <string name="sync_tv_backup_button">Backup to this TV</string>
+    <string name="sync_tv_backup_title">Sync server backup on this TV</string>
+    <string name="sync_tv_backup_hint">Copies the whole sync server (profiles, history, IPTV logins, paired devices, certificate, dashboard login) to this TV over SSH. After a new receiver or a reinstall: install the sync server, then restore here. Uses the receiver's root login; the password is not stored.</string>
+    <string name="sync_tv_backup_make">Make backup to TV</string>
+    <string name="sync_tv_backup_restore">Restore to receiver</string>
+    <string name="sync_tv_backup_export">Export</string>
+    <string name="sync_tv_backup_delete">Delete</string>
+    <string name="sync_tv_backup_busy">Working on the backup over SSH…</string>
+    <string name="sync_tv_backup_none">No backups on this TV yet.</string>
+    <string name="sync_tv_backup_done">Backup stored on this TV: %1$s</string>
+    <string name="sync_tv_backup_failed">Backup failed: %1$s</string>
+    <string name="sync_tv_restore_done">Restored %1$s. This TV is paired again; other TVs reconnect by themselves.</string>
+    <string name="sync_tv_backup_exported">Exported to %1$s. Keep it private: it contains the server key.</string>
+    <string name="sync_tv_restore_message">Restore %1$s onto the sync server on the receiver? Its current data is replaced (a safety copy stays on the receiver). Install the sync server first on a new receiver.</string>
 </resources>
