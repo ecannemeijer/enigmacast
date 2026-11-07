@@ -163,6 +163,9 @@ fun XtreamScreen(
     val liveKeys = remember(model.items) { com.enigmacast.domain.xtream.LazyKeys.keyed(model.items, "live") { "${it.section.name}:${it.id}" } }
     var quickBar by remember { mutableStateOf(false) }
     var recentBar by remember { mutableStateOf(false) }
+    /** OK on live IPTV: the mini OSD at the top with the recent channels (then the options) below. */
+    var okOsd by remember { mutableStateOf(false) }
+    LaunchedEffect(recentBar, quickBar) { if (!recentBar && !quickBar) okOsd = false }
     var recentToken by remember { mutableIntStateOf(0) }
     androidx.activity.compose.BackHandler(enabled = recentBar || model.equivalentsState.open) {
         if (model.equivalentsState.open) model.closeEquivalent() else recentBar = false
@@ -196,6 +199,8 @@ fun XtreamScreen(
         if (playingVod()) { vodOsd.show(); return }
         bannerFromZap = fromZap
         details = withDetails
+        // A zap (or Info) brings the normal banner: the mini OSD and its rows close.
+        if (okOsd) { okOsd = false; recentBar = false; quickBar = false }
         bannerUntil = System.currentTimeMillis() + if (withDetails) 10_000 else 5_000
     }
     LaunchedEffect(Unit) {
@@ -385,6 +390,8 @@ fun XtreamScreen(
         liveBackAt[0] = now
         val bannerShown = System.currentTimeMillis() < bannerUntil
         when {
+            // Mini OSD: Back on the options goes back to the recent channels.
+            quickBar && okOsd -> { quickBar = false; recentBar = true; recentToken++ }
             quickBar -> { quickBar = false; showBanner(fromZap = false); openRequest++ }
             panelOpen && column == PanelColumn.GUIDE -> { model.closeGuide(); column = PanelColumn.CHANNELS; openRequest++ }
             panelOpen && column == PanelColumn.CHANNELS && model.series != null -> { model.closeSeries(); openRequest++ }
@@ -473,6 +480,16 @@ fun XtreamScreen(
                             if (e.type == KeyEventType.KeyUp) recentBar = false
                             return@onPreviewKeyEvent true
                         }
+                        // Mini OSD: the strip is the top row; Down to the options, Up stays.
+                        okOsd && code == android.view.KeyEvent.KEYCODE_DPAD_UP -> return@onPreviewKeyEvent true
+                        okOsd && code == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
+                                recentBar = false
+                                quickBar = true
+                                quickToken++
+                            }
+                            return@onPreviewKeyEvent true
+                        }
                         code == android.view.KeyEvent.KEYCODE_DPAD_UP && e.type == KeyEventType.KeyDown -> {
                             recentBar = false
                             quickBar = true
@@ -481,6 +498,15 @@ fun XtreamScreen(
                         }
                         else -> return@onPreviewKeyEvent false
                     }
+                }
+                // Mini OSD: the options are the bottom row; Up goes back to the recent channels.
+                if (okOsd && quickBar && (code == android.view.KeyEvent.KEYCODE_DPAD_UP || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) {
+                    if (code == android.view.KeyEvent.KEYCODE_DPAD_UP && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
+                        quickBar = false
+                        recentBar = true
+                        recentToken++
+                    }
+                    return@onPreviewKeyEvent true
                 }
                 // The options row may not own focus on every remote; handle the second Down here too.
                 if (quickBar && e.type == KeyEventType.KeyDown && code == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -530,7 +556,23 @@ fun XtreamScreen(
                 if (com.enigmacast.domain.tuner.BannerTimer.restartsOnKey(bannerShown, quickBar, keyDown = true)) {
                     bannerUntil = System.currentTimeMillis() + if (details) 10_000 else 5_000
                 }
-                when (val action = IptvPlayerKeys.action(code, bindings, bannerShown, bannerFromZap, vod)) {
+                val okKey = code == android.view.KeyEvent.KEYCODE_DPAD_CENTER || code == android.view.KeyEvent.KEYCODE_ENTER || code == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+                val okAction = IptvPlayerKeys.action(code, bindings, bannerShown, bannerFromZap, vod)
+                // OK on live IPTV (also on a zap banner): the mini OSD at the top with the recent channels.
+                if (okKey && !vod && playing?.item?.section == XtreamSection.LIVE && !(model.pip.playing() && !panelOpen) &&
+                    (okAction == IptvKeyAction.Banner || okAction == IptvKeyAction.OptionsBanner)
+                ) {
+                    if (repeat == 0) {
+                        bannerUntil = 0L
+                        details = false
+                        quickBar = false
+                        okOsd = true
+                        recentBar = true
+                        recentToken++
+                    }
+                    return@onPreviewKeyEvent true
+                }
+                when (val action = okAction) {
                     is IptvKeyAction.Zap -> if (repeat % 4 == 0) {
                         if (model.pip.playing() && model.pip.swapped.value) model.pip.zap(action.step)
                         else { model.zap(action.step); showBanner(fromZap = true) }
@@ -717,7 +759,11 @@ fun XtreamScreen(
                     ),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
-            } else if (!panelOpen && (quickBar || now < bannerUntil)) {
+            }
+            if (okOsd && !panelOpen && playing.item?.section == XtreamSection.LIVE && (recentBar || quickBar)) {
+                IptvMiniOsd(model, playing, Modifier.align(Alignment.TopCenter))
+            }
+            if (!panelOpen && !playingVod() && (quickBar || now < bannerUntil)) {
                 IptvOsd(
                     model, playing, quickBar, quickToken, details,
                     Modifier.align(Alignment.BottomCenter),
@@ -770,7 +816,7 @@ fun XtreamScreen(
                     channels = model.recentChannels,
                     currentReference = model.playing?.item?.id.orEmpty(),
                     focusToken = recentToken,
-                    onChoose = { channel -> model.playRecent(channel); recentBar = false },
+                    onChoose = { channel -> model.playRecent(channel); recentBar = false; okOsd = false },
                     onClear = model::clearRecent,
                     onBackToOptions = { recentBar = false; quickBar = true; quickToken++ },
                     onClose = { recentBar = false },
@@ -1407,6 +1453,31 @@ internal fun nowNext(list: List<XtreamEpg>, nowSec: Long = System.currentTimeMil
  * it. Satellite slots (position, signal/SNR, tuner, CA/FTA, transponder) are switched off and the
  * options row only has the player's own options.
  */
+/** The compact top OSD of live IPTV (see [com.enigmacast.ui.remote.MiniOsd]). */
+@Composable
+private fun IptvMiniOsd(model: XtreamViewModel, playing: XtreamPlaying, modifier: Modifier) {
+    val look by model.osdLook.collectAsStateWithLifecycle()
+    val item = playing.item
+    val entry = com.enigmacast.domain.model.BouquetEntry(
+        name = playing.title,
+        reference = "iptv:${item?.id.orEmpty()}:${playing.episode?.id.orEmpty()}",
+        number = item?.number?.takeIf { item.section == XtreamSection.LIVE } ?: 0,
+        picon = item?.icon.orEmpty(),
+    )
+    val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epgOf(it.id) }?.let { IptvOsdModel.guide(entry, it) }
+    com.enigmacast.ui.remote.MiniOsd(
+        channel = entry,
+        number = entry.number,
+        guide = guide,
+        loading = model.buffering,
+        recording = false,
+        picon = { e -> e.picon.takeIf { it.isNotBlank() }?.let { model.logo(it) } },
+        cachedPicon = { null },
+        scrim = EnigmaColors.scrim(look.second),
+        modifier = modifier,
+    )
+}
+
 @Composable
 private fun IptvOsd(
     model: XtreamViewModel,

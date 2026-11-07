@@ -155,6 +155,8 @@ data class RemoteDisplayUiState(
     val quickBarToken: Int = 0,
     /** Recent channels under the options; Down on the options opens it. */
     val recentBar: Boolean = false,
+    /** OK on live TV: the compact OSD at the top with the recent channels (then the options) below. */
+    val okOsd: Boolean = false,
     val recentBarToken: Int = 0,
     /** Unified search over the picture, opened from the first quick-bar tile. */
     val searchOpen: Boolean = false,
@@ -494,9 +496,51 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * OK on live TV: the mini OSD at the top and the recent channels focused at the bottom;
+     * Down from there reaches the options. A zap keeps the normal banner.
+     */
+    private fun openOkOsd() {
+        bannerJob?.cancel()
+        equivalents.close()
+        ownSession.refreshGuideIfStale()
+        _ui.update {
+            it.copy(
+                okOsd = true,
+                banner = false,
+                details = false,
+                bannerFromZap = false,
+                quickBar = false,
+                recentBar = true,
+                recentBarToken = it.recentBarToken + 1,
+            )
+        }
+        watchOsdInfo()
+    }
+
+    /** Mini OSD: Down from the recent channels to the options row. */
+    private fun okOsdToOptions() {
+        _ui.update { it.copy(recentBar = false, quickBar = true, quickBarToken = it.quickBarToken + 1) }
+    }
+
+    /** Mini OSD: Up or Back on the options goes back to the recent channels. */
+    private fun okOsdToRecent() {
+        _ui.update { it.copy(quickBar = false, searchOpen = false, recentBar = true, recentBarToken = it.recentBarToken + 1) }
+    }
+
+    private fun closeOkOsd() {
+        _ui.update { it.copy(okOsd = false, recentBar = false, quickBar = false, searchOpen = false) }
+        watchOsdInfo()
+    }
+
     /** Up from the recent strip returns to the options; Back closes the OSD. */
     fun closeRecentBar(backToOptions: Boolean = false) {
         if (!_ui.value.recentBar) return
+        if (_ui.value.okOsd) {
+            // The strip sits on top of the options in the mini OSD: Up stays, anything else closes.
+            if (!backToOptions) closeOkOsd()
+            return
+        }
         _ui.update {
             it.copy(
                 recentBar = false,
@@ -550,6 +594,7 @@ class RemoteDisplayViewModel @Inject constructor(
     /** Back on the bar: close it; the banner (own tuner) stays for its usual few seconds. */
     fun closeQuickBar() {
         if (!_ui.value.quickBar) return
+        if (_ui.value.okOsd) { okOsdToRecent(); return }
         _ui.update { it.copy(quickBar = false, recentBar = false, searchOpen = false) }
         if (_ui.value.playerState.filePlayback) {
             fileOsd.show()
@@ -657,7 +702,7 @@ class RemoteDisplayViewModel @Inject constructor(
     }
 
     fun zapRecent(channel: LastChannel) {
-        _ui.update { it.copy(quickBar = false, recentBar = false) }
+        _ui.update { it.copy(quickBar = false, recentBar = false, okOsd = false) }
         ownSession.start(BouquetEntry(channel.name, channel.reference))
     }
 
@@ -1218,7 +1263,11 @@ class RemoteDisplayViewModel @Inject constructor(
     private fun showBanner(details: Boolean = _ui.value.details, fromZap: Boolean = false) {
         if (playingRadio()) return
         ownSession.refreshGuideIfStale()
-        _ui.update { it.copy(banner = true, details = details, bannerFromZap = fromZap) }
+        _ui.update {
+            // A zap (or Info) brings the normal banner: the mini OSD and its rows close.
+            if (it.okOsd) it.copy(banner = true, details = details, bannerFromZap = fromZap, okOsd = false, recentBar = false, quickBar = false)
+            else it.copy(banner = true, details = details, bannerFromZap = fromZap)
+        }
         watchOsdInfo()
         bannerJob?.cancel()
         // The quick bar keeps the banner up while it has the focus.
@@ -1232,7 +1281,7 @@ class RemoteDisplayViewModel @Inject constructor(
 
     private fun hideBanner() {
         bannerJob?.cancel()
-        _ui.update { it.copy(banner = false, details = false, quickBar = false) }
+        _ui.update { it.copy(banner = false, details = false, quickBar = false, okOsd = false, recentBar = false) }
         watchOsdInfo()
     }
 
@@ -1242,7 +1291,7 @@ class RemoteDisplayViewModel @Inject constructor(
      */
     private fun watchOsdInfo() {
         val ui = _ui.value
-        val visible = ui.ownTuner && (ui.banner || ui.quickBar)
+        val visible = ui.ownTuner && (ui.banner || ui.quickBar || ui.okOsd)
         val reference = ui.currentService?.reference.orEmpty()
         val receiver = settingsSnapshot.activeReceiver()
         if (!visible || reference.isBlank() || receiver == null) {
@@ -1317,6 +1366,15 @@ class RemoteDisplayViewModel @Inject constructor(
                 if (event.action == KeyEvent.ACTION_UP) closeRecentBar()
                 return true
             }
+            if (ui.okOsd) {
+                // Mini OSD: the strip is the top row; Down goes to the options, Up stays.
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) okOsdToOptions()
+                    return true
+                }
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) return true
+                return false
+            }
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN) {
                 closeRecentBar(backToOptions = true)
                 return true
@@ -1335,6 +1393,15 @@ class RemoteDisplayViewModel @Inject constructor(
         // Every key while the banner shows keeps it up for its full time again.
         if (com.enigmacast.domain.tuner.BannerTimer.restartsOnKey(ui.banner, ui.quickBar, event.action == KeyEvent.ACTION_DOWN)) restartBannerTimer()
         if (ui.quickBar) {
+            if (ui.okOsd) {
+                // Mini OSD: the options are the bottom row; Up goes back to the recent channels.
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) okOsdToRecent()
+                    return true
+                }
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true
+                return false
+            }
             // Second Down on the options: recent channels, even when the row itself lost focus.
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN) {
                 openRecentBar()
@@ -1373,11 +1440,12 @@ class RemoteDisplayViewModel @Inject constructor(
                     com.enigmacast.domain.tuner.BannerOk.Action.RETRY -> ownSession.retry()
                     // The banner a zap brought up: the info banner at once (timer restarted), so
                     // Down reaches the options without waiting; a second OK pauses.
-                    com.enigmacast.domain.tuner.BannerOk.Action.OPTIONS_BANNER -> showBanner(fromZap = false)
+                    // OK (also on a zap banner): the mini OSD at the top with the recent channels.
+                    com.enigmacast.domain.tuner.BannerOk.Action.OPTIONS_BANNER -> openOkOsd()
                     // Banner up, or radio (no banner): pause or resume. Left opens the list.
                     // An internet stream cannot pause, so OK still opens the list there.
                     com.enigmacast.domain.tuner.BannerOk.Action.PAUSE_OR_LIST -> if (!playback.toggleTimeshiftPause()) openChannelList()
-                    com.enigmacast.domain.tuner.BannerOk.Action.SHOW_BANNER -> showBanner()
+                    com.enigmacast.domain.tuner.BannerOk.Action.SHOW_BANNER -> if (radio) showBanner() else openOkOsd()
                 }
             }
             OwnKeyAction.DIGIT -> if (down && event.repeatCount == 0) pushDigit(OwnTunerKeys.digit(event.keyCode))

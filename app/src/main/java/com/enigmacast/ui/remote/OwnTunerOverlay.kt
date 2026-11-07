@@ -211,6 +211,25 @@ fun OwnTunerOverlay(
                     .padding(bottom = 2.dp),
             )
         }
+        // OK: the compact OSD at the top (the recent channels / options sit at the bottom).
+        EnigmaAnimatedOsd(visible = ui.okOsd && channel != null && !ui.channelList && !radio, modifier = Modifier.align(Alignment.TopCenter)) {
+            if (channel != null) {
+                MiniOsd(
+                    channel = channel,
+                    number = numberOf(channel),
+                    guide = own.guide?.takeIf { BouquetChannels.sameService(it.serviceReference, channel.reference) },
+                    loading = rememberDebouncedLoading(
+                        ui.playerState.playbackState == "BUFFERING" ||
+                            tuner.status == TunerStatus.CHECKING ||
+                            tuner.status == TunerStatus.STARTING,
+                    ),
+                    recording = isRecording(ui.recordingReferences, channel.reference),
+                    picon = picon,
+                    cachedPicon = cachedPicon,
+                    scrim = scrim,
+                )
+            }
+        }
         val showBanner = ui.banner && !ui.quickBar && channel != null && !ui.channelList && !radio
         val showStrip = channel != null && !ui.channelList && !radio && (ui.banner || ui.quickBar)
         EnigmaAnimatedOsd(visible = showStrip, modifier = Modifier.align(Alignment.BottomCenter)) {
