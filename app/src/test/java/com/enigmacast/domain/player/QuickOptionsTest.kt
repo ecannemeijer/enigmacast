@@ -74,4 +74,21 @@ class QuickOptionsTest {
         assertEquals(51, values.size)
         assertTrue(0 in values)
     }
+
+    @Test fun pauseTileOnlyForLiveTvThatCanPause() {
+        assertTrue(QuickOption.PAUSE in QuickOptions.tiles(ownTuner = true))
+        assertTrue(QuickOption.PAUSE in QuickOptions.iptvTiles(vod = false))
+        assertFalse(QuickOption.PAUSE in QuickOptions.iptvTiles(vod = true))
+        assertFalse(QuickOption.PAUSE in QuickOptions.tiles(ownTuner = false))
+        assertFalse(QuickOption.PAUSE in QuickOptions.tiles(ownTuner = true, file = true))
+    }
+
+    @Test fun playOnlyResumesPauseOnlyPausesPlayPauseToggles() {
+        assertTrue(PauseKeys.toggles(android.view.KeyEvent.KEYCODE_MEDIA_PLAY, paused = true))
+        assertFalse(PauseKeys.toggles(android.view.KeyEvent.KEYCODE_MEDIA_PLAY, paused = false))
+        assertTrue(PauseKeys.toggles(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE, paused = false))
+        assertFalse(PauseKeys.toggles(android.view.KeyEvent.KEYCODE_MEDIA_PAUSE, paused = true))
+        assertTrue(PauseKeys.toggles(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, paused = true))
+        assertTrue(PauseKeys.toggles(0, paused = false))
+    }
 }

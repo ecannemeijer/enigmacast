@@ -1836,4 +1836,7 @@
     <string name="iptv_show_all_channels">Alle anzeigen</string>
     <string name="iptv_reset_order">Reihenfolge zurücksetzen</string>
     <string name="skin_slate_calm">Ruhiger Schiefer</string>
+    <string name="quick_pause">Pause</string>
+    <string name="quick_paused">Pausiert</string>
+    <string name="quick_pause_unavailable">Pausieren ist auf diesem Sender nicht möglich</string>
 </resources>

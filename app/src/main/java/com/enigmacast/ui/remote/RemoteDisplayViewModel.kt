@@ -474,6 +474,11 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
+    /** The Pause tile in the options: live TV paused in the timeshift buffer, or resumed. */
+    fun toggleLivePause() {
+        if (!playback.toggleTimeshiftPause()) showNotice(UiText.res(R.string.quick_pause_unavailable))
+    }
+
     fun openQuickBar() {
         bannerJob?.cancel()
         _ui.update { it.copy(quickBar = true, quickBarToken = it.quickBarToken + 1, recentBar = false) }
@@ -1465,6 +1470,7 @@ class RemoteDisplayViewModel @Inject constructor(
      */
     private fun handleBound(event: KeyEvent, bindings: com.enigmacast.domain.remote.Bindings, follow: Boolean): Boolean {
         val code = event.keyCode
+        performKeyCode = code
         val down = event.action == KeyEvent.ACTION_DOWN
         if (KeyBindings.hasLong(bindings, code)) {
             if (down) {
@@ -1502,6 +1508,9 @@ class RemoteDisplayViewModel @Inject constructor(
         return true
     }
 
+    /** The key behind the action [perform] runs (0: not a key, e.g. a tile). */
+    private var performKeyCode = 0
+
     private fun perform(action: PlayerAction) {
         // Hotel mode: guests cannot record or switch to another receiver.
         if (!com.enigmacast.domain.hotel.HotelRestrictions.actionAllowed(action, com.enigmacast.domain.hotel.HotelRuntime.config)) return
@@ -1519,7 +1528,8 @@ class RemoteDisplayViewModel @Inject constructor(
                 openSearch()
             }
             PlayerAction.RECORD -> recordWatching()
-            PlayerAction.PAUSE -> playback.toggleTimeshiftPause()
+            // Play only resumes and Pause only pauses; Play/Pause (and a remapped key) toggles.
+            PlayerAction.PAUSE -> if (com.enigmacast.domain.player.PauseKeys.toggles(performKeyCode, ui.playerState.timeshiftPaused)) playback.toggleTimeshiftPause()
             PlayerAction.AUDIO_TRACK -> {
                 val tracks = ui.tracks.audio
                 if (tracks.size < 2) return showNotice(UiText.res(R.string.keys_no_other_audio))

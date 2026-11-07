@@ -1831,4 +1831,7 @@
     <string name="iptv_show_all_channels">Alles tonen</string>
     <string name="iptv_reset_order">Volgorde herstellen</string>
     <string name="skin_slate_calm">Rustig Leisteen</string>
+    <string name="quick_pause">Pauze</string>
+    <string name="quick_paused">Gepauzeerd</string>
+    <string name="quick_pause_unavailable">Pauzeren kan niet op deze zender</string>
 </resources>

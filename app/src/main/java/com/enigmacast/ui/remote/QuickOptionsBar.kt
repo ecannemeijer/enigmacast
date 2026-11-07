@@ -116,6 +116,8 @@ data class QuickBarActions(
     val onPip: () -> Unit = {},
     /** Audio boost: the next of the five levels (or off) for this channel. */
     val onBoost: () -> Unit = {},
+    /** Live TV: pause or resume. */
+    val onPause: () -> Unit = {},
 )
 
 /**
@@ -174,7 +176,7 @@ fun QuickOptionsBar(
         itemsIndexed(tiles, key = { _, option -> option.name }) { index, option ->
             Box {
                 QuickTile(
-                    icon = option.icon(),
+                    icon = if (option == QuickOption.PAUSE && livePaused(ui)) com.enigmacast.ui.player.VodIcons.Play else option.icon(),
                     label = when {
                         option == QuickOption.RECORD && ui.recordingTitle.isNotBlank() -> stringResource(R.string.my_items_stop)
                         option == QuickOption.RESTART && ui.playerState.filePlayback -> stringResource(R.string.file_from_start)
@@ -193,6 +195,7 @@ fun QuickOptionsBar(
                             QuickOption.RESTART -> actions.onRestart()
                             QuickOption.RECORD -> actions.onRecord()
                             QuickOption.PIP -> actions.onPip()
+                            QuickOption.PAUSE -> actions.onPause()
                             // No picker: every OK is one step louder, after 5 it is off again.
                             QuickOption.BOOST -> actions.onBoost()
                             else -> open = option
@@ -407,7 +410,7 @@ private fun pickerItems(option: QuickOption, ui: RemoteDisplayUiState, actions: 
             listOf(PickerItem(stringResource(R.string.quality_auto_setting), manual == null, pick { actions.onQuality(null) })) +
                 levels.map { level -> PickerItem(qualityLabel(level), manual == level, pick { actions.onQuality(level) }) }
         }
-        QuickOption.SEARCH, QuickOption.EQUIVALENT, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP, QuickOption.BOOST -> emptyList()
+        QuickOption.SEARCH, QuickOption.EQUIVALENT, QuickOption.GUIDE, QuickOption.RESTART, QuickOption.STREAM_INFO, QuickOption.RECORD, QuickOption.PIP, QuickOption.BOOST, QuickOption.PAUSE -> emptyList()
     }
 }
 
@@ -558,6 +561,7 @@ private fun tileValue(option: QuickOption, ui: RemoteDisplayUiState, nowMs: Long
     QuickOption.EQUIVALENT -> ""
     QuickOption.RESTART -> ""
     QuickOption.PIP -> ""
+    QuickOption.PAUSE -> if (livePaused(ui)) stringResource(R.string.quick_paused) else ""
     QuickOption.BOOST -> boostValue(ui.boostLevel)
     QuickOption.RECORD -> if (ui.recordingTitle.isNotBlank()) ui.recordingTitle else {
         val nowSec = nowMs / 1000
@@ -587,6 +591,7 @@ private fun QuickOption.label(): String = stringResource(
         QuickOption.RECORD -> R.string.epg_record
         QuickOption.PIP -> R.string.pip
         QuickOption.BOOST -> R.string.quick_boost
+        QuickOption.PAUSE -> R.string.quick_pause
     },
 )
 
@@ -607,7 +612,12 @@ private fun QuickOption.icon(): ImageVector = when (this) {
     QuickOption.RECORD -> EnigmaIcons.Record
     QuickOption.PIP -> EnigmaIcons.Tv
     QuickOption.BOOST -> EnigmaIcons.VolumeUp
+    QuickOption.PAUSE -> com.enigmacast.ui.player.VodIcons.Pause
 }
+
+/** Live TV held: satellite timeshift pause, or the IPTV player paused while ready. */
+internal fun livePaused(ui: RemoteDisplayUiState): Boolean =
+    ui.playerState.timeshiftPaused || (ui.playerState.playbackState == "READY" && !ui.playerState.playing)
 
 @Composable
 private fun pictureLabel(mode: PictureMode): String = stringResource(

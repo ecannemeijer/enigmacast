@@ -592,7 +592,9 @@ fun XtreamScreen(
                     IptvKeyAction.ChannelList -> if (repeat == 0) {
                         if (model.pip.playing() && model.pip.swapped.value) model.pip.openList() else openPanel()
                     }
-                    IptvKeyAction.Pause -> if (repeat == 0) { model.togglePause(); showBanner(fromZap = false) }
+                    IptvKeyAction.Pause -> if (repeat == 0 && com.enigmacast.domain.player.PauseKeys.toggles(code, model.playerState.playbackState == "READY" && !model.playerState.playing)) {
+                        model.togglePause(); showBanner(fromZap = false)
+                    }
                     IptvKeyAction.None -> return@onPreviewKeyEvent false
                 }
                 true
@@ -1553,6 +1555,7 @@ private fun IptvOsd(
                     onRecent = model::playRecent,
                     onSleep = model::setSleepTimer,
                     onRestart = model::restart,
+                    onPause = { if (playing.item?.section == XtreamSection.LIVE) model.togglePause() },
                     onQuality = {},
                     onRecord = {},
                     onSearch = {
