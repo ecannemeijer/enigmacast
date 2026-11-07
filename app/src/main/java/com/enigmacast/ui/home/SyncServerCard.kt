@@ -58,6 +58,7 @@ class SyncServerViewModel @Inject constructor(
     private val profiles: ProfileStore,
     private val settings: SettingsRepository,
     private val updater: SyncServerUpdater,
+    private val tvBackup: com.enigmacast.data.enigmasync.SyncServerBackup,
 ) : ViewModel() {
     var host by mutableStateOf("")
     var user by mutableStateOf("root")
@@ -351,6 +352,95 @@ class SyncServerViewModel @Inject constructor(
         engine.syncInBackground("herstel backup")
     }
 
+
+    // ------------------------------------------------------------ backup to this TV (over SSH)
+
+    var tvBackupOpen by mutableStateOf(false)
+    var tvBackupPassword by mutableStateOf("")
+    var tvBackupBusy by mutableStateOf(false)
+        private set
+    /** Text resource of the last backup result (with [tvBackupDetail]); null = nothing to say. */
+    var tvBackupMessage by mutableStateOf<Int?>(null)
+        private set
+    var tvBackupDetail by mutableStateOf("")
+        private set
+    var tvBackups by mutableStateOf<List<com.enigmacast.data.enigmasync.TvSyncBackup>>(emptyList())
+        private set
+
+    private fun backupHost(): String = linkedHost.ifBlank { host }.trim()
+
+    fun openTvBackup() {
+        tvBackupOpen = !tvBackupOpen
+        if (tvBackupOpen) tvBackups = tvBackup.list()
+    }
+
+    private fun tvBackupWork(work: suspend () -> Pair<Int, String>) {
+        if (tvBackupBusy) return
+        tvBackupBusy = true
+        tvBackupMessage = null
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { work() } }
+            tvBackupBusy = false
+            tvBackups = tvBackup.list()
+            result.fold(
+                onSuccess = { (res, detail) -> tvBackupMessage = res; tvBackupDetail = detail },
+                onFailure = { tvBackupMessage = R.string.sync_tv_backup_failed; tvBackupDetail = it.message ?: it.javaClass.simpleName },
+            )
+        }
+    }
+
+    fun backupToTv() {
+        val address = backupHost()
+        val typed = tvBackupPassword
+        if (address.isBlank() || typed.isBlank()) return
+        tvBackupWork {
+            val made = tvBackup.backup(address, user.trim().ifBlank { "root" }, typed)
+            R.string.sync_tv_backup_done to made.file.name
+        }
+    }
+
+    /**
+     * Puts [file] on the server now installed on the receiver, then pairs this TV with it again:
+     * the restored certificate is the old one, so the pin saved for the fresh install is stale.
+     */
+    fun restoreFromTv(file: java.io.File) {
+        val address = backupHost()
+        val typed = tvBackupPassword
+        if (address.isBlank() || typed.isBlank()) return
+        tvBackupWork {
+            tvBackup.restore(address, user.trim().ifBlank { "root" }, typed, file)
+            engine.serverChanged(address)
+            var paired: JSONObject? = null
+            var pin = ""
+            for (attempt in 0 until 10) {
+                kotlinx.coroutines.delay(1_500)
+                val ok = runCatching {
+                    pin = client.capturePin(address, 5, 8)
+                    paired = JSONObject(client.join(address, pin, "EnigmaCast"))
+                }.isSuccess
+                if (ok) break
+            }
+            val joined = paired ?: error("sync server did not answer after the restore")
+            client.save(address, pin, joined.getString("token"), joined.getString("deviceId"), joined.getString("role"))
+            withContext(Dispatchers.Main) {
+                linkedHost = address
+                linkedRole = joined.getString("role")
+            }
+            runCatching { engine.importProfiles() }
+            engine.syncInBackground("herstel van tv-backup")
+            R.string.sync_tv_restore_done to file.name
+        }
+    }
+
+    fun exportTvBackup(file: java.io.File) = tvBackupWork {
+        R.string.sync_tv_backup_exported to tvBackup.export(file).absolutePath
+    }
+
+    fun deleteTvBackup(file: java.io.File) {
+        tvBackup.delete(file)
+        tvBackups = tvBackup.list()
+    }
+
     /** Resets the device list with the recovery code, then pairs this device again. */
     fun disconnect() {
         client.clear()
@@ -471,6 +561,8 @@ fun SyncServerCard(
                     TvButton(stringResource(R.string.sync_manage_button), { if (model.manageOpen) model.manageOpen = false else model.openManage() }, enabled = !linkedUpdating)
                 }
                 if (model.manageOpen) SyncManageSection(model)
+                TvButton(stringResource(R.string.sync_tv_backup_button), { model.openTvBackup() }, enabled = !linkedUpdating)
+                if (model.tvBackupOpen) SyncTvBackupSection(model)
                 // Paired from this card: the Pair button is gone, keep D-pad focus inside the card.
                 LaunchedEffect(model.justPaired) {
                     if (model.justPaired) {
@@ -546,6 +638,8 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
             TvButton(stringResource(R.string.sync_server_claim), { model.claim() }, enabled = !model.busy && !updating && model.recoveryCode.isNotBlank())
         }
     }
+    TvButton(stringResource(R.string.sync_tv_backup_button), { model.openTvBackup() }, enabled = !model.busy && !updating)
+    if (model.tvBackupOpen) SyncTvBackupSection(model)
     if (confirmReinstall && server != null) {
         TvConfirmDialog(
             title = stringResource(R.string.sync_server_reinstall_title),
@@ -605,6 +699,66 @@ private fun SyncManageSection(model: SyncServerViewModel) {
             onConfirm = {
                 confirmRestore = null
                 model.restoreBackup(folder)
+            },
+            onDismiss = { confirmRestore = null },
+            destructive = true,
+        )
+    }
+}
+
+/**
+ * Backup of the whole sync server (database, key, certificate, dashboard login) to this TV, and
+ * restore onto a newly installed server. Uses the receiver's SSH login like the installer.
+ */
+@Composable
+private fun SyncTvBackupSection(model: SyncServerViewModel) {
+    var confirmRestore by remember { mutableStateOf<java.io.File?>(null) }
+    val format = remember { java.text.SimpleDateFormat("dd-MM-yyyy HH:mm", java.util.Locale.getDefault()) }
+    Text(stringResource(R.string.sync_tv_backup_title), color = EnigmaColors.Text, fontSize = 16.sp)
+    Text(stringResource(R.string.sync_tv_backup_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+    TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it })
+    TvTextField(
+        stringResource(R.string.sync_server_password),
+        model.tvBackupPassword,
+        { model.tvBackupPassword = it },
+        visualTransformation = PasswordVisualTransformation(),
+    )
+    if (model.tvBackupBusy) SyncBusyRow(stringResource(R.string.sync_tv_backup_busy))
+    model.tvBackupMessage?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(it, model.tvBackupDetail)) }
+    TvButton(
+        stringResource(R.string.sync_tv_backup_make),
+        { model.backupToTv() },
+        enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(),
+    )
+    if (model.tvBackups.isEmpty()) {
+        Text(stringResource(R.string.sync_tv_backup_none), color = EnigmaColors.Subtle, fontSize = 14.sp)
+    }
+    model.tvBackups.take(5).forEach { item ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(
+                "${format.format(java.util.Date(item.createdMs))} · ${item.sizeBytes / 1024} KB",
+                color = EnigmaColors.Muted,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f),
+            )
+            TvButton(
+                stringResource(R.string.sync_tv_backup_restore),
+                { confirmRestore = item.file },
+                enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(),
+            )
+            TvButton(stringResource(R.string.sync_tv_backup_export), { model.exportTvBackup(item.file) }, enabled = !model.tvBackupBusy)
+            TvButton(stringResource(R.string.sync_tv_backup_delete), { model.deleteTvBackup(item.file) }, enabled = !model.tvBackupBusy)
+        }
+    }
+    confirmRestore?.let { file ->
+        TvConfirmDialog(
+            title = stringResource(R.string.sync_tv_backup_restore),
+            message = stringResource(R.string.sync_tv_restore_message, file.name),
+            confirmLabel = stringResource(R.string.sync_tv_backup_restore),
+            dismissLabel = stringResource(R.string.cancel),
+            onConfirm = {
+                confirmRestore = null
+                model.restoreFromTv(file)
             },
             onDismiss = { confirmRestore = null },
             destructive = true,

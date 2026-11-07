@@ -1860,4 +1860,18 @@
     <string name="sync_manage_revoked">Dispositivo revocato. Deve associarsi di nuovo per sincronizzare.</string>
     <string name="sync_manage_backup_done">Backup creato: %1$s</string>
     <string name="sync_manage_restored">Backup ripristinato: %1$s</string>
+    <string name="sync_tv_backup_button">Backup su questa TV</string>
+    <string name="sync_tv_backup_title">Backup del server di sincronizzazione su questa TV</string>
+    <string name="sync_tv_backup_hint">Copia l\'intero server di sincronizzazione (profili, cronologia, login IPTV, dispositivi associati, certificato, login dashboard) su questa TV via SSH. Dopo un nuovo ricevitore o una reinstallazione: installa il server e ripristina qui. Usa il login root del ricevitore; la password non viene salvata.</string>
+    <string name="sync_tv_backup_make">Crea backup sulla TV</string>
+    <string name="sync_tv_backup_restore">Ripristina sul ricevitore</string>
+    <string name="sync_tv_backup_export">Esporta</string>
+    <string name="sync_tv_backup_delete">Elimina</string>
+    <string name="sync_tv_backup_busy">Backup via SSH in corso…</string>
+    <string name="sync_tv_backup_none">Ancora nessun backup su questa TV.</string>
+    <string name="sync_tv_backup_done">Backup salvato su questa TV: %1$s</string>
+    <string name="sync_tv_backup_failed">Backup non riuscito: %1$s</string>
+    <string name="sync_tv_restore_done">%1$s ripristinato. Questa TV è di nuovo associata; le altre TV si riconnettono da sole.</string>
+    <string name="sync_tv_backup_exported">Esportato in %1$s. Tienilo privato: contiene la chiave del server.</string>
+    <string name="sync_tv_restore_message">Ripristinare %1$s sul server di sincronizzazione del ricevitore? I dati attuali vengono sostituiti (una copia di sicurezza resta sul ricevitore). Su un nuovo ricevitore installa prima il server.</string>
 </resources>

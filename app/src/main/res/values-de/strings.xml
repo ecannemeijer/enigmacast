@@ -1856,4 +1856,18 @@
     <string name="sync_manage_revoked">Gerät widerrufen. Es muss sich zum Synchronisieren neu koppeln.</string>
     <string name="sync_manage_backup_done">Backup erstellt: %1$s</string>
     <string name="sync_manage_restored">Backup wiederhergestellt: %1$s</string>
+    <string name="sync_tv_backup_button">Backup auf diesen Fernseher</string>
+    <string name="sync_tv_backup_title">Sync-Server-Backup auf diesem Fernseher</string>
+    <string name="sync_tv_backup_hint">Kopiert den ganzen Sync-Server (Profile, Verlauf, IPTV-Logins, gekoppelte Geräte, Zertifikat, Dashboard-Login) per SSH auf diesen Fernseher. Nach einem neuen Receiver oder einer Neuinstallation: Sync-Server installieren und hier wiederherstellen. Nutzt den Root-Login des Receivers; das Passwort wird nicht gespeichert.</string>
+    <string name="sync_tv_backup_make">Backup auf Fernseher erstellen</string>
+    <string name="sync_tv_backup_restore">Auf Receiver wiederherstellen</string>
+    <string name="sync_tv_backup_export">Exportieren</string>
+    <string name="sync_tv_backup_delete">Löschen</string>
+    <string name="sync_tv_backup_busy">Backup über SSH läuft…</string>
+    <string name="sync_tv_backup_none">Noch keine Backups auf diesem Fernseher.</string>
+    <string name="sync_tv_backup_done">Backup auf diesem Fernseher gespeichert: %1$s</string>
+    <string name="sync_tv_backup_failed">Backup fehlgeschlagen: %1$s</string>
+    <string name="sync_tv_restore_done">%1$s wiederhergestellt. Dieser Fernseher ist neu gekoppelt; andere Fernseher verbinden sich selbst neu.</string>
+    <string name="sync_tv_backup_exported">Exportiert nach %1$s. Privat halten: es enthält den Serverschlüssel.</string>
+    <string name="sync_tv_restore_message">%1$s auf dem Sync-Server des Receivers wiederherstellen? Die aktuellen Daten werden ersetzt (eine Sicherheitskopie bleibt auf dem Receiver). Auf einem neuen Receiver zuerst den Sync-Server installieren.</string>
 </resources>

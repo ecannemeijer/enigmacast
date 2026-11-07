@@ -1851,4 +1851,18 @@
     <string name="sync_manage_revoked">Toestel ingetrokken. Het moet opnieuw koppelen om te synchroniseren.</string>
     <string name="sync_manage_backup_done">Backup gemaakt: %1$s</string>
     <string name="sync_manage_restored">Backup teruggezet: %1$s</string>
+    <string name="sync_tv_backup_button">Backup naar deze tv</string>
+    <string name="sync_tv_backup_title">Syncserver-backup op deze tv</string>
+    <string name="sync_tv_backup_hint">Kopieert de hele syncserver (profielen, geschiedenis, IPTV-logins, gekoppelde toestellen, certificaat, dashboardlogin) via SSH naar deze tv. Na een nieuwe ontvanger of herinstallatie: installeer de syncserver en zet hier terug. Gebruikt de root-login van de ontvanger; het wachtwoord wordt niet bewaard.</string>
+    <string name="sync_tv_backup_make">Backup maken naar tv</string>
+    <string name="sync_tv_backup_restore">Terugzetten op ontvanger</string>
+    <string name="sync_tv_backup_export">Exporteren</string>
+    <string name="sync_tv_backup_delete">Verwijderen</string>
+    <string name="sync_tv_backup_busy">Bezig met de backup via SSH…</string>
+    <string name="sync_tv_backup_none">Nog geen backups op deze tv.</string>
+    <string name="sync_tv_backup_done">Backup bewaard op deze tv: %1$s</string>
+    <string name="sync_tv_backup_failed">Backup mislukt: %1$s</string>
+    <string name="sync_tv_restore_done">%1$s teruggezet. Deze tv is opnieuw gekoppeld; andere tv's verbinden vanzelf opnieuw.</string>
+    <string name="sync_tv_backup_exported">Geëxporteerd naar %1$s. Houd het privé: het bevat de sleutel van de server.</string>
+    <string name="sync_tv_restore_message">%1$s terugzetten op de syncserver van de ontvanger? De huidige gegevens worden vervangen (een veiligheidskopie blijft op de ontvanger). Installeer op een nieuwe ontvanger eerst de syncserver.</string>
 </resources>
