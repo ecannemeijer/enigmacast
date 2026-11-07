@@ -70,6 +70,20 @@ class ProfileCloudTest {
         assertEquals(com.enigmacast.domain.player.LiveSubtitles(), newer.scope.liveSubtitles)
     }
 
+    @Test fun seriesSubtitlesTravelWithTheProfileAndOlderDocumentsKeepThem() {
+        val nl = com.enigmacast.domain.player.LiveSubtitles(com.enigmacast.domain.player.LiveSubtitles.Mode.ON, "nl", mime = "application/x-subrip")
+        val choices = mapOf("iptv:p1:42" to nl, "torrent:tv:7" to com.enigmacast.domain.player.LiveSubtitles.OFF)
+        val raw = ProfileCloud.encode(ProfileSettingsSnapshot(scope = ProfileScope(seriesSubtitles = choices)))
+        assertEquals(choices, ProfileCloud.decode(raw).scope.seriesSubtitles)
+        assertEquals(choices, ProfileScope.of(ProfileScope(seriesSubtitles = choices).applyTo(com.enigmacast.domain.model.AppSettings())).seriesSubtitles)
+        val old = """{"scope":{"navigationSounds":false}}"""
+        assertFalse(ProfileCloud.includesSeriesSubtitles(old))
+        assertEquals(choices, ProfileCloud.keepSeriesSubtitlesWhenMissing(ProfileCloud.decode(old), old, choices).scope.seriesSubtitles)
+        // A newer document that cleared them wins (last change wins, as for the other profile settings).
+        val cleared = ProfileCloud.encode(ProfileSettingsSnapshot(scope = ProfileScope()))
+        assertEquals(emptyMap<String, com.enigmacast.domain.player.LiveSubtitles>(), ProfileCloud.keepSeriesSubtitlesWhenMissing(ProfileCloud.decode(cleared), cleared, choices).scope.seriesSubtitles)
+    }
+
     @Test fun iptvLoadStaysBehindSatelliteDownloads() {
         val withReceiver = CacheWorkOrder.steps(hasReceiver = true)
         assertEquals(CacheWorkOrder.Step.SATELLITE, withReceiver.first())
