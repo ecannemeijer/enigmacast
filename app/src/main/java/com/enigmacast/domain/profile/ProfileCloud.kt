@@ -80,6 +80,21 @@ object ProfileCloud {
         return snapshot.copy(scope = snapshot.scope.copy(liveSubtitles = keep))
     }
 
+    /** Documents from before series subtitles were kept have no such field: keep this device's choices. */
+    fun includesSeriesSubtitles(raw: String): Boolean = runCatching {
+        val scope = json.parseToJsonElement(raw).jsonObject["scope"]?.jsonObject ?: return false
+        "seriesSubtitles" in scope
+    }.getOrDefault(false)
+
+    fun keepSeriesSubtitlesWhenMissing(
+        snapshot: ProfileSettingsSnapshot,
+        raw: String,
+        keep: Map<String, com.enigmacast.domain.player.LiveSubtitles>,
+    ): ProfileSettingsSnapshot {
+        if (includesSeriesSubtitles(raw) || snapshot.scope.seriesSubtitles == keep) return snapshot
+        return snapshot.copy(scope = snapshot.scope.copy(seriesSubtitles = keep))
+    }
+
     fun keepStartupWhenMissing(snapshot: ProfileSettingsSnapshot, raw: String, keep: StartupLive): ProfileSettingsSnapshot {
         if (includesStartupLive(raw) || snapshot.scope.startupLive == keep) return snapshot
         return snapshot.copy(scope = snapshot.scope.copy(startupLive = keep))

@@ -266,6 +266,7 @@ object HotelCleanupPlan {
             recentByReceiver = settings.recentByReceiver.mapValues { emptyList() },
             recentChannels = emptyList(),
             liveSubtitles = LiveSubtitles(),
+            seriesSubtitles = emptyMap(),
         )
         next = withStartChannel(next, config)
         return next

@@ -334,6 +334,8 @@ data class AppSettings(
     val tvFallback: TvFallback = TvFallback.OFF,
     /** Live TV subtitles (off, or a language/kind), for satellite and IPTV; per profile and synced. */
     val liveSubtitles: com.enigmacast.domain.player.LiveSubtitles = com.enigmacast.domain.player.LiveSubtitles(),
+    /** Subtitle choice per series (IPTV/torrent episodes), see [com.enigmacast.domain.player.SeriesSubtitles]; per profile and synced. */
+    val seriesSubtitles: Map<String, com.enigmacast.domain.player.LiveSubtitles> = emptyMap(),
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
