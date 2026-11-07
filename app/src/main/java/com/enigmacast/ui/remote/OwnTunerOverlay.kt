@@ -84,6 +84,10 @@ import com.enigmacast.ui.components.ensureVisible
 import com.enigmacast.ui.components.EnigmaProgramProgress
 import com.enigmacast.ui.osd.OsdInfoPresenter
 import com.enigmacast.ui.osd.OsdSkins
+import androidx.compose.ui.draw.clip
+import com.enigmacast.ui.theme.osdOrnament
+import com.enigmacast.ui.theme.borderless
+import com.enigmacast.ui.theme.gradientFill
 import com.enigmacast.ui.recording.RecordingDot
 import com.enigmacast.ui.recording.isRecording
 import com.enigmacast.ui.theme.ChannelsLoadingDialog
@@ -345,7 +349,7 @@ internal fun ChannelBanner(
         else -> Unit
     }
     val cardShape = skinShape(16.dp)
-    val fill = if (layout == OsdLayout.GLASS || layout == OsdLayout.CALM) {
+    val fill = if (layout.gradientFill) {
         Brush.linearGradient(listOf(EnigmaColors.scrimOf(ActiveSkin.current.palette.osdFill, scrim), EnigmaColors.scrimOf(ActiveSkin.current.palette.osdFillEnd, scrim)))
     } else {
         androidx.compose.ui.graphics.SolidColor(scrim)
@@ -360,7 +364,9 @@ internal fun ChannelBanner(
             )
             .fillMaxWidth()
             .background(fill, cardShape)
-            .then(if (layout == OsdLayout.MINIMAL) Modifier else Modifier.border(1.dp, EnigmaColors.GlassEdge, cardShape))
+            .then(if (layout.borderless) Modifier else Modifier.border(1.dp, EnigmaColors.GlassEdge, cardShape))
+            .clip(cardShape)
+            .osdOrnament(layout, ActiveSkin.current.palette)
             // Glass skins sit over video here: no photo behind it, so the sheen and hairline only.
             .glassSheen(cardShape)
             .padding(20.dp),

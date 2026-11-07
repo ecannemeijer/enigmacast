@@ -4,6 +4,7 @@ import com.enigmacast.domain.model.OsdSkinId
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import androidx.compose.ui.graphics.luminance
 import org.junit.Test
 
 class SkinsTest {
@@ -68,5 +69,21 @@ class SkinsTest {
         assertEquals(androidx.compose.ui.graphics.Color(0xFFAAAAAA), p.muted)    // grey
         assertEquals(0f, Skins.OpenPli.cornerScale)
         assertEquals(6, p.focusBrush?.size)
+    }
+
+    @Test
+    fun newSkinsKeepTextReadable() {
+        fun lum(c: androidx.compose.ui.graphics.Color) = c.luminance()
+        fun ratio(a: androidx.compose.ui.graphics.Color, b: androidx.compose.ui.graphics.Color): Float {
+            val x = lum(a); val y = lum(b)
+            return (maxOf(x, y) + 0.05f) / (minOf(x, y) + 0.05f)
+        }
+        for (skin in listOf(Skins.Lumen, Skins.CinemaBlack, Skins.Arena, Skins.Starbridge)) {
+            val p = skin.palette
+            assert(ratio(p.text, p.canvas) >= 7f) { "${skin.id} text" }
+            assert(ratio(p.muted, p.card) >= 4.5f) { "${skin.id} muted" }
+            assert(ratio(p.onFocus, p.focus) >= 4.5f) { "${skin.id} focus" }
+            assert(ratio(p.onAccent, p.accent) >= 3f) { "${skin.id} accent" }
+        }
     }
 }

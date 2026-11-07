@@ -44,6 +44,9 @@ import com.enigmacast.ui.theme.Skin
 import com.enigmacast.ui.theme.Skins
 import com.enigmacast.ui.theme.edgeLeft
 import com.enigmacast.ui.theme.skinShape
+import com.enigmacast.ui.theme.gradientFill
+import com.enigmacast.ui.theme.borderless
+import com.enigmacast.ui.theme.osdOrnament
 
 /**
  * Settings › Appearance › GUI skins: one tile per skin with a small preview of its colours
@@ -84,7 +87,8 @@ fun SkinChooser(selected: OsdSkinId, onSelect: (OsdSkinId) -> Unit, modifier: Mo
     }
 }
 
-private const val SkinColumns = 4
+/** Two rows for twelve skins; names wrap to two lines instead of being cut. */
+private const val SkinColumns = 6
 
 @Composable
 private fun SkinTile(skin: Skin, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
@@ -173,10 +177,12 @@ internal fun SkinThumbnail(skin: Skin, modifier: Modifier = Modifier) {
             else -> Box(
                 bar.padding(5.dp).fillMaxWidth().height(20.dp)
                     .background(
-                        if (skin.osd == OsdLayout.GLASS || skin.osd == OsdLayout.CALM) Brush.linearGradient(listOf(p.osdFill, p.osdFillEnd)) else Brush.linearGradient(listOf(p.osdFill, p.osdFill)),
+                        if (skin.osd.gradientFill) Brush.linearGradient(listOf(p.osdFill, p.osdFillEnd)) else Brush.linearGradient(listOf(p.osdFill, p.osdFill)),
                         skinShape(6.dp, skin),
                     )
-                    .border(1.dp, if (skin.osd == OsdLayout.MINIMAL) p.osdFill else p.osdEdge, skinShape(6.dp, skin)),
+                    .border(1.dp, if (skin.osd.borderless) p.osdFill else p.osdEdge, skinShape(6.dp, skin))
+                    .clip(skinShape(6.dp, skin))
+                    .osdOrnament(skin.osd, p, scale = 0.45f),
             ) {
                 Box(Modifier.padding(start = 6.dp, top = 12.dp).width(70.dp).height(3.dp).background(Brush.horizontalGradient(listOf(p.accent, p.highlight))))
             }

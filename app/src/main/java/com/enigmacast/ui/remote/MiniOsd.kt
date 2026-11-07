@@ -45,6 +45,7 @@ import com.enigmacast.ui.theme.ActiveSkin
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.OsdLayout
+import com.enigmacast.ui.theme.osdOrnament
 import com.enigmacast.ui.theme.glassSheen
 import com.enigmacast.ui.theme.skinShape
 import kotlinx.coroutines.delay
@@ -96,7 +97,7 @@ fun MiniOsd(
     }
     val fill: Brush = when (layout) {
         OsdLayout.PLI_BAR, OsdLayout.WAVE -> Brush.horizontalGradient(listOf(start, end))
-        OsdLayout.GLASS, OsdLayout.CALM, OsdLayout.ORBIT -> Brush.linearGradient(listOf(start, end))
+        OsdLayout.GLASS, OsdLayout.CALM, OsdLayout.ORBIT, OsdLayout.LUMEN, OsdLayout.CINEMA, OsdLayout.ELBOW -> Brush.linearGradient(listOf(start, end))
         else -> androidx.compose.ui.graphics.SolidColor(start)
     }
     val wide = layout == OsdLayout.PLI_BAR || layout == OsdLayout.WAVE
@@ -114,12 +115,13 @@ fun MiniOsd(
             .background(fill, shape)
             .then(
                 when (layout) {
-                    OsdLayout.MINIMAL, OsdLayout.FLAT, OsdLayout.PLI_BAR, OsdLayout.WAVE -> Modifier
+                    OsdLayout.MINIMAL, OsdLayout.FLAT, OsdLayout.PLI_BAR, OsdLayout.WAVE, OsdLayout.CINEMA -> Modifier
                     OsdLayout.ORBIT -> Modifier.border(1.dp, p.accent.copy(alpha = 0.55f), shape)
                     else -> Modifier.border(1.dp, p.osdEdge, shape)
                 },
             )
-            .glassSheen(shape),
+            .glassSheen(shape)
+            .osdOrnament(layout, p),
     ) {
         Row(
             Modifier
@@ -127,7 +129,8 @@ fun MiniOsd(
                 .padding(horizontal = if (layout == OsdLayout.ORBIT) 22.dp else 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (layout == OsdLayout.FLAT && number > 0) {
+            if (layout == OsdLayout.ELBOW) Spacer(Modifier.width(12.dp))
+            if ((layout == OsdLayout.FLAT || layout == OsdLayout.SCOREBOARD) && number > 0) {
                 Box(
                     Modifier.background(p.accent, skinShape(6.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
@@ -147,7 +150,7 @@ fun MiniOsd(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (layout != OsdLayout.FLAT && number > 0) {
+                    if (layout != OsdLayout.FLAT && layout != OsdLayout.SCOREBOARD && number > 0) {
                         Text("$number", color = p.accent, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
                     }
                     Text(
