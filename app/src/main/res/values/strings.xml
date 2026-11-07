@@ -1865,7 +1865,7 @@
     <string name="sync_manage_restored">Backup restored: %1$s</string>
     <string name="sync_tv_backup_button">Backup to this TV</string>
     <string name="sync_tv_backup_title">Sync server backup on this TV</string>
-    <string name="sync_tv_backup_hint">Copies the whole sync server (profiles, history, IPTV logins, paired devices, certificate, dashboard login) to this TV over SSH. After a new receiver or a reinstall: install the sync server, then restore here. Uses the receiver's root login; the password is not stored.</string>
+    <string name="sync_tv_backup_hint">Copies the whole sync server (profiles, history, IPTV logins, paired devices, certificate, dashboard login) to this TV over SSH. After a new receiver or a reinstall: install the sync server, then restore here. Uses the receiver\'s root login; the password is not stored.</string>
     <string name="sync_tv_backup_make">Make backup to TV</string>
     <string name="sync_tv_backup_restore">Restore to receiver</string>
     <string name="sync_tv_backup_export">Export</string>

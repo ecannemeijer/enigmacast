@@ -1866,7 +1866,7 @@
     <string name="sync_tv_backup_none">Nog geen backups op deze tv.</string>
     <string name="sync_tv_backup_done">Backup bewaard op deze tv: %1$s</string>
     <string name="sync_tv_backup_failed">Backup mislukt: %1$s</string>
-    <string name="sync_tv_restore_done">%1$s teruggezet. Deze tv is opnieuw gekoppeld; andere tv's verbinden vanzelf opnieuw.</string>
+    <string name="sync_tv_restore_done">%1$s teruggezet. Deze tv is opnieuw gekoppeld; andere tv\'s verbinden vanzelf opnieuw.</string>
     <string name="sync_tv_backup_exported">Geëxporteerd naar %1$s. Houd het privé: het bevat de sleutel van de server.</string>
     <string name="sync_tv_restore_message">%1$s terugzetten op de syncserver van de ontvanger? De huidige gegevens worden vervangen (een veiligheidskopie blijft op de ontvanger). Installeer op een nieuwe ontvanger eerst de syncserver.</string>
 </resources>
