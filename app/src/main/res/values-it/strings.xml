@@ -1840,4 +1840,7 @@
     <string name="iptv_show_all_channels">Mostra tutti</string>
     <string name="iptv_reset_order">Ripristina ordine</string>
     <string name="skin_slate_calm">Ardesia Calma</string>
+    <string name="quick_pause">Pausa</string>
+    <string name="quick_paused">In pausa</string>
+    <string name="quick_pause_unavailable">Non è possibile mettere in pausa questo canale</string>
 </resources>

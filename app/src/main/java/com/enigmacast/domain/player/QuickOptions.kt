@@ -22,6 +22,8 @@ enum class QuickOption {
     STREAM_INFO,
     RESTART,
     PIP,
+    /** Live TV: pause / resume (for remotes without a pause key; OK opens the mini OSD). */
+    PAUSE,
 }
 
 object QuickOptions {
@@ -41,7 +43,7 @@ object QuickOptions {
             QuickOption.SLEEP,
         )
         ownTuner -> QuickOption.entries.filter { it != QuickOption.SEARCH }
-        else -> QuickOption.entries - setOf(QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RECENT, QuickOption.PIP)
+        else -> QuickOption.entries - setOf(QuickOption.SEARCH, QuickOption.GUIDE, QuickOption.RECENT, QuickOption.PIP, QuickOption.PAUSE)
     }
 
     /**
@@ -65,6 +67,7 @@ object QuickOptions {
         add(QuickOption.SLEEP)
         add(QuickOption.STREAM_INFO)
         add(QuickOption.RESTART)
+        if (!vod) add(QuickOption.PAUSE)
     }
 }
 

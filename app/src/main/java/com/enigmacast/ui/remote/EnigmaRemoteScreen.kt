@@ -133,6 +133,7 @@ fun EnigmaRemoteScreen(
             onRecent = viewModel::zapRecent,
             onSleep = viewModel::setSleepTimer,
             onRestart = viewModel::restartFromBar,
+            onPause = viewModel::toggleLivePause,
             onQuality = viewModel::chooseQuality,
             onRecord = viewModel::recordWatching,
             onSearch = viewModel::openSearch,

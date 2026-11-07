@@ -59,4 +59,10 @@ class IptvPlayerKeysTest {
         assertEquals(live, chooseGuide(live, past, now))
         assertEquals(past, chooseGuide(past, emptyList(), now))
     }
+
+    @Test fun pauseKeysAlsoPauseLiveIptv() {
+        assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+        assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_MEDIA_PAUSE, banner = true))
+        assertEquals(IptvKeyAction.Pause, a(KeyEvent.KEYCODE_MEDIA_PLAY, vod = true))
+    }
 }

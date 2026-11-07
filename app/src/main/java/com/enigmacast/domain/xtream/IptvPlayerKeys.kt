@@ -45,7 +45,8 @@ object IptvPlayerKeys {
             PlayerAction.INFO -> IptvKeyAction.Details
             PlayerAction.BANNER -> IptvKeyAction.Banner
             PlayerAction.OPTIONS, PlayerAction.AUDIO_TRACK, PlayerAction.SUBTITLES, PlayerAction.PICTURE_MODE -> IptvKeyAction.Options
-            PlayerAction.PAUSE -> if (vod) IptvKeyAction.Pause else IptvKeyAction.None
+            // Live too: the provider stream pauses in the player's buffer (as on satellite).
+            PlayerAction.PAUSE -> IptvKeyAction.Pause
             PlayerAction.PREVIOUS_CHANNEL -> if (vod) IptvKeyAction.None else IptvKeyAction.PreviousChannel
             else -> IptvKeyAction.None
         }
