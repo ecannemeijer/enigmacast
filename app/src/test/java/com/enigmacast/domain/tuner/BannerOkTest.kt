@@ -11,8 +11,8 @@ class BannerOkTest {
     }
 
     @Test
-    fun secondOkOnTheInfoBannerPausesAsBefore() {
-        assertEquals(Action.PAUSE_OR_LIST, BannerOk.decide(false, radio = false, banner = true, fromZap = false))
+    fun okOnTheInfoBannerAlsoOpensTheMiniOsdRadioPauses() {
+        assertEquals(Action.OPTIONS_BANNER, BannerOk.decide(false, radio = false, banner = true, fromZap = false))
         assertEquals(Action.PAUSE_OR_LIST, BannerOk.decide(false, radio = true, banner = true, fromZap = true))
         assertEquals(Action.PAUSE_OR_LIST, BannerOk.decide(false, radio = true, banner = false, fromZap = false))
     }
