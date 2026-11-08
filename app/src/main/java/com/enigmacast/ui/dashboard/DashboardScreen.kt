@@ -2121,6 +2121,17 @@ private fun GeneralSettingsPanel(
             selectedIndex = modes.indexOf(fastMode),
             onSelect = { index -> viewModel.setFastMode(modes[index]) },
         )
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var statsOn by remember { mutableStateOf(com.enigmacast.data.telemetry.Telemetry.isEnabled(context)) }
+        ToggleRow(
+            title = stringResource(R.string.usage_stats),
+            description = stringResource(R.string.usage_stats_desc),
+            checked = statsOn,
+            onCheckedChange = {
+                statsOn = it
+                com.enigmacast.data.telemetry.Telemetry.setEnabled(context, it)
+            },
+        )
     }
 }
 
