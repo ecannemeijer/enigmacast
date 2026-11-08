@@ -666,7 +666,7 @@ class EnigmaSyncEngine @Inject constructor(
                     .put("server", provider.server)
                     .put("username", provider.username)
                     .put("password", provider.password)
-                    .put("enabled", provider.enabled)
+                    // Active/inactive stays on this TV (see IptvPlaylistStore.setProviderEnabled).
                     .put("sortOrder", provider.sortOrder),
             )
         }

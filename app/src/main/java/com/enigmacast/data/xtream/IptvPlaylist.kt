@@ -82,6 +82,12 @@ class IptvPlaylistStore @Inject constructor(
     private val secrets: SecretStore,
 ) {
     private val revisionPrefs = context.getSharedPreferences(REVISION_PREFS, Context.MODE_PRIVATE)
+    /**
+     * Active/inactive per provider, for this TV only. The provider list itself (name, URL, login)
+     * is shared through the sync server; whether a provider is switched on is not, so each TV
+     * can watch its own providers.
+     */
+    private val enabledPrefs = context.getSharedPreferences(ENABLED_PREFS, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _providers = MutableStateFlow(readProviders())
     val providers: StateFlow<List<IptvProvider>> = _providers
@@ -138,6 +144,29 @@ class IptvPlaylistStore @Inject constructor(
             .getOrDefault(emptyList())
             .filter { it.id.isNotBlank() }
             .sortedBy { it.sortOrder }
+            .let(::withLocalEnabled)
+    }
+
+    /**
+     * Puts this TV's own active/inactive choice on each provider. A provider this TV has not seen
+     * yet takes [defaultFor] once (the first run after the update keeps the value it had).
+     */
+    private fun withLocalEnabled(list: List<IptvProvider>, defaultFor: (IptvProvider) -> Boolean = { it.enabled }): List<IptvProvider> {
+        val edit = enabledPrefs.edit()
+        var changed = false
+        val out = list.map { provider ->
+            val key = KEY_ENABLED_PREFIX + provider.id
+            if (enabledPrefs.contains(key)) {
+                provider.copy(enabled = enabledPrefs.getBoolean(key, true))
+            } else {
+                val value = defaultFor(provider)
+                edit.putBoolean(key, value)
+                changed = true
+                provider.copy(enabled = value)
+            }
+        }
+        if (changed) edit.apply()
+        return out
     }
 
     /** Existing single-playlist users keep their login as provider "default". */
@@ -158,8 +187,8 @@ class IptvPlaylistStore @Inject constructor(
         persistProviders(listOf(provider))
     }
 
-    private fun persistProviders(list: List<IptvProvider>) {
-        val ordered = list.sortedBy { it.sortOrder }
+    private fun persistProviders(list: List<IptvProvider>, defaultFor: (IptvProvider) -> Boolean = { it.enabled }) {
+        val ordered = withLocalEnabled(list.sortedBy { it.sortOrder }, defaultFor)
         _providers.value = ordered
         secrets.write(PROVIDERS, json.encodeToString(ordered))
         if (ordered.isEmpty()) {
@@ -204,8 +233,10 @@ class IptvPlaylistStore @Inject constructor(
         persistProviders(list.mapIndexed { i, provider -> provider.copy(sortOrder = i) })
     }
 
+    /** Local to this TV: not marked for sync and not sent to the sync server. */
     fun setProviderEnabled(id: String, enabled: Boolean) {
-        persistProviders(_providers.value.map { if (it.id == id) it.copy(enabled = enabled) else it })
+        enabledPrefs.edit().putBoolean(KEY_ENABLED_PREFIX + id, enabled).apply()
+        persistProviders(_providers.value)
     }
 
     /** A JSON document for backup/import. Contains credentials, so the UI warns before copying. */
@@ -226,8 +257,12 @@ class IptvPlaylistStore @Inject constructor(
     }
 
     /** Used by the sync server: replace the whole list without writing legacy single-login fields. */
+    /**
+     * The provider list from the sync server. This TV's active/inactive choice is kept; a provider
+     * that is new to this TV starts active.
+     */
     fun replaceProviders(list: List<IptvProvider>) {
-        persistProviders(list.filter { it.id.isNotBlank() })
+        persistProviders(list.filter { it.id.isNotBlank() }) { true }
     }
 
     fun save(login: IptvPlaylistLogin) {
@@ -269,6 +304,8 @@ class IptvPlaylistStore @Inject constructor(
 
     private companion object {
         const val REVISION_PREFS = "iptv_playlist_revision"
+        const val ENABLED_PREFS = "iptv_provider_enabled"
+        const val KEY_ENABLED_PREFIX = "enabled_"
         const val REV_MS = "updated_ms"
         const val REV_CHANGE = "change_id"
         const val REV_DIRTY = "dirty"
@@ -378,6 +415,36 @@ class IptvPlaylistSync @Inject constructor(
                 _lastLoad.value++
                 IptvLoadResult.Done(categories, items)
             }
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            failed = false
+            throw cancel
+        } finally {
+            activity.finish(task, failed)
+        }
+    }
+
+    /**
+     * Fetches one provider only, e.g. a provider switched on that this TV never loaded. The other
+     * providers' rows stay as they are.
+     */
+    suspend fun loadOne(providerId: String, onProgress: (IptvLoadProgress) -> Unit = {}): IptvLoadResult = gate.withLock {
+        val provider = store.enabledProviders().firstOrNull { it.id == providerId }
+            ?: return@withLock IptvLoadResult.Failure.NOT_CONFIGURED
+        val task = activity.start(com.enigmacast.activity.ActivityKind.IPTV)
+        var failed = true
+        try {
+            val result = loadProvider(provider) { progress ->
+                activity.progress(task, progress.count, null)
+                onProgress(progress)
+            }
+            _providerFailures.value = if (result is IptvLoadResult.Failure) {
+                _providerFailures.value + (provider.id to result)
+            } else {
+                _providerFailures.value - provider.id
+            }
+            failed = result is IptvLoadResult.Failure && result != IptvLoadResult.Failure.NOT_CONFIGURED
+            if (result is IptvLoadResult.Done && result.items > 0) _lastLoad.value++
+            result
         } catch (cancel: kotlinx.coroutines.CancellationException) {
             failed = false
             throw cancel
