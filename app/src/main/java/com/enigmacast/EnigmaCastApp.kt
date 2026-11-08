@@ -30,6 +30,7 @@ class EnigmaCastApp : Application() {
         com.enigmacast.playback.SubtitleStyleStore.init(this)
         recordingTunerGuard.start()
         userSync.start()
+        com.enigmacast.data.telemetry.Telemetry.onAppStart(this)
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }

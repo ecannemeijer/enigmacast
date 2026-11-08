@@ -1884,4 +1884,6 @@
     <string name="receiver_unreachable_setup">Receiver address</string>
     <string name="receiver_unreachable_iptv">Continue with IPTV</string>
     <string name="autodetect_vpn_hint">Searching does not work over a VPN (for example OpenVPN to home): enter the receiver\'s home address yourself, for example 192.168.1.10. A saved address is always tried directly.</string>
+    <string name="usage_stats">Anonymous usage statistics</string>
+    <string name="usage_stats_desc">On each start, sends your TV model, Android version and app version with a random ID, so we know which devices to support. No name, account or IP address.</string>
 </resources>
