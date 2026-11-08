@@ -249,11 +249,27 @@ class IptvSettingsViewModel @Inject constructor(
         reload()
     }
 
+    /**
+     * Active/inactive is this TV's own choice: nothing goes to the sync server, and the lists
+     * already loaded are only filtered. A provider that was never loaded on this TV is fetched.
+     */
     fun setProviderEnabled(id: String, enabled: Boolean) {
         store.setProviderEnabled(id, enabled)
-        store.markDirty()
-        viewModelScope.launch { runCatching { syncEngine.publishProviders() } }
-        reload()
+        if (!enabled) return
+        viewModelScope.launch {
+            val cached = runCatching { sync.countProvider(id) }.getOrDefault(0)
+            if (cached == 0) loadOne(id)
+        }
+    }
+
+    private fun loadOne(id: String) {
+        job?.cancel()
+        _load.value = IptvLoadState(busy = true)
+        job = viewModelScope.launch {
+            val result = sync.loadOne(id) { p -> _load.value = IptvLoadState(true, p) }
+            _load.value = IptvLoadState(false, result = result)
+            refreshProviderCounts()
+        }
     }
 
     fun moveProvider(id: String, delta: Int) {
