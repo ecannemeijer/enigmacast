@@ -45,6 +45,7 @@ class ReceiverReachability @Inject constructor(
         for (timeout in TIMEOUTS_MS) {
             if (connect(host, port, timeout)) {
                 _state.value = null
+                com.enigmacast.data.telemetry.Telemetry.reportReceiver(target)
                 return true
             }
         }
