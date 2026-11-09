@@ -73,13 +73,16 @@ internal fun BindGuide(medium: GuideMedium, model: StreamGuideViewModel) {
     LaunchedEffect(medium) {
         model.show(medium)
     }
+    // One refresh when the page opens (silent when a list is already on screen). Then only
+    // check whether the receiver changed channel; a full bouquet/guide refresh at most every
+    // five minutes, so opening the menu does not flash "Loading bouquets" again.
     LaunchedEffect(medium) {
         model.refresh()
         var elapsed = 0
         while (true) {
             delay(2_000)
             elapsed += 2_000
-            if (elapsed >= 30_000) {
+            if (elapsed >= 300_000) {
                 elapsed = 0
                 model.refresh()
                 model.grid.refresh()
