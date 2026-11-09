@@ -475,8 +475,7 @@ private class VideoLayer(
             }
             else -> {
                 // A SurfaceView cannot take a matrix; it is sized instead, centred and clipped by the frame.
-                val w = (width * scale.x).toInt().coerceAtLeast(1)
-                val h = (height * scale.y).toInt().coerceAtLeast(1)
+                val (w, h) = VideoScaling.surfaceSize(width, height, scale)
                 val params = video.layoutParams as FrameLayout.LayoutParams
                 if (params.width != w || params.height != h) {
                     params.width = w

@@ -39,6 +39,11 @@ object StreamStartCheck {
     /** Long enough for a dish motor or a unicable tuner to lock; Enigma2 sends TS right after locking. */
     const val NO_DATA_TIMEOUT_MS = 10_000L
     const val NO_PICTURE_TIMEOUT_MS = 12_000L
+    /**
+     * Audio is already playing but no video frame yet: the decoder is likely stuck or waiting
+     * on a keyframe. Fail over sooner so PictureRescue can try another decoder.
+     */
+    const val AUDIO_NO_PICTURE_MS = 4_000L
 
     fun evaluate(
         elapsedMs: Long,
@@ -58,6 +63,9 @@ object StreamStartCheck {
             StreamFailure.NONE -> Unit
         }
         if (bytes < NO_DATA_BYTES && elapsedMs >= NO_DATA_TIMEOUT_MS) return StreamHealth.NO_TUNER
+        if (hasVideoTrack && audioPlaying && bytes >= NO_DATA_BYTES && elapsedMs >= AUDIO_NO_PICTURE_MS) {
+            return StreamHealth.NO_PICTURE
+        }
         if (elapsedMs >= NO_PICTURE_TIMEOUT_MS) return StreamHealth.NO_PICTURE
         return StreamHealth.STARTING
     }

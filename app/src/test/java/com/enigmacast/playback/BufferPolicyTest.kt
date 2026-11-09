@@ -61,7 +61,7 @@ class BufferPolicyTest {
     @Test
     fun quickStartOnlyShortensTheFirstStartOfTheStableBuffer() {
         val custom = BufferPolicy.LiveDurations(1_500, 5_000, 500, 1_000)
-        assertEquals(BufferPolicy.LiveDurations(2_000, 15_000, 750, 2_000), BufferPolicy.live(lowLatency = false, fastStart = true, custom = custom))
+        assertEquals(BufferPolicy.LiveDurations(2_000, 15_000, 350, 2_000), BufferPolicy.live(lowLatency = false, fastStart = true, custom = custom))
         assertEquals(BufferPolicy.LiveDurations(2_000, 15_000, 2_000, 2_000), BufferPolicy.live(lowLatency = false, fastStart = false, custom = custom))
         assertEquals(custom, BufferPolicy.live(lowLatency = true, fastStart = true, custom = custom))
     }

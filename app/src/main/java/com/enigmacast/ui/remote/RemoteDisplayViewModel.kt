@@ -1538,7 +1538,9 @@ class RemoteDisplayViewModel @Inject constructor(
             }
             PlayerAction.RECORD -> recordWatching()
             // Play only resumes and Pause only pauses; Play/Pause (and a remapped key) toggles.
-            PlayerAction.PAUSE -> if (com.enigmacast.domain.player.PauseKeys.toggles(performKeyCode, ui.playerState.timeshiftPaused)) playback.toggleTimeshiftPause()
+            PlayerAction.PAUSE -> if (com.enigmacast.domain.player.PauseKeys.toggles(performKeyCode, ui.playerState.timeshiftPaused)) {
+                if (!playback.toggleTimeshiftPause()) showNotice(UiText.res(R.string.quick_pause_unavailable))
+            }
             PlayerAction.AUDIO_TRACK -> {
                 val tracks = ui.tracks.audio
                 if (tracks.size < 2) return showNotice(UiText.res(R.string.keys_no_other_audio))

@@ -45,4 +45,14 @@ class StreamStartCheckTest {
         assertEquals(StreamHealth.NO_PICTURE, check(elapsedMs = StreamStartCheck.NO_PICTURE_TIMEOUT_MS, bytes = bytes))
         assertEquals(StreamHealth.FAILED, check(failure = StreamFailure.ENDED, bytes = bytes))
     }
+
+    @Test
+    fun audioWithoutPictureFailsOverSooner() {
+        val bytes = 2_000_000L
+        assertEquals(StreamHealth.STARTING, check(elapsedMs = 3_000, bytes = bytes, audioPlaying = true))
+        assertEquals(
+            StreamHealth.NO_PICTURE,
+            check(elapsedMs = StreamStartCheck.AUDIO_NO_PICTURE_MS, bytes = bytes, audioPlaying = true),
+        )
+    }
 }

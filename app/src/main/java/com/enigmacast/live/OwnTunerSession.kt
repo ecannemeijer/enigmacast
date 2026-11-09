@@ -986,7 +986,7 @@ class OwnTunerSession @Inject constructor(
     }
 
     companion object {
-        private const val STREAM_RELEASE_MS = 400L
+        private const val STREAM_RELEASE_MS = 150L
 
         fun fullMessage(used: Int, total: Int): UiText {
             return if (total > 0) UiText.res(R.string.tuner_full_count, used, total) else UiText.res(R.string.tuner_full)
