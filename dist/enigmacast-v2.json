@@ -1,13 +1,13 @@
 {
-  "versionCode": 131,
-  "versionName": "1.0.0-beta.128",
-  "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/v1.0.0-beta.128/enigmacast.apk",
-  "notes": "What's new in EnigmaCast\n\n• Easier searching: Back now takes you to your search results, with the item you opened still selected.\n• Richer information pages: the information page scrolls, with the full story, the episodes and the cast.\n• Actors and directors: search for an actor or director and open their own page with their films and series.\n• Torrents in search: when torrents are turned on, search results also show matching torrents.\n• Quicker options after zapping: press OK and then Down to reach the options straight away. A hint shows you how.\n• The information bar now stays on screen while you keep pressing buttons.\n• Sound that always works: if your device can't play a channel's sound format, EnigmaCast automatically switches to built-in sound decoding.\n• IPTV now follows your HDMI passthrough setting, just like satellite TV.\n• A frozen live channel now restarts by itself, so you no longer have to zap away and back.\n• Calmer loading spinner: it no longer flickers on and off.",
+  "versionCode": 138,
+  "versionName": "1.0.0",
+  "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
+  "notes": "What's new in EnigmaCast\n\nEnigmaCast 1.0.0 is the first official release — no longer a beta. The app stays free.\n\n• Turkish and Polish languages\n• Programme description in the top info bar\n• IPTV providers can be switched on or off per TV\n• Faster background loading of channel lists and the guide\n• Category navigation fix in IPTV Live TV\n• You can now skip the receiver step in the setup wizard and use EnigmaCast as an IPTV player only; a receiver can be added later in Settings.",
   "companion": {
-    "versionCode": 118,
-    "versionName": "1.0.0-beta.19",
-    "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/download/companion-v1.0.0-beta.19/enigmacast-companion.apk",
-    "notes": "Volledige vaste Companion-interface in vijf talen, met taalkeuze onder Meer.",
+    "versionCode": 120,
+    "versionName": "1.0.0-beta.21",
+    "apkUrl": "https://github.com/ecannemeijer/enigmacast-companion/releases/latest/download/enigmacast-companion.apk",
+    "notes": "Live koppelt nu automatisch met de Enigma2-ontvanger van de TV. Nieuw: Zoeken en een Torrents-tab als die op de TV aanstaat.",
     "sideloadFile": "enigmacast-companion.apk"
   }
 }
