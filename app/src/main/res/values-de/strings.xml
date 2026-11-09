@@ -1904,7 +1904,7 @@
     <string name="setup_iptv_provider_failed">Dieser Anbieter war nicht erreichbar. Prüfe die Angaben oder überspringe und versuche es später in den Einstellungen.</string>
     <string name="setup_iptv_provider_later">Weitere Anbieter kannst du später unter Einstellungen → IPTV hinzufügen.</string>
     <string name="setup_done_body_minimal">Du kannst mit EnigmaCast starten und später unter Einstellungen einen Receiver oder IPTV-Anbieter hinzufügen. Alles Übersprungene richtest du dort ein.</string>
-    <string name="skin_openpli">Klassik HD</string>
+    <string name="skin_openpli">OpenPLi</string>
     <string name="pli_list_hint">Hoch/Runter - Links Bouquets - Rechts Programm - OK schaltet</string>
     <string name="pli_event_info">Jetzt</string>
     <string name="pli_event_open_epg">Grün oder Rechts öffnet die Programmliste dieses Senders.</string>
