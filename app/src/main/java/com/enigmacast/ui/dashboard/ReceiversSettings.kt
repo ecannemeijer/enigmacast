@@ -112,7 +112,7 @@ fun ReceiversSettingsPanel(
             lineHeight = 18.sp,
         )
         CompactButton(
-            label = stringResource(R.string.receivers_add),
+            label = stringResource(R.string.receivers_add_enigma2),
             onClick = {
                 // Free accounts keep one receiver; a second one opens the Premium dialog.
                 if (!premiumGate.canAddReceiver(receivers.size)) {

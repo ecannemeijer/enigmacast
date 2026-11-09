@@ -103,6 +103,10 @@ fun TunerHomePanel(
     onXtream: () -> Unit = {},
     library: com.enigmacast.ui.dashboard.MyItemsViewModel = hiltViewModel(),
     showStream: Boolean = false,
+    /** False when setup was finished without an Enigma2 box (IPTV-only). */
+    hasReceiver: Boolean = true,
+    /** Opens Settings → Receivers so the viewer can add a box later. */
+    onAddReceiver: () -> Unit = {},
     /** A Torrent card in Continue watching: the dashboard opens the Torrent page on its info page. */
     onTorrent: () -> Unit = {},
     /**
@@ -182,7 +186,16 @@ fun TunerHomePanel(
                 up = chain.neighbourKey(key, -1)?.let(chain::requester) ?: FocusRequester.Cancel
             }
             val list = buildList {
-                add(PageSection("tuners") {
+                if (!hasReceiver) {
+                    add(PageSection("add_receiver") {
+                        AddReceiverHintCard(
+                            focus = contentFocus,
+                            onAdd = onAddReceiver,
+                            modifier = Modifier.fillMaxWidth().then(left),
+                        )
+                    })
+                }
+                if (hasReceiver) add(PageSection("tuners") {
                     val nextDown = chain.neighbourKey("tuners", 1)?.let(chain::requester) ?: FocusRequester.Cancel
                     val dot = when {
                         model.failed && !model.loading -> EnigmaColors.Danger
@@ -213,11 +226,11 @@ fun TunerHomePanel(
                         }
                     }
                 })
-                if (model.series.isNotEmpty()) add(PageSection("series") { SeriesRow(model, left, rowNav("series")) { openSeries = it } })
-                add(PageSection("today") {
+                if (hasReceiver && model.series.isNotEmpty()) add(PageSection("series") { SeriesRow(model, left, rowNav("series")) { openSeries = it } })
+                if (hasReceiver) add(PageSection("today") {
                     ScheduleRow(stringResource(R.string.home_schedule_title), model.schedule, model, left, rowNav("today"), emptyText = stringResource(R.string.home_schedule_empty)) { openItem = it }
                 })
-                if (model.upcoming.isNotEmpty()) add(PageSection("upcoming") {
+                if (hasReceiver && model.upcoming.isNotEmpty()) add(PageSection("upcoming") {
                     ScheduleRow(stringResource(R.string.home_upcoming_title), model.upcoming, model, left, rowNav("upcoming"), withDay = true) { openItem = it }
                 })
             }
@@ -793,3 +806,34 @@ private fun SeriesEpisodesDialog(
     }
 }
 
+@Composable
+private fun AddReceiverHintCard(
+    focus: FocusRequester,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .then(tunerCardLook(false, CardShape))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            stringResource(R.string.home_add_receiver_title),
+            color = EnigmaColors.Text,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            stringResource(R.string.home_add_receiver_body),
+            color = EnigmaColors.Muted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+        )
+        com.enigmacast.ui.theme.TvButton(
+            stringResource(R.string.home_add_receiver_action),
+            onAdd,
+            Modifier.focusRequester(focus),
+        )
+    }
+}

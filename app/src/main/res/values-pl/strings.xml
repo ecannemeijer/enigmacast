@@ -1077,9 +1077,9 @@
     <string name="setup_step_of">Etap %1$d %2$d · %3$s</string>
     <string name="setup_try_again">Spróbuj jeszcze raz</string>
     <string name="setup_welcome_title">Witamy w EnigmaCast</string>
-    <string name="setup_welcome_body">Oglądaj TV z satelity lub odbiornika kablowego na tym telewizorze. Kilka krótkich pytań i jesteś gotowy. Najpierw wybierz język.</string>
+    <string name="setup_welcome_body">Oglądaj telewizję na żywo z odbiornika Enigma2 lub przez IPTV na tym telewizorze. Kilka krótkich pytań i gotowe. Najpierw wybierz język.</string>
     <string name="setup_receiver_title">Szukamy twojego odbiornika.</string>
-    <string name="setup_receiver_body">Włącz odbiornik satelitarny lub kablowy. Musi być w tej samej sieci WiFi lub kablowej co ten telewizor. Szukamy go automatycznie.</string>
+    <string name="setup_receiver_body">Włącz odbiornik satelitarny lub kablowy. Musi być w tej samej sieci Wi-Fi lub kablowej co ten telewizor. Szukamy go automatycznie. Albo pomiń ten krok, by używać EnigmaCast tylko z IPTV.</string>
     <string name="setup_profile_title">Kto patrzy?</string>
     <string name="setup_profile_body">Podaj profil i wybierz zdjęcie. Każdy w domu może dostać swój własny profil później.</string>
     <string name="setup_sync_link_title">Więcej niż jeden telewizor w domu?</string>
@@ -1890,4 +1890,11 @@
     <string name="usage_stats">Anonimowe statystyki wykorzystania</string>
     <string name="usage_stats_desc">Na każdym starcie wysyła model TV, wersję Android i wersję aplikacji z losowym ID, więc wiemy, które urządzenia do obsługi. Brak nazwy, konta lub adresu IP.</string>
     <string name="osd_plot_more">Info: pełny opis</string>
+    <string name="setup_skip_no_receiver">Pomiń / kontynuuj bez odbiornika</string>
+    <string name="setup_done_body_iptv">Możesz używać EnigmaCast jako odtwarzacza IPTV. Satelitę lub kabel dodasz później w Ustawienia → Odbiorniki. Pominięte rzeczy ustawisz później w Ustawieniach.</string>
+    <string name="home_add_receiver_title">Brak odbiornika Enigma2</string>
+    <string name="home_add_receiver_body">EnigmaCast działa jako odtwarzacz IPTV bez odbiornika. Dodaj dekoder satelitarny lub kablowy w dowolnej chwili, by odblokować TV na żywo, przewodnik i nagrania.</string>
+    <string name="home_add_receiver_action">Dodaj odbiornik Enigma2</string>
+    <string name="nav_tv_needs_receiver">Dodaj odbiornik Enigma2 w Ustawienia → Odbiorniki, aby oglądać TV satelitarną lub kablową.</string>
+    <string name="receivers_add_enigma2">Dodaj odbiornik Enigma2</string>
 </resources>

@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SetupStepTest {
-    private val plain = SetupConditions(accountRequired = true)
-    private val free = SetupConditions(accountRequired = false)
+    private val plain = SetupConditions(accountRequired = true, hasReceiver = true)
+    private val free = SetupConditions(accountRequired = false, hasReceiver = true)
 
     @Test fun freeModeHidesTheAccountStep() {
         assertEquals(
@@ -27,17 +27,17 @@ class SetupStepTest {
     }
 
     @Test fun syncAndIptvOnlyWhenOffered() {
-        val sync = SetupConditions(syncOffered = true, accountRequired = true)
+        val sync = SetupConditions(syncOffered = true, accountRequired = true, hasReceiver = true)
         assertEquals(
             listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.SYNC_LINK, SetupStep.VIEWING, SetupStep.ACCOUNT, SetupStep.DONE),
             SetupFlow.steps(sync),
         )
-        val both = SetupConditions(syncOffered = true, iptvOffered = true, paired = true)
+        val both = SetupConditions(syncOffered = true, iptvOffered = true, paired = true, hasReceiver = true)
         assertEquals(SetupStep.SYNC_LINK, SetupFlow.next(SetupStep.RECEIVER, both))
         assertEquals(SetupStep.IPTV_OFFER, SetupFlow.next(SetupStep.SYNC_LINK, both))
         assertEquals(SetupStep.VIEWING, SetupFlow.next(SetupStep.IPTV_OFFER, both))
         // Paired before the wizard: no sync step, but the IPTV offer still shows.
-        val prePaired = SetupConditions(iptvOffered = true, paired = true)
+        val prePaired = SetupConditions(iptvOffered = true, paired = true, hasReceiver = true)
         assertEquals(SetupStep.IPTV_OFFER, SetupFlow.next(SetupStep.RECEIVER, prePaired))
         assertEquals(SetupStep.RECEIVER, SetupFlow.previous(SetupStep.IPTV_OFFER, prePaired))
     }
@@ -63,7 +63,8 @@ class SetupStepTest {
     @Test fun extrasComeFromAndReturnToDone() {
         assertEquals(listOf(SetupStep.PROFILE, SetupStep.BOUQUETS), SetupFlow.extras(SetupConditions(hasReceiver = true)))
         assertEquals(listOf(SetupStep.BOUQUETS), SetupFlow.extras(SetupConditions(paired = true, hasReceiver = true)))
-        assertEquals(listOf(SetupStep.PROFILE), SetupFlow.extras(plain))
+        assertEquals(listOf(SetupStep.PROFILE), SetupFlow.extras(SetupConditions(accountRequired = true, hasReceiver = false)))
+        assertEquals(listOf(SetupStep.PROFILE, SetupStep.BOUQUETS), SetupFlow.extras(plain))
         SetupStep.entries.filter { it.extra }.forEach {
             assertEquals(SetupStep.DONE, SetupFlow.next(it, plain))
             assertEquals(SetupStep.DONE, SetupFlow.previous(it, plain))
@@ -76,7 +77,7 @@ class SetupStepTest {
         assertEquals(1 to 5, SetupFlow.position(SetupStep.WELCOME, plain))
         assertEquals(3 to 5, SetupFlow.position(SetupStep.VIEWING, plain))
         assertEquals(5 to 5, SetupFlow.position(SetupStep.DONE, plain))
-        val sync = SetupConditions(syncOffered = true, iptvOffered = true, accountRequired = true)
+        val sync = SetupConditions(syncOffered = true, iptvOffered = true, accountRequired = true, hasReceiver = true)
         assertEquals(3 to 7, SetupFlow.position(SetupStep.SYNC_LINK, sync))
         assertEquals(5 to 7, SetupFlow.position(SetupStep.VIEWING, sync))
         // A step that just dropped out keeps a sensible number until the wizard moves on.
@@ -85,10 +86,10 @@ class SetupStepTest {
 
     @Test fun skippableSteps() {
         assertEquals(
-            setOf(SetupStep.SYNC_LINK, SetupStep.IPTV_OFFER, SetupStep.ACCOUNT, SetupStep.PROFILE, SetupStep.BOUQUETS),
+            setOf(SetupStep.RECEIVER, SetupStep.SYNC_LINK, SetupStep.IPTV_OFFER, SetupStep.ACCOUNT, SetupStep.PROFILE, SetupStep.BOUQUETS),
             SetupStep.entries.filter { it.optional }.toSet(),
         )
-        assertFalse(SetupStep.RECEIVER.optional)
+        assertTrue(SetupStep.RECEIVER.optional)
         assertFalse(SetupStep.WELCOME.optional)
     }
 
@@ -99,10 +100,21 @@ class SetupStepTest {
 
     @Test fun startGate() {
         assertEquals(Start.SETUP, SetupStep.startScreen(receiverCount = 0, completed = false))
-        assertEquals(Start.CONNECTION, SetupStep.startScreen(receiverCount = 0, completed = true))
+        // Setup finished without a receiver: IPTV-only opens on the dashboard, not the connection screen.
+        assertEquals(Start.DASHBOARD, SetupStep.startScreen(receiverCount = 0, completed = true))
         assertEquals(Start.DASHBOARD, SetupStep.startScreen(receiverCount = 1, completed = false))
         assertEquals(Start.DASHBOARD, SetupStep.startScreen(receiverCount = 2, completed = true))
         assertFalse(SetupStep.showOnStart(0, completed = true))
+    }
+
+    @Test fun iptvOnlyPathSkipsViewingWithoutReceiver() {
+        val iptvOnly = SetupConditions(accountRequired = false, hasReceiver = false)
+        assertEquals(
+            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.DONE),
+            SetupFlow.steps(iptvOnly),
+        )
+        assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.RECEIVER, iptvOnly))
+        assertEquals(listOf(SetupStep.PROFILE), SetupFlow.extras(iptvOnly))
     }
 
     @Test fun updatePromptWaitsForSetup() {

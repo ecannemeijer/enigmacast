@@ -419,7 +419,11 @@ private fun stepBody(model: SetupViewModel, step: SetupStep): String {
     if (step != SetupStep.DONE) return stringResource(step.body())
     val name by model.receiverName.collectAsStateWithLifecycle()
     val receiver by model.receiver.collectAsStateWithLifecycle()
-    return stringResource(R.string.setup_done_body, name.ifBlank { receiver?.name.orEmpty() })
+    return if (receiver == null) {
+        stringResource(R.string.setup_done_body_iptv)
+    } else {
+        stringResource(R.string.setup_done_body, name.ifBlank { receiver?.name.orEmpty() })
+    }
 }
 
 private fun SetupStep.title(): Int = when (this) {
@@ -460,6 +464,7 @@ private fun SetupStep.shortName(): Int = when (this) {
 }
 
 private fun SetupStep.skipLabel(): Int = when (this) {
+    SetupStep.RECEIVER -> R.string.setup_skip_no_receiver
     SetupStep.SYNC_LINK -> R.string.setup_sync_link_not_now
     SetupStep.IPTV_OFFER -> R.string.setup_iptv_no
     SetupStep.ACCOUNT -> R.string.setup_skip_later
