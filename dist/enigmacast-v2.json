@@ -1,8 +1,8 @@
 {
-  "versionCode": 138,
-  "versionName": "1.0.0",
+  "versionCode": 139,
+  "versionName": "1.0.1",
   "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
-  "notes": "What's new in EnigmaCast\n\nEnigmaCast 1.0.0 is the first official release — no longer a beta. The app stays free.\n\n• Turkish and Polish languages\n• Programme description in the top info bar\n• IPTV providers can be switched on or off per TV\n• Faster background loading of channel lists and the guide\n• Category navigation fix in IPTV Live TV\n• You can now skip the receiver step in the setup wizard and use EnigmaCast as an IPTV player only; a receiver can be added later in Settings.",
+  "notes": "What's new in EnigmaCast\n\nThe setup wizard now lets you add an IPTV provider (Xtream or M3U) right away. Smaller, consistent Add Enigma2 receiver button.",
   "companion": {
     "versionCode": 120,
     "versionName": "1.0.0-beta.21",
