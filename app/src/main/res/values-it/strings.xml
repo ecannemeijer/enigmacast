@@ -1908,4 +1908,13 @@
     <string name="setup_iptv_provider_failed">Impossibile raggiungere questo provider. Controlla i dati oppure salta e riprova più tardi in Impostazioni.</string>
     <string name="setup_iptv_provider_later">Puoi aggiungere altri provider più tardi in Impostazioni → IPTV.</string>
     <string name="setup_done_body_minimal">Puoi iniziare con EnigmaCast e aggiungere dopo un ricevitore o un provider IPTV in Impostazioni. Ciò che hai saltato si configura lì.</string>
+    <string name="skin_openpli">Classico HD</string>
+    <string name="pli_list_hint">Su/Giù - Sinistra bouquet - Destra guida - OK guarda</string>
+    <string name="pli_event_info">Ora</string>
+    <string name="pli_event_open_epg">Verde o Destra apre l\'elenco programmi di questo canale.</string>
+    <string name="pli_hint_red">Bouquet</string>
+    <string name="pli_hint_green">EPG</string>
+    <string name="pli_hint_yellow">Guida</string>
+    <string name="pli_hint_blue">Opzioni</string>
+    <string name="pli_hint_ok">OK: guarda</string>
 </resources>

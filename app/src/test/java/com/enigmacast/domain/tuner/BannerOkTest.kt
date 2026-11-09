@@ -22,4 +22,13 @@ class BannerOkTest {
         assertEquals(Action.SHOW_BANNER, BannerOk.decide(false, radio = false, banner = false, fromZap = false))
         assertEquals(Action.RETRY, BannerOk.decide(true, radio = false, banner = true, fromZap = true))
     }
+
+    @Test
+    fun classicListSkinOpensTheChannelList() {
+        assertEquals(Action.OPEN_LIST, BannerOk.decide(false, radio = false, banner = false, fromZap = false, classicList = true))
+        assertEquals(Action.OPEN_LIST, BannerOk.decide(false, radio = false, banner = true, fromZap = true, classicList = true))
+        // Radio keeps pause/list; tuner trouble still retries.
+        assertEquals(Action.PAUSE_OR_LIST, BannerOk.decide(false, radio = true, banner = false, fromZap = false, classicList = true))
+        assertEquals(Action.RETRY, BannerOk.decide(true, radio = false, banner = false, fromZap = false, classicList = true))
+    }
 }

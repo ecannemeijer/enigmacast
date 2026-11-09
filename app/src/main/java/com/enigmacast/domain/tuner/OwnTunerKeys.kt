@@ -44,14 +44,21 @@ object OwnTunerKeys {
 
 /** What OK does on live TV, by what the banner shows. */
 object BannerOk {
-    enum class Action { RETRY, OPTIONS_BANNER, PAUSE_OR_LIST, SHOW_BANNER }
+    enum class Action { RETRY, OPTIONS_BANNER, PAUSE_OR_LIST, SHOW_BANNER, OPEN_LIST }
 
     /**
-     * A banner a zap brought up turns into the info banner (Down then opens the options) instead
-     * of pausing; OK on that banner (or on radio) pauses as before; no banner: the banner.
+     * @param classicList when true (Classic HD / PLi-style skin): OK opens the channel list
+     * like a receiver GUI, instead of the mini OSD. Other skins keep the previous behaviour.
      */
-    fun decide(tunerTrouble: Boolean, radio: Boolean, banner: Boolean, fromZap: Boolean): Action = when {
+    fun decide(
+        tunerTrouble: Boolean,
+        radio: Boolean,
+        banner: Boolean,
+        fromZap: Boolean,
+        classicList: Boolean = false,
+    ): Action = when {
         tunerTrouble -> Action.RETRY
+        classicList && !radio -> Action.OPEN_LIST
         // Any banner (a zap's or Info's): OK goes to the mini OSD with the recent channels.
         !radio && banner -> Action.OPTIONS_BANNER
         radio || banner -> Action.PAUSE_OR_LIST

@@ -1899,4 +1899,13 @@
     <string name="setup_iptv_provider_failed">Deze provider was niet bereikbaar. Controleer de gegevens, of sla over en probeer later in Instellingen.</string>
     <string name="setup_iptv_provider_later">Je kunt later meer providers toevoegen onder Instellingen → IPTV.</string>
     <string name="setup_done_body_minimal">Je kunt met EnigmaCast starten en later een receiver of IPTV-provider toevoegen onder Instellingen. Alles wat je hebt overgeslagen kun je daar instellen.</string>
+    <string name="skin_openpli">Klassiek HD</string>
+    <string name="pli_list_hint">Omhoog/omlaag bladeren - Links bouquets - Rechts programmagids - OK kijkt</string>
+    <string name="pli_event_info">Nu</string>
+    <string name="pli_event_open_epg">Groen of Rechts opent de programmalijst van dit kanaal.</string>
+    <string name="pli_hint_red">Bouquets</string>
+    <string name="pli_hint_green">EPG</string>
+    <string name="pli_hint_yellow">Gids</string>
+    <string name="pli_hint_blue">Opties</string>
+    <string name="pli_hint_ok">OK: kijken</string>
 </resources>
