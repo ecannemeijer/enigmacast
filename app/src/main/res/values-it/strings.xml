@@ -1887,4 +1887,5 @@
     <string name="autodetect_vpn_hint">La ricerca non funziona tramite VPN (ad esempio OpenVPN verso casa): inserisci tu l\'indirizzo di casa del ricevitore, ad esempio 192.168.1.10. Un indirizzo salvato viene sempre provato direttamente.</string>
     <string name="usage_stats">Statistiche d\'uso anonime</string>
     <string name="usage_stats_desc">A ogni avvio invia il modello della TV, la versione di Android e dell\'app con un ID casuale, per sapere quali dispositivi supportare. Nessun nome, account o indirizzo IP.</string>
+    <string name="osd_plot_more">Info: descrizione completa</string>
 </resources>

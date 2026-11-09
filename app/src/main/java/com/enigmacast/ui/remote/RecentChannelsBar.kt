@@ -66,6 +66,8 @@ fun RecentChannelsBar(
     onClear: () -> Unit,
     onBackToOptions: () -> Unit,
     onClose: () -> Unit,
+    /** Info key: expand or collapse the programme plot in the mini OSD above. */
+    onInfo: (() -> Unit)? = null,
     loadLogo: suspend (LastChannel) -> ImageBitmap?,
     modifier: Modifier = Modifier,
 ) {
@@ -118,7 +120,12 @@ fun RecentChannelsBar(
                         true
                     }
                     Key.DirectionUp -> { onBackToOptions(); true }
-                    else -> false
+                    // Info expands the plot in the mini OSD; remotes without Info simply ignore this.
+                    else -> {
+                        if (onInfo != null && event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_INFO) {
+                            onInfo.invoke(); true
+                        } else false
+                    }
                 }
             },
     ) {

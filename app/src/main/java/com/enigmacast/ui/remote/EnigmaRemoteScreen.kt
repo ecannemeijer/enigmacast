@@ -303,6 +303,7 @@ fun EnigmaRemoteScreen(
                 onClear = viewModel::clearRecent,
                 onBackToOptions = { viewModel.closeRecentBar(backToOptions = true) },
                 onClose = { viewModel.closeRecentBar(backToOptions = false) },
+                onInfo = viewModel::togglePlotExpanded,
                 loadLogo = { channel ->
                     viewModel.picon(com.enigmacast.domain.model.BouquetEntry(channel.name, channel.reference))
                 },            )

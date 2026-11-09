@@ -166,6 +166,8 @@ fun XtreamScreen(
     /** OK on live IPTV: the mini OSD at the top with the recent channels (then the options) below. */
     var okOsd by remember { mutableStateOf(false) }
     LaunchedEffect(recentBar, quickBar) { if (!recentBar && !quickBar) okOsd = false }
+    var plotExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(okOsd) { if (!okOsd) plotExpanded = false }
     var recentToken by remember { mutableIntStateOf(0) }
     androidx.activity.compose.BackHandler(enabled = recentBar || model.equivalentsState.open) {
         if (model.equivalentsState.open) model.closeEquivalent() else recentBar = false
@@ -763,7 +765,7 @@ fun XtreamScreen(
                 )
             }
             if (okOsd && !panelOpen && playing.item?.section == XtreamSection.LIVE && (recentBar || quickBar)) {
-                IptvMiniOsd(model, playing, Modifier.align(Alignment.TopCenter))
+                IptvMiniOsd(model, playing, Modifier.align(Alignment.TopCenter), plotExpanded = plotExpanded)
             }
             if (!panelOpen && !playingVod() && (quickBar || now < bannerUntil)) {
                 IptvOsd(
@@ -822,6 +824,7 @@ fun XtreamScreen(
                     onClear = model::clearRecent,
                     onBackToOptions = { recentBar = false; quickBar = true; quickToken++ },
                     onClose = { recentBar = false },
+                    onInfo = { plotExpanded = !plotExpanded },
                     loadLogo = { channel -> channel.logo.takeIf { it.isNotBlank() }?.let { model.logo(it) } },
                 )
             }
@@ -1466,7 +1469,7 @@ internal fun nowNext(list: List<XtreamEpg>, nowSec: Long = System.currentTimeMil
  */
 /** The compact top OSD of live IPTV (see [com.enigmacast.ui.remote.MiniOsd]). */
 @Composable
-private fun IptvMiniOsd(model: XtreamViewModel, playing: XtreamPlaying, modifier: Modifier) {
+private fun IptvMiniOsd(model: XtreamViewModel, playing: XtreamPlaying, modifier: Modifier, plotExpanded: Boolean = false) {
     val look by model.osdLook.collectAsStateWithLifecycle()
     val item = playing.item
     val entry = com.enigmacast.domain.model.BouquetEntry(
@@ -1486,6 +1489,7 @@ private fun IptvMiniOsd(model: XtreamViewModel, playing: XtreamPlaying, modifier
         cachedPicon = { null },
         scrim = EnigmaColors.scrim(look.second),
         modifier = modifier,
+        plotExpanded = plotExpanded,
     )
 }
 

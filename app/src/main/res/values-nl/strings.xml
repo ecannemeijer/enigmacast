@@ -1878,4 +1878,5 @@
     <string name="autodetect_vpn_hint">Zoeken werkt niet via een VPN (bijvoorbeeld OpenVPN naar huis): vul zelf het thuisadres van de receiver in, bijvoorbeeld 192.168.1.10. Een opgeslagen adres wordt altijd direct geprobeerd.</string>
     <string name="usage_stats">Anonieme gebruiksstatistieken</string>
     <string name="usage_stats_desc">Stuurt bij elke start je tv-model, Android-versie en app-versie met een willekeurige ID, zodat we weten welke apparaten we moeten ondersteunen. Geen naam, account of IP-adres.</string>
+    <string name="osd_plot_more">Info: volledige beschrijving</string>
 </resources>
