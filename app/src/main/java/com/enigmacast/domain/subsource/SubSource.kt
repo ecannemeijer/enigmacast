@@ -45,6 +45,8 @@ object SubSourceLanguages {
         SubSourceLanguage("german", "de", "German"),
         SubSourceLanguage("french", "fr", "French"),
         SubSourceLanguage("italian", "it", "Italian"),
+        SubSourceLanguage("turkish", "tr", "Turkish"),
+        SubSourceLanguage("polish", "pl", "Polish"),
     )
     private val rest = listOf(
         SubSourceLanguage("arabic", "ar", "Arabic"),
@@ -64,7 +66,6 @@ object SubSourceLanguages {
         SubSourceLanguage("japanese", "ja", "Japanese"),
         SubSourceLanguage("korean", "ko", "Korean"),
         SubSourceLanguage("norwegian", "no", "Norwegian"),
-        SubSourceLanguage("polish", "pl", "Polish"),
         SubSourceLanguage("portuguese", "pt", "Portuguese"),
         SubSourceLanguage("romanian", "ro", "Romanian"),
         SubSourceLanguage("russian", "ru", "Russian"),
@@ -74,7 +75,6 @@ object SubSourceLanguages {
         SubSourceLanguage("spanish", "es", "Spanish"),
         SubSourceLanguage("swedish", "sv", "Swedish"),
         SubSourceLanguage("thai", "th", "Thai"),
-        SubSourceLanguage("turkish", "tr", "Turkish"),
         SubSourceLanguage("ukrainian", "uk", "Ukrainian"),
         SubSourceLanguage("vietnamese", "vi", "Vietnamese"),
     )
@@ -91,6 +91,8 @@ object SubSourceLanguages {
         "de" -> "german"
         "fr" -> "french"
         "it" -> "italian"
+        "tr" -> "turkish"
+        "pl" -> "polish"
         else -> null
     }
 

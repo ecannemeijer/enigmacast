@@ -172,6 +172,9 @@
     <string name="lang_english">Inglese</string>
     <string name="lang_german">Tedesco</string>
     <string name="lang_french">Francese</string>
+    <string name="lang_italian">Italiano</string>
+    <string name="lang_turkish">Turco</string>
+    <string name="lang_polish">Polacco</string>
     <string name="lang_original">Originale</string>
     <string name="lang_multi">Multilingue</string>
     <string name="lang_audio_description">Audiodescrizione</string>

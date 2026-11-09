@@ -38,6 +38,8 @@ object CountryResolver {
             lang == "de" -> if (country in setOf("AT", "CH")) "de-$country" else "de-DE"
             lang == "it" -> if (country == "CH") "it-CH" else "it-IT"
             lang == "fr" -> if (country in setOf("BE", "CH", "CA")) "fr-$country" else "fr-FR"
+            lang == "tr" -> "tr-TR"
+            lang == "pl" -> "pl-PL"
             else -> "$lang-$country"
         }
     }

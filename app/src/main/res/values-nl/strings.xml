@@ -172,6 +172,9 @@
     <string name="lang_english">Engels</string>
     <string name="lang_german">Duits</string>
     <string name="lang_french">Frans</string>
+    <string name="lang_italian">Italiaans</string>
+    <string name="lang_turkish">Turks</string>
+    <string name="lang_polish">Pools</string>
     <string name="lang_original">Origineel</string>
     <string name="lang_multi">Meertalig</string>
     <string name="lang_audio_description">Audiodescriptie</string>

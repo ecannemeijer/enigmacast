@@ -108,6 +108,9 @@ internal object TrackLabels {
             "eng", "en" -> R.string.lang_english
             "ger", "deu", "de" -> R.string.lang_german
             "fre", "fra", "fr" -> R.string.lang_french
+            "ita", "it" -> R.string.lang_italian
+            "tur", "tr" -> R.string.lang_turkish
+            "pol", "pl" -> R.string.lang_polish
             "qaa" -> R.string.lang_original
             "mul" -> R.string.lang_multi
             "nar" -> R.string.lang_audio_description
