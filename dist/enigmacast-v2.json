@@ -1,8 +1,8 @@
 {
-  "versionCode": 139,
-  "versionName": "1.0.1",
+  "versionCode": 140,
+  "versionName": "1.0.2",
   "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
-  "notes": "What's new in EnigmaCast\n\nThe setup wizard now lets you add an IPTV provider (Xtream or M3U) right away. Smaller, consistent Add Enigma2 receiver button.",
+  "notes": "What's new in EnigmaCast\n\nFaster and more reliable zapping on satellite channels, with fewer green or noisy pictures on some Android TV boxes. Subtitles stay off by default. SD channels scale better. Pause is disabled on live TV with picture because there is no timeshift. New OpenPLi skin with a classic Enigma2-style channel list: OK opens the list; colour keys open bouquets, EPG, guide and options.",
   "companion": {
     "versionCode": 120,
     "versionName": "1.0.0-beta.21",
