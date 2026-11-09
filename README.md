@@ -697,6 +697,16 @@ Settings can enable:
 - **Stremio addons:** only the `stream` resource of an addon is used (no catalogs from the addon; browsing comes from TMDB). Direct links are played as they are; the app does not resolve debrid services itself.
 - **IPTV row EPG:** a channel whose provider has no listings and whose name does not match a satellite channel shows no programme.
 
+## Local XAMPP
+
+The site uses its own local DNS name, the same way as the other hosts in `C:\xampp\apache\conf\extra\httpd-vhosts.conf`. The document root is `C:/xampp/htdocs/enigmacast`, so the installer is `http://enigmacast.<suffix>/install.php`. The suffix is taken from the names already in that file (`.test`, `.local`, and the other local names there). From the project root, as administrator:
+
+```bat
+xampp\install.bat
+```
+
+The script appends that virtual host, adds `127.0.0.1` for the name to the Windows hosts file, and does not replace the existing localhost site. An `install.php` already in the folder is left as it is. Restart Apache from the XAMPP Control Panel when it is not running as a service.
+
 ## Troubleshooting
 
 - Test connection fails immediately: check the IP, that OpenWebif is enabled, and that the TV is on the same LAN. A VPN app on the TV can hide the receiver unless it routes the home subnet; the built-in tunnel only comes up when home does not answer.
