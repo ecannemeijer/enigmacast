@@ -1,6 +1,8 @@
 package com.enigmacast.ui.remote
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,6 +77,8 @@ fun MiniOsd(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     scrim: Color,
     modifier: Modifier = Modifier,
+    /** Full plot in a scrollable block under the compact lines (Info toggles this). */
+    plotExpanded: Boolean = false,
 ) {
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
     LaunchedEffect(Unit) {
@@ -181,6 +187,40 @@ fun MiniOsd(
                         )
                     }
                     if (layout != OsdLayout.WAVE) EnigmaProgramProgress(progress(current, nowSec), Modifier.fillMaxWidth())
+                    val plot = current.plot.ifBlank { current.shortDescription }.trim()
+                    if (plot.isNotBlank()) {
+                        var truncated by remember(plot) { mutableStateOf(false) }
+                        if (plotExpanded) {
+                            Text(
+                                plot,
+                                color = p.muted,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 160.dp)
+                                    .verticalScroll(rememberScrollState()),
+                            )
+                        } else {
+                            Text(
+                                plot,
+                                color = p.muted,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                onTextLayout = { truncated = it.hasVisualOverflow },
+                            )
+                            if (truncated) {
+                                Text(
+                                    stringResource(R.string.osd_plot_more),
+                                    color = p.accent.copy(alpha = 0.9f),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
                 } else {
                     Text(stringResource(R.string.osd_no_programme_data), color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1)
                 }

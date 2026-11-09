@@ -158,6 +158,8 @@ data class RemoteDisplayUiState(
     /** OK on live TV: the compact OSD at the top with the recent channels (then the options) below. */
     val okOsd: Boolean = false,
     val recentBarToken: Int = 0,
+    /** Mini OSD: full programme plot expanded with Info. */
+    val plotExpanded: Boolean = false,
     /** Unified search over the picture, opened from the first quick-bar tile. */
     val searchOpen: Boolean = false,
     /** Bumped when search opens, so the field takes the focus. */
@@ -505,13 +507,20 @@ class RemoteDisplayViewModel @Inject constructor(
      * OK on live TV: the mini OSD at the top and the recent channels focused at the bottom;
      * Down from there reaches the options. A zap keeps the normal banner.
      */
+    fun togglePlotExpanded() {
+        if (!_ui.value.okOsd) return
+        _ui.update { it.copy(plotExpanded = !it.plotExpanded) }
+    }
+
     private fun openOkOsd() {
+
         bannerJob?.cancel()
         equivalents.close()
         ownSession.refreshGuideIfStale()
         _ui.update {
             it.copy(
                 okOsd = true,
+                plotExpanded = false,
                 banner = false,
                 details = false,
                 bannerFromZap = false,
@@ -534,7 +543,7 @@ class RemoteDisplayViewModel @Inject constructor(
     }
 
     private fun closeOkOsd() {
-        _ui.update { it.copy(okOsd = false, recentBar = false, quickBar = false, searchOpen = false) }
+        _ui.update { it.copy(okOsd = false, recentBar = false, quickBar = false, searchOpen = false, plotExpanded = false) }
         watchOsdInfo()
     }
 

@@ -231,6 +231,7 @@ fun OwnTunerOverlay(
                     picon = picon,
                     cachedPicon = cachedPicon,
                     scrim = scrim,
+                    plotExpanded = ui.plotExpanded,
                 )
             }
         }

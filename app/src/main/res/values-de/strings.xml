@@ -1883,4 +1883,5 @@
     <string name="autodetect_vpn_hint">Die Suche funktioniert nicht über ein VPN (zum Beispiel OpenVPN nach Hause): Gib die Heimadresse des Receivers selbst ein, zum Beispiel 192.168.1.10. Eine gespeicherte Adresse wird immer direkt versucht.</string>
     <string name="usage_stats">Anonyme Nutzungsstatistik</string>
     <string name="usage_stats_desc">Sendet bei jedem Start TV-Modell, Android-Version und App-Version mit einer zufälligen ID, damit wir wissen, welche Geräte wir unterstützen sollen. Kein Name, kein Konto, keine IP-Adresse.</string>
+    <string name="osd_plot_more">Info: vollständige Beschreibung</string>
 </resources>
