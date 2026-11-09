@@ -987,9 +987,12 @@ class StreamGuideViewModel @Inject constructor(
             }
     }
 
-    /** First follow-mode load keeps the wait dialog up and names each step. Later refreshes stay quiet. */
+    /**
+     * First follow-mode load with nothing on screen keeps the wait dialog up and names each step.
+     * Later refreshes (menu open, periodic check) keep the list and update quietly.
+     */
     private suspend fun loadFollowing() {
-        val initial = mode != StreamMode.OWN_TUNER && (!bouquetLoaded || channels.isEmpty())
+        val initial = mode != StreamMode.OWN_TUNER && !bouquetLoaded && channels.isEmpty() && bouquets.isEmpty()
         if (initial) {
             val receiver = settingsRepository.current().activeReceiver()
             if (receiver != null && !reachability.check(receiver)) {

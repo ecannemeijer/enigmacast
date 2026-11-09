@@ -387,7 +387,9 @@ class OwnTunerSession @Inject constructor(
 
     private fun loadInitial(startPlayback: Boolean) {
         startAfterLoad = startPlayback
-        val dialog = !channelLoadFailed
+        // Wait dialog only when this TV has no channel list yet. Reloads and menu refreshes
+        // keep the list on screen and update it quietly in the background.
+        val dialog = !channelLoadFailed && _state.value.channels.isEmpty()
         startJob = scope.launch {
             try {
                 val settings = settingsRepository.current()
