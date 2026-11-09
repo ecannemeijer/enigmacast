@@ -66,6 +66,8 @@ class SkinPreviewActivity : ComponentActivity() {
                 when (mode) {
                     "list" -> PliListPreview(now)
                     "epg" -> PliEpgPreview(now, events)
+                    "infobar" -> InfobarOnlyPreview(id, events)
+                    "chooser" -> ChooserPreview(id)
                     else -> DefaultPreview(id, events, start)
                 }
             }
@@ -146,8 +148,8 @@ class SkinPreviewActivity : ComponentActivity() {
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("%04d".format(num), color = if (focused) PliHd.SecondFg else PliHd.Foreground, fontSize = 13.sp, modifier = Modifier.width(48.dp))
-                                Text(name, color = if (focused) PliHd.SecondFg else PliHd.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.4f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("%04d".format(num), color = PliHd.Foreground, fontSize = 13.sp, modifier = Modifier.width(48.dp))
+                                Text(name, color = PliHd.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(0.4f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Column(Modifier.weight(0.6f)) {
                                     Text(title, color = if (focused) PliHd.SecondFg else PliHd.Grey, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Box(Modifier.fillMaxWidth().height(4.dp).background(PliHd.ProgressBg).padding(top = 2.dp)) {
@@ -199,7 +201,7 @@ class SkinPreviewActivity : ComponentActivity() {
                     ) {
                         Text(event.beginLabel, color = if (focused) PliHd.SecondFg else PliHd.Grey, fontSize = 13.sp, modifier = Modifier.width(56.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(event.title, color = if (focused) PliHd.SecondFg else PliHd.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(event.title, color = PliHd.Foreground, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             if (focused) {
                                 Box(Modifier.fillMaxWidth().height(4.dp).background(PliHd.ProgressBg).padding(top = 3.dp)) {
                                     Box(Modifier.fillMaxWidth(0.55f).fillMaxHeight().background(Brush.verticalGradient(PliHd.ProgressFill)))
@@ -213,6 +215,45 @@ class SkinPreviewActivity : ComponentActivity() {
                 Text(events.first().plot.ifBlank { "Het laatste nieuws uit binnen- en buitenland." }, color = PliHd.Foreground, fontSize = 13.sp)
                 Spacer(Modifier.weight(1f))
                 PliColourHints(Modifier.fillMaxWidth().background(PliHd.NoTransBg).padding(horizontal = 8.dp, vertical = 8.dp))
+            }
+        }
+    }
+
+
+    @Composable
+    private fun InfobarOnlyPreview(id: OsdSkinId, events: List<EpgEvent>) {
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.linearGradient(listOf(Color(0xFF2A4058), Color(0xFF1A2838), Color(0xFF0E1824))),
+            ),
+        ) {
+            ChannelBanner(
+                channel = BouquetEntry("NPO 1 HD", "1:0:19:17C0:C:1:FFFF0000:0:0:0:", 1),
+                number = 1,
+                guide = ChannelGuide("NPO 1 HD", "", events),
+                player = PlayerState(playbackState = "READY", videoWidth = 1920, videoHeight = 1080, audioLabel = UiText.Raw("Nederlands · AC3 5.1")),
+                tuner = TunerState(),
+                details = false,
+                optionsHint = true,
+                recording = false,
+                osdInfo = OsdInfo(),
+                osdFields = OsdInfoFields(),
+                osdSkin = id,
+                picon = { null },
+                cachedPicon = { null },
+                scrim = EnigmaColors.scrim(10),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+
+    @Composable
+    private fun ChooserPreview(id: OsdSkinId) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF0A1428))) {
+            Column(Modifier.padding(48.dp).width(980.dp).background(EnigmaColors.Canvas).padding(16.dp)) {
+                SettingsCard(getString(R.string.nav_osd_skins)) {
+                    SkinChooser(id, {})
+                }
             }
         }
     }

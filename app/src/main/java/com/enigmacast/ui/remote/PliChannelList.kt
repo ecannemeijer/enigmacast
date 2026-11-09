@@ -67,7 +67,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Classic HD channel list: bouquet title, numbered rows with now/progress, a description
+ * OpenPLi-style channel list: bouquet title, numbered rows with now/progress, a description
  * panel for the focused channel, and red/green/yellow/blue hints. Drawn in Compose with
  * the PLi-HD palette — no receiver OSD, no third-party skin assets.
  */
@@ -237,8 +237,8 @@ private fun RowScope.PliChannelRow(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
 ) {
-    val titleColor = if (focused) PliHd.SecondFg else PliHd.Foreground
-    val secondary = if (focused) PliHd.SecondFg.copy(alpha = 0.85f) else PliHd.Grey
+    val titleColor = PliHd.Foreground
+    val secondary = if (focused) PliHd.SecondFg else PliHd.Grey
     Text(if (number > 0) "%04d".format(number) else "", color = titleColor, fontSize = 13.sp, fontFamily = FontFamily.SansSerif, maxLines = 1, modifier = Modifier.width(44.dp))
     Picon(entry, picon, cachedPicon, Modifier.width(40.dp).height(24.dp), fallbackSize = 8.sp)
     Spacer(Modifier.width(8.dp))

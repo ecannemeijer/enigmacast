@@ -1316,7 +1316,7 @@
     <string name="osd_remaining_min">+%1$d dk</string>
     <string name="osd_duration_min">%1$d dk</string>
     <string name="skin_enigmacast" translatable="false">EnigmaCast</string>
-    <string name="skin_openpli">Klasik HD</string>
+    <string name="skin_openpli">OpenPLi</string>
     <string name="skin_midnight" translatable="false">Midnight</string>
     <string name="skin_metrix" translatable="false">Metrix</string>
     <string name="skin_aurora" translatable="false">Aurora</string>

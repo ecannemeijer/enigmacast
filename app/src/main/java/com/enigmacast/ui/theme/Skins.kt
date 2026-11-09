@@ -191,21 +191,22 @@ object Skins {
     )
 
     /**
-     * Classic HD (PLi-HD style bar): near-black #101214 screens,
-     * a glossy blue-grey selection bar (buttons/sel.png) with secondFG yellow text, yellow
-     * clock and accents, grey secondary text, square corners, one semi-bold sans font.
+     * OpenPLi (PLi-HD / PLi-FullHD style): dark navy screens, glossy blue selection bar
+     * with white focus text, light-blue clock/event accents and progress, grey secondary
+     * text, square corners, one semi-bold sans font. No yellow skin accents (remote yellow
+     * button colour stays on the colour-key hints only).
      */
     val OpenPli = Skin(
         id = OsdSkinId.OPENPLI,
         palette = SkinPalette(
-            canvas = Color(0xFF101214), card = Color(0xFF16181B), cardBorder = Color(0xFF33333A),
-            raised = Color(0xFF242424), selected = Color(0xFF303240), focus = Color(0xFF2B3745),
-            onFocus = Color(0xFFFCC000), accent = Color(0xFFFFC000), highlight = Color(0xFFFCC000),
-            secondary = Color(0xFF879CE1), onAccent = Color.Black, text = Color(0xFFF0F0F0),
-            muted = Color(0xFFAAAAAA), subtle = Color(0xFF555556), success = Color(0xFF56C856),
+            canvas = Color(0xFF0A1428), card = Color(0xFF0E1A30), cardBorder = Color(0xFF2A3A58),
+            raised = Color(0xFF142038), selected = Color(0xFF163050), focus = Color(0xFF1E4A88),
+            onFocus = Color(0xFFF0F4FA), accent = Color(0xFF5B8DEF), highlight = Color(0xFF7EB6FF),
+            secondary = Color(0xFF879CE1), onAccent = Color.White, text = Color(0xFFF0F4FA),
+            muted = Color(0xFFA8B0C0), subtle = Color(0xFF3A4560), success = Color(0xFF56C856),
             danger = Color(0xFFFF4A3C), dangerFocus = Color(0xFF4C0000),
-            osdFill = Color(0xFF101214), osdFillEnd = Color(0xFF101214), osdEdge = Color(0xFF33333A),
-            focusBrush = listOf(Color(0xFF939FAB), Color(0xFF647080), Color(0xFF2B3745), Color(0xFF061220), Color(0xFF0D1E2E), Color(0xFF435260)),
+            osdFill = Color(0xFF0A1428), osdFillEnd = Color(0xFF0C1A32), osdEdge = Color(0xFF2A3A58),
+            focusBrush = listOf(Color(0xFF8AA8D8), Color(0xFF4A78B8), Color(0xFF1E4A88), Color(0xFF0C2A58), Color(0xFF123868), Color(0xFF3A6AA8)),
         ),
         cornerScale = 0f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.FILL, osd = OsdLayout.PLI_BAR,
     )

@@ -48,31 +48,31 @@ import java.time.format.DateTimeFormatter
  * Enigma2 writes #AARRGGBB with the alpha inverted (00 is opaque); these are converted.
  */
 object PliHd {
-    val Foreground = Color(0xFFF0F0F0)      // foreground / white
-    val Grey = Color(0xFFAAAAAA)            // grey: next event
-    val DarkGrey = Color(0xFF555556)        // darkgrey
-    val SecondFg = Color(0xFFFCC000)        // secondFG / selectedFG: clock, date, selection text
-    val Yellow = Color(0xFFFFC000)          // yellow / orange
-    val Blue = Color(0xFF879CE1)            // blue: genres
-    val Red = Color(0xFFFF4A3C)             // red: rec, marked
-    val Green = Color(0xFF56C856)
-    val NoTransBg = Color(0xFF101214)       // noTransBG: menu background
-    val SelectedBg = Color(0xFF303240)      // selectedBG (#06 → 98 %)
-    val ProgressBg = Color(0xFF33333A)      // un33333a: progress background
-    val TranspBlack = Color(0xAB111112)     // transpBlack #54111112
-    /** infobar/hd.png: #101214, transparent at the top, 82 % from 1/3 of its height down. */
-    val BarFill = Color(0xFF101214)
-    /** infobar/pbar.png, top to bottom: dark bronze with a lighter middle line. */
-    val ProgressFill = listOf(Color(0xFF31240B), Color(0xFF4C3811), Color(0xFF574013), Color(0xFF453310), Color(0xFF382A0D), Color(0xFF30240B), Color(0xFF291E09), Color(0xFF271D09))
-    /** buttons/sel.png: glossy blue-grey selection bar, light top, dark middle, light edge at the bottom. */
-    val Selection = listOf(Color(0xE6939FAB), Color(0xE6647080), Color(0xE62B3745), Color(0xE6061220), Color(0xE60D1E2E), Color(0xE6435260))
+    val Foreground = Color(0xFFF0F4FA)      // foreground / white
+    val Grey = Color(0xFFA8B0C0)            // grey: next event / muted
+    val DarkGrey = Color(0xFF3A4560)        // darkgrey / panel edges
+    val SecondFg = Color(0xFF7EB6FF)        // light-blue accents: clock, date, event titles
+    val Yellow = Color(0xFFFFC000)          // remote yellow button only (not a skin accent)
+    val Blue = Color(0xFF5B8DEF)            // blue: genres / blue remote hint
+    val Red = Color(0xFFFF4A3C)             // red: rec, marked, red remote hint
+    val Green = Color(0xFF56C856)           // green remote hint
+    val NoTransBg = Color(0xFF0A1428)       // navy menu / list background
+    val SelectedBg = Color(0xFF163050)      // selected row fill fallback
+    val ProgressBg = Color(0xFF1A2840)      // progress track
+    val TranspBlack = Color(0xCC0A1428)     // semi-transparent navy overlay
+    /** Infobar fill: dark navy, transparent at the top, denser lower third. */
+    val BarFill = Color(0xFF0A1428)
+    /** Progress fill: cool blue gradient (light mid line). */
+    val ProgressFill = listOf(Color(0xFF0E2A55), Color(0xFF1A4A8A), Color(0xFF2E6FBF), Color(0xFF3A86D8), Color(0xFF2E6FBF), Color(0xFF1A4A8A), Color(0xFF123A6E), Color(0xFF0E2A55))
+    /** Selection bar: glossy blue gradient (light top, deep middle, soft bottom edge). */
+    val Selection = listOf(Color(0xE68AA8D8), Color(0xE64A78B8), Color(0xE61E4A88), Color(0xE60C2A58), Color(0xE6123868), Color(0xE63A6AA8))
 }
 
 private val DateFormat = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")
 
 /**
  * The PLi-HD `InfoBar` (InfoBarTemplate in skin_templates.xml), laid out on its own 1280×720
- * grid and scaled to the screen width: bar image 1280×220 at y 510; date and clock (yellow)
+ * grid and scaled to the screen width: bar image 1280×220 at y 510; date and clock (light blue)
  * top left with the rec mark; channel number and name next to the clock; crypto line top
  * right; service icons at y 588; the 840×8 progress bar at x 220; now/next with start time,
  * title and remaining / duration; picon 100×60 bottom left; video size, tuner, SNR and orbital
