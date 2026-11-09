@@ -9,7 +9,8 @@ enum class Start { DASHBOARD, SETUP, CONNECTION }
  */
 enum class SetupStep(val optional: Boolean = false, val extra: Boolean = false) {
     WELCOME,
-    RECEIVER,
+    /** Optional: skip to continue without an Enigma2 receiver (IPTV-only). */
+    RECEIVER(optional = true),
 
     /** Only when a sync server answered on the receiver: pair, or Not now. */
     SYNC_LINK(optional = true),
@@ -29,10 +30,9 @@ enum class SetupStep(val optional: Boolean = false, val extra: Boolean = false) 
         /** Only a fresh install sees the wizard by itself: no receiver set up yet. */
         fun showOnStart(receiverCount: Int, completed: Boolean = false): Boolean = receiverCount == 0 && !completed
 
-        /** Where the app opens: dashboard with a receiver; otherwise the wizard, or the connection screen after it was done once. */
+        /** Where the app opens: dashboard when a receiver exists or setup was finished (IPTV-only); else the wizard. */
         fun startScreen(receiverCount: Int, completed: Boolean): Start = when {
-            receiverCount > 0 -> Start.DASHBOARD
-            completed -> Start.CONNECTION
+            receiverCount > 0 || completed -> Start.DASHBOARD
             else -> Start.SETUP
         }
 
@@ -65,6 +65,8 @@ object SetupFlow {
             SetupStep.SYNC_LINK -> conditions.syncOffered
             SetupStep.IPTV_OFFER -> conditions.iptvOffered
             SetupStep.ACCOUNT -> conditions.accountRequired
+            // Viewing mode is about the receiver; IPTV-only skips it.
+            SetupStep.VIEWING -> conditions.hasReceiver
             else -> !step.extra
         }
     }

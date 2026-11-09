@@ -1077,9 +1077,9 @@
     <string name="setup_step_of">Adım %1$d / %2$d · %3$s</string>
     <string name="setup_try_again">Tekrar deneyin</string>
     <string name="setup_welcome_title">EnigmaCast\'a hoş geldiniz</string>
-    <string name="setup_welcome_body">Bu TV\'de uydu veya kablo alıcınızdan TV izleyin. Birkaç kısa soru ve hazırsınız. Öncelikle dilinizi seçin.</string>
+    <string name="setup_welcome_body">Bu TV\'de Enigma2 alıcınızdan veya IPTV ile canlı TV izleyin. Birkaç kısa soru ve hazırsınız. Önce dilinizi seçin.</string>
     <string name="setup_receiver_title">Alıcınızı arıyoruz</string>
-    <string name="setup_receiver_body">Uydu veya kablo alıcınızı açın. Bu TV ile aynı Wi-Fi veya kablolu ağda olmalıdır. Otomatik olarak ararız.</string>
+    <string name="setup_receiver_body">Uydu veya kablo alıcınızı açın. Bu TV ile aynı Wi-Fi veya kablo ağında olmalıdır. Otomatik ararız. Ya da yalnızca IPTV ile kullanmak için bu adımı atlayın.</string>
     <string name="setup_profile_title">Kim izliyor?</string>
     <string name="setup_profile_body">Profilinize bir ad verin ve bir resim seçin. Evdeki herkes daha sonra kendi profilini alabilir.</string>
     <string name="setup_sync_link_title">Evde birden fazla televizyon mu var?</string>
@@ -1890,4 +1890,11 @@
     <string name="usage_stats">Anonim kullanım istatistikleri</string>
     <string name="usage_stats_desc">Her başlangıçta, TV modelini, Android versiyonunu ve uygulama versiyonunu rastgele bir ID ile gönderir, bu yüzden hangi cihazları destekleyeceğimizi biliyoruz. Hiçbir isim, hesap veya IP adresi.</string>
     <string name="osd_plot_more">Bilgi: tam açıklama</string>
+    <string name="setup_skip_no_receiver">Atla / alıcı olmadan devam et</string>
+    <string name="setup_done_body_iptv">EnigmaCast\'ı IPTV oynatıcı olarak kullanabilirsiniz. Uydu veya kabloyu daha sonra Ayarlar → Alıcılar bölümünden ekleyin. Attığınız adımları Ayarlar\'dan sonra tamamlayabilirsiniz.</string>
+    <string name="home_add_receiver_title">Henüz Enigma2 alıcı yok</string>
+    <string name="home_add_receiver_body">EnigmaCast alıcı olmadan IPTV oynatıcı olarak çalışır. Canlı TV, rehber ve kayıtlar için uydu veya kablo kutunuzu istediğiniz zaman ekleyin.</string>
+    <string name="home_add_receiver_action">Enigma2 alıcı ekle</string>
+    <string name="nav_tv_needs_receiver">Uydu veya kablo TV izlemek için Ayarlar → Alıcılar bölümünden bir Enigma2 alıcı ekleyin.</string>
+    <string name="receivers_add_enigma2">Enigma2 alıcı ekle</string>
 </resources>

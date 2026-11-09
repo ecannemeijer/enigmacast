@@ -1063,9 +1063,9 @@
     <string name="setup_step_of">Étape %1$d sur %2$d · %3$s</string>
     <string name="setup_try_again">Réessayer</string>
     <string name="setup_welcome_title">Bienvenue dans EnigmaCast</string>
-    <string name="setup_welcome_body">Regardez la télé de votre récepteur satellite ou câble sur ce téléviseur. Quelques questions et c\'est prêt. Choisissez d\'abord votre langue.</string>
+    <string name="setup_welcome_body">Regardez la TV en direct depuis votre récepteur Enigma2 ou via IPTV sur ce téléviseur. Quelques questions et vous êtes prêt. Choisissez d\'abord votre langue.</string>
     <string name="setup_receiver_title">Nous cherchons votre récepteur</string>
-    <string name="setup_receiver_body">Allumez votre récepteur satellite ou câble. Il doit être sur le même réseau Wi-Fi ou câblé que ce téléviseur. Nous le cherchons automatiquement.</string>
+    <string name="setup_receiver_body">Allumez votre récepteur satellite ou câble. Il doit être sur le même réseau Wi-Fi ou câble que ce téléviseur. Nous le cherchons automatiquement. Ou ignorez cette étape pour utiliser EnigmaCast uniquement en IPTV.</string>
     <string name="setup_profile_title">Qui regarde ?</string>
     <string name="setup_profile_body">Donnez un nom à votre profil et choisissez une image. Chacun à la maison pourra avoir son propre profil plus tard.</string>
     <string name="setup_iptv_title">Votre abonnement IPTV aussi sur ce téléviseur ?</string>
@@ -1891,4 +1891,11 @@
     <string name="usage_stats">Statistiques d\'utilisation anonymes</string>
     <string name="usage_stats_desc">À chaque démarrage, envoie le modèle du téléviseur, la version d\'Android et de l\'application avec un identifiant aléatoire, pour savoir quels appareils prendre en charge. Aucun nom, compte ou adresse IP.</string>
     <string name="osd_plot_more">Info: description complète</string>
+    <string name="setup_skip_no_receiver">Ignorer / continuer sans récepteur</string>
+    <string name="setup_done_body_iptv">Vous pouvez utiliser EnigmaCast comme lecteur IPTV. Ajoutez le satellite ou le câble plus tard dans Paramètres → Récepteurs. Tout ce que vous avez ignoré peut être réglé plus tard dans Paramètres.</string>
+    <string name="home_add_receiver_title">Pas encore de récepteur Enigma2</string>
+    <string name="home_add_receiver_body">EnigmaCast fonctionne comme lecteur IPTV sans récepteur. Ajoutez votre box satellite ou câble à tout moment pour la TV en direct, le guide et les enregistrements.</string>
+    <string name="home_add_receiver_action">Ajouter un récepteur Enigma2</string>
+    <string name="nav_tv_needs_receiver">Ajoutez un récepteur Enigma2 dans Paramètres → Récepteurs pour regarder la TV satellite ou câble.</string>
+    <string name="receivers_add_enigma2">Ajouter un récepteur Enigma2</string>
 </resources>

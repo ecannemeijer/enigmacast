@@ -347,6 +347,10 @@ fun DashboardScreen(
     val account by accountModel.account.collectAsState()
     val premium = accountModel.gate.isUnlocked()
     val xtreamAvailable = xtreamModel.detection.collectAsState().value?.available == true
+    val settingsModel: SettingsViewModel = hiltViewModel()
+    val appSettings by settingsModel.settings.collectAsStateWithLifecycle()
+    val hasReceiver = appSettings.receivers.isNotEmpty()
+    var needReceiverHint by remember { mutableStateOf(false) }
     // IPTV live (not catch-up) that plays on behind the dashboard: the mini players show it.
     val iptvLive = xtreamModel.playingLive
     val showStream = showMiniPlayer || iptvLive
@@ -637,6 +641,10 @@ fun DashboardScreen(
                             if (flyout == DashGroup.TV) down = tvFlyoutFocus
                         },
                     onClick = {
+                        if (!hasReceiver) {
+                            needReceiverHint = true
+                            return@NavItem
+                        }
                         if (flyout == DashGroup.TV) runCatching { tvFlyoutFocus.requestFocus() }
                         else flyout = DashGroup.TV
                     },
@@ -863,6 +871,8 @@ fun DashboardScreen(
                             onXtream = onXtream,
                             library = myItemsModel,
                             showStream = showStream,
+                            hasReceiver = hasReceiver,
+                            onAddReceiver = { enterSection(DashSection.Settings) },
                             onTorrent = { enterSection(DashSection.Torrent) },
                             miniFocusable = miniTarget != com.enigmacast.domain.xtream.IptvMini.Target.NONE,
                             // OK on the mini player: what it shows, full screen, without a restart.
@@ -1129,6 +1139,19 @@ fun DashboardScreen(
             )
         }
         val unreachable by guideModel.unreachable.collectAsState()
+        if (needReceiverHint) {
+            TvConfirmDialog(
+                title = stringResource(R.string.home_add_receiver_title),
+                message = stringResource(R.string.nav_tv_needs_receiver),
+                confirmLabel = stringResource(R.string.home_add_receiver_action),
+                dismissLabel = stringResource(R.string.cancel),
+                onConfirm = {
+                    needReceiverHint = false
+                    enterSection(DashSection.Settings)
+                },
+                onDismiss = { needReceiverHint = false },
+            )
+        }
         unreachable?.let { lost ->
             ReceiverUnreachableDialog(
                 host = lost.host,

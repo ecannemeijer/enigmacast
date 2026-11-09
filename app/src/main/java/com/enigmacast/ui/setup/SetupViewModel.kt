@@ -191,6 +191,11 @@ class SetupViewModel @Inject constructor(
     /** Optional steps: leave what is there and go on. */
     fun skip() {
         when (step) {
+            SetupStep.RECEIVER -> {
+                // IPTV-only: no Enigma2 box. Viewing is omitted by SetupFlow when hasReceiver is false.
+                leavingReceiver = false
+                go(forward(SetupStep.RECEIVER))
+            }
             SetupStep.SYNC_LINK -> stayStandalone()
             SetupStep.IPTV_OFFER -> leaveIptv()
             SetupStep.PROFILE -> {
@@ -489,9 +494,13 @@ class SetupViewModel @Inject constructor(
             // The status window shows this first full sync, and only this one. Home films are not
             // listed: they run straight after the guide (when a film key is set) and keep it open.
             val paired = withContext(Dispatchers.IO) { syncClient.config() != null }
+            val hasReceiver = current.activeReceiver() != null
             val expected = buildSet {
-                add(com.enigmacast.activity.ActivityKind.CHANNELS)
-                add(com.enigmacast.activity.ActivityKind.GUIDE)
+                // Without a receiver there is no bouquet/guide sync: IPTV-only must not wait on 15%.
+                if (hasReceiver) {
+                    add(com.enigmacast.activity.ActivityKind.CHANNELS)
+                    add(com.enigmacast.activity.ActivityKind.GUIDE)
+                }
                 if (playlist && iptvPlaylist.hasLogin(current.iptvPlaylistKind)) add(com.enigmacast.activity.ActivityKind.IPTV)
                 if (paired) add(com.enigmacast.activity.ActivityKind.SYNC_SERVER)
             }
