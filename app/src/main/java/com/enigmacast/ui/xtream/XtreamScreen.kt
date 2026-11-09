@@ -897,11 +897,17 @@ private fun SidePanel(
         // Categories stay beside the channel list, the same way Enigma2 keeps the channels next to the bouquets.
         val liveList = model.section == XtreamSection.LIVE &&
             (column == PanelColumn.CATEGORIES || column == PanelColumn.CHANNELS || column == PanelColumn.GUIDE)
+        // Category under D-pad focus; Right opens its channels (OK already selects via onClick).
+        var focusedCategory by remember(model.category) { mutableStateOf(model.category) }
         if (liveList && column == PanelColumn.CATEGORIES) Column(
             Modifier.width(com.enigmacast.ui.components.LivePanelWidths.IPTV_CATEGORIES).columnKeys(
                 onLeft = if (model.playing?.item?.section == XtreamSection.LIVE) null else onLeave,
-                // Right only enters a list that is already there.
-                onRight = { if (hasList) onColumn(PanelColumn.CHANNELS) },
+                // Right opens the focused category's channels (not the previously selected one).
+                onRight = {
+                    val next = focusedCategory
+                    if (next != null) model.selectCategory(next)
+                    else if (hasList) onColumn(PanelColumn.CHANNELS)
+                },
             ),
         ) {
             Header(stringResource(R.string.xtream_categories), model.loading && model.categories.isEmpty())
@@ -956,6 +962,9 @@ private fun SidePanel(
                             .focusRequesterIf(index == selectedIndex, categoryFocus)
                             .focusRequesterIf(index == 0, firstFocus)
                             .focusRequesterIf(index == lastIndex && lastIndex > 0, lastFocus)
+                            .onFocusChanged {
+                                if (it.isFocused && entry is CategoryEntry.Row) focusedCategory = entry.category
+                            }
                             .wrapListEnds(
                                 index = index,
                                 lastIndex = lastIndex,
