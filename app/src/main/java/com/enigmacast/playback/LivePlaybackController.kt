@@ -45,7 +45,6 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.TsExtractor
 import com.enigmacast.data.network.OkHttpClientFactory
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
@@ -482,13 +481,18 @@ class LivePlaybackController @Inject constructor(
     }
 
     /**
-     * Pauses or resumes the Enigma2 stream in place. Returns false when this playback
-     * is a file, an internet stream, or nothing is loaded; the caller can do something else.
+     * Live TV (with video) has only a technical read-ahead buffer, not a user timeshift.
+     * Pausing then resuming after the receiver drops the socket (or the buffer fills) jumps
+     * back to live, which looks broken — so pause is disabled when a video track is selected.
+     * Radio-only streams may still pause in place. Recordings use [toggleFilePause].
+     * Returns false so the UI can show "pausing is not possible" or open the channel list.
      */
     fun toggleTimeshiftPause(): Boolean {
         val exo = player ?: return false
         if (filePlayback || internet || store == null || currentUrl == null) return false
         if (exo.playerError != null || exo.playbackState == Player.STATE_IDLE) return false
+        val hasVideo = exo.currentTracks.groups.any { it.type == C.TRACK_TYPE_VIDEO && it.isSelected }
+        if (hasVideo) return false
         if (exo.playWhenReady) {
             timeshiftPaused = true
             exo.pause()
@@ -929,15 +933,10 @@ class LivePlaybackController @Inject constructor(
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesOn())
             .setSelectUndeterminedTextLanguage(subtitlesOn())
             .build()
-        // "Snel starten": start decoding on the first I-frame (DVB H.264 often sends IDR frames
-        // seconds apart) and cut H.264 samples on slice headers too, so a stream without access
-        // unit delimiters does not wait for the next one. A missed reference can show a few
-        // blocky frames right after the zap; the picture is clean at the next keyframe.
-        val tsFlags = if (settings.fastStart) {
-            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
-        } else {
-            0
-        }
+        // "Snel starten": cut H.264 on slice headers when AUD markers are missing so the first
+        // real IDR is found sooner. Never treat non-IDR I-frames as keyframes — Amlogic and
+        // similar STB decoders show green/noise from those until the next IDR while audio plays.
+        val tsFlags = TsZapFlags.forLive(settings.fastStart)
         val extractors = DefaultExtractorsFactory()
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
             .setTsExtractorFlags(tsFlags)
@@ -1254,6 +1253,10 @@ class LivePlaybackController @Inject constructor(
             group.type == C.TRACK_TYPE_TEXT && group.isSelected
         }
         if (alreadySelected) return
+        // Do not let Media3 auto-pick teletext/DVB text just because a track exists.
+        // Only choose a track when the user (or a remembered live ON preference) asked for subs.
+        val mayAutoPick = filePlayback || liveSubtitles.mode == com.enigmacast.domain.player.LiveSubtitles.Mode.ON
+        if (!mayAutoPick) return
         val group = exo.currentTracks.groups.firstOrNull { candidate ->
             candidate.type == C.TRACK_TYPE_TEXT && candidate.isTrackSupported(0)
         } ?: return

@@ -19,6 +19,14 @@ class VideoScalingTest {
     }
 
     @Test
+    fun autoInfersFourByThreeWhenSdOmitsSar() {
+        // 720×576 with reported PAR 1.0 → treat as 4:3 (16:15), not 5:4.
+        val result = scale(PictureMode.AUTO, 720, 576, 1f)
+        assertEquals(0.75f, result.x, 0.01f)
+        assertEquals(1f, result.y, 0.0001f)
+    }
+
+    @Test
     fun autoUsesThePixelShapeOfAnamorphicSd() {
         val result = scale(PictureMode.AUTO, 720, 576, 64f / 45f) // 16:9 PAL
         assertEquals(1f, result.x, 0.01f)
@@ -45,5 +53,11 @@ class VideoScalingTest {
     fun unknownSizesLeaveThePictureAlone() {
         assertEquals(VideoScale(1f, 1f), scale(PictureMode.AUTO, 0, 0))
         assertEquals(VideoScale(1f, 1f), VideoScaling.scale(PictureMode.ZOOM, 720, 576, 1f, 0, 0))
+    }
+
+    @Test
+    fun nearMatchSnapsToFullScreen() {
+        // 1920×1080 view, picture aspect within 2% → no bars from rounding.
+        assertEquals(VideoScale(1f, 1f), VideoScaling.scale(PictureMode.AUTO, 1920, 1088, 1f, 1920, 1080))
     }
 }

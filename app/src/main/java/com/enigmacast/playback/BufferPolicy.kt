@@ -29,11 +29,11 @@ object BufferPolicy {
     val STABLE = LiveDurations(minMs = 2_000, maxMs = 15_000, playbackMs = 2_000, rebufferMs = 2_000)
 
     /**
-     * Stable buffer with "Snel starten": the picture starts after 0.75 s of stream. A stall
+     * Stable buffer with "Snel starten": the picture starts after 0.35 s of stream. A stall
      * still waits the full 2 s, and the 2–15 s target is unchanged, so a stream that runs
      * keeps the same cushion as before; only the first start (each zap) is quicker.
      */
-    val FAST_START = LiveDurations(minMs = 2_000, maxMs = 15_000, playbackMs = 750, rebufferMs = 2_000)
+    val FAST_START = LiveDurations(minMs = 2_000, maxMs = 15_000, playbackMs = 350, rebufferMs = 2_000)
 
     /**
      * The live buffer for these settings. The low-latency buffer ([custom]) wins when it is on;

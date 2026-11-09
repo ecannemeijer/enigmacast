@@ -70,7 +70,7 @@ data class PlaybackSettings(
     val bufferForPlaybackMs: Int = 500,
     val bufferForRebufferMs: Int = 1_000,
     /**
-     * "Snel starten": Enigma2 streams start playing after a short buffer (about 0.75 s instead
+     * "Snel starten": Enigma2 streams start playing after a short buffer (about 0.35 s instead
      * of 2 s) and the MPEG-TS reader may start on the first I-frame instead of waiting for an
      * IDR frame. Only used with the stable buffer (the fast buffer starts even sooner). Off
      * unless the user turns it on.
@@ -84,7 +84,12 @@ data class PlaybackSettings(
     val hardwareDecoder: Boolean = true,
     val autoReconnect: Boolean = true,
     val hdmiPassthrough: Boolean = false,
-    val subtitlesEnabled: Boolean = true,
+    /**
+     * Show text (DVB / teletext / subtitle) tracks when the stream has them.
+     * Off by default: ExoPlayer must not auto-enable teletext or DVB subs until the user turns them on.
+     * Existing profiles that already stored true keep that choice.
+     */
+    val subtitlesEnabled: Boolean = false,
     /** Audio delay correction for decoded (stereo/PCM) sound, -500..500 ms. */
     val audioDelayPcmMs: Int = 0,
     /** Audio delay correction for AC3/E-AC3 sent undecoded over HDMI, -500..500 ms. */
