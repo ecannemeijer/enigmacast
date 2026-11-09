@@ -2,6 +2,7 @@ package com.enigmacast.ui.tuners
 
 import com.enigmacast.ui.theme.skinSurface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.focusRequesterIf
@@ -830,10 +831,10 @@ private fun AddReceiverHintCard(
             fontSize = 14.sp,
             lineHeight = 20.sp,
         )
-        com.enigmacast.ui.theme.TvButton(
-            stringResource(R.string.home_add_receiver_action),
-            onAdd,
-            Modifier.focusRequester(focus),
+        CompactButton(
+            label = stringResource(R.string.home_add_receiver_action),
+            onClick = onAdd,
+            modifier = Modifier.focusRequester(focus),
         )
     }
 }

@@ -1897,4 +1897,14 @@
     <string name="home_add_receiver_action">Dodaj odbiornik Enigma2</string>
     <string name="nav_tv_needs_receiver">Dodaj odbiornik Enigma2 w Ustawienia → Odbiorniki, aby oglądać TV satelitarną lub kablową.</string>
     <string name="receivers_add_enigma2">Dodaj odbiornik Enigma2</string>
+    <string name="setup_iptv_provider_title">Dodaj dostawcę IPTV</string>
+    <string name="setup_iptv_provider_body">Wpisz login Xtream lub adres listy M3U. Możesz tu przetestować połączenie albo pominąć i dodać dostawcę później w Ustawieniach.</string>
+    <string name="setup_name_iptv_provider">Dostawca IPTV</string>
+    <string name="setup_iptv_provider_skip">Ustaw później / pomiń</string>
+    <string name="setup_iptv_provider_xtream_desc">Adres serwera, nazwa użytkownika i hasło od dostawcy IPTV.</string>
+    <string name="setup_iptv_provider_m3u_desc">Bezpośredni adres listy M3U lub M3U8.</string>
+    <string name="setup_iptv_provider_ok">Dostawca połączony. Lista kanałów ładuje się w tle.</string>
+    <string name="setup_iptv_provider_failed">Nie udało się połączyć z tym dostawcą. Sprawdź dane albo pomiń i spróbuj później w Ustawieniach.</string>
+    <string name="setup_iptv_provider_later">Więcej dostawców dodasz później w Ustawienia → IPTV.</string>
+    <string name="setup_done_body_minimal">Możesz zacząć z EnigmaCast i później dodać odbiornik lub dostawcę IPTV w Ustawieniach. Pominięte rzeczy ustawisz tam.</string>
 </resources>

@@ -6,11 +6,15 @@ enum class Start { DASHBOARD, SETUP, CONNECTION }
  * The first-run wizard. The standard path is Language › Receiver › Viewing mode › Account › Done;
  * Sync server and IPTV only show up when the network offers them ([SetupFlow]). [extra] steps are
  * opened from Done and go back there. [optional] steps have a Skip button.
+ * IPTV_PROVIDER is always on the path so a playlist can be added without a receiver.
  */
 enum class SetupStep(val optional: Boolean = false, val extra: Boolean = false) {
     WELCOME,
     /** Optional: skip to continue without an Enigma2 receiver (IPTV-only). */
     RECEIVER(optional = true),
+
+    /** Optional: add an Xtream or M3U provider (with or without a receiver). */
+    IPTV_PROVIDER(optional = true),
 
     /** Only when a sync server answered on the receiver: pair, or Not now. */
     SYNC_LINK(optional = true),

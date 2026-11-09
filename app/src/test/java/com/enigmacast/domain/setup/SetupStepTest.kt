@@ -12,16 +12,16 @@ class SetupStepTest {
 
     @Test fun freeModeHidesTheAccountStep() {
         assertEquals(
-            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.VIEWING, SetupStep.DONE),
+            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.IPTV_PROVIDER, SetupStep.VIEWING, SetupStep.DONE),
             SetupFlow.steps(free),
         )
         assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.VIEWING, free))
-        assertEquals(1 to 4, SetupFlow.position(SetupStep.WELCOME, free))
+        assertEquals(1 to 5, SetupFlow.position(SetupStep.WELCOME, free))
     }
 
-    @Test fun standardPathHasFiveSteps() {
+    @Test fun standardPathHasSixSteps() {
         assertEquals(
-            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.VIEWING, SetupStep.ACCOUNT, SetupStep.DONE),
+            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.IPTV_PROVIDER, SetupStep.VIEWING, SetupStep.ACCOUNT, SetupStep.DONE),
             SetupFlow.steps(plain),
         )
     }
@@ -29,34 +29,37 @@ class SetupStepTest {
     @Test fun syncAndIptvOnlyWhenOffered() {
         val sync = SetupConditions(syncOffered = true, accountRequired = true, hasReceiver = true)
         assertEquals(
-            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.SYNC_LINK, SetupStep.VIEWING, SetupStep.ACCOUNT, SetupStep.DONE),
+            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.IPTV_PROVIDER, SetupStep.SYNC_LINK, SetupStep.VIEWING, SetupStep.ACCOUNT, SetupStep.DONE),
             SetupFlow.steps(sync),
         )
         val both = SetupConditions(syncOffered = true, iptvOffered = true, paired = true, hasReceiver = true)
-        assertEquals(SetupStep.SYNC_LINK, SetupFlow.next(SetupStep.RECEIVER, both))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.next(SetupStep.RECEIVER, both))
+        assertEquals(SetupStep.SYNC_LINK, SetupFlow.next(SetupStep.IPTV_PROVIDER, both))
         assertEquals(SetupStep.IPTV_OFFER, SetupFlow.next(SetupStep.SYNC_LINK, both))
         assertEquals(SetupStep.VIEWING, SetupFlow.next(SetupStep.IPTV_OFFER, both))
-        // Paired before the wizard: no sync step, but the IPTV offer still shows.
+        // Paired before the wizard: no sync step, but the IPTV offer still shows after the provider step.
         val prePaired = SetupConditions(iptvOffered = true, paired = true, hasReceiver = true)
-        assertEquals(SetupStep.IPTV_OFFER, SetupFlow.next(SetupStep.RECEIVER, prePaired))
-        assertEquals(SetupStep.RECEIVER, SetupFlow.previous(SetupStep.IPTV_OFFER, prePaired))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.next(SetupStep.RECEIVER, prePaired))
+        assertEquals(SetupStep.IPTV_OFFER, SetupFlow.next(SetupStep.IPTV_PROVIDER, prePaired))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.previous(SetupStep.IPTV_OFFER, prePaired))
     }
 
     @Test fun nextAndPreviousSkipOmittedSteps() {
         assertEquals(SetupStep.RECEIVER, SetupFlow.next(SetupStep.WELCOME, plain))
-        assertEquals(SetupStep.VIEWING, SetupFlow.next(SetupStep.RECEIVER, plain))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.next(SetupStep.RECEIVER, plain))
+        assertEquals(SetupStep.VIEWING, SetupFlow.next(SetupStep.IPTV_PROVIDER, plain))
         assertEquals(SetupStep.ACCOUNT, SetupFlow.next(SetupStep.VIEWING, plain))
         assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.ACCOUNT, plain))
         assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.DONE, plain))
         assertNull(SetupFlow.previous(SetupStep.WELCOME, plain))
-        assertEquals(SetupStep.RECEIVER, SetupFlow.previous(SetupStep.VIEWING, plain))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.previous(SetupStep.VIEWING, plain))
         assertEquals(SetupStep.VIEWING, SetupFlow.previous(SetupStep.ACCOUNT, plain))
     }
 
     @Test fun leavingAStepThatJustDisappearedGoesOn() {
         // The sync search ended without a server while its step was on screen.
         assertEquals(SetupStep.VIEWING, SetupFlow.next(SetupStep.SYNC_LINK, plain))
-        assertEquals(SetupStep.RECEIVER, SetupFlow.previous(SetupStep.SYNC_LINK, plain))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.previous(SetupStep.SYNC_LINK, plain))
         assertEquals(SetupStep.VIEWING, SetupFlow.next(SetupStep.IPTV_OFFER, plain))
     }
 
@@ -74,22 +77,23 @@ class SetupStepTest {
     }
 
     @Test fun progressCountsOnlyShownSteps() {
-        assertEquals(1 to 5, SetupFlow.position(SetupStep.WELCOME, plain))
-        assertEquals(3 to 5, SetupFlow.position(SetupStep.VIEWING, plain))
-        assertEquals(5 to 5, SetupFlow.position(SetupStep.DONE, plain))
+        assertEquals(1 to 6, SetupFlow.position(SetupStep.WELCOME, plain))
+        assertEquals(4 to 6, SetupFlow.position(SetupStep.VIEWING, plain))
+        assertEquals(6 to 6, SetupFlow.position(SetupStep.DONE, plain))
         val sync = SetupConditions(syncOffered = true, iptvOffered = true, accountRequired = true, hasReceiver = true)
-        assertEquals(3 to 7, SetupFlow.position(SetupStep.SYNC_LINK, sync))
-        assertEquals(5 to 7, SetupFlow.position(SetupStep.VIEWING, sync))
+        assertEquals(4 to 8, SetupFlow.position(SetupStep.SYNC_LINK, sync))
+        assertEquals(6 to 8, SetupFlow.position(SetupStep.VIEWING, sync))
         // A step that just dropped out keeps a sensible number until the wizard moves on.
-        assertEquals(3 to 5, SetupFlow.position(SetupStep.SYNC_LINK, plain))
+        assertEquals(4 to 6, SetupFlow.position(SetupStep.SYNC_LINK, plain))
     }
 
     @Test fun skippableSteps() {
         assertEquals(
-            setOf(SetupStep.RECEIVER, SetupStep.SYNC_LINK, SetupStep.IPTV_OFFER, SetupStep.ACCOUNT, SetupStep.PROFILE, SetupStep.BOUQUETS),
+            setOf(SetupStep.RECEIVER, SetupStep.IPTV_PROVIDER, SetupStep.SYNC_LINK, SetupStep.IPTV_OFFER, SetupStep.ACCOUNT, SetupStep.PROFILE, SetupStep.BOUQUETS),
             SetupStep.entries.filter { it.optional }.toSet(),
         )
         assertTrue(SetupStep.RECEIVER.optional)
+        assertTrue(SetupStep.IPTV_PROVIDER.optional)
         assertFalse(SetupStep.WELCOME.optional)
     }
 
@@ -110,10 +114,11 @@ class SetupStepTest {
     @Test fun iptvOnlyPathSkipsViewingWithoutReceiver() {
         val iptvOnly = SetupConditions(accountRequired = false, hasReceiver = false)
         assertEquals(
-            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.DONE),
+            listOf(SetupStep.WELCOME, SetupStep.RECEIVER, SetupStep.IPTV_PROVIDER, SetupStep.DONE),
             SetupFlow.steps(iptvOnly),
         )
-        assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.RECEIVER, iptvOnly))
+        assertEquals(SetupStep.IPTV_PROVIDER, SetupFlow.next(SetupStep.RECEIVER, iptvOnly))
+        assertEquals(SetupStep.DONE, SetupFlow.next(SetupStep.IPTV_PROVIDER, iptvOnly))
         assertEquals(listOf(SetupStep.PROFILE), SetupFlow.extras(iptvOnly))
     }
 

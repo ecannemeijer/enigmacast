@@ -44,6 +44,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.StreamMode
 import com.enigmacast.domain.setup.SetupStep
 import com.enigmacast.locale.AppLanguage
@@ -59,6 +60,7 @@ import com.enigmacast.ui.theme.TvButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.focusRequesterIf
 import com.enigmacast.ui.theme.requestWhenReady
@@ -127,6 +129,7 @@ fun SetupWizard(
                 when (step) {
                     SetupStep.WELCOME -> LanguageStep(stepFocus, onChooseLanguage)
                     SetupStep.RECEIVER -> ReceiverStep(model, connection, stepFocus, onConnected = { model.next() })
+                    SetupStep.IPTV_PROVIDER -> IptvProviderStep(model, stepFocus)
                     SetupStep.SYNC_LINK -> SyncLinkStep(model, stepFocus)
                     SetupStep.IPTV_OFFER -> IptvOfferStep(model, stepFocus)
                     SetupStep.VIEWING -> ViewingStep(model, stepFocus)
@@ -232,6 +235,76 @@ private fun ReceiverStep(model: SetupViewModel, connection: ConnectionViewModel,
         focus = focus,
         onConnected = onConnected,
         modifier = Modifier.widthIn(max = 780.dp),
+    )
+}
+
+
+@Composable
+private fun IptvProviderStep(model: SetupViewModel, focus: FocusRequester) {
+    if (model.providerOk) {
+        SetupNotice(stringResource(R.string.setup_iptv_provider_ok), NoticeKind.SUCCESS)
+    }
+    BigChoice(
+        title = stringResource(R.string.iptv_kind_xtream),
+        description = stringResource(R.string.setup_iptv_provider_xtream_desc),
+        selected = model.providerKind == IptvPlaylistKind.XTREAM,
+        modifier = Modifier.focusRequesterIf(model.providerKind == IptvPlaylistKind.XTREAM, focus),
+    ) { model.chooseProviderKind(IptvPlaylistKind.XTREAM) }
+    BigChoice(
+        title = stringResource(R.string.iptv_kind_m3u),
+        description = stringResource(R.string.setup_iptv_provider_m3u_desc),
+        selected = model.providerKind == IptvPlaylistKind.M3U,
+        modifier = Modifier.focusRequesterIf(model.providerKind == IptvPlaylistKind.M3U, focus),
+    ) { model.chooseProviderKind(IptvPlaylistKind.M3U) }
+    TvTextField(
+        stringResource(R.string.iptv_provider_name),
+        model.providerName,
+        { model.providerName = it; model.touchProviderDraft() },
+        Modifier.fillMaxWidth().widthIn(max = 780.dp),
+    )
+    if (model.providerKind == IptvPlaylistKind.M3U) {
+        TvTextField(
+            stringResource(R.string.iptv_m3u_url),
+            model.providerM3u,
+            { model.providerM3u = it; model.touchProviderDraft() },
+            Modifier.fillMaxWidth().widthIn(max = 780.dp),
+            kind = TvFieldKind.HOST,
+        )
+    } else {
+        TvTextField(
+            stringResource(R.string.iptv_xtream_server),
+            model.providerServer,
+            { model.providerServer = it; model.touchProviderDraft() },
+            Modifier.fillMaxWidth().widthIn(max = 780.dp),
+            kind = TvFieldKind.HOST,
+        )
+        TvTextField(
+            stringResource(R.string.iptv_xtream_user),
+            model.providerUser,
+            { model.providerUser = it; model.touchProviderDraft() },
+            Modifier.fillMaxWidth().widthIn(max = 780.dp),
+        )
+        TvTextField(
+            stringResource(R.string.iptv_xtream_pass),
+            model.providerPass,
+            { model.providerPass = it; model.touchProviderDraft() },
+            Modifier.fillMaxWidth().widthIn(max = 780.dp),
+            kind = TvFieldKind.PASSWORD,
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        CompactButton(
+            label = stringResource(if (model.providerBusy) R.string.setup_iptv_busy else R.string.action_test_connection),
+            onClick = model::testAndSaveProvider,
+        )
+    }
+    if (model.providerFailed) {
+        SetupNotice(stringResource(R.string.setup_iptv_provider_failed), NoticeKind.ERROR)
+    }
+    Text(
+        stringResource(R.string.setup_iptv_provider_later),
+        color = EnigmaColors.Muted,
+        fontSize = 15.sp,
     )
 }
 
@@ -419,10 +492,10 @@ private fun stepBody(model: SetupViewModel, step: SetupStep): String {
     if (step != SetupStep.DONE) return stringResource(step.body())
     val name by model.receiverName.collectAsStateWithLifecycle()
     val receiver by model.receiver.collectAsStateWithLifecycle()
-    return if (receiver == null) {
-        stringResource(R.string.setup_done_body_iptv)
-    } else {
-        stringResource(R.string.setup_done_body, name.ifBlank { receiver?.name.orEmpty() })
+    return when {
+        receiver != null -> stringResource(R.string.setup_done_body, name.ifBlank { receiver?.name.orEmpty() })
+        model.hasIptvProvider() -> stringResource(R.string.setup_done_body_iptv)
+        else -> stringResource(R.string.setup_done_body_minimal)
     }
 }
 
@@ -430,6 +503,7 @@ private fun SetupStep.title(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_welcome_title
     SetupStep.ACCOUNT -> R.string.setup_account_title
     SetupStep.RECEIVER -> R.string.setup_receiver_title
+    SetupStep.IPTV_PROVIDER -> R.string.setup_iptv_provider_title
     SetupStep.SYNC_LINK -> R.string.setup_sync_link_title
     SetupStep.IPTV_OFFER -> R.string.setup_iptv_title
     SetupStep.PROFILE -> R.string.setup_profile_title
@@ -442,6 +516,7 @@ private fun SetupStep.body(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_welcome_body
     SetupStep.ACCOUNT -> R.string.setup_account_body
     SetupStep.RECEIVER -> R.string.setup_receiver_body
+    SetupStep.IPTV_PROVIDER -> R.string.setup_iptv_provider_body
     SetupStep.SYNC_LINK -> R.string.setup_sync_link_body
     SetupStep.IPTV_OFFER -> R.string.setup_iptv_body
     SetupStep.PROFILE -> R.string.setup_profile_body
@@ -454,6 +529,7 @@ private fun SetupStep.body(): Int = when (this) {
 private fun SetupStep.shortName(): Int = when (this) {
     SetupStep.WELCOME -> R.string.setup_name_language
     SetupStep.RECEIVER -> R.string.setup_name_receiver
+    SetupStep.IPTV_PROVIDER -> R.string.setup_name_iptv_provider
     SetupStep.SYNC_LINK -> R.string.setup_name_sync
     SetupStep.IPTV_OFFER -> R.string.setup_name_iptv
     SetupStep.VIEWING -> R.string.setup_name_viewing
@@ -465,6 +541,7 @@ private fun SetupStep.shortName(): Int = when (this) {
 
 private fun SetupStep.skipLabel(): Int = when (this) {
     SetupStep.RECEIVER -> R.string.setup_skip_no_receiver
+    SetupStep.IPTV_PROVIDER -> R.string.setup_iptv_provider_skip
     SetupStep.SYNC_LINK -> R.string.setup_sync_link_not_now
     SetupStep.IPTV_OFFER -> R.string.setup_iptv_no
     SetupStep.ACCOUNT -> R.string.setup_skip_later

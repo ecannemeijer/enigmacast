@@ -1889,4 +1889,14 @@
     <string name="home_add_receiver_action">Enigma2-receiver toevoegen</string>
     <string name="nav_tv_needs_receiver">Voeg een Enigma2-receiver toe onder Instellingen → Receivers om satelliet- of kabel-TV te kijken.</string>
     <string name="receivers_add_enigma2">Enigma2-receiver toevoegen</string>
+    <string name="setup_iptv_provider_title">IPTV-provider toevoegen</string>
+    <string name="setup_iptv_provider_body">Vul je Xtream-login of een M3U-afspeellijst-URL in. Je kunt de verbinding hier testen, of overslaan en later een provider toevoegen in Instellingen.</string>
+    <string name="setup_name_iptv_provider">IPTV-provider</string>
+    <string name="setup_iptv_provider_skip">Later instellen / overslaan</string>
+    <string name="setup_iptv_provider_xtream_desc">Server-URL, gebruikersnaam en wachtwoord van je IPTV-provider.</string>
+    <string name="setup_iptv_provider_m3u_desc">Een directe M3U- of M3U8-afspeellijstadres.</string>
+    <string name="setup_iptv_provider_ok">Provider verbonden. De kanalenlijst wordt op de achtergrond geladen.</string>
+    <string name="setup_iptv_provider_failed">Deze provider was niet bereikbaar. Controleer de gegevens, of sla over en probeer later in Instellingen.</string>
+    <string name="setup_iptv_provider_later">Je kunt later meer providers toevoegen onder Instellingen → IPTV.</string>
+    <string name="setup_done_body_minimal">Je kunt met EnigmaCast starten en later een receiver of IPTV-provider toevoegen onder Instellingen. Alles wat je hebt overgeslagen kun je daar instellen.</string>
 </resources>
