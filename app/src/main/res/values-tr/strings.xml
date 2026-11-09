@@ -1316,7 +1316,7 @@
     <string name="osd_remaining_min">+%1$d dk</string>
     <string name="osd_duration_min">%1$d dk</string>
     <string name="skin_enigmacast" translatable="false">EnigmaCast</string>
-    <string name="skin_openpli" translatable="false">OpenPLi</string>
+    <string name="skin_openpli">Klasik HD</string>
     <string name="skin_midnight" translatable="false">Midnight</string>
     <string name="skin_metrix" translatable="false">Metrix</string>
     <string name="skin_aurora" translatable="false">Aurora</string>
@@ -1907,4 +1907,12 @@
     <string name="setup_iptv_provider_failed">Bu sağlayıcıya ulaşılamadı. Bilgileri kontrol edin veya atlayıp daha sonra Ayarlar\'dan deneyin.</string>
     <string name="setup_iptv_provider_later">Daha sonra Ayarlar → IPTV altında başka sağlayıcılar ekleyebilirsiniz.</string>
     <string name="setup_done_body_minimal">EnigmaCast ile başlayıp daha sonra Ayarlar\'dan bir alıcı veya IPTV sağlayıcı ekleyebilirsiniz. Attığınız adımları oradan tamamlayabilirsiniz.</string>
+    <string name="pli_list_hint">Yukarı/Aşağı - Sol buketler - Sağ program - OK izler</string>
+    <string name="pli_event_info">Şimdi</string>
+    <string name="pli_event_open_epg">Yeşil veya Sağ bu kanalın program listesini açar.</string>
+    <string name="pli_hint_red">Buketler</string>
+    <string name="pli_hint_green">EPG</string>
+    <string name="pli_hint_yellow">Rehber</string>
+    <string name="pli_hint_blue">Seçenekler</string>
+    <string name="pli_hint_ok">OK: izle</string>
 </resources>

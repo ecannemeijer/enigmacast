@@ -1364,6 +1364,37 @@ class RemoteDisplayViewModel @Inject constructor(
         }
     }
 
+
+    /** Classic HD colour keys while the channel list is open. */
+    private fun handlePliColourKey(keyCode: Int, ui: RemoteDisplayUiState): Boolean {
+        val key = com.enigmacast.domain.remote.EnigmaKeyMapper.fromAndroidKeyCode(keyCode) ?: return false
+        return when (key) {
+            com.enigmacast.domain.remote.EnigmaKey.RED -> {
+                if (ui.bouquetPanel) applyPane(com.enigmacast.domain.tuner.ListPane.CHANNELS, focusList = true)
+                else openBouquets()
+                true
+            }
+            com.enigmacast.domain.remote.EnigmaKey.GREEN -> {
+                val channel = ui.own.channel
+                    ?: ui.own.channels.firstOrNull { it.reference.equals(ui.listFocusReference, true) }
+                    ?: ui.own.channels.firstOrNull()
+                if (channel != null) openChannelEpg(channel)
+                true
+            }
+            com.enigmacast.domain.remote.EnigmaKey.YELLOW -> {
+                closeChannelList()
+                openGuideFromBar()
+                true
+            }
+            com.enigmacast.domain.remote.EnigmaKey.BLUE -> {
+                closeChannelList()
+                openQuickBar()
+                true
+            }
+            else -> false
+        }
+    }
+
     private fun handleOwnKey(event: KeyEvent): Boolean {
         val action = OwnTunerKeys.action(event.keyCode)
         val ui = _ui.value
@@ -1431,6 +1462,11 @@ class RemoteDisplayViewModel @Inject constructor(
             return true
         }
         if (ui.channelList) {
+            // Classic HD: coloured buttons map to bouquets / EPG / guide / options.
+            if (ui.osdSkin == com.enigmacast.domain.model.OsdSkinId.OPENPLI &&
+                event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
+                handlePliColourKey(event.keyCode, ui)
+            ) return true
             // Left in the channel list reveals the bouquets, Left in a channel's programme panel
             // goes back to that channel; everything else is plain Compose focus and clicks in the
             // list (Right on a channel or bouquet is handled there).
@@ -1450,7 +1486,8 @@ class RemoteDisplayViewModel @Inject constructor(
             OwnKeyAction.OK -> if (!down) {
                 val tuner = ui.own.tuner.status
                 val trouble = tuner == TunerStatus.FULL || tuner == TunerStatus.PROBLEM
-                when (com.enigmacast.domain.tuner.BannerOk.decide(trouble, radio, ui.banner, ui.bannerFromZap)) {
+                val classicList = ui.osdSkin == com.enigmacast.domain.model.OsdSkinId.OPENPLI
+                when (com.enigmacast.domain.tuner.BannerOk.decide(trouble, radio, ui.banner, ui.bannerFromZap, classicList)) {
                     com.enigmacast.domain.tuner.BannerOk.Action.RETRY -> ownSession.retry()
                     // The banner a zap brought up: the info banner at once (timer restarted), so
                     // Down reaches the options without waiting; a second OK pauses.
@@ -1460,6 +1497,8 @@ class RemoteDisplayViewModel @Inject constructor(
                     // An internet stream cannot pause, so OK still opens the list there.
                     com.enigmacast.domain.tuner.BannerOk.Action.PAUSE_OR_LIST -> if (!playback.toggleTimeshiftPause()) openChannelList()
                     com.enigmacast.domain.tuner.BannerOk.Action.SHOW_BANNER -> if (radio) showBanner() else openOkOsd()
+                    // Classic HD skin: OK opens the channel list like a receiver GUI.
+                    com.enigmacast.domain.tuner.BannerOk.Action.OPEN_LIST -> openChannelList()
                 }
             }
             OwnKeyAction.DIGIT -> if (down && event.repeatCount == 0) pushDigit(OwnTunerKeys.digit(event.keyCode))

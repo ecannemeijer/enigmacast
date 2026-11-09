@@ -191,7 +191,7 @@ object Skins {
     )
 
     /**
-     * OpenPLi PLi-HD (littlesat/skin-PLiHD, PLi-HD/skin.xml): near-black #101214 screens,
+     * Classic HD (PLi-HD style bar): near-black #101214 screens,
      * a glossy blue-grey selection bar (buttons/sel.png) with secondFG yellow text, yellow
      * clock and accents, grey secondary text, square corners, one semi-bold sans font.
      */

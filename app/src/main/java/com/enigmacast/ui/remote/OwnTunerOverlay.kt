@@ -271,19 +271,34 @@ fun OwnTunerOverlay(
             }
         }
         if (ui.channelList) {
-            ChannelListOverlay(
-                ui = ui,
-                numberOf = numberOf,
-                picon = picon,
-                cachedPicon = cachedPicon,
-                onZap = onZap,
-                onChooseBouquet = onChooseBouquet,
-                guideActions = guideActions,
-                scrim = scrim,
-                channelList = channelList,
-                bouquetList = bouquetList,
-                modifier = Modifier.align(Alignment.CenterStart),
-            )
+            if (ActiveSkin.current.osd == OsdLayout.PLI_BAR) {
+                PliChannelListOverlay(
+                    ui = ui,
+                    numberOf = numberOf,
+                    picon = picon,
+                    cachedPicon = cachedPicon,
+                    onZap = onZap,
+                    onChooseBouquet = onChooseBouquet,
+                    guideActions = guideActions,
+                    channelList = channelList,
+                    bouquetList = bouquetList,
+                    modifier = Modifier.align(Alignment.CenterStart),
+                )
+            } else {
+                ChannelListOverlay(
+                    ui = ui,
+                    numberOf = numberOf,
+                    picon = picon,
+                    cachedPicon = cachedPicon,
+                    onZap = onZap,
+                    onChooseBouquet = onChooseBouquet,
+                    guideActions = guideActions,
+                    scrim = scrim,
+                    channelList = channelList,
+                    bouquetList = bouquetList,
+                    modifier = Modifier.align(Alignment.CenterStart),
+                )
+            }
         }
         ui.programmePrompt?.let { prompt -> ProgrammeDialog(prompt, guideActions) }
     }

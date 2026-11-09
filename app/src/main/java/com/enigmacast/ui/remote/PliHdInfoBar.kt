@@ -47,7 +47,7 @@ import java.time.format.DateTimeFormatter
  * Colours of the OpenPLi PLi-HD skin (littlesat/skin-PLiHD, PLi-HD/skin.xml `<colors>`).
  * Enigma2 writes #AARRGGBB with the alpha inverted (00 is opaque); these are converted.
  */
-internal object PliHd {
+object PliHd {
     val Foreground = Color(0xFFF0F0F0)      // foreground / white
     val Grey = Color(0xFFAAAAAA)            // grey: next event
     val DarkGrey = Color(0xFF555556)        // darkgrey
