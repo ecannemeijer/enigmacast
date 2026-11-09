@@ -1898,4 +1898,14 @@
     <string name="home_add_receiver_action">Ajouter un récepteur Enigma2</string>
     <string name="nav_tv_needs_receiver">Ajoutez un récepteur Enigma2 dans Paramètres → Récepteurs pour regarder la TV satellite ou câble.</string>
     <string name="receivers_add_enigma2">Ajouter un récepteur Enigma2</string>
+    <string name="setup_iptv_provider_title">Ajouter un fournisseur IPTV</string>
+    <string name="setup_iptv_provider_body">Saisissez votre identifiant Xtream ou une URL de liste M3U. Vous pouvez tester la connexion ici, ou ignorer et ajouter un fournisseur plus tard dans Paramètres.</string>
+    <string name="setup_name_iptv_provider">Fournisseur IPTV</string>
+    <string name="setup_iptv_provider_skip">Configurer plus tard / ignorer</string>
+    <string name="setup_iptv_provider_xtream_desc">URL du serveur, nom d\'utilisateur et mot de passe de votre fournisseur IPTV.</string>
+    <string name="setup_iptv_provider_m3u_desc">Une adresse de liste M3U ou M3U8 directe.</string>
+    <string name="setup_iptv_provider_ok">Fournisseur connecté. La liste des chaînes se charge en arrière-plan.</string>
+    <string name="setup_iptv_provider_failed">Impossible d\'atteindre ce fournisseur. Vérifiez les informations, ou ignorez et réessayez plus tard dans Paramètres.</string>
+    <string name="setup_iptv_provider_later">Vous pourrez ajouter d\'autres fournisseurs plus tard dans Paramètres → IPTV.</string>
+    <string name="setup_done_body_minimal">Vous pouvez démarrer avec EnigmaCast et ajouter plus tard un récepteur ou un fournisseur IPTV dans Paramètres. Tout ce que vous avez ignoré s\'y configure.</string>
 </resources>

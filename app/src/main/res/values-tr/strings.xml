@@ -1897,4 +1897,14 @@
     <string name="home_add_receiver_action">Enigma2 alıcı ekle</string>
     <string name="nav_tv_needs_receiver">Uydu veya kablo TV izlemek için Ayarlar → Alıcılar bölümünden bir Enigma2 alıcı ekleyin.</string>
     <string name="receivers_add_enigma2">Enigma2 alıcı ekle</string>
+    <string name="setup_iptv_provider_title">IPTV sağlayıcı ekle</string>
+    <string name="setup_iptv_provider_body">Xtream girişinizi veya bir M3U oynatma listesi URL\'sini girin. Bağlantıyı burada test edebilir veya atlayıp daha sonra Ayarlar\'dan ekleyebilirsiniz.</string>
+    <string name="setup_name_iptv_provider">IPTV sağlayıcı</string>
+    <string name="setup_iptv_provider_skip">Sonra ayarla / atla</string>
+    <string name="setup_iptv_provider_xtream_desc">IPTV sağlayıcınızın sunucu URL\'si, kullanıcı adı ve şifresi.</string>
+    <string name="setup_iptv_provider_m3u_desc">Doğrudan bir M3U veya M3U8 oynatma listesi adresi.</string>
+    <string name="setup_iptv_provider_ok">Sağlayıcı bağlandı. Kanal listesi arka planda yükleniyor.</string>
+    <string name="setup_iptv_provider_failed">Bu sağlayıcıya ulaşılamadı. Bilgileri kontrol edin veya atlayıp daha sonra Ayarlar\'dan deneyin.</string>
+    <string name="setup_iptv_provider_later">Daha sonra Ayarlar → IPTV altında başka sağlayıcılar ekleyebilirsiniz.</string>
+    <string name="setup_done_body_minimal">EnigmaCast ile başlayıp daha sonra Ayarlar\'dan bir alıcı veya IPTV sağlayıcı ekleyebilirsiniz. Attığınız adımları oradan tamamlayabilirsiniz.</string>
 </resources>

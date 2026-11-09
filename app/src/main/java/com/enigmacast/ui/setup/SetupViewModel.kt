@@ -120,7 +120,25 @@ class SetupViewModel @Inject constructor(
     var iptvProviders by mutableStateOf<List<com.enigmacast.data.xtream.IptvProvider>>(emptyList())
         private set
     var iptvSelected by mutableStateOf<Set<String>>(emptySet())
+
+    /** Manual IPTV provider step (Xtream / M3U) in the wizard. */
+    var providerKind by mutableStateOf(com.enigmacast.domain.model.IptvPlaylistKind.XTREAM)
         private set
+    var providerName by mutableStateOf("")
+    var providerM3u by mutableStateOf("")
+    var providerServer by mutableStateOf("")
+    var providerUser by mutableStateOf("")
+    var providerPass by mutableStateOf("")
+    var providerBusy by mutableStateOf(false)
+        private set
+    var providerFailed by mutableStateOf(false)
+        private set
+    var providerOk by mutableStateOf(false)
+        private set
+    var providerSavedId by mutableStateOf<String?>(null)
+        private set
+    /** True when at least one configured IPTV provider is stored (for Done hint). */
+    fun hasIptvProvider(): Boolean = playlistStore.providers.value.any { it.enabled && it.configured() }
 
     fun toggleIptvProvider(id: String) {
         iptvSelected = if (id in iptvSelected) iptvSelected - id else iptvSelected + id
@@ -160,6 +178,7 @@ class SetupViewModel @Inject constructor(
         SetupStep.SYNC_LINK -> syncLinked
         SetupStep.PROFILE -> profileName.isNotBlank() && (creatingProfile || namedProfiles(profiles.state.value).isEmpty())
         SetupStep.IPTV_OFFER -> false
+        SetupStep.IPTV_PROVIDER -> providerOk && !providerBusy
         else -> true
     }
 
@@ -168,6 +187,7 @@ class SetupViewModel @Inject constructor(
         SetupStep.ACCOUNT -> !conditions().accountRequired && accountState.value == null
         SetupStep.SYNC_LINK -> !syncLinked && !syncLinking
         SetupStep.IPTV_OFFER -> !iptvBusy
+        SetupStep.IPTV_PROVIDER -> !providerBusy
         else -> true
     }
 
@@ -175,6 +195,10 @@ class SetupViewModel @Inject constructor(
         when (step) {
             SetupStep.DONE -> return
             SetupStep.RECEIVER -> leaveReceiver()
+            SetupStep.IPTV_PROVIDER -> {
+                if (providerOk) go(forward(SetupStep.IPTV_PROVIDER))
+                else testAndSaveProvider()
+            }
             SetupStep.SYNC_LINK -> leaveSyncLink()
             SetupStep.PROFILE -> viewModelScope.launch {
                 saveProfile()
@@ -195,6 +219,10 @@ class SetupViewModel @Inject constructor(
                 // IPTV-only: no Enigma2 box. Viewing is omitted by SetupFlow when hasReceiver is false.
                 leavingReceiver = false
                 go(forward(SetupStep.RECEIVER))
+            }
+            SetupStep.IPTV_PROVIDER -> {
+                providerBusy = false
+                go(forward(SetupStep.IPTV_PROVIDER))
             }
             SetupStep.SYNC_LINK -> stayStandalone()
             SetupStep.IPTV_OFFER -> leaveIptv()
@@ -315,6 +343,76 @@ class SetupViewModel @Inject constructor(
             }
             iptvAnswered = true
             go(SetupFlow.next(SetupStep.IPTV_OFFER, conditions()))
+        }
+    }
+
+
+    fun chooseProviderKind(kind: com.enigmacast.domain.model.IptvPlaylistKind) {
+        providerKind = kind
+        providerFailed = false
+        providerOk = false
+    }
+
+    /** Clears the last test result when the viewer edits a field. */
+    fun touchProviderDraft() {
+        providerFailed = false
+        providerOk = false
+    }
+
+    private fun draftProvider(): com.enigmacast.data.xtream.IptvProvider =
+        com.enigmacast.data.xtream.IptvProvider(
+            id = providerSavedId.orEmpty(),
+            name = providerName.trim().ifBlank {
+                if (providerKind == com.enigmacast.domain.model.IptvPlaylistKind.M3U) "M3U" else "Xtream"
+            },
+            kind = providerKind,
+            m3uUrl = providerM3u.trim(),
+            server = providerServer.trim(),
+            username = providerUser.trim(),
+            password = providerPass,
+            enabled = true,
+        )
+
+    /** Saves the draft provider and loads its playlist (test connection). */
+    fun testAndSaveProvider() {
+        if (providerBusy) return
+        val draft = draftProvider()
+        if (!draft.configured()) {
+            providerFailed = true
+            providerOk = false
+            return
+        }
+        providerBusy = true
+        providerFailed = false
+        viewModelScope.launch {
+            try {
+                val saved = withContext(Dispatchers.IO) { playlistStore.saveProvider(draft) }
+                providerSavedId = saved.id
+                settings.update {
+                    it.copy(
+                        iptvSource = com.enigmacast.domain.model.IptvSourceMode.PLAYLIST,
+                        iptvPlaylistKind = saved.kind,
+                    )
+                }
+                val result = withContext(Dispatchers.IO) { iptvPlaylist.loadOne(saved.id) }
+                if (result is com.enigmacast.data.xtream.IptvLoadResult.Failure) {
+                    providerFailed = true
+                    providerOk = false
+                    EnigmaLog.service("setup iptv provider test failed: $result")
+                } else {
+                    providerOk = true
+                    providerFailed = false
+                    // Background load already done by loadOne; arm for any follow-up sync.
+                    syncEngine.armIptvLoad()
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                providerFailed = true
+                providerOk = false
+                EnigmaLog.service("setup iptv provider save failed: ${e.javaClass.simpleName}")
+            } finally {
+                providerBusy = false
+            }
         }
     }
 
@@ -501,7 +599,9 @@ class SetupViewModel @Inject constructor(
                     add(com.enigmacast.activity.ActivityKind.CHANNELS)
                     add(com.enigmacast.activity.ActivityKind.GUIDE)
                 }
-                if (playlist && iptvPlaylist.hasLogin(current.iptvPlaylistKind)) add(com.enigmacast.activity.ActivityKind.IPTV)
+                if ((playlist || hasIptvProvider()) && iptvPlaylist.hasLogin(current.iptvPlaylistKind)) {
+                    add(com.enigmacast.activity.ActivityKind.IPTV)
+                }
                 if (paired) add(com.enigmacast.activity.ActivityKind.SYNC_SERVER)
             }
             activity.beginInitialSetup(expected)
@@ -520,5 +620,15 @@ class SetupViewModel @Inject constructor(
         iptvSelected = emptySet()
         iptvAnswered = false
         iptvFailed = false
+        providerKind = com.enigmacast.domain.model.IptvPlaylistKind.XTREAM
+        providerName = ""
+        providerM3u = ""
+        providerServer = ""
+        providerUser = ""
+        providerPass = ""
+        providerBusy = false
+        providerFailed = false
+        providerOk = false
+        providerSavedId = null
     }
 }
