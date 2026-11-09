@@ -14,6 +14,8 @@ enum class AppLanguage(val tag: String, val nativeName: String) {
     GERMAN("de", "Deutsch"),
     ITALIAN("it", "Italiano"),
     FRENCH("fr", "Français"),
+    TURKISH("tr", "Türkçe"),
+    POLISH("pl", "Polski"),
     ;
 
     companion object {

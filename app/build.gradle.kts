@@ -28,7 +28,7 @@ android {
 
     // The app's languages (see AppLanguage and res/xml/locales_config.xml); other library translations are left out.
     androidResources {
-        localeFilters += listOf("en", "nl", "de", "it", "fr")
+        localeFilters += listOf("en", "nl", "de", "it", "fr", "tr", "pl")
     }
 
     buildTypes {

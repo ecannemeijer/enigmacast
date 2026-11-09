@@ -175,6 +175,9 @@
     <string name="lang_english">English</string>
     <string name="lang_german">German</string>
     <string name="lang_french">French</string>
+    <string name="lang_italian">Italian</string>
+    <string name="lang_turkish">Turkish</string>
+    <string name="lang_polish">Polish</string>
     <string name="lang_original">Original</string>
     <string name="lang_multi">Multilingual</string>
     <string name="lang_audio_description">Audio description</string>
