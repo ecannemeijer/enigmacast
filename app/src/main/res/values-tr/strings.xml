@@ -1915,4 +1915,11 @@
     <string name="pli_hint_yellow">Rehber</string>
     <string name="pli_hint_blue">Seçenekler</string>
     <string name="pli_hint_ok">OK: izle</string>
+    <string name="iptv_refresh_interval">Liste yenileme</string>
+    <string name="iptv_refresh_interval_desc">Uygulamanın listeyi arka planda ne sıklıkla yenileyeceği. İstediğiniz zaman kendiniz yenileyebilirsiniz.</string>
+    <string name="iptv_refresh_6h">Her 6 saatte bir</string>
+    <string name="iptv_refresh_12h">Her 12 saatte bir</string>
+    <string name="iptv_refresh_24h">Her 24 saatte bir</string>
+    <string name="iptv_refresh_48h">Her 48 saatte bir</string>
+    <string name="iptv_refresh_manual">Yalnızca elle</string>
 </resources>

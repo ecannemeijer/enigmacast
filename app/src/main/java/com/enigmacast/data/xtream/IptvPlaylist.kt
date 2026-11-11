@@ -7,6 +7,9 @@ import com.enigmacast.data.db.IptvDao
 import com.enigmacast.data.db.IptvItemRow
 import com.enigmacast.data.security.SecretStore
 import com.enigmacast.domain.model.IptvPlaylistKind
+import com.enigmacast.domain.model.IptvRefreshInterval
+import com.enigmacast.domain.xtream.IptvRefresh
+import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.xtream.M3uPlaylist
 import com.enigmacast.domain.xtream.XStreamityPlaylists
 import com.enigmacast.domain.xtream.XtreamAccount
@@ -332,6 +335,7 @@ class IptvPlaylistSync @Inject constructor(
     private val dao: IptvDao,
     private val store: IptvPlaylistStore,
     private val activity: com.enigmacast.activity.BackgroundActivityTracker,
+    private val settingsRepository: SettingsRepository,
 ) {
     private val gate = Mutex()
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
@@ -354,14 +358,15 @@ class IptvPlaylistSync @Inject constructor(
     val providerFailures: StateFlow<Map<String, IptvLoadResult.Failure>> = _providerFailures
 
     /**
-     * Fetches the playlist when a server login is waiting, or when the daily refresh is due.
+     * Fetches the playlist when a server login is waiting, or when the refresh interval is due.
      * [allow] is false until setup has finished, so this does not run beside the wizard's bouquet and guide download.
      */
     suspend fun loadTail(kind: IptvPlaylistKind, allow: Boolean): IptvLoadResult? {
         if (!allow) return null
         val armed = loadAfterCache
         val indexCatchup = store.needsCatchupIndex()
-        if (!armed && !indexCatchup && System.currentTimeMillis() - store.loadedAt < 24 * 60 * 60_000L) return null
+        val interval = settingsRepository.current().iptvRefreshInterval
+        if (!IptvRefresh.isDue(interval, store.loadedAt, System.currentTimeMillis(), armed, indexCatchup)) return null
         if (store.enabledProviders().isEmpty() && !store.login.value.configured(kind)) return null
         loadAfterCache = false
         val result = load(kind)
@@ -705,10 +710,10 @@ class IptvPlaylistSync @Inject constructor(
         }
     }
 
-    /** Background refresh (WorkManager): once a day in playlist mode. */
-    suspend fun refreshIfDue(kind: IptvPlaylistKind, maxAgeMs: Long = 24 * 60 * 60_000L): IptvLoadResult? {
+    /** Background refresh (WorkManager): respects the playlist refresh interval. */
+    suspend fun refreshIfDue(kind: IptvPlaylistKind, interval: IptvRefreshInterval = IptvRefreshInterval.EVERY_24H): IptvLoadResult? {
         if (store.enabledProviders().isEmpty() && !store.login.value.configured(kind)) return null
-        if (System.currentTimeMillis() - store.loadedAt < maxAgeMs) return null
+        if (!IptvRefresh.isDue(interval, store.loadedAt, System.currentTimeMillis())) return null
         return load(kind)
     }
 

@@ -336,6 +336,8 @@ data class AppSettings(
     /** Settings › IPTV: where the IPTV page gets its lists. Logins of a playlist are in the SecretStore. */
     val iptvSource: IptvSourceMode = IptvSourceMode.XSTREAMITY,
     val iptvPlaylistKind: IptvPlaylistKind = IptvPlaylistKind.M3U,
+    /** Settings › IPTV: how often a playlist is refreshed in the background. */
+    val iptvRefreshInterval: IptvRefreshInterval = IptvRefreshInterval.EVERY_24H,
     /**
      * SubSource language slugs offered for IPTV films and series.
      * Null means the choice was never saved, so the app language is used.
@@ -541,3 +543,19 @@ enum class IptvSourceMode { XSTREAMITY, PLAYLIST }
 
 @Serializable
 enum class IptvPlaylistKind { M3U, XTREAM }
+
+/**
+ * How often the IPTV playlist is fetched again in the background.
+ * [MANUAL] only reloads when the viewer asks; the default is once a day, as before.
+ */
+enum class IptvRefreshInterval(val hours: Int?) {
+    EVERY_6H(6),
+    EVERY_12H(12),
+    EVERY_24H(24),
+    EVERY_48H(48),
+    MANUAL(null),
+    ;
+
+    val maxAgeMs: Long? get() = hours?.let { it * 60L * 60_000L }
+}
+

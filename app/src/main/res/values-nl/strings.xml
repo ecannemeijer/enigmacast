@@ -1908,4 +1908,11 @@
     <string name="pli_hint_yellow">Gids</string>
     <string name="pli_hint_blue">Opties</string>
     <string name="pli_hint_ok">OK: kijken</string>
+    <string name="iptv_refresh_interval">Afspeellijst vernieuwen</string>
+    <string name="iptv_refresh_interval_desc">Hoe vaak de app de afspeellijst op de achtergrond opnieuw ophaalt. Je kunt altijd zelf vernieuwen.</string>
+    <string name="iptv_refresh_6h">Elke 6 uur</string>
+    <string name="iptv_refresh_12h">Elke 12 uur</string>
+    <string name="iptv_refresh_24h">Elke 24 uur</string>
+    <string name="iptv_refresh_48h">Elke 48 uur</string>
+    <string name="iptv_refresh_manual">Alleen handmatig</string>
 </resources>

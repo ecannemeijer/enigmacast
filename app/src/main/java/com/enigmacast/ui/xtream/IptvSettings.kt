@@ -52,6 +52,7 @@ import com.enigmacast.data.xtream.IptvPlaylistStore
 import com.enigmacast.data.xtream.IptvPlaylistSync
 import com.enigmacast.data.xtream.IptvProvider
 import com.enigmacast.domain.model.IptvPlaylistKind
+import com.enigmacast.domain.model.IptvRefreshInterval
 import com.enigmacast.domain.model.IptvSourceMode
 import com.enigmacast.ui.components.EnigmaLoadingIndicator
 import com.enigmacast.domain.subsource.SubSourceLanguages
@@ -225,6 +226,12 @@ class IptvSettingsViewModel @Inject constructor(
 
     fun setMode(mode: IptvSourceMode) = viewModelScope.launch { settingsRepository.update { it.copy(iptvSource = mode) } }
     fun setKind(kind: IptvPlaylistKind) = viewModelScope.launch { settingsRepository.update { it.copy(iptvPlaylistKind = kind) } }
+    val refreshInterval: StateFlow<IptvRefreshInterval> = settingsRepository.settings
+        .map { it.iptvRefreshInterval }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IptvRefreshInterval.EVERY_24H)
+    fun setRefreshInterval(interval: IptvRefreshInterval) = viewModelScope.launch {
+        settingsRepository.update { it.copy(iptvRefreshInterval = interval) }
+    }
 
     /** Saves the fields of the selected provider, writes it to the sync server, and reloads all. */
     fun saveProvider(provider: com.enigmacast.data.xtream.IptvProvider): com.enigmacast.data.xtream.IptvProvider? {
@@ -408,6 +415,22 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
         }
 
         SettingsCard(stringResource(R.string.iptv_manage_card)) {
+            val refreshOptions = IptvRefreshInterval.entries
+            val refresh by model.refreshInterval.collectAsStateWithLifecycle()
+            ChoiceRow(
+                title = stringResource(R.string.iptv_refresh_interval),
+                description = stringResource(R.string.iptv_refresh_interval_desc),
+                options = listOf(
+                    stringResource(R.string.iptv_refresh_6h),
+                    stringResource(R.string.iptv_refresh_12h),
+                    stringResource(R.string.iptv_refresh_24h),
+                    stringResource(R.string.iptv_refresh_48h),
+                    stringResource(R.string.iptv_refresh_manual),
+                ),
+                selectedIndex = refreshOptions.indexOf(refresh).coerceAtLeast(0),
+                onSelect = { model.setRefreshInterval(refreshOptions[it]) },
+            )
+
             ValueRow(
                 title = stringResource(R.string.iptv_categories_manage),
                 value = "›",

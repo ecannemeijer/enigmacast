@@ -1917,4 +1917,11 @@
     <string name="pli_hint_yellow">Guide</string>
     <string name="pli_hint_blue">Options</string>
     <string name="pli_hint_ok">OK : regarder</string>
+    <string name="iptv_refresh_interval">Actualisation de la liste</string>
+    <string name="iptv_refresh_interval_desc">À quelle fréquence l\'application recharge la liste en arrière-plan. Vous pouvez toujours l\'actualiser vous-même.</string>
+    <string name="iptv_refresh_6h">Toutes les 6 heures</string>
+    <string name="iptv_refresh_12h">Toutes les 12 heures</string>
+    <string name="iptv_refresh_24h">Toutes les 24 heures</string>
+    <string name="iptv_refresh_48h">Toutes les 48 heures</string>
+    <string name="iptv_refresh_manual">Manuel uniquement</string>
 </resources>
