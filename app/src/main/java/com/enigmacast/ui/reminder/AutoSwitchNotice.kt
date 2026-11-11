@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.domain.reminder.ReminderKind
 import com.enigmacast.domain.reminder.ReminderNotice
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaIcons
@@ -60,7 +61,7 @@ fun AutoSwitchNotice(notice: ReminderNotice, modifier: Modifier = Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(EnigmaIcons.Timer, contentDescription = null, tint = EnigmaColors.Accent, modifier = Modifier.size(18.dp))
             Text(
-                "  " + stringResource(R.string.autoswitch_notice_title),
+                "  " + stringResource(if (reminder.kind == ReminderKind.REMIND) R.string.iptv_reminder_notice_title else R.string.autoswitch_notice_title),
                 color = EnigmaColors.Accent,
                 fontSize = 14.sp,
                 fontWeight = EnigmaType.Strong,
@@ -68,7 +69,11 @@ fun AutoSwitchNotice(notice: ReminderNotice, modifier: Modifier = Modifier) {
         }
         Text(
             stringResource(
-                if (begun) R.string.autoswitch_notice_started else R.string.autoswitch_notice,
+                when {
+                    reminder.kind == ReminderKind.REMIND -> R.string.iptv_reminder_notice
+                    begun -> R.string.autoswitch_notice_started
+                    else -> R.string.autoswitch_notice
+                },
                 reminder.title,
                 reminder.channelName,
                 seconds,
@@ -89,7 +94,7 @@ fun AutoSwitchNotice(notice: ReminderNotice, modifier: Modifier = Modifier) {
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 2.dp)) {
-            KeyHint(stringResource(R.string.autoswitch_key_ok), stringResource(R.string.autoswitch_switch_now))
+            KeyHint(stringResource(R.string.autoswitch_key_ok), stringResource(if (reminder.kind == ReminderKind.REMIND) R.string.iptv_reminder_watch else R.string.autoswitch_switch_now))
             KeyHint(stringResource(R.string.autoswitch_key_back), stringResource(R.string.cancel))
         }
     }

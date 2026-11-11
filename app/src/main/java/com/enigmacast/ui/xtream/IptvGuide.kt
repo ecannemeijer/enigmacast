@@ -29,6 +29,14 @@ object IptvGuideRows {
 
     fun reference(streamId: String): String = PREFIX + streamId.replace(':', '_')
 
+    /** How far back the IPTV grid can scroll, so catch-up programmes stay reachable. */
+    const val LOOKBACK_SEC = 7 * 24 * 60 * 60L
+
+    fun isIptvReference(reference: String): Boolean = reference.startsWith(PREFIX)
+
+    fun streamId(reference: String): String? =
+        reference.takeIf { it.startsWith(PREFIX) }?.removePrefix(PREFIX)
+
     fun entry(item: XtreamItem, index: Int): BouquetEntry =
         BouquetEntry(name = item.name, reference = reference(item), number = item.number.takeIf { it > 0 } ?: (index + 1))
 
@@ -97,7 +105,7 @@ class IptvGuide(
     private val listings: suspend (List<XtreamItem>, onRow: (XtreamItem, List<XtreamEpg>) -> Unit) -> Unit,
     clock: () -> Long = { System.currentTimeMillis() / 1000 },
 ) {
-    val grid = GuideGridController(scope, { _, _ -> emptyList() }, clock)
+    val grid = GuideGridController(scope, { _, _ -> emptyList() }, clock, IptvGuideRows.LOOKBACK_SEC)
 
     var categories by mutableStateOf<List<XtreamCategory>>(emptyList())
         private set

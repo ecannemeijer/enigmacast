@@ -41,6 +41,7 @@ class GuideGridController(
     /** One 3-hour block of the shown list's programmes; null when it failed (asked again on refresh). */
     private val loadChunk: suspend (bouquetReference: String, chunkStartSec: Long) -> List<GuideEvent>?,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
+    private val lookbackSec: Long = 0L,
 ) {
     /** The receiver's bouquets (OpenWebif, cached in [GuideRepository]). */
     constructor(
@@ -82,7 +83,7 @@ class GuideGridController(
             it.copy(
                 bouquetReference = bouquetReference,
                 channels = channels,
-                cursor = GuideTimeline.clamp(cursor, now, channels.size),
+                cursor = GuideTimeline.clamp(cursor, now, channels.size, lookbackSec),
                 events = if (sameBouquet) it.events else emptyMap(),
                 failed = false,
             )
@@ -98,7 +99,7 @@ class GuideGridController(
         pendingFocus = null
         val now = clock()
         val channels = _state.value.channels
-        _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(0, now, GuideTimeline.slotFloor(now)), now, channels.size)) }
+        _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(0, now, GuideTimeline.slotFloor(now)), now, channels.size, lookbackSec)) }
         ensureData()
     }
 
@@ -116,7 +117,7 @@ class GuideGridController(
             return false
         }
         pendingFocus = null
-        _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(row, now, GuideTimeline.slotFloor(now)), now, channels.size)) }
+        _state.update { it.copy(cursor = GuideTimeline.clamp(GuideCursor(row, now, GuideTimeline.slotFloor(now)), now, channels.size, lookbackSec)) }
         ensureData()
         return true
     }
@@ -142,7 +143,7 @@ class GuideGridController(
     fun moveRows(delta: Int) {
         val state = _state.value
         val rows = state.channels.size
-        val cursor = GuideTimeline.clamp(GuideTimeline.moveVertical(state.cursor, delta, rows), clock(), rows)
+        val cursor = GuideTimeline.clamp(GuideTimeline.moveVertical(state.cursor, delta, rows), clock(), rows, lookbackSec)
         _state.update { it.copy(cursor = cursor) }
         if (cursor.windowStartSec != state.cursor.windowStartSec) ensureData()
     }
@@ -152,8 +153,8 @@ class GuideGridController(
         val state = _state.value
         val entry = state.focusedChannel ?: return direction > 0
         val now = clock()
-        val cursor = GuideTimeline.clamp(state.cursor, now, state.channels.size)
-        val move = GuideTimeline.moveHorizontal(state.eventsOf(entry), cursor, direction, now)
+        val cursor = GuideTimeline.clamp(state.cursor, now, state.channels.size, lookbackSec)
+        val move = GuideTimeline.moveHorizontal(state.eventsOf(entry), cursor, direction, now, lookbackSec)
         if (move.atLeftEdge) return false
         _state.update { it.copy(cursor = move.cursor) }
         if (move.cursor.windowStartSec != state.cursor.windowStartSec) ensureData()
@@ -164,7 +165,7 @@ class GuideGridController(
     fun focused(): Pair<BouquetEntry, GuideCell>? {
         val state = _state.value
         val entry = state.focusedChannel ?: return null
-        val cell = GuideTimeline.focusedCell(state.eventsOf(entry), state.cursor, clock()) ?: return null
+        val cell = GuideTimeline.focusedCell(state.eventsOf(entry), state.cursor, clock(), lookbackSec) ?: return null
         return entry to cell
     }
 

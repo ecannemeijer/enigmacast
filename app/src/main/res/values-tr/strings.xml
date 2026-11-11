@@ -1937,4 +1937,11 @@
     <string name="iptv_provider_user_agent_desc">Uygulamanın varsayılanını kullanmak için boş bırakın (EnigmaCast).</string>
     <string name="iptv_provider_headers">HTTP başlıkları</string>
     <string name="iptv_provider_headers_desc">Her satıra bir başlık, örneğin Referer: http://example.com</string>
+    <string name="iptv_catchup_badge">Tekrar</string>
+    <string name="iptv_guide_future">%1$s — bu program henüz başlamadı.</string>
+    <string name="iptv_reminder_set">Anımsat</string>
+    <string name="iptv_reminder_cancel">Anımsatıcıyı kapat</string>
+    <string name="iptv_reminder_notice_title">Anımsatıcı</string>
+    <string name="iptv_reminder_notice">%1$s, %2$s kanalında başlıyor. İzlemek için OK tuşuna basın.</string>
+    <string name="iptv_reminder_watch">İzle</string>
 </resources>

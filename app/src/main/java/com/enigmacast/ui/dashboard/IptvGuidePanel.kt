@@ -36,6 +36,13 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.enigmacast.R
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.enigmacast.ui.theme.TvChoiceDialog
+import com.enigmacast.domain.reminder.ReminderKind
+import com.enigmacast.domain.xtream.XtreamEpg
+import com.enigmacast.domain.xtream.IptvGuideOk
+import com.enigmacast.domain.xtream.IptvGuideAction
+import com.enigmacast.domain.xtream.Catchup
 import com.enigmacast.domain.model.BouquetEntry
 import com.enigmacast.ui.remote.GuideDetails
 import com.enigmacast.ui.remote.GuideTimelineGrid
@@ -50,7 +57,7 @@ import kotlinx.coroutines.delay
  * with the highlighted programme, and the channels of one live category as a programme grid.
  * It opens on the playing channel (else the last watched one) at the current time. OK on a
  * programme on air plays that channel full screen; Left on the programme on air opens the
- * categories. Back is left to the caller (to the menu). No catch-up.
+ * categories. Back is left to the caller (to the menu). OK on a past programme with catch-up plays the archive; a future one offers a reminder or AutoSwitch.
  */
 @Composable
 internal fun IptvGuidePanel(
@@ -99,6 +106,20 @@ internal fun IptvGuidePanel(
     val focusedCell = remember(grid, nowSec) { guide.grid.focused()?.second }
     val noGuide = stringResource(R.string.epg_no_guide_info)
     val checked = guide.checked
+    val scheduledKeys by model.scheduledReminderKeys.collectAsStateWithLifecycle()
+    val catchupKeys = remember(grid, nowSec) {
+        grid.channels.flatMap { entry ->
+            val item = guide.itemOf(entry) ?: return@flatMap emptyList()
+            grid.eventsOf(entry).filter { event ->
+                Catchup.canPlay(
+                    item,
+                    XtreamEpg(event.title, event.beginEpochSec, event.endEpochSec, event.description),
+                    nowSec,
+                )
+            }.map { it.programmeKey }
+        }.toSet()
+    }
+    var futurePrompt by remember { mutableStateOf<Pair<com.enigmacast.domain.model.BouquetEntry, com.enigmacast.domain.epg.GuideCell>?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().height(IptvMiniHeight),
@@ -154,6 +175,8 @@ internal fun IptvGuidePanel(
                 picon = { entry -> guide.itemOf(entry)?.icon?.takeIf { it.isNotBlank() }?.let { model.logo(it) } },
                 cachedPicon = { entry -> guide.itemOf(entry)?.icon?.takeIf { it.isNotBlank() }?.let(model::cachedLogo) },
                 emptyLabel = { entry -> noGuide.takeIf { entry.reference in checked && grid.eventsOf(entry).isEmpty() } },
+                autoSwitchKeys = scheduledKeys,
+                catchupKeys = catchupKeys,
                 hint = stringResource(R.string.epg_iptv_guide_hint),
                 modifier = Modifier
                     .weight(1f)
@@ -170,9 +193,15 @@ internal fun IptvGuidePanel(
                             onTime = { guide.grid.moveTime(it) },
                             onOk = {
                                 val (entry, cell) = guide.grid.focused() ?: return@iptvGridKey
-                                if (cell.startSec > System.currentTimeMillis() / 1000) return@iptvGridKey
                                 val item = guide.itemOf(entry) ?: return@iptvGridKey
-                                if (model.playFromGuide(item)) onPlay()
+                                val event = cell.event
+                                val epg = event?.let { XtreamEpg(it.title, it.beginEpochSec, it.endEpochSec, it.description) }
+                                when (IptvGuideAction.decide(item, epg, System.currentTimeMillis() / 1000)) {
+                                    IptvGuideOk.WATCH_LIVE -> if (model.playFromGuide(item)) onPlay()
+                                    IptvGuideOk.PLAY_CATCHUP -> if (epg != null) { model.playCatchup(item, epg); onPlay() }
+                                    IptvGuideOk.PROMPT_FUTURE -> futurePrompt = entry to cell
+                                    IptvGuideOk.NONE -> Unit
+                                }
                             },
                             onCategories = {
                                 if (categoriesOpen) {
@@ -188,6 +217,59 @@ internal fun IptvGuidePanel(
             )
         }
     }
+    futurePrompt?.let { (entry, cell) ->
+        val event = cell.event
+        if (event == null) {
+            futurePrompt = null
+        } else {
+            val item = guide.itemOf(entry)
+            IptvFutureProgrammeDialog(
+                title = event.title.ifBlank { entry.name },
+                channelName = entry.name,
+                reminderSet = model.iptvReminderKind(event) == ReminderKind.REMIND,
+                autoSwitchSet = model.iptvReminderKind(event) == ReminderKind.AUTO_SWITCH,
+                onReminder = {
+                    model.toggleIptvReminder(event, entry.name, item?.providerId.orEmpty(), ReminderKind.REMIND)
+                    futurePrompt = null
+                },
+                onAutoSwitch = {
+                    model.toggleIptvReminder(event, entry.name, item?.providerId.orEmpty(), ReminderKind.AUTO_SWITCH)
+                    futurePrompt = null
+                },
+                onDismiss = { futurePrompt = null },
+            )
+        }
+    }
+}
+
+@Composable
+private fun IptvFutureProgrammeDialog(
+    title: String,
+    channelName: String,
+    reminderSet: Boolean,
+    autoSwitchSet: Boolean,
+    onReminder: () -> Unit,
+    onAutoSwitch: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    TvChoiceDialog(
+        title = title,
+        message = stringResource(R.string.iptv_guide_future, channelName),
+        choices = listOf(
+            stringResource(if (reminderSet) R.string.iptv_reminder_cancel else R.string.iptv_reminder_set),
+            stringResource(if (autoSwitchSet) R.string.autoswitch_cancel_action else R.string.autoswitch_action),
+            stringResource(R.string.cancel),
+        ),
+        stacked = true,
+        onChoose = { index ->
+            when (index) {
+                0 -> onReminder()
+                1 -> onAutoSwitch()
+                else -> onDismiss()
+            }
+        },
+        onDismiss = onDismiss,
+    )
 }
 
 private val IptvMiniHeight = 158.dp

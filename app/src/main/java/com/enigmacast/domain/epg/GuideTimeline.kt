@@ -63,12 +63,14 @@ object GuideTimeline {
         cells.firstOrNull { it.contains(sec) } ?: cells.firstOrNull { it.startSec >= sec } ?: cells.lastOrNull()
 
     /** Keeps the cursor inside the guide when time moves on: nothing before the current half hour. */
-    fun clamp(cursor: GuideCursor, nowSec: Long, rowCount: Int): GuideCursor {
-        val earliest = slotFloor(nowSec)
+    fun clamp(cursor: GuideCursor, nowSec: Long, rowCount: Int, lookbackSec: Long = 0L): GuideCursor {
+        val earliest = slotFloor(nowSec - lookbackSec.coerceAtLeast(0L))
+        val minFocus = if (lookbackSec > 0L) earliest else nowSec
+        val minWindow = if (lookbackSec > 0L) earliest else slotFloor(nowSec)
         return cursor.copy(
             row = if (rowCount <= 0) 0 else cursor.row.coerceIn(0, rowCount - 1),
-            focusSec = maxOf(cursor.focusSec, nowSec),
-            windowStartSec = maxOf(cursor.windowStartSec, earliest),
+            focusSec = maxOf(cursor.focusSec, minFocus),
+            windowStartSec = maxOf(cursor.windowStartSec, minWindow),
         )
     }
 
@@ -77,8 +79,8 @@ object GuideTimeline {
      * window once that programme starts beyond it. Left goes back; on the programme on air
      * now it reports the left edge, where the bouquet column opens.
      */
-    fun moveHorizontal(row: List<GuideEvent>, cursor: GuideCursor, direction: Int, nowSec: Long): GuideMove {
-        val earliest = slotFloor(nowSec)
+    fun moveHorizontal(row: List<GuideEvent>, cursor: GuideCursor, direction: Int, nowSec: Long, lookbackSec: Long = 0L): GuideMove {
+        val earliest = slotFloor(nowSec - lookbackSec.coerceAtLeast(0L))
         val cells = cells(row, earliest, earliest + HORIZON_SEC)
         val current = cellAt(cells, cursor.focusSec) ?: return GuideMove(cursor, atLeftEdge = direction < 0)
         val index = cells.indexOf(current)
@@ -88,9 +90,16 @@ object GuideTimeline {
             if (next.startSec >= window + WINDOW_SEC) window = maxOf(earliest, slotFloor(next.startSec) - SLOT_SEC)
             return GuideMove(cursor.copy(focusSec = next.startSec, windowStartSec = window))
         }
-        if (current.startSec <= maxOf(earliest, nowSec) || index == 0) return GuideMove(cursor, atLeftEdge = true)
+        val onAir = current.contains(nowSec) || (current.startSec <= nowSec && current.endSec > nowSec)
+        if (lookbackSec <= 0L) {
+            if (current.startSec <= maxOf(earliest, nowSec) || index == 0) return GuideMove(cursor, atLeftEdge = true)
+        } else if (onAir || (index == 0 && current.endSec > nowSec)) {
+            return GuideMove(cursor, atLeftEdge = true)
+        } else if (index == 0) {
+            return GuideMove(cursor)
+        }
         val previous = cells[index - 1]
-        val focus = maxOf(previous.startSec, nowSec)
+        val focus = maxOf(previous.startSec, if (lookbackSec > 0L) earliest else nowSec)
         var window = cursor.windowStartSec
         if (focus < window) window = maxOf(earliest, slotFloor(focus))
         return GuideMove(cursor.copy(focusSec = focus, windowStartSec = window))
@@ -111,9 +120,9 @@ object GuideTimeline {
     }
 
     /** The cell the guide highlights in one channel's row. */
-    fun focusedCell(row: List<GuideEvent>, cursor: GuideCursor, nowSec: Long): GuideCell? {
-        val earliest = slotFloor(nowSec)
-        val focus = maxOf(cursor.focusSec, nowSec)
+    fun focusedCell(row: List<GuideEvent>, cursor: GuideCursor, nowSec: Long, lookbackSec: Long = 0L): GuideCell? {
+        val earliest = slotFloor(nowSec - lookbackSec.coerceAtLeast(0L))
+        val focus = maxOf(cursor.focusSec, if (lookbackSec > 0L) earliest else nowSec)
         return cellAt(cells(row, earliest, maxOf(focus, cursor.windowStartSec + WINDOW_SEC) + SLOT_SEC), focus)
     }
 

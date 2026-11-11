@@ -4,6 +4,9 @@ import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.tuner.NowEvents
 import kotlinx.serialization.Serializable
 
+@Serializable
+enum class ReminderKind { AUTO_SWITCH, REMIND }
+
 /**
  * AutoSwitch: switch to [serviceReference] when the programme [title] begins at [beginEpochSec].
  * Ten seconds before, a notice counts down; then the app zaps unless the viewer cancels.
@@ -25,7 +28,7 @@ data class Reminder(
     companion object {
         fun keyOf(reference: String, beginEpochSec: Long): String = "${NowEvents.key(reference)}|$beginEpochSec"
 
-        fun of(event: GuideEvent, channelName: String, receiverId: String, nowMs: Long): Reminder = Reminder(
+        fun of(event: GuideEvent, channelName: String, receiverId: String, nowMs: Long, kind: ReminderKind = ReminderKind.AUTO_SWITCH, providerId: String = "): Reminder = Reminder(
             serviceReference = event.reference,
             channelName = channelName,
             eventId = event.eventId,
@@ -33,6 +36,8 @@ data class Reminder(
             beginEpochSec = event.beginEpochSec,
             receiverId = receiverId,
             createdAtMs = nowMs,
+            kind = kind,
+            providerId = providerId,
         )
     }
 }
@@ -60,13 +65,23 @@ object ReminderPlanner {
     const val NOTICE_SEC = 10L
     const val MIN_COUNTDOWN_SEC = 5L
     const val MISSED_AFTER_SEC = 120L
+    /** A reminder notice stays this long after the start so Watch still works. */
+    const val REMIND_KEEP_SEC = 30 * 60L
     const val SAME_SLOT_SEC = 60L
 
     private val order = compareBy<Reminder>({ it.beginEpochSec }, { it.createdAtMs })
 
     /** Saved reminders at app start: programmes that already began are gone. */
     fun onLoad(saved: List<Reminder>, nowSec: Long): List<Reminder> =
-        saved.filter { it.beginEpochSec > nowSec }.distinctBy { it.key }.sortedWith(order)
+        saved.filter { keepOnLoad(it, nowSec) }.distinctBy { it.key }.sortedWith(order)
+
+    fun keepOnLoad(reminder: Reminder, nowSec: Long): Boolean = when (reminder.kind) {
+        ReminderKind.REMIND -> nowSec < reminder.beginEpochSec + REMIND_KEEP_SEC
+        ReminderKind.AUTO_SWITCH -> reminder.beginEpochSec > nowSec
+    }
+
+    fun missedAfter(reminder: Reminder): Long =
+        if (reminder.kind == ReminderKind.REMIND) REMIND_KEEP_SEC else MISSED_AFTER_SEC
 
     /** Adds [reminder], replacing one for the same programme. */
     fun add(reminders: List<Reminder>, reminder: Reminder): List<Reminder> =
@@ -79,11 +94,11 @@ object ReminderPlanner {
 
     /** Reminders whose moment passed without a notice (not the one on screen). */
     fun missed(reminders: List<Reminder>, nowSec: Long, shownKey: String?): List<Reminder> =
-        reminders.filter { it.key != shownKey && nowSec >= it.beginEpochSec + MISSED_AFTER_SEC }
+        reminders.filter { it.key != shownKey && nowSec >= it.beginEpochSec + missedAfter(it) }
 
     /** The reminder whose notice should show now, if any. */
     fun due(reminders: List<Reminder>, nowSec: Long): Reminder? = reminders
-        .filter { nowSec >= it.beginEpochSec - NOTICE_SEC && nowSec < it.beginEpochSec + MISSED_AFTER_SEC }
+        .filter { nowSec >= it.beginEpochSec - NOTICE_SEC && nowSec < it.beginEpochSec + missedAfter(it) }
         .minWithOrNull(order)
 
     /** Other reminders in [reminder]'s slot. */
@@ -92,7 +107,9 @@ object ReminderPlanner {
         .sortedWith(order)
 
     /** When the notice that appears at [shownAtSec] switches. */
-    fun deadline(reminder: Reminder, shownAtSec: Long): Long = maxOf(reminder.beginEpochSec, shownAtSec + MIN_COUNTDOWN_SEC)
+    fun deadline(reminder: Reminder, shownAtSec: Long): Long =
+        if (reminder.kind == ReminderKind.REMIND) reminder.beginEpochSec + REMIND_KEEP_SEC
+        else maxOf(reminder.beginEpochSec, shownAtSec + MIN_COUNTDOWN_SEC)
 
     fun notice(reminders: List<Reminder>, reminder: Reminder, shownAtSec: Long): ReminderNotice =
         ReminderNotice(reminder, deadline(reminder, shownAtSec), sameSlot(reminders, reminder))
