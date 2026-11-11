@@ -39,6 +39,7 @@ data class XtreamDetection(val pluginInstalled: Boolean, val accounts: List<Xtre
 @Singleton
 class XtreamRepository @Inject constructor(
     private val webif: com.enigmacast.data.openwebif.OpenWebifApi,
+    private val headers: IptvHeaderResolver,
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -211,7 +212,7 @@ class XtreamRepository @Inject constructor(
 
     private suspend fun get(account: XtreamAccount, action: String?, vararg params: Pair<String, String>): String = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
-        val request = Request.Builder().url(XtreamUrls.api(account, action, *params)).header("User-Agent", USER_AGENT).build()
+        val request = headers.forAccount(account).applyTo(Request.Builder().url(XtreamUrls.api(account, action, *params))).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 EnigmaLog.networkError("Xtream ${action ?: "user_info"} on ${account.host}: HTTP ${response.code}")

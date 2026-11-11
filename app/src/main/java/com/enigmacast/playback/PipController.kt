@@ -48,6 +48,8 @@ data class PipEntry(
     val fallbackUrl: String = "",
     /** Original stream, tried when the encoder slot cannot be opened. */
     val directUrl: String = "",
+    val userAgent: String = "",
+    val headers: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -62,6 +64,7 @@ class PipController @Inject constructor(
     private val playlistStore: IptvPlaylistStore,
     private val playlistSync: IptvPlaylistSync,
     private val repository: XtreamRepository,
+    private val headerResolver: com.enigmacast.data.xtream.IptvHeaderResolver,
     private val targets: StreamTargets,
 ) {
     private val _active = MutableStateFlow(false)
@@ -81,6 +84,8 @@ class PipController @Inject constructor(
     private var authorization: String? = null
 
     private var sawFrame = false
+    private var httpFactory: DefaultHttpDataSource.Factory? = null
+    @Volatile private var streamHeaders: Map<String, String> = emptyMap()
 
     fun player(): Player = ensure()
 
@@ -169,6 +174,8 @@ class PipController @Inject constructor(
             // Resolved by [resolve] before prepare; start() already has urls for IPTV.
         }
         authorization = entry.authorization
+        streamHeaders = entry.headers
+        httpFactory?.setUserAgent(entry.userAgent.ifBlank { XtreamRepository.USER_AGENT })
         val url = entry.url
         if (url.isBlank()) return
         sawFrame = false
@@ -230,12 +237,14 @@ class PipController @Inject constructor(
             val account = playlistStore.login.value.xtreamAccount()
             return playlistSync.items(XtreamSection.LIVE, categoryId).map { item ->
                 val url = item.url.ifBlank { account?.let { XtreamUrls.live(it, item.id) }.orEmpty() }
-                PipEntry(item.name, url)
+                val headers = headerResolver.forItem(item)
+                PipEntry(item.name, url, userAgent = headers.userAgent, headers = headers.headers)
             }
         }
         val account = xstreamity() ?: return emptyList()
         return repository.items(account, XtreamSection.LIVE, categoryId).map { item ->
-            PipEntry(item.name, item.url.ifBlank { XtreamUrls.live(account, item.id) })
+            val headers = headerResolver.forItem(item)
+            PipEntry(item.name, item.url.ifBlank { XtreamUrls.live(account, item.id) }, userAgent = headers.userAgent, headers = headers.headers)
         }
     }
 
@@ -253,9 +262,15 @@ class PipController @Inject constructor(
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(20_000)
+        httpFactory = http
         val withAuth = ResolvingDataSource.Factory(http) { spec: DataSpec ->
             val header = authorization
-            if (header == null) spec else spec.withAdditionalHeaders(mapOf("Authorization" to header))
+            val extra = streamHeaders
+            val all = buildMap {
+                if (header != null) put("Authorization", header)
+                extra.forEach { (k, v) -> put(k, v) }
+            }
+            if (all.isEmpty()) spec else spec.withAdditionalHeaders(all)
         }
         return ExoPlayer.Builder(context)
             // A small inset next to the main player: a small byte target, so both fit the heap.

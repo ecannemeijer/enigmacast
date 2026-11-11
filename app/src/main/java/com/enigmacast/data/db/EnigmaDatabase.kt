@@ -14,7 +14,7 @@ import javax.inject.Singleton
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
         SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvCategoryRow::class, IptvItemRow::class, IptvRowEpgRow::class],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
@@ -67,6 +67,13 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `iptv_row_epg` (`account` TEXT NOT NULL, `streamId` TEXT NOT NULL, `fetchedAtMs` INTEGER NOT NULL, `events` TEXT NOT NULL, PRIMARY KEY(`account`, `streamId`))")
             }
         }
+
+        /** 10 → 11: per-stream HTTP headers from `#EXTVLCOPT` / `#KODIPROP`. */
+        val MIGRATION_10_11 = object : androidx.room.migration.Migration(10, 11) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE iptv_item ADD COLUMN httpHeaders TEXT NOT NULL DEFAULT ''")
+            }
+        }
     }
 }
 
@@ -78,7 +85,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9, EnigmaDatabase.MIGRATION_9_10)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9, EnigmaDatabase.MIGRATION_9_10, EnigmaDatabase.MIGRATION_10_11)
             // A cache only: an older build reading a newer database just starts empty instead of crashing.
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .fallbackToDestructiveMigration(dropAllTables = true)

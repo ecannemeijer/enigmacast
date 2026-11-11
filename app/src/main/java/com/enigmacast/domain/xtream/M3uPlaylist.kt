@@ -18,6 +18,8 @@ object M3uPlaylist {
         val number: Int,
         val archiveDays: Int = 0,
         val catchupSource: String = "",
+        /** Per-stream `#EXTVLCOPT` / `#KODIPROP` headers, including User-Agent when set. */
+        val headers: Map<String, String> = emptyMap(),
     )
 
     /** Calls [onEntry] for each channel in order; lines are read one by one, never all at once. */
@@ -25,12 +27,26 @@ object M3uPlaylist {
         var info: String? = null
         var group = ""
         var count = 0
+        val options = ArrayList<Pair<String, String>>()
         for (raw in lines) {
             val line = raw.trim().removePrefix("\uFEFF")
             when {
                 line.isEmpty() -> Unit
-                line.startsWith("#EXTINF", ignoreCase = true) -> info = line
+                line.startsWith("#EXTINF", ignoreCase = true) -> {
+                    info = line
+                    options.clear()
+                }
                 line.startsWith("#EXTGRP:", ignoreCase = true) -> group = line.substringAfter(':').trim()
+                line.startsWith("#EXTVLCOPT:", ignoreCase = true) -> {
+                    val option = line.substringAfter(':')
+                    val key = option.substringBefore('=').trim()
+                    if (key.isNotEmpty() && option.contains('=')) options += key to option.substringAfter('=').trim()
+                }
+                line.startsWith("#KODIPROP:", ignoreCase = true) -> {
+                    val option = line.substringAfter(':')
+                    val key = option.substringBefore('=').trim()
+                    if (key.isNotEmpty() && option.contains('=')) options += key to option.substringAfter('=').trim()
+                }
                 line.startsWith("#") -> Unit
                 info != null -> {
                     val head = info.substringBefore(',', info)
@@ -58,10 +74,12 @@ object M3uPlaylist {
                             number = attrs["tvg-chno"]?.toIntOrNull() ?: count,
                             archiveDays = archiveDays,
                             catchupSource = template,
+                            headers = IptvHeaders.fromPlaylistOptions(options),
                         ),
                     )
                     info = null
                     group = ""
+                    options.clear()
                 }
             }
         }

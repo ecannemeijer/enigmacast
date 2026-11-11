@@ -9,6 +9,7 @@ import com.enigmacast.data.security.SecretStore
 import com.enigmacast.domain.model.IptvPlaylistKind
 import com.enigmacast.domain.model.IptvRefreshInterval
 import com.enigmacast.domain.xtream.IptvRefresh
+import com.enigmacast.domain.xtream.IptvHeaders
 import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.xtream.M3uPlaylist
 import com.enigmacast.domain.xtream.XStreamityPlaylists
@@ -518,8 +519,13 @@ class IptvPlaylistSync @Inject constructor(
 
     private class HttpStatus(val code: Int) : IOException("HTTP $code")
 
-    private suspend fun <T> stream(url: String, read: suspend (InputStream) -> T): T {
-        val request = Request.Builder().url(url).header("User-Agent", XtreamRepository.USER_AGENT).build()
+    private suspend fun <T> stream(url: String, provider: IptvProvider? = null, read: suspend (InputStream) -> T): T {
+        val headers = IptvHeaders.resolve(
+            defaultUserAgent = XtreamRepository.USER_AGENT,
+            providerUserAgent = provider?.userAgent.orEmpty(),
+            providerHeaders = IptvHeaders.parseLines(provider?.httpHeaders.orEmpty()),
+        )
+        val request = headers.applyTo(Request.Builder().url(url)).build()
         val call = client.newCall(request)
         val job = currentCoroutineContext()[kotlinx.coroutines.Job]
         val handle = job?.invokeOnCompletion { if (it != null) call.cancel() }
@@ -544,7 +550,7 @@ class IptvPlaylistSync @Inject constructor(
         val batch = ArrayList<IptvItemRow>(CHUNK)
         var total = 0
         val outer = currentCoroutineContext()
-        stream(url) { input ->
+        stream(url, provider) { input ->
             input.bufferedReader().useLines { lines ->
                 M3uPlaylist.parse(lines) { e ->
                     val group = e.group.ifBlank { OTHER }
@@ -554,7 +560,7 @@ class IptvPlaylistSync @Inject constructor(
                     batch += IptvItemRow(
                         source, e.section.name, catId, "m$total", e.name, e.logo,
                         e.url.substringAfterLast('.', "").take(5), e.number, e.url, total,
-                        e.archiveDays, e.catchupSource,
+                        e.archiveDays, e.catchupSource, IptvHeaders.formatLines(e.headers),
                     )
                     if (batch.size >= CHUNK) {
                         outer.ensureActive()
@@ -597,17 +603,18 @@ class IptvPlaylistSync @Inject constructor(
         for ((names, step) in sections) {
             val (section, catAction, itemAction) = names
             onProgress(IptvLoadProgress(step, total))
-            val cats: List<XtreamCategory> = stream(XtreamUrls.api(account, catAction)) { input -> objects(input).mapNotNull(XtreamJson::category).toList() }
+            val cats: List<XtreamCategory> = stream(XtreamUrls.api(account, catAction), provider) { input -> objects(input).mapNotNull(XtreamJson::category).toList() }
             dao.insertCategories(cats.mapIndexed { i, c -> IptvCategoryRow(source, section.name, c.id, c.name, i) })
             categories += cats.size
             val batch = ArrayList<IptvItemRow>(CHUNK)
-            stream(XtreamUrls.api(account, itemAction)) { input ->
+            stream(XtreamUrls.api(account, itemAction), provider) { input ->
                 for (o in objects(input)) {
                     val item: XtreamItem = XtreamJson.item(o, section) ?: continue
                     total++
                     batch += IptvItemRow(
                         source, section.name, item.categoryId, item.id, item.name, item.icon,
                         item.extension, item.number, "", total, item.archiveDays, item.catchupSource,
+                        item.httpHeaders,
                     )
                     if (batch.size >= CHUNK) {
                         flush(batch)
@@ -749,6 +756,7 @@ class IptvPlaylistSync @Inject constructor(
             id, name, section, categoryId, icon, extension, number, url, archiveDays, catchupSource,
             providerId = providerId,
             providerName = providerName,
+            httpHeaders = httpHeaders,
         )
 
     companion object {

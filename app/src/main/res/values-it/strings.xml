@@ -1935,4 +1935,8 @@
     <string name="iptv_account_warn_expired">%1$s è scaduto</string>
     <string name="iptv_expiry_warning">Avvisa prima della scadenza dell\'account</string>
     <string name="iptv_expiry_warning_desc">Compare un avviso qualche giorno prima della scadenza di un accesso Xtream.</string>
+    <string name="iptv_provider_user_agent">User-Agent</string>
+    <string name="iptv_provider_user_agent_desc">Lascia vuoto per usare il valore predefinito dell\'app (EnigmaCast).</string>
+    <string name="iptv_provider_headers">Intestazioni HTTP</string>
+    <string name="iptv_provider_headers_desc">Un\'intestazione per riga, ad esempio Referer: http://example.com</string>
 </resources>

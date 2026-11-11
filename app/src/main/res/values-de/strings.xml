@@ -1931,4 +1931,8 @@
     <string name="iptv_account_warn_expired">%1$s ist abgelaufen</string>
     <string name="iptv_expiry_warning">Vor Ablauf eines Kontos warnen</string>
     <string name="iptv_expiry_warning_desc">Ein Hinweis erscheint ein paar Tage, bevor ein Xtream-Login abläuft.</string>
+    <string name="iptv_provider_user_agent">User-Agent</string>
+    <string name="iptv_provider_user_agent_desc">Leer lassen, um die Vorgabe der App zu verwenden (EnigmaCast).</string>
+    <string name="iptv_provider_headers">HTTP-Header</string>
+    <string name="iptv_provider_headers_desc">Ein Header pro Zeile, zum Beispiel Referer: http://example.com</string>
 </resources>
