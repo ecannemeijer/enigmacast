@@ -247,6 +247,26 @@ class IptvSettingsViewModel @Inject constructor(
     fun setExpiryWarning(enabled: Boolean) = viewModelScope.launch {
         settingsRepository.update { it.copy(iptvExpiryWarning = enabled) }
     }
+
+    val recordMarginBefore: StateFlow<Int> = settingsRepository.settings
+        .map { it.iptvRecordMarginBeforeMin }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1)
+    val recordMarginAfter: StateFlow<Int> = settingsRepository.settings
+        .map { it.iptvRecordMarginAfterMin }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 2)
+    val recordVolume: StateFlow<Int> = settingsRepository.settings
+        .map { it.iptvRecordVolume }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    fun setRecordMarginBefore(minutes: Int) = viewModelScope.launch {
+        settingsRepository.update { it.copy(iptvRecordMarginBeforeMin = minutes) }
+    }
+    fun setRecordMarginAfter(minutes: Int) = viewModelScope.launch {
+        settingsRepository.update { it.copy(iptvRecordMarginAfterMin = minutes) }
+    }
+    fun setRecordVolume(index: Int) = viewModelScope.launch {
+        settingsRepository.update { it.copy(iptvRecordVolume = index) }
+    }
     fun refreshAccountInfo(force: Boolean = false) = viewModelScope.launch {
         accounts.refreshAll(force)
     }
@@ -480,6 +500,52 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                 checked = expiryWarning,
                 onCheckedChange = model::setExpiryWarning,
             )
+            val marginChoices = com.enigmacast.domain.recording.IptvRecordTimes.MARGIN_MINUTES
+            val marginBefore by model.recordMarginBefore.collectAsStateWithLifecycle()
+            val marginAfter by model.recordMarginAfter.collectAsStateWithLifecycle()
+            val marginLabels = marginChoices.map { minutes ->
+                if (minutes == 0) stringResource(R.string.iptv_record_margin_none)
+                else stringResource(R.string.iptv_record_margin_min, minutes)
+            }
+            ChoiceRow(
+                title = stringResource(R.string.iptv_record_margin_before),
+                description = stringResource(R.string.iptv_record_margin_before_desc),
+                options = marginLabels,
+                selectedIndex = marginChoices.indexOf(marginBefore).let { if (it >= 0) it else 1 },
+                onSelect = { model.setRecordMarginBefore(marginChoices[it]) },
+            )
+            ChoiceRow(
+                title = stringResource(R.string.iptv_record_margin_after),
+                description = stringResource(R.string.iptv_record_margin_after_desc),
+                options = marginLabels,
+                selectedIndex = marginChoices.indexOf(marginAfter).let { if (it >= 0) it else 2 },
+                onSelect = { model.setRecordMarginAfter(marginChoices[it]) },
+            )
+            val recordContext = LocalContext.current
+            val volumes = remember(recordContext) { com.enigmacast.live.IptvRecordStorage.volumes(recordContext) }
+            val volumeIndex by model.recordVolume.collectAsStateWithLifecycle()
+            if (volumes.isNotEmpty()) {
+                val volumeLabels = volumes.map { volume ->
+                    val name = if (volume.removable) {
+                        stringResource(R.string.iptv_record_storage_external, volume.label)
+                    } else {
+                        stringResource(R.string.iptv_record_storage_internal, volume.label)
+                    }
+                    val space = stringResource(
+                        R.string.iptv_record_storage_space,
+                        android.text.format.Formatter.formatShortFileSize(recordContext, volume.freeBytes),
+                        android.text.format.Formatter.formatShortFileSize(recordContext, volume.totalBytes),
+                    )
+                    "$name  ·  $space"
+                }
+                ChoiceRow(
+                    title = stringResource(R.string.iptv_record_storage),
+                    description = stringResource(R.string.iptv_record_storage_desc),
+                    options = volumeLabels,
+                    selectedIndex = volumeIndex.coerceIn(0, volumes.lastIndex),
+                    onSelect = { model.setRecordVolume(volumes[it].index) },
+                )
+            }
 
             ValueRow(
                 title = stringResource(R.string.iptv_categories_manage),

@@ -27,8 +27,14 @@ data class Recording(
     /** Local file name, or the receiver movie path once the box has created it. */
     val fileName: String = "",
     val error: String = "",
+    /** IPTV provider this capture belongs to; blank for satellite / receiver recordings. */
+    val iptvProviderId: String = "",
+    /** Live stream id of an IPTV capture; blank for satellite / receiver recordings. */
+    val iptvStreamId: String = "",
 ) {
     fun isActive(): Boolean = status == RecordingStatus.SCHEDULED || status == RecordingStatus.RECORDING
+
+    fun isIptv(): Boolean = iptvProviderId.isNotBlank() || iptvStreamId.isNotBlank() || reference.startsWith("iptv:")
 
     companion object {
         fun idFor(reference: String, beginEpochSec: Long): String = "$reference|$beginEpochSec"

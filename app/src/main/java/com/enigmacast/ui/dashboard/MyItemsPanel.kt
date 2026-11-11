@@ -88,6 +88,7 @@ fun MyItemsPanel(
     // The section follows where a recording is stored, not which device scheduled it.
     val sections = com.enigmacast.domain.recording.MyItemsSections.split(book, viewModel.boxMovies, viewModel.boxTimers)
     val items = sections.device
+    val iptvRecordings = sections.iptv
     val listState = rememberLazyListState()
     val rowStates = remember { mutableMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
     val posterMap by viewModel.posters.collectAsStateWithLifecycle()
@@ -118,20 +119,20 @@ fun MyItemsPanel(
     val iptvReturnKey by viewModel.returnKeys.collectAsStateWithLifecycle()
     // Where Right from the menu lands: a recording that had the focus, else the first card on the
     // page (the IPTV/Torrent rows come first; the recordings may be scrolled out of the list then).
-    val allRecordings = items + sections.onReceiver + sections.scheduledOnReceiver
+    val allRecordings = iptvRecordings + items + sections.onReceiver + sections.scheduledOnReceiver
     val recordingEntry = viewModel.focusId?.takeIf { id -> allRecordings.any { it.id == id } }
     val entryOnIptv = iptvBlocks.isNotEmpty() && recordingEntry == null
     // Entering the list: bring the entry on screen first, so its requester is attached.
     LaunchedEffect(rowsFocusable, entryOnIptv, recordingEntry) {
         if (!rowsFocusable || allRecordings.isEmpty() || com.enigmacast.domain.xtream.LibraryReturn.isMyItems(iptvReturnKey)) return@LaunchedEffect
-        val index = if (entryOnIptv) 0 else listIndexOf(recordingEntry ?: allRecordings.first().id, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
+        val index = if (entryOnIptv) 0 else listIndexOf(recordingEntry ?: allRecordings.first().id, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster, iptvRecordings)
             .let { if (it < 0) -1 else it + iptvRowCount }
         if (index >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
     }
     // Every card and row by key, so a removal can hand the focus to its neighbour.
     val keyRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun keyFocus(key: String) = keyRequesters.getOrPut(key) { FocusRequester() }
-    val pageRows = myItemsPageRows(iptvBlocks.map { (h, cards) -> h to cards.map { "$h/${it.key}" } }, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
+    val pageRows = myItemsPageRows(iptvBlocks.map { (h, cards) -> h to cards.map { "$h/${it.key}" } }, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster, iptvRecordings)
     val currentPage by androidx.compose.runtime.rememberUpdatedState(pageRows)
     var removal by remember { mutableStateOf<Pair<String, String?>?>(null) }
     val removeFocus: (String?) -> Unit = { removed ->
@@ -209,7 +210,7 @@ fun MyItemsPanel(
         }
         val boxMovies = sections.onReceiver
         val boxTimers = sections.scheduledOnReceiver
-        val all = items + boxMovies + boxTimers
+        val all = iptvRecordings + items + boxMovies + boxTimers
         if (all.isEmpty()) {
             iptvBlocks.forEach { (h, c) -> iptvRow(h, c) }
             Text(
@@ -235,14 +236,31 @@ fun MyItemsPanel(
                 iptvBlocks.forEach { (h, c) -> item(key = "iptv-$h") { iptvRow(h, c) } }
                 // Sections: this app's recordings, recordings on the box, timers on the box. Headers are not focusable.
                 val box = boxName.ifBlank { null }
+                val hasOtherRecordings = iptvRecordings.isNotEmpty() || boxMovies.isNotEmpty() || boxTimers.isNotEmpty()
+                val volume = viewModel.iptvVolume()
                 listOf(
-                    Triple("app", if (boxMovies.isEmpty() && boxTimers.isEmpty()) null else R.string.my_items_section_app, items),
+                    Triple("iptv", R.string.my_items_section_iptv, iptvRecordings),
+                    Triple("app", if (hasOtherRecordings) R.string.my_items_section_app else null, items),
                     Triple("movies", if (box != null) R.string.my_items_section_box_named else R.string.my_items_section_box, boxMovies),
                     Triple("timers", if (box != null) R.string.my_items_section_box_timers_named else R.string.my_items_section_box_timers, boxTimers),
                 ).forEach { (key, header, list) ->
                     if (list.isEmpty()) return@forEach
                     if (header != null) item(key = "h-$key") {
-                        Text(stringResource(header, box.orEmpty()), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp))
+                        Column(Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp)) {
+                            Text(stringResource(header, box.orEmpty()), color = EnigmaColors.Cyan, fontSize = 13.sp)
+                            if (key == "iptv" && volume != null) {
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                Text(
+                                    stringResource(
+                                        R.string.my_items_iptv_space,
+                                        android.text.format.Formatter.formatShortFileSize(context, volume.freeBytes),
+                                        android.text.format.Formatter.formatShortFileSize(context, volume.totalBytes),
+                                    ),
+                                    color = EnigmaColors.Subtle,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                        }
                     }
                     val posters = list.filter(viewModel::isPoster)
                     val rows = list.filterNot(viewModel::isPoster)
@@ -321,10 +339,10 @@ fun MyItemsPanel(
     LaunchedEffect(viewModel.focusToken) {
         if (viewModel.focusToken == 0 || viewModel.focusToken == focusTokenOnEnter) return@LaunchedEffect
         if (viewModel.selected != null || viewModel.pendingDelete != null) return@LaunchedEffect
-        val index = listIndexOf(viewModel.focusId, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster)
+        val index = listIndexOf(viewModel.focusId, items, sections.onReceiver, sections.scheduledOnReceiver, viewModel::isPoster, iptvRecordings)
         if (index >= 0) listState.scrollToItem(index + iptvRowCount)
         // A poster sits inside a sideways row: bring it into view there too.
-        for ((key, list) in listOf("app" to items, "movies" to sections.onReceiver)) {
+        for ((key, list) in listOf("iptv" to iptvRecordings, "app" to items, "movies" to sections.onReceiver)) {
             val i = list.filter(viewModel::isPoster).indexOfFirst { it.id == viewModel.focusId }
             if (i >= 0) rowStates[key]?.scrollToItem(i)
         }
@@ -400,13 +418,14 @@ internal fun listIndexOf(
     movies: List<Recording>,
     timers: List<Recording>,
     poster: (Recording) -> Boolean = { false },
+    iptvRec: List<Recording> = emptyList(),
 ): Int {
     if (id == null) return -1
-    val headers = movies.isNotEmpty() || timers.isNotEmpty()
+    val headers = iptvRec.isNotEmpty() || movies.isNotEmpty() || timers.isNotEmpty()
     var offset = 0
-    for (list in listOf(app, movies, timers)) {
+    for ((key, list) in listOf("iptv" to iptvRec, "app" to app, "movies" to movies, "timers" to timers)) {
         if (list.isEmpty()) continue
-        if (headers) offset++
+        if (key != "app" || headers) offset++
         // Posters of a section share one LazyColumn item (their sideways row), before the plain rows.
         val posters = list.filter(poster)
         val rows = list.filterNot(poster)
@@ -502,7 +521,13 @@ private fun rowDetail(item: Recording): String {
     val start = Instant.ofEpochSecond(item.beginEpochSec).atZone(zone)
     val end = Instant.ofEpochSecond(item.endEpochSec).atZone(zone)
     val minutes = ((item.endEpochSec - item.beginEpochSec) / 60).coerceAtLeast(1)
-    val place = stringResource(if (item.place == RecordingPlace.RECEIVER) R.string.my_items_place_receiver else R.string.my_items_place_tv)
+    val place = stringResource(
+        when {
+            item.isIptv() -> R.string.my_items_place_iptv
+            item.place == RecordingPlace.RECEIVER -> R.string.my_items_place_receiver
+            else -> R.string.my_items_place_tv
+        }
+    )
     val clock = "${start.format(DayFormat)}  ${start.format(ClockFormat)}–${end.format(ClockFormat)}  ·  $minutes min  ·  $place"
     return if (item.status == RecordingStatus.FAILED && item.error.isNotBlank()) {
         "${item.channelName}  ·  $clock  ·  ${item.error}"
@@ -650,12 +675,13 @@ internal fun myItemsPageRows(
     movies: List<Recording>,
     timers: List<Recording>,
     poster: (Recording) -> Boolean,
+    iptvRec: List<Recording> = emptyList(),
 ): List<MyItemsPageRow> {
-    val recordings = app.isNotEmpty() || movies.isNotEmpty() || timers.isNotEmpty()
+    val recordings = iptvRec.isNotEmpty() || app.isNotEmpty() || movies.isNotEmpty() || timers.isNotEmpty()
     val out = iptv.mapIndexed { i, (h, keys) -> MyItemsPageRow(keys, if (recordings) i else null, iptvHeader = h) }.toMutableList()
     var index = iptv.size
-    val headers = movies.isNotEmpty() || timers.isNotEmpty()
-    for ((key, list) in listOf("app" to app, "movies" to movies, "timers" to timers)) {
+    val headers = iptvRec.isNotEmpty() || movies.isNotEmpty() || timers.isNotEmpty()
+    for ((key, list) in listOf("iptv" to iptvRec, "app" to app, "movies" to movies, "timers" to timers)) {
         if (list.isEmpty()) continue
         if (key != "app" || headers) index++
         val posters = list.filter(poster)

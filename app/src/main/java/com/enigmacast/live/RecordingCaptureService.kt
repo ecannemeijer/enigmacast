@@ -105,7 +105,7 @@ class RecordingCaptureService : Service() {
             for ((i, candidate) in target.urls.withIndex()) {
                 url = candidate
                 val opened = try {
-                    open(id, candidate, auth)
+                    open(id, candidate, auth, target.userAgent, target.headers)
                 } catch (error: java.io.IOException) {
                     if (stopping.contains(id)) throw error
                     lastError = error
@@ -186,9 +186,21 @@ class RecordingCaptureService : Service() {
         return maxOf(read, onDisk)
     }
 
-    private fun open(id: String, url: String, authorization: String?): okhttp3.Response {
+    private fun open(
+        id: String,
+        url: String,
+        authorization: String?,
+        userAgent: String = "",
+        headers: Map<String, String> = emptyMap(),
+    ): okhttp3.Response {
         val request = Request.Builder().url(url).apply {
             authorization?.let { header("Authorization", it) }
+            if (userAgent.isNotBlank()) header("User-Agent", userAgent)
+            headers.forEach { (name, value) ->
+                if (name.isNotBlank() && !name.equals("User-Agent", true) && value.isNotBlank()) {
+                    header(name, value)
+                }
+            }
         }.build()
         // streamClient() is not the player's one-stream gate, so both can stay open.
         val call = clients.streamClient().newCall(request)

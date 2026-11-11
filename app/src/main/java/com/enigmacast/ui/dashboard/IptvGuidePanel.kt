@@ -35,6 +35,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.enigmacast.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enigmacast.ui.theme.TvChoiceDialog
@@ -216,6 +217,14 @@ internal fun IptvGuidePanel(
                     .focusable(),
             )
         }
+        if (model.notice.isNotBlank()) {
+            androidx.tv.material3.Text(
+                model.notice,
+                color = com.enigmacast.ui.theme.EnigmaColors.Accent,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+            )
+        }
     }
     futurePrompt?.let { (entry, cell) ->
         val event = cell.event
@@ -236,10 +245,15 @@ internal fun IptvGuidePanel(
                     model.toggleIptvReminder(event, entry.name, item?.providerId.orEmpty(), ReminderKind.AUTO_SWITCH)
                     futurePrompt = null
                 },
+                onRecord = {
+                    if (item != null) model.requestIptvRecord(event, item)
+                    futurePrompt = null
+                },
                 onDismiss = { futurePrompt = null },
             )
         }
     }
+    com.enigmacast.ui.xtream.IptvRecordAskDialog(model)
 }
 
 @Composable
@@ -250,6 +264,7 @@ private fun IptvFutureProgrammeDialog(
     autoSwitchSet: Boolean,
     onReminder: () -> Unit,
     onAutoSwitch: () -> Unit,
+    onRecord: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     TvChoiceDialog(
@@ -258,6 +273,7 @@ private fun IptvFutureProgrammeDialog(
         choices = listOf(
             stringResource(if (reminderSet) R.string.iptv_reminder_cancel else R.string.iptv_reminder_set),
             stringResource(if (autoSwitchSet) R.string.autoswitch_cancel_action else R.string.autoswitch_action),
+            stringResource(R.string.iptv_guide_record),
             stringResource(R.string.cancel),
         ),
         stacked = true,
@@ -265,6 +281,7 @@ private fun IptvFutureProgrammeDialog(
             when (index) {
                 0 -> onReminder()
                 1 -> onAutoSwitch()
+                2 -> onRecord()
                 else -> onDismiss()
             }
         },

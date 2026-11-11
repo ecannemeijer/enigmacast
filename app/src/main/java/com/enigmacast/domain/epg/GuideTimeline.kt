@@ -90,15 +90,21 @@ object GuideTimeline {
             if (next.startSec >= window + WINDOW_SEC) window = maxOf(earliest, slotFloor(next.startSec) - SLOT_SEC)
             return GuideMove(cursor.copy(focusSec = next.startSec, windowStartSec = window))
         }
-        val onAir = current.contains(nowSec) || (current.startSec <= nowSec && current.endSec > nowSec)
         if (lookbackSec <= 0L) {
             if (current.startSec <= maxOf(earliest, nowSec) || index == 0) return GuideMove(cursor, atLeftEdge = true)
-        } else if (onAir || (index == 0 && current.endSec > nowSec)) {
-            return GuideMove(cursor, atLeftEdge = true)
         } else if (index == 0) {
-            return GuideMove(cursor)
+            // With lookback, Left on the earliest cell opens the category list.
+            return GuideMove(cursor, atLeftEdge = true)
         }
-        val previous = cells[index - 1]
+        var prevIndex = index - 1
+        var previous = cells[prevIndex]
+        // With lookback, skip empty gap cells so Left reaches the previous programme.
+        if (lookbackSec > 0L) {
+            while (previous.event == null && prevIndex > 0) {
+                prevIndex--
+                previous = cells[prevIndex]
+            }
+        }
         val focus = maxOf(previous.startSec, if (lookbackSec > 0L) earliest else nowSec)
         var window = cursor.windowStartSec
         if (focus < window) window = maxOf(earliest, slotFloor(focus))

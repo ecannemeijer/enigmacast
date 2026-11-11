@@ -340,6 +340,12 @@ data class AppSettings(
     val iptvRefreshInterval: IptvRefreshInterval = IptvRefreshInterval.EVERY_24H,
     /** Settings > IPTV: show a notice a few days before an Xtream account expires. */
     val iptvExpiryWarning: Boolean = true,
+    /** Minutes to start an IPTV capture before the programme (Settings > IPTV). */
+    val iptvRecordMarginBeforeMin: Int = 1,
+    /** Minutes to keep an IPTV capture after the programme (Settings > IPTV). */
+    val iptvRecordMarginAfterMin: Int = 2,
+    /** Index into getExternalFilesDirs(DIRECTORY_MOVIES); 0 is internal app storage. */
+    val iptvRecordVolume: Int = 0,
     /**
      * SubSource language slugs offered for IPTV films and series.
      * Null means the choice was never saved, so the app language is used.

@@ -48,8 +48,9 @@ object QuickOptions {
 
     /**
      * IPTV (Xtream / playlist) in the full player: the same row as the own tuner, minus what
-     * belongs to the receiver. Record is a box timer and quality is receiver transcoding.
-     * The guide and recent channels are the IPTV list, so they only show for live.
+     * belongs to the receiver. Quality is receiver transcoding. Record captures the live
+     * IPTV stream on this TV. The guide and recent channels are the IPTV list, so they
+     * only show for live. Boost stays the 5th tile.
      */
     fun iptvTiles(vod: Boolean): List<QuickOption> = buildList {
         if (!vod) add(QuickOption.EQUIVALENT)
@@ -57,6 +58,7 @@ object QuickOptions {
         add(QuickOption.AUDIO)
         add(QuickOption.PICTURE)
         if (!vod) add(QuickOption.BOOST)
+        if (!vod) add(QuickOption.RECORD)
         add(QuickOption.AUDIO_DELAY)
         add(QuickOption.SUBTITLE_DELAY)
         if (!vod) {
