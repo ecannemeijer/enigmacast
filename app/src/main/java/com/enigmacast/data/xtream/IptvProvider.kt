@@ -20,6 +20,10 @@ data class IptvProvider(
     val password: String = "",
     val enabled: Boolean = true,
     val sortOrder: Int = 0,
+    /** Blank: the app default user-agent (EnigmaCast) is used. */
+    val userAgent: String = "",
+    /** Extra HTTP headers as `Name: value` lines (Referer, Origin, ...). */
+    val httpHeaders: String = "",
 ) {
     val login: IptvPlaylistLogin get() = IptvPlaylistLogin(m3uUrl, server, username, password)
 

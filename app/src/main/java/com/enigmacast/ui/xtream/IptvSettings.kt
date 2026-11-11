@@ -615,6 +615,8 @@ private fun IptvProviderDialog(
     var server by remember(provider?.id) { mutableStateOf(provider?.server.orEmpty()) }
     var user by remember(provider?.id) { mutableStateOf(provider?.username.orEmpty()) }
     var pass by remember(provider?.id) { mutableStateOf(provider?.password.orEmpty()) }
+    var userAgent by remember(provider?.id) { mutableStateOf(provider?.userAgent.orEmpty()) }
+    var httpHeaders by remember(provider?.id) { mutableStateOf(provider?.httpHeaders.orEmpty()) }
     var confirmDelete by remember { mutableStateOf(false) }
     Dialog(
         onDismissRequest = { onClose(null) },
@@ -672,6 +674,28 @@ private fun IptvProviderDialog(
                 TvTextField(stringResource(R.string.iptv_xtream_user), user, { user = it }, Modifier.fillMaxWidth())
                 TvTextField(stringResource(R.string.iptv_xtream_pass), pass, { pass = it }, Modifier.fillMaxWidth(), kind = TvFieldKind.PASSWORD)
             }
+            TvTextField(
+                stringResource(R.string.iptv_provider_user_agent),
+                userAgent,
+                { userAgent = it },
+                Modifier.fillMaxWidth(),
+            )
+            Text(
+                stringResource(R.string.iptv_provider_user_agent_desc),
+                color = EnigmaColors.Muted,
+                fontSize = 12.sp,
+            )
+            TvTextField(
+                stringResource(R.string.iptv_provider_headers),
+                httpHeaders,
+                { httpHeaders = it },
+                Modifier.fillMaxWidth(),
+            )
+            Text(
+                stringResource(R.string.iptv_provider_headers_desc),
+                color = EnigmaColors.Muted,
+                fontSize = 12.sp,
+            )
             val draft = IptvProvider(
                 id = provider?.id.orEmpty(),
                 name = name,
@@ -682,6 +706,8 @@ private fun IptvProviderDialog(
                 password = pass,
                 enabled = provider?.enabled ?: true,
                 sortOrder = provider?.sortOrder ?: 0,
+                userAgent = userAgent,
+                httpHeaders = httpHeaders,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton(

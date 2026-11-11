@@ -149,6 +149,7 @@ data class IptvItemRow(
     val sort: Int,
     @androidx.room.ColumnInfo(defaultValue = "0") val archiveDays: Int = 0,
     @androidx.room.ColumnInfo(defaultValue = "''") val catchupSource: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "''") val httpHeaders: String = "",
 )
 
 /**

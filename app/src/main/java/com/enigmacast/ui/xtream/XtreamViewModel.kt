@@ -82,6 +82,7 @@ class XtreamViewModel @Inject constructor(
     private val repository: XtreamRepository,
     private val settingsRepository: SettingsRepository,
     private val playlistStore: IptvPlaylistStore,
+    private val headerResolver: com.enigmacast.data.xtream.IptvHeaderResolver,
     private val playlistSync: IptvPlaylistSync,
     private val satelliteEpg: com.enigmacast.data.xtream.IptvSatelliteEpg,
     private val rowEpg: com.enigmacast.data.xtream.IptvRowEpg,
@@ -390,6 +391,12 @@ class XtreamViewModel @Inject constructor(
     @OptIn(UnstableApi::class)
     private val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(streamConnections.client)
         .setUserAgent(XtreamRepository.USER_AGENT)
+
+    private fun applyStreamHeaders(item: com.enigmacast.domain.xtream.XtreamItem) {
+        val resolved = headerResolver.forItem(item)
+        httpFactory.setUserAgent(resolved.userAgent)
+        httpFactory.setDefaultRequestProperties(resolved.headers)
+    }
     /** Playback setting at start: unknown-language text tracks are selected when this is on. */
     private var playbackSubtitles = true
     private var mediaUrl = ""
@@ -1906,7 +1913,7 @@ class XtreamViewModel @Inject constructor(
         catchup = false
         catchupDurationMs = 0L
         fallbackLatched = false
-        httpFactory.setDefaultRequestProperties(emptyMap())
+        applyStreamHeaders(item)
         val account = accountFor(item.providerId) ?: return
         if (item.url.isNotBlank() && item.section != XtreamSection.SERIES) {
             start(item.url, XtreamPlaying(item.name, item), live = item.section == XtreamSection.LIVE, account = account)
@@ -1926,6 +1933,7 @@ class XtreamViewModel @Inject constructor(
         catchup = true
         catchupDurationMs = (event.endSec - event.startSec).coerceAtLeast(1) * 1000
         fallbackLatched = false
+        applyStreamHeaders(item)
         start(url, XtreamPlaying(event.title, item), live = false, account = loginAccount, archive = true)
     }
 
@@ -2316,6 +2324,7 @@ class XtreamViewModel @Inject constructor(
     }
 
     private fun start(url: String, what: XtreamPlaying, live: Boolean, account: XtreamAccount, startMs: Long = 0L, resume: String? = null, archive: Boolean = false, automaticRetry: Boolean = false) {
+        if (what.item != null) applyStreamHeaders(what.item)
         if (!automaticRetry) {
             iptvRecoveryJob?.cancel()
             iptvRetries.reset()

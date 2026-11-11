@@ -56,6 +56,8 @@ data class XtreamItem(
     /** Which configured IPTV provider this row came from. */
     val providerId: String = "",
     val providerName: String = "",
+    /** Per-stream `#EXTVLCOPT` / `#KODIPROP` headers as `Name: value` lines. */
+    val httpHeaders: String = "",
 ) {
     val hasArchive: Boolean get() = archiveDays > 0 || catchupSource.isNotBlank()
 }

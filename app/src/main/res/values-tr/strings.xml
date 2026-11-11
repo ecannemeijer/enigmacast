@@ -1933,4 +1933,8 @@
     <string name="iptv_account_warn_expired">%1$s sona erdi</string>
     <string name="iptv_expiry_warning">Hesap süresi dolmadan uyar</string>
     <string name="iptv_expiry_warning_desc">Bir Xtream girişi sona ermeden birkaç gün önce bir uyarı görünür.</string>
+    <string name="iptv_provider_user_agent">User-Agent</string>
+    <string name="iptv_provider_user_agent_desc">Uygulamanın varsayılanını kullanmak için boş bırakın (EnigmaCast).</string>
+    <string name="iptv_provider_headers">HTTP başlıkları</string>
+    <string name="iptv_provider_headers_desc">Her satıra bir başlık, örneğin Referer: http://example.com</string>
 </resources>

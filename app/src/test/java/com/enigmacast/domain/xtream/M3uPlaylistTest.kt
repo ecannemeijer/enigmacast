@@ -60,4 +60,23 @@ class M3uPlaylistTest {
         assertFalse(IptvPlaylistLogin(m3uUrl = "ftp://x").configured(IptvPlaylistKind.M3U))
         assertNull(IptvPlaylistLogin().xtreamAccount())
     }
+
+    @Test fun readsExtVlcOptAndKodiPropHeaders() {
+        val list = parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 group-title="News",CNN
+            #EXTVLCOPT:http-user-agent=VlcUA
+            #EXTVLCOPT:http-referrer=http://vlc.example
+            #KODIPROP:inputstream.adaptive.stream_headers=Origin=http://kodi.example
+            http://example.invalid/live/1.ts
+            #EXTINF:-1 group-title="News",Plain
+            http://example.invalid/live/2.ts
+            """.trimIndent(),
+        )
+        assertEquals("VlcUA", list[0].headers["User-Agent"])
+        assertEquals("http://vlc.example", list[0].headers["Referer"])
+        assertEquals("http://kodi.example", list[0].headers["Origin"])
+        assertTrue(list[1].headers.isEmpty())
+    }
 }
