@@ -338,6 +338,8 @@ data class AppSettings(
     val iptvPlaylistKind: IptvPlaylistKind = IptvPlaylistKind.M3U,
     /** Settings › IPTV: how often a playlist is refreshed in the background. */
     val iptvRefreshInterval: IptvRefreshInterval = IptvRefreshInterval.EVERY_24H,
+    /** Settings > IPTV: show a notice a few days before an Xtream account expires. */
+    val iptvExpiryWarning: Boolean = true,
     /**
      * SubSource language slugs offered for IPTV films and series.
      * Null means the choice was never saved, so the app language is used.

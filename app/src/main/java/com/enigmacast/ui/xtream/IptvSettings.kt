@@ -48,6 +48,13 @@ import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.data.xtream.IptvLoadProgress
 import com.enigmacast.data.xtream.IptvLoadResult
 import com.enigmacast.data.xtream.IptvPlaylistLogin
+import com.enigmacast.data.xtream.IptvAccountStore
+import com.enigmacast.domain.xtream.XtreamAccountInfo
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import androidx.compose.ui.platform.LocalConfiguration
 import com.enigmacast.data.xtream.IptvPlaylistStore
 import com.enigmacast.data.xtream.IptvPlaylistSync
 import com.enigmacast.data.xtream.IptvProvider
@@ -95,6 +102,7 @@ class IptvSettingsViewModel @Inject constructor(
     private val xtream: com.enigmacast.data.xtream.XtreamRepository,
     private val hidden: com.enigmacast.data.xtream.IptvHiddenCategories,
     private val syncEngine: EnigmaSyncEngine,
+    private val accounts: IptvAccountStore,
 ) : ViewModel() {
     /** Settings › IPTV › Categories: the open section's categories and which are hidden. */
     data class CategoryPage(
@@ -232,6 +240,19 @@ class IptvSettingsViewModel @Inject constructor(
     fun setRefreshInterval(interval: IptvRefreshInterval) = viewModelScope.launch {
         settingsRepository.update { it.copy(iptvRefreshInterval = interval) }
     }
+    val accountInfo: StateFlow<Map<String, XtreamAccountInfo>> = accounts.info
+    val expiryWarning: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.iptvExpiryWarning }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    fun setExpiryWarning(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.update { it.copy(iptvExpiryWarning = enabled) }
+    }
+    fun refreshAccountInfo(force: Boolean = false) = viewModelScope.launch {
+        accounts.refreshAll(force)
+    }
+    fun refreshAccountInfo(provider: IptvProvider, force: Boolean = false) = viewModelScope.launch {
+        accounts.refreshOne(provider, force)
+    }
 
     /** Saves the fields of the selected provider, writes it to the sync server, and reloads all. */
     fun saveProvider(provider: com.enigmacast.data.xtream.IptvProvider): com.enigmacast.data.xtream.IptvProvider? {
@@ -346,6 +367,9 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
     var count by remember { mutableStateOf(0) }
     LaunchedEffect(loads) { count = model.count() }
     LaunchedEffect(providers, loads) { model.refreshProviderCounts() }
+    val accountInfo by model.accountInfo.collectAsStateWithLifecycle()
+    val expiryWarning by model.expiryWarning.collectAsStateWithLifecycle()
+    LaunchedEffect(providers, loads) { model.refreshAccountInfo() }
 
     SettingsCard(stringResource(R.string.iptv_source_card)) {
         val sources = IptvSourceMode.entries
@@ -374,6 +398,22 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                     fontSize = 13.sp,
                 )
             }
+            if (expiryWarning) {
+                val nowSec = System.currentTimeMillis() / 1000
+                val warnings = providers.mapNotNull { provider ->
+                    val info = accountInfo[provider.id] ?: return@mapNotNull null
+                    if (!info.needsWarning(nowSec, IptvAccountStore.DEFAULT_WARN_DAYS)) return@mapNotNull null
+                    val days = info.daysLeft(nowSec) ?: return@mapNotNull null
+                    if (days < 0L || info.isExpired(nowSec)) {
+                        stringResource(R.string.iptv_account_warn_expired, provider.displayName())
+                    } else {
+                        stringResource(R.string.iptv_account_warn, provider.displayName(), days.toInt())
+                    }
+                }
+                warnings.forEach { line ->
+                    Text(line, color = EnigmaColors.Danger, fontSize = 13.sp)
+                }
+            }
             providers.forEach { provider ->
                 CompactListRow(
                     onClick = { editing = provider.id },
@@ -390,14 +430,18 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                         val status = providerCounts[provider.id]?.let {
                             stringResource(R.string.iptv_provider_channels, it)
                         } ?: stringResource(R.string.iptv_provider_not_loaded)
+                        val account = accountInfo[provider.id]
+                        val accountLine = account?.let { iptvAccountLine(it) }
+                        val warn = expiryWarning && account?.needsWarning(System.currentTimeMillis() / 1000, IptvAccountStore.DEFAULT_WARN_DAYS) == true
                         Text(
                             listOf(
                                 provider.kind.name,
                                 if (provider.enabled) stringResource(R.string.iptv_provider_enabled) else stringResource(R.string.iptv_provider_disabled),
                                 status,
+                                accountLine,
                                 providerFailures[provider.id]?.let { stringResource(R.string.iptv_provider_failed) },
                             ).filterNotNull().joinToString("  ·  "),
-                            color = if (providerFailures[provider.id] != null) EnigmaColors.Danger else EnigmaColors.Muted,
+                            color = if (providerFailures[provider.id] != null || warn) EnigmaColors.Danger else EnigmaColors.Muted,
                             fontSize = 12.sp,
                         )
                     }
@@ -429,6 +473,12 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                 ),
                 selectedIndex = refreshOptions.indexOf(refresh).coerceAtLeast(0),
                 onSelect = { model.setRefreshInterval(refreshOptions[it]) },
+            )
+            ToggleRow(
+                title = stringResource(R.string.iptv_expiry_warning),
+                description = stringResource(R.string.iptv_expiry_warning_desc),
+                checked = expiryWarning,
+                onCheckedChange = model::setExpiryWarning,
             )
 
             ValueRow(
@@ -595,6 +645,17 @@ private fun IptvProviderDialog(
                     color = EnigmaColors.Muted,
                     fontSize = 12.sp,
                 )
+                val expiryWarning by model.expiryWarning.collectAsStateWithLifecycle()
+                val accountInfo by model.accountInfo.collectAsStateWithLifecycle()
+                LaunchedEffect(provider.id) { model.refreshAccountInfo(provider) }
+                accountInfo[provider.id]?.let { info ->
+                    val warn = expiryWarning && info.needsWarning(System.currentTimeMillis() / 1000, IptvAccountStore.DEFAULT_WARN_DAYS)
+                    Text(
+                        iptvAccountLine(info),
+                        color = if (warn) EnigmaColors.Danger else EnigmaColors.Muted,
+                        fontSize = 12.sp,
+                    )
+                }
             }
             TvTextField(stringResource(R.string.iptv_provider_name), name, { name = it }, Modifier.fillMaxWidth(), fieldFocus = first)
             val kinds = IptvPlaylistKind.entries
@@ -998,4 +1059,35 @@ private fun IptvHiddenChannelsDialog(channels: List<IptvSettingsViewModel.Hidden
             }
         }
     }
+}
+
+
+@Composable
+private fun iptvAccountLine(info: XtreamAccountInfo): String {
+    val nowSec = System.currentTimeMillis() / 1000
+    val locale = LocalConfiguration.current.locales[0] ?: java.util.Locale.getDefault()
+    val parts = ArrayList<String>()
+    if (info.status.isNotBlank()) parts += info.status
+    if (info.isTrial) parts += stringResource(R.string.iptv_account_trial)
+    info.expDateEpochSec?.let { exp ->
+        val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
+            .format(Instant.ofEpochSecond(exp).atZone(ZoneId.systemDefault()))
+        val days = info.daysLeft(nowSec)
+        val expiry = when {
+            info.isExpired(nowSec) -> stringResource(R.string.iptv_account_expired)
+            days == 0L -> stringResource(R.string.iptv_account_expires_today, date)
+            days == 1L -> stringResource(R.string.iptv_account_one_day, date)
+            days != null -> stringResource(R.string.iptv_account_days_left, days.toInt(), date)
+            else -> stringResource(R.string.iptv_account_expires, date)
+        }
+        parts += expiry
+    }
+    if (info.activeCons != null || info.maxConnections != null) {
+        parts += stringResource(
+            R.string.iptv_account_connections,
+            info.activeCons ?: 0,
+            info.maxConnections ?: 0,
+        )
+    }
+    return parts.joinToString("  ·  ")
 }

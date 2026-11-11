@@ -4,6 +4,7 @@ import com.enigmacast.data.settingsimport.FtpReceiverClient
 import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.xtream.XStreamityPlaylists
 import com.enigmacast.domain.xtream.XtreamAccount
+import com.enigmacast.domain.xtream.XtreamAccountInfo
 import com.enigmacast.domain.xtream.XtreamCategory
 import com.enigmacast.domain.xtream.XtreamEpg
 import com.enigmacast.domain.xtream.XtreamEpisode
@@ -202,16 +203,22 @@ class XtreamRepository @Inject constructor(
     private val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
     private val refreshing: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    private suspend fun get(account: XtreamAccount, action: String, vararg params: Pair<String, String>): String = withContext(Dispatchers.IO) {
+    /** player_api.php with no action: the login's user_info (expiry, connections, status). */
+    suspend fun userInfo(account: XtreamAccount): XtreamAccountInfo? = withContext(Dispatchers.IO) {
+        val body = get(account, null)
+        XtreamAccountInfo.parse(body, System.currentTimeMillis())
+    }
+
+    private suspend fun get(account: XtreamAccount, action: String?, vararg params: Pair<String, String>): String = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
         val request = Request.Builder().url(XtreamUrls.api(account, action, *params)).header("User-Agent", USER_AGENT).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                EnigmaLog.networkError("Xtream $action on ${account.host}: HTTP ${response.code}")
+                EnigmaLog.networkError("Xtream ${action ?: "user_info"} on ${account.host}: HTTP ${response.code}")
                 throw IOException("HTTP ${response.code}")
             }
             val body = response.body.string()
-            EnigmaLog.network("Xtream $action on ${account.host}: ${body.length} bytes in ${System.currentTimeMillis() - started} ms")
+            EnigmaLog.network("Xtream ${action ?: "user_info"} on ${account.host}: ${body.length} bytes in ${System.currentTimeMillis() - started} ms")
             body
         }
     }

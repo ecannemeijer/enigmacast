@@ -1915,4 +1915,15 @@
     <string name="iptv_refresh_24h">Elke 24 uur</string>
     <string name="iptv_refresh_48h">Elke 48 uur</string>
     <string name="iptv_refresh_manual">Alleen handmatig</string>
+    <string name="iptv_account_expires">Verloopt %1$s</string>
+    <string name="iptv_account_days_left">Verloopt %2$s (nog %1$d dagen)</string>
+    <string name="iptv_account_one_day">Verloopt %1$s (nog 1 dag)</string>
+    <string name="iptv_account_expires_today">Verloopt vandaag (%1$s)</string>
+    <string name="iptv_account_expired">Verlopen</string>
+    <string name="iptv_account_connections">%1$d / %2$d verbindingen</string>
+    <string name="iptv_account_trial">Proef</string>
+    <string name="iptv_account_warn">%1$s verloopt over %2$d dagen</string>
+    <string name="iptv_account_warn_expired">%1$s is verlopen</string>
+    <string name="iptv_expiry_warning">Waarschuw voor het verlopen van een account</string>
+    <string name="iptv_expiry_warning_desc">Een melding verschijnt een paar dagen voordat een Xtream-login verloopt.</string>
 </resources>

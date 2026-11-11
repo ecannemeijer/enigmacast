@@ -1922,4 +1922,15 @@
     <string name="iptv_refresh_24h">Her 24 saatte bir</string>
     <string name="iptv_refresh_48h">Her 48 saatte bir</string>
     <string name="iptv_refresh_manual">Yalnızca elle</string>
+    <string name="iptv_account_expires">Bitiş: %1$s</string>
+    <string name="iptv_account_days_left">Bitiş: %2$s (%1$d gün kaldı)</string>
+    <string name="iptv_account_one_day">Bitiş: %1$s (1 gün kaldı)</string>
+    <string name="iptv_account_expires_today">Bugün bitiyor (%1$s)</string>
+    <string name="iptv_account_expired">Süresi doldu</string>
+    <string name="iptv_account_connections">%1$d / %2$d bağlantı</string>
+    <string name="iptv_account_trial">Deneme</string>
+    <string name="iptv_account_warn">%1$s %2$d gün içinde sona eriyor</string>
+    <string name="iptv_account_warn_expired">%1$s sona erdi</string>
+    <string name="iptv_expiry_warning">Hesap süresi dolmadan uyar</string>
+    <string name="iptv_expiry_warning_desc">Bir Xtream girişi sona ermeden birkaç gün önce bir uyarı görünür.</string>
 </resources>
