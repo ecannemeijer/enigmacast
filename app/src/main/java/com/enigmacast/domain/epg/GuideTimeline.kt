@@ -81,7 +81,11 @@ object GuideTimeline {
      */
     fun moveHorizontal(row: List<GuideEvent>, cursor: GuideCursor, direction: Int, nowSec: Long, lookbackSec: Long = 0L): GuideMove {
         val earliest = slotFloor(nowSec - lookbackSec.coerceAtLeast(0L))
-        val cells = cells(row, earliest, earliest + HORIZON_SEC)
+        // Horizon is measured from now, not from the lookback start; otherwise a 7-day
+        // lookback with a 7-day horizon would end at the current half hour and Right
+        // could never reach a future programme.
+        val latest = slotFloor(nowSec) + HORIZON_SEC
+        val cells = cells(row, earliest, latest)
         val current = cellAt(cells, cursor.focusSec) ?: return GuideMove(cursor, atLeftEdge = direction < 0)
         val index = cells.indexOf(current)
         if (direction > 0) {
