@@ -16,8 +16,17 @@ class MyItemsSectionsTest {
         val dupe = rec("bm:/hdd/a.ts", RecordingPlace.RECEIVER, RecordingStatus.READY, "/hdd/a.ts", 10)
         val s = MyItemsSections.split(listOf(tv, ourDone, ourNext), listOf(other, dupe), emptyList())
         assertEquals(listOf(tv), s.device)
+        assertEquals(emptyList<Recording>(), s.iptv)
         assertEquals(listOf("bm:/hdd/b.ts", "box1"), s.onReceiver.map { it.id })
         assertEquals(listOf(ourNext), s.scheduledOnReceiver)
+    }
+
+    @Test fun iptvRecordingsHaveTheirOwnSection() {
+        val sat = rec("sat", RecordingPlace.TV, RecordingStatus.READY)
+        val live = Recording("iptv1", "News", "CNN", "iptv:123", -1, 10, 70, RecordingPlace.TV, RecordingStatus.READY, "", iptvProviderId = "p1", iptvStreamId = "123")
+        val s = MyItemsSections.split(listOf(sat, live), emptyList(), emptyList())
+        assertEquals(listOf(sat), s.device)
+        assertEquals(listOf(live), s.iptv)
     }
 
     @Test fun receiverLabel() {

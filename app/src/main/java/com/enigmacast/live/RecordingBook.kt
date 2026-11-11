@@ -14,11 +14,15 @@ import com.enigmacast.data.settings.SettingsRepository
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.model.RecordingTarget
 import com.enigmacast.domain.model.ReceiverConfig
+import com.enigmacast.domain.recording.IptvConnectionLimit
+import com.enigmacast.domain.recording.IptvRecordAsk
+import com.enigmacast.domain.recording.IptvRecordTimes
 import com.enigmacast.domain.recording.RecordAsk
 import com.enigmacast.domain.recording.Recording
 import com.enigmacast.domain.recording.RecordingPlace
 import com.enigmacast.domain.recording.RecordingStatus
 import com.enigmacast.domain.recording.receiverTimers
+import com.enigmacast.domain.xtream.XtreamUrls
 import com.enigmacast.playback.LivePlaybackController
 import com.enigmacast.util.EnigmaLog
 import com.enigmacast.util.UiText
@@ -51,6 +55,10 @@ class RecordingBook @Inject constructor(
     private val streamTargets: StreamTargets,
     private val playback: LivePlaybackController,
     private val series: dagger.Lazy<SeriesRecorder>,
+    private val playlistSync: com.enigmacast.data.xtream.IptvPlaylistSync,
+    private val playlistStore: com.enigmacast.data.xtream.IptvPlaylistStore,
+    private val headerResolver: com.enigmacast.data.xtream.IptvHeaderResolver,
+    private val accounts: com.enigmacast.data.xtream.IptvAccountStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val gate = Mutex()
@@ -59,8 +67,10 @@ class RecordingBook @Inject constructor(
     private val _nowPlaying = MutableStateFlow<Recording?>(null)
     val nowPlaying: StateFlow<Recording?> = _nowPlaying.asStateFlow()
     private var loaded = false
+    private val iptvVolumeIndex = java.util.concurrent.atomic.AtomicInteger(0)
 
     init {
+        scope.launch { settingsRepository.settings.collect { iptvVolumeIndex.set(it.iptvRecordVolume) } }
         scope.launch { ensureArmed() }
     }
 
@@ -138,6 +148,97 @@ class RecordingBook @Inject constructor(
             }
             whenText
         }
+    }
+
+    /**
+     * Confirm step for an IPTV live or guide recording. [watchingSameProvider] is true when
+     * this TV is already playing a live stream from that provider (a second connection).
+     */
+    suspend fun prepareIptv(
+        event: GuideEvent,
+        channelName: String,
+        providerId: String,
+        streamId: String,
+        watchingSameProvider: Boolean,
+    ): IptvPrepareResult {
+        val now = nowSec()
+        if (event.endEpochSec <= now) return IptvPrepareResult.Message(UiText.res(R.string.record_already_ended))
+        awaitLoaded()
+        val existing = _items.value.firstOrNull { item ->
+            item.isIptv() && item.isActive() &&
+                (item.iptvStreamId == streamId || com.enigmacast.domain.tuner.NowEvents.key(item.reference) == com.enigmacast.domain.tuner.NowEvents.key(event.reference)) &&
+                item.beginEpochSec < event.endEpochSec && event.beginEpochSec < item.endEpochSec
+        }
+        if (existing != null) return IptvPrepareResult.Message(UiText.res(R.string.record_already_set))
+        val info = if (providerId.isNotBlank()) {
+            val provider = playlistStore.provider(providerId)
+            if (provider != null) runCatching { accounts.refreshOne(provider, force = false) }.getOrNull()
+            else accounts.info.value[providerId]
+        } else null
+        val localRecording = _items.value.count { it.isIptv() && it.status == RecordingStatus.RECORDING && (providerId.isBlank() || it.iptvProviderId == providerId) }
+        val used = IptvConnectionLimit.used(info?.activeCons, if (watchingSameProvider) 1 else 0, localRecording)
+        val warning = IptvConnectionLimit.wouldExceed(info?.maxConnections, used, extra = 1)
+        return IptvPrepareResult.Ask(
+            IptvRecordAsk(
+                event = event,
+                channelName = channelName,
+                providerId = providerId,
+                streamId = streamId,
+                connectionWarning = warning,
+                maxConnections = info?.maxConnections,
+                usedConnections = used,
+            ),
+        )
+    }
+
+    suspend fun scheduleIptv(ask: IptvRecordAsk): UiText {
+        val settings = settingsRepository.current()
+        val now = nowSec()
+        val event = ask.event
+        val (begin, end) = IptvRecordTimes.window(
+            event.beginEpochSec,
+            event.endEpochSec,
+            settings.iptvRecordMarginBeforeMin * 60,
+            settings.iptvRecordMarginAfterMin * 60,
+            now,
+        )
+        val recording = Recording(
+            id = Recording.newId(),
+            title = event.title.ifBlank { ask.channelName },
+            channelName = ask.channelName,
+            reference = event.reference,
+            eventId = event.eventId,
+            beginEpochSec = begin,
+            endEpochSec = end,
+            place = RecordingPlace.TV,
+            status = RecordingStatus.SCHEDULED,
+            receiverId = "",
+            iptvProviderId = ask.providerId,
+            iptvStreamId = ask.streamId,
+        )
+        save(recording)
+        if (recording.beginEpochSec <= now + START_SLOP_SEC) startCapture(recording.id)
+        else armOne(recording)
+        return if (event.beginEpochSec <= now) {
+            UiText.res(R.string.iptv_record_started, recording.title)
+        } else {
+            UiText.res(R.string.iptv_record_scheduled, recording.title)
+        }
+    }
+
+    suspend fun stopIptvStream(streamId: String) {
+        if (streamId.isBlank()) return
+        awaitLoaded()
+        _items.value.filter { it.isIptv() && it.iptvStreamId == streamId && it.status == RecordingStatus.RECORDING }
+            .forEach { stop(it.id) }
+    }
+
+    fun isRecordingStream(streamId: String): Boolean =
+        streamId.isNotBlank() && _items.value.any { it.isIptv() && it.iptvStreamId == streamId && it.status == RecordingStatus.RECORDING }
+
+    fun iptvVolume(): IptvStorageVolume? {
+        val all = IptvRecordStorage.volumes(context)
+        return all.getOrNull(iptvVolumeIndex.get().coerceAtLeast(0)) ?: all.firstOrNull()
     }
 
     suspend fun stop(id: String) {
@@ -336,7 +437,12 @@ class RecordingBook @Inject constructor(
         return _items.value.firstOrNull { it.id == id }
     }
 
-    fun fileFor(item: Recording): File = File(moviesDir(), "${item.id}.ts")
+    fun fileFor(item: Recording): File {
+        if (item.isIptv()) {
+            return IptvRecordStorage.fileFor(context, item.id, iptvVolumeIndex.get())
+        }
+        return File(moviesDir(), "${item.id}.ts")
+    }
 
     /**
      * Where a capture on this device reads from. "Recording size" (Settings › Playback) picks
@@ -346,6 +452,7 @@ class RecordingBook @Inject constructor(
      * finally to the original stream, so the programme is still recorded.
      */
     suspend fun streamFor(item: Recording): com.enigmacast.domain.recording.CaptureTarget? {
+        if (item.isIptv()) return iptvTarget(item)
         val receiver = receiverFor(item) ?: return null
         val preset = settingsRepository.current().playback.recordingPreset
         val target = streamTargets.recording(receiver, item.reference, preset)
@@ -479,6 +586,32 @@ class RecordingBook @Inject constructor(
     sealed class PrepareResult {
         data class Ask(val ask: RecordAsk) : PrepareResult()
         data class Message(val text: UiText) : PrepareResult()
+    }
+
+    sealed class IptvPrepareResult {
+        data class Ask(val ask: IptvRecordAsk) : IptvPrepareResult()
+        data class Message(val text: UiText) : IptvPrepareResult()
+    }
+
+    private suspend fun iptvTarget(item: Recording): com.enigmacast.domain.recording.CaptureTarget? {
+        val streamId = item.iptvStreamId.ifBlank { item.reference.removePrefix("iptv:").takeIf { item.reference.startsWith("iptv:") }.orEmpty() }
+        if (streamId.isBlank()) return null
+        val found = playlistSync.liveChannels(listOf(streamId)).map { it.second }.firstOrNull { candidate ->
+            item.iptvProviderId.isBlank() || candidate.providerId == item.iptvProviderId || candidate.id == streamId
+        }
+        val providerId = item.iptvProviderId.ifBlank { found?.providerId.orEmpty() }
+        val url = found?.url?.takeIf { it.isNotBlank() }
+            ?: providerId.takeIf { it.isNotBlank() }?.let { id ->
+                playlistStore.provider(id)?.account()?.let { account -> XtreamUrls.live(account, streamId) }
+            }
+        if (url.isNullOrBlank()) return null
+        val headers = headerResolver.forProviderId(providerId, found)
+        return com.enigmacast.domain.recording.CaptureTarget(
+            urls = listOf(url),
+            authorization = null,
+            userAgent = headers.userAgent,
+            headers = headers.headers,
+        )
     }
 
     companion object {

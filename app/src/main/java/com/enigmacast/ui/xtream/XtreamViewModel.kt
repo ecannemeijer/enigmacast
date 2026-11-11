@@ -105,6 +105,7 @@ class XtreamViewModel @Inject constructor(
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
     private val boostStore: com.enigmacast.data.player.AudioBoostStore,
     private val reminders: com.enigmacast.live.ReminderScheduler,
+    private val recordings: com.enigmacast.live.RecordingBook,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
     /** Null until the active receiver was checked. The menu item shows when it has playlists. */
@@ -629,6 +630,61 @@ class XtreamViewModel @Inject constructor(
     fun toggleIptvReminder(event: com.enigmacast.domain.epg.GuideEvent, channelName: String, providerId: String, kind: com.enigmacast.domain.reminder.ReminderKind) {
         reminders.toggle(event, channelName, "", kind, providerId)
     }
+
+    val recordingItems = recordings.items
+    var iptvRecordAsk by mutableStateOf<com.enigmacast.domain.recording.IptvRecordAsk?>(null)
+        private set
+
+    fun isRecordingStream(streamId: String): Boolean = recordings.isRecordingStream(streamId)
+
+    /** Record the live channel now, or stop the capture already running for it. */
+    fun recordNow() {
+        val item = playing?.item?.takeIf { it.section == XtreamSection.LIVE } ?: return
+        if (recordings.isRecordingStream(item.id)) {
+            viewModelScope.launch {
+                recordings.stopIptvStream(item.id)
+                showNotice(context.getString(com.enigmacast.R.string.iptv_record_stop))
+            }
+            return
+        }
+        val now = System.currentTimeMillis() / 1000
+        val current = epgNow(item.id).orEmpty().firstOrNull { it.startSec <= now && now < it.endSec }
+        val begin = current?.startSec ?: now
+        val end = current?.endSec ?: (now + com.enigmacast.domain.recording.IptvRecordTimes.DEFAULT_LIVE_DURATION_SEC)
+        val event = com.enigmacast.domain.epg.GuideEvent(
+            eventId = -1,
+            reference = IptvGuideRows.reference(item),
+            title = current?.title?.ifBlank { playing?.title.orEmpty() } ?: playing?.title.orEmpty(),
+            shortDescription = "",
+            plot = current?.description.orEmpty(),
+            beginEpochSec = begin,
+            durationSec = (end - begin).coerceAtLeast(60L),
+        )
+        requestIptvRecord(event, item)
+    }
+
+    fun requestIptvRecord(event: com.enigmacast.domain.epg.GuideEvent, item: XtreamItem) {
+        viewModelScope.launch {
+            // Recording the current live channel uses a second connection alongside playback.
+            val watchingSame = playing?.item?.section == XtreamSection.LIVE &&
+                (item.providerId.isBlank() || playing?.item?.providerId == item.providerId)
+            when (val result = recordings.prepareIptv(event, item.name, item.providerId, item.id, watchingSame)) {
+                is com.enigmacast.live.RecordingBook.IptvPrepareResult.Ask -> {
+                    if (result.ask.connectionWarning) iptvRecordAsk = result.ask
+                    else showNotice(recordings.scheduleIptv(result.ask).resolve(context))
+                }
+                is com.enigmacast.live.RecordingBook.IptvPrepareResult.Message -> showNotice(result.text.resolve(context))
+            }
+        }
+    }
+
+    fun confirmIptvRecord() {
+        val ask = iptvRecordAsk ?: return
+        iptvRecordAsk = null
+        viewModelScope.launch { showNotice(recordings.scheduleIptv(ask).resolve(context)) }
+    }
+
+    fun dismissIptvRecord() { iptvRecordAsk = null }
 
     /**
      * Listings for guide rows, the same sources as the channel list ([requestEpg]): the

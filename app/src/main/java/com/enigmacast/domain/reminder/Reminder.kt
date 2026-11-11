@@ -21,6 +21,9 @@ data class Reminder(
     /** The receiver whose channel list the reminder came from; blank for any. */
     val receiverId: String = "",
     val createdAtMs: Long = 0,
+    val kind: ReminderKind = ReminderKind.AUTO_SWITCH,
+    /** IPTV provider of a guide reminder; blank for satellite AutoSwitch. */
+    val providerId: String = "",
 ) {
     /** Same key as [GuideEvent.programmeKey], so both guide views can mark the programme. */
     val key: String get() = keyOf(serviceReference, beginEpochSec)
@@ -28,7 +31,7 @@ data class Reminder(
     companion object {
         fun keyOf(reference: String, beginEpochSec: Long): String = "${NowEvents.key(reference)}|$beginEpochSec"
 
-        fun of(event: GuideEvent, channelName: String, receiverId: String, nowMs: Long, kind: ReminderKind = ReminderKind.AUTO_SWITCH, providerId: String = "): Reminder = Reminder(
+        fun of(event: GuideEvent, channelName: String, receiverId: String, nowMs: Long, kind: ReminderKind = ReminderKind.AUTO_SWITCH, providerId: String = ""): Reminder = Reminder(
             serviceReference = event.reference,
             channelName = channelName,
             eventId = event.eventId,

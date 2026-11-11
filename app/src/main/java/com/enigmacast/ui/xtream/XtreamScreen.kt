@@ -660,6 +660,7 @@ fun XtreamScreen(
                 compact = true,
             )
         }
+        IptvRecordAskDialog(model)
         val accounts = detection?.accounts.orEmpty()
         // The live channel and category lists keep their place while hidden: on every zap they move
         // to the playing channel / its category silently, so the panel opens there without scrolling.
@@ -1479,12 +1480,14 @@ private fun IptvMiniOsd(model: XtreamViewModel, playing: XtreamPlaying, modifier
         picon = item?.icon.orEmpty(),
     )
     val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epgOf(it.id) }?.let { IptvOsdModel.guide(entry, it) }
+    val recordingItems by model.recordingItems.collectAsStateWithLifecycle()
+    val recording = item != null && recordingItems.any { it.isIptv() && it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING && it.iptvStreamId == item.id }
     com.enigmacast.ui.remote.MiniOsd(
         channel = entry,
         number = entry.number,
         guide = guide,
         loading = model.buffering,
-        recording = false,
+        recording = recording,
         picon = { e -> e.picon.takeIf { it.isNotBlank() }?.let { model.logo(it) } },
         cachedPicon = { null },
         scrim = EnigmaColors.scrim(look.second),
@@ -1521,6 +1524,8 @@ private fun IptvOsd(
         picon = logo,
     )
     val guide = item?.takeIf { it.section == XtreamSection.LIVE }?.let { model.epgOf(it.id) }?.let { IptvOsdModel.guide(entry, it) }
+    val recordingItems by model.recordingItems.collectAsStateWithLifecycle()
+    val recording = item != null && recordingItems.any { it.isIptv() && it.status == com.enigmacast.domain.recording.RecordingStatus.RECORDING && it.iptvStreamId == item.id }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (showChannelBanner) {
             com.enigmacast.ui.remote.ChannelBanner(
@@ -1532,7 +1537,7 @@ private fun IptvOsd(
                 details = details,
                 optionsHint = !fromZap && !quickBar,
                 zapHint = fromZap && !quickBar,
-                recording = false,
+                recording = recording,
                 osdInfo = IptvOsdModel.INFO,
                 osdFields = IptvOsdModel.FIELDS,
                 osdSkin = look.first,
@@ -1570,7 +1575,7 @@ private fun IptvOsd(
                     onRestart = model::restart,
                     onPause = { if (playing.item?.section == XtreamSection.LIVE) model.togglePause() },
                     onQuality = {},
-                    onRecord = {},
+                    onRecord = model::recordNow,
                     onSearch = {
                         model.stop()
                         onSearch()

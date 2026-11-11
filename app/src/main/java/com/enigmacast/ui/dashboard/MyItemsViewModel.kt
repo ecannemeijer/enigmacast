@@ -283,6 +283,8 @@ class MyItemsViewModel @Inject constructor(
     /** Show the recordings that are actually stored, including one that just stopped. */
     suspend fun reloadNow() = book.reload()
 
+    fun iptvVolume(): com.enigmacast.live.IptvStorageVolume? = book.iptvVolume()
+
     /** Back from playback: highlight this recording again. */
     fun focusRow(id: String) = restore(id)
 
