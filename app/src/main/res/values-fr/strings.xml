@@ -1924,4 +1924,15 @@
     <string name="iptv_refresh_24h">Toutes les 24 heures</string>
     <string name="iptv_refresh_48h">Toutes les 48 heures</string>
     <string name="iptv_refresh_manual">Manuel uniquement</string>
+    <string name="iptv_account_expires">Expire le %1$s</string>
+    <string name="iptv_account_days_left">Expire le %2$s (%1$d jours restants)</string>
+    <string name="iptv_account_one_day">Expire le %1$s (1 jour restant)</string>
+    <string name="iptv_account_expires_today">Expire aujourd\'hui (%1$s)</string>
+    <string name="iptv_account_expired">Expiré</string>
+    <string name="iptv_account_connections">%1$d / %2$d connexions</string>
+    <string name="iptv_account_trial">Essai</string>
+    <string name="iptv_account_warn">%1$s expire dans %2$d jours</string>
+    <string name="iptv_account_warn_expired">%1$s a expiré</string>
+    <string name="iptv_expiry_warning">Avertir avant l\'expiration d\'un compte</string>
+    <string name="iptv_expiry_warning_desc">Un avis apparaît quelques jours avant l\'expiration d\'un identifiant Xtream.</string>
 </resources>

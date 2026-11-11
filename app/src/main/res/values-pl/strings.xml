@@ -1922,4 +1922,15 @@
     <string name="iptv_refresh_24h">Co 24 godziny</string>
     <string name="iptv_refresh_48h">Co 48 godzin</string>
     <string name="iptv_refresh_manual">Tylko ręcznie</string>
+    <string name="iptv_account_expires">Wygasa %1$s</string>
+    <string name="iptv_account_days_left">Wygasa %2$s (pozostało %1$d dni)</string>
+    <string name="iptv_account_one_day">Wygasa %1$s (pozostał 1 dzień)</string>
+    <string name="iptv_account_expires_today">Wygasa dzisiaj (%1$s)</string>
+    <string name="iptv_account_expired">Wygasło</string>
+    <string name="iptv_account_connections">%1$d / %2$d połączeń</string>
+    <string name="iptv_account_trial">Próbne</string>
+    <string name="iptv_account_warn">%1$s wygaśnie za %2$d dni</string>
+    <string name="iptv_account_warn_expired">%1$s wygasło</string>
+    <string name="iptv_expiry_warning">Ostrzegaj przed wygaśnięciem konta</string>
+    <string name="iptv_expiry_warning_desc">Powiadomienie pojawi się na kilka dni przed wygaśnięciem logowania Xtream.</string>
 </resources>
