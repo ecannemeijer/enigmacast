@@ -1,8 +1,8 @@
 {
-  "versionCode": 140,
-  "versionName": "1.0.2",
+  "versionCode": 141,
+  "versionName": "1.0.3",
   "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
-  "notes": "What's new in EnigmaCast\n\nFaster and more reliable zapping on satellite channels, with fewer green or noisy pictures on some Android TV boxes. Subtitles stay off by default. SD channels scale better. Pause is disabled on live TV with picture because there is no timeshift. New OpenPLi skin with a classic Enigma2-style channel list: OK opens the list; colour keys open bouquets, EPG, guide and options.",
+  "notes": "What's new in EnigmaCast\n\nYou can now play catch-up from the TV guide, and set a reminder or AutoSwitch for a programme that has not started yet. Record IPTV now, or schedule a recording from the guide, to the TV's internal storage or a USB drive. For Xtream accounts, Settings shows whether the subscription is active, when it expires, and how many connections are in use. Each IPTV provider can have its own user-agent and extra HTTP headers. You can choose how often the playlist is refreshed: every 6, 12, 24 or 48 hours, or only when you refresh it yourself. Moving right in the TV guide now correctly reaches programmes that have not started yet.",
   "companion": {
     "versionCode": 120,
     "versionName": "1.0.0-beta.21",
