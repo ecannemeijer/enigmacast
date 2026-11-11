@@ -1916,4 +1916,11 @@
     <string name="pli_hint_yellow">Guide</string>
     <string name="pli_hint_blue">Options</string>
     <string name="pli_hint_ok">OK: watch</string>
+    <string name="iptv_refresh_interval">Playlist refresh</string>
+    <string name="iptv_refresh_interval_desc">How often the app reloads the playlist in the background. You can always refresh it yourself.</string>
+    <string name="iptv_refresh_6h">Every 6 hours</string>
+    <string name="iptv_refresh_12h">Every 12 hours</string>
+    <string name="iptv_refresh_24h">Every 24 hours</string>
+    <string name="iptv_refresh_48h">Every 48 hours</string>
+    <string name="iptv_refresh_manual">Manual only</string>
 </resources>
