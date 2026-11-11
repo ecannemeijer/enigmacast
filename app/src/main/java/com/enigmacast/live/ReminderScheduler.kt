@@ -2,6 +2,7 @@ package com.enigmacast.live
 
 import com.enigmacast.domain.epg.GuideEvent
 import com.enigmacast.domain.reminder.Reminder
+import com.enigmacast.domain.reminder.ReminderKind
 import com.enigmacast.domain.reminder.ReminderNotice
 import com.enigmacast.domain.reminder.ReminderPlanner
 import com.enigmacast.domain.reminder.ReminderStorage
@@ -53,6 +54,8 @@ class ReminderScheduler(
     }
 
     fun isScheduled(key: String): Boolean = key in _scheduledKeys.value
+    fun kindOf(key: String): com.enigmacast.domain.reminder.ReminderKind? =
+        _reminders.value.firstOrNull { it.key == key }?.kind
 
     /** Sets AutoSwitch for [reminder]; false when the programme already began. */
     fun schedule(reminder: Reminder): Boolean {
@@ -66,13 +69,13 @@ class ReminderScheduler(
     enum class Toggle { SET, CANCELLED, ALREADY_BEGUN }
 
     /** AutoSwitch from the guide: set it for [event], or cancel it when it was set. */
-    fun toggle(event: GuideEvent, channelName: String, receiverId: String): Toggle {
+    fun toggle(event: GuideEvent, channelName: String, receiverId: String, kind: ReminderKind = ReminderKind.AUTO_SWITCH, providerId: String = ""): Toggle {
         val key = event.programmeKey
-        if (isScheduled(key)) {
+        if (kindOf(key) == kind) {
             cancel(key)
             return Toggle.CANCELLED
         }
-        return if (schedule(Reminder.of(event, channelName, receiverId, clockMs()))) Toggle.SET else Toggle.ALREADY_BEGUN
+        return if (schedule(Reminder.of(event, channelName, receiverId, clockMs(), kind, providerId))) Toggle.SET else Toggle.ALREADY_BEGUN
     }
 
     fun cancel(key: String) {
@@ -150,7 +153,13 @@ class ReminderScheduler(
         if (!foreground) return
         if (shown != null) {
             if (now >= shown.deadlineSec) {
-                fire(shown.reminder)
+                if (shown.reminder.kind == ReminderKind.REMIND) {
+                    _notice.value = null
+                    publish(ReminderPlanner.remove(_reminders.value, shown.reminder.key))
+                    wake()
+                } else {
+                    fire(shown.reminder)
+                }
             } else {
                 _notice.value = shown.copy(alsoDue = ReminderPlanner.sameSlot(_reminders.value, shown.reminder))
             }

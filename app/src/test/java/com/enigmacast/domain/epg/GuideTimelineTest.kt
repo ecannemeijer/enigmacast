@@ -154,4 +154,19 @@ class GuideTimelineTest {
         assertEquals(1, GuideTimeline.focusedCell(row, GuideCursor(0, base, base), now)?.event?.eventId)
         assertEquals(2, GuideTimeline.focusedCell(row, GuideCursor(0, base + 90 * 60, base), now)?.event?.eventId)
     }
+
+    @Test
+    fun lookbackLetsTheCursorEnterThePast() {
+        val now = 1_700_002_800L // on a half hour
+        val lookback = 2 * 60 * 60L
+        val past = GuideEvent(1, "1:0:1", "Earlier", "", "", now - 3600, 1800)
+        val live = GuideEvent(2, "1:0:1", "Now", "", "", now - 600, 1800)
+        val row = listOf(past, live)
+        val cursor = GuideCursor(0, now, GuideTimeline.slotFloor(now))
+        val left = GuideTimeline.moveHorizontal(row, cursor, -1, now, lookback)
+        assertFalse(left.atLeftEdge)
+        assertEquals(past.beginEpochSec, left.cursor.focusSec)
+        val cell = GuideTimeline.focusedCell(row, left.cursor, now, lookback)
+        assertEquals(1, cell?.event?.eventId)
+    }
 }

@@ -662,7 +662,10 @@ class AppViewModel @Inject constructor(
             return
         }
         when (autoSwitcher.switchTo(reminder)) {
-            AutoSwitcher.Result.SWITCHED -> openStream()
+            AutoSwitcher.Result.SWITCHED -> {
+                if (com.enigmacast.ui.xtream.IptvGuideRows.isIptvReference(reminder.serviceReference)) openXtream()
+                else openStream()
+            }
             AutoSwitcher.Result.ZAP_FAILED -> showReminderMessage(UiText.res(R.string.autoswitch_zap_failed, reminder.channelName))
             AutoSwitcher.Result.NOT_THIS_RECEIVER -> Unit
         }

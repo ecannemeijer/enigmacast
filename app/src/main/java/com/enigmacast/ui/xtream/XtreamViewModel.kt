@@ -104,6 +104,7 @@ class XtreamViewModel @Inject constructor(
     private val equivalents: com.enigmacast.data.channel.EquivalentChannelsController,
     private val channelSwitch: com.enigmacast.data.channel.ChannelSwitchBus,
     private val boostStore: com.enigmacast.data.player.AudioBoostStore,
+    private val reminders: com.enigmacast.live.ReminderScheduler,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
     /** Null until the active receiver was checked. The menu item shows when it has playlists. */
@@ -620,6 +621,15 @@ class XtreamViewModel @Inject constructor(
         return playing != null
     }
 
+    val scheduledReminderKeys = reminders.scheduledKeys
+
+    fun isIptvReminderSet(event: com.enigmacast.domain.epg.GuideEvent): Boolean = reminders.isScheduled(event.programmeKey)
+    fun iptvReminderKind(event: com.enigmacast.domain.epg.GuideEvent): com.enigmacast.domain.reminder.ReminderKind? = reminders.kindOf(event.programmeKey)
+
+    fun toggleIptvReminder(event: com.enigmacast.domain.epg.GuideEvent, channelName: String, providerId: String, kind: com.enigmacast.domain.reminder.ReminderKind) {
+        reminders.toggle(event, channelName, "", kind, providerId)
+    }
+
     /**
      * Listings for guide rows, the same sources as the channel list ([requestEpg]): the
      * satellite guide matched by name, rows stored in Room, then Xtream ([RowGuide.CONCURRENCY]
@@ -633,7 +643,7 @@ class XtreamViewModel @Inject constructor(
         val todo = rows.filter { it.section == XtreamSection.LIVE }.distinctBy { it.id }
         if (todo.isEmpty()) return
         val sat = try {
-            satelliteEpg.byName(todo.map { it.name }, hours = 24)
+            satelliteEpg.byName(todo.map { it.name }, hours = 24, pastHours = 7 * 24)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -663,7 +673,8 @@ class XtreamViewModel @Inject constructor(
             network.forEach { (item, xtream) ->
                 launch {
                     val bulk = sat[item.name].orEmpty()
-                    val list = chooseGuide(rowEpg.fetch(xtream, item.id).orEmpty(), bulk, System.currentTimeMillis() / 1000)
+                    val list = if (item.hasArchive) loadGuide(item)
+                    else chooseGuide(rowEpg.fetch(xtream, item.id).orEmpty(), bulk, System.currentTimeMillis() / 1000)
                     if (list.isNotEmpty()) publishEpg(item.id, list)
                     onRow(item, list)
                 }
@@ -1635,6 +1646,7 @@ class XtreamViewModel @Inject constructor(
         val target = request.account
         if (target != null && target.key != current.key) choose(target, startLive = false)
         play(request.item)
+        liveResume = true
         channelSwitch.clear(request.id)
     }
 

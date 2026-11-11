@@ -124,6 +124,7 @@ fun GuideTimelineGrid(
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     modifier: Modifier = Modifier,
     autoSwitchKeys: Set<String> = emptySet(),
+    catchupKeys: Set<String> = emptySet(),
     recordingReferences: Set<String> = emptySet(),
     /** Text in a row's empty time (no programmes known), e.g. "no guide information"; null: blank. */
     emptyLabel: (BouquetEntry) -> String? = { null },
@@ -156,6 +157,7 @@ fun GuideTimelineGrid(
                 picon = picon,
                 cachedPicon = cachedPicon,
                 autoSwitchKeys = autoSwitchKeys,
+                catchupKeys = catchupKeys,
                 recordingReferences = recordingReferences,
                 emptyLabel = emptyLabel,
                 modifier = Modifier.weight(1f),
@@ -328,6 +330,7 @@ private fun GuideRows(
     picon: suspend (BouquetEntry) -> ImageBitmap?,
     cachedPicon: (BouquetEntry) -> ImageBitmap?,
     autoSwitchKeys: Set<String>,
+    catchupKeys: Set<String>,
     recordingReferences: Set<String>,
     emptyLabel: (BouquetEntry) -> String?,
     modifier: Modifier = Modifier,
@@ -365,6 +368,7 @@ private fun GuideRows(
                 playing = playingReference.isNotBlank() && NowEvents.key(entry.reference) == playingKey,
                 nowSec = nowSec,
                 autoSwitchKeys = autoSwitchKeys,
+                catchupKeys = catchupKeys,
                 recording = isRecording(recordingReferences, entry.reference),
                 dpPerSec = dpPerSec,
                 picon = picon,
@@ -386,6 +390,7 @@ private fun GuideRow(
     playing: Boolean,
     nowSec: Long,
     autoSwitchKeys: Set<String>,
+    catchupKeys: Set<String>,
     recording: Boolean,
     dpPerSec: Float,
     picon: suspend (BouquetEntry) -> ImageBitmap?,
@@ -435,6 +440,7 @@ private fun GuideRow(
                     marked = focused && !active,
                     airing = cell.startSec <= nowSec && nowSec < cell.endSec,
                     autoSwitch = cell.event?.programmeKey?.let { it in autoSwitchKeys } == true,
+                    catchup = cell.event?.programmeKey?.let { it in catchupKeys } == true,
                     x = ((cell.startSec - windowStartSec) * dpPerSec).dp,
                     width = ((cell.endSec - cell.startSec) * dpPerSec).dp,
                     nowSec = nowSec,
@@ -446,7 +452,7 @@ private fun GuideRow(
 }
 
 @Composable
-private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, x: Dp, width: Dp, nowSec: Long, emptyLabel: String? = null) {
+private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, airing: Boolean, autoSwitch: Boolean, catchup: Boolean = false, x: Dp, width: Dp, nowSec: Long, emptyLabel: String? = null) {
     val event = cell.event
     val spec = LocalMotionSpec.current
     val scale by animateFloatAsState(
@@ -481,6 +487,16 @@ private fun GuideCellBox(cell: GuideCell, focused: Boolean, marked: Boolean, air
         ) {
         if (autoSwitch) {
             AutoSwitchMark(if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent, 12.dp)
+            Spacer(Modifier.width(4.dp))
+        }
+        if (catchup) {
+            Text(
+                stringResource(R.string.iptv_catchup_badge),
+                color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Accent,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
             Spacer(Modifier.width(4.dp))
         }
         Text(

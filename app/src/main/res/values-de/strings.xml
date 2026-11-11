@@ -1935,4 +1935,11 @@
     <string name="iptv_provider_user_agent_desc">Leer lassen, um die Vorgabe der App zu verwenden (EnigmaCast).</string>
     <string name="iptv_provider_headers">HTTP-Header</string>
     <string name="iptv_provider_headers_desc">Ein Header pro Zeile, zum Beispiel Referer: http://example.com</string>
+    <string name="iptv_catchup_badge">Replay</string>
+    <string name="iptv_guide_future">%1$s — diese Sendung hat noch nicht begonnen.</string>
+    <string name="iptv_reminder_set">Erinnern</string>
+    <string name="iptv_reminder_cancel">Erinnerung aus</string>
+    <string name="iptv_reminder_notice_title">Erinnerung</string>
+    <string name="iptv_reminder_notice">%1$s beginnt auf %2$s. Zum Anschauen OK drücken.</string>
+    <string name="iptv_reminder_watch">Ansehen</string>
 </resources>
