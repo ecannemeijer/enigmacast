@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -18,7 +19,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +34,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -45,13 +52,12 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +67,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,9 +77,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -83,23 +99,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.enigmacast.R
+import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.domain.radio.RadioCategory
 import com.enigmacast.domain.radio.RadioStation
 import kotlinx.coroutines.delay
 
-internal val RADIO_BG = Color(0xFF07090F)
-internal val RADIO_SURFACE = Color(0xFF181C27)
-internal val RADIO_ACCENT = Color(0xFF2979FF)
-internal val RADIO_TEXT = Color(0xFFF0F2F8)
-internal val RADIO_MUTED = Color(0xFF7A8499)
-internal val RADIO_GOLD = Color(0xFFFFB300)
 private val RADIO_CARD_WIDTH = 108.dp
 private val RADIO_CARD_ART = 48.dp
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RadioScreen(
     onBack: () -> Unit = {},
@@ -110,8 +130,18 @@ fun RadioScreen(
     val isTv = true
     val isTouch = false
     val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var fullscreen by remember { mutableStateOf(false) }
     var selectedStation by remember { mutableStateOf<RadioStation?>(null) }
+    var countryMenuOpen by remember { mutableStateOf(false) }
+    var genreMenuOpen by remember { mutableStateOf(false) }
+    var searchEditing by remember { mutableStateOf(false) }
+    var radioHasFocus by remember { mutableStateOf(false) }
+    val imeVisible = WindowInsets.isImeVisible
+    var imeSeen by remember { mutableStateOf(false) }
+    val anchors = remember { RadioFocusAnchors() }
+
+    val overlayOpen = fullscreen || countryMenuOpen || genreMenuOpen || selectedStation != null || searchEditing
 
     fun play(station: RadioStation) = viewModel.playStation(station)
     fun openFullscreen(station: RadioStation) {
@@ -130,8 +160,35 @@ fun RadioScreen(
         ).show()
     }
 
-    BackHandler(enabled = fullscreen) {
-        fullscreen = false
+    fun handleRadioBack(): Boolean {
+        when {
+            imeVisible || searchEditing -> {
+                searchEditing = false
+                imeSeen = false
+                keyboard?.hide()
+            }
+            countryMenuOpen -> countryMenuOpen = false
+            genreMenuOpen -> genreMenuOpen = false
+            selectedStation != null -> selectedStation = null
+            fullscreen -> fullscreen = false
+            else -> onBack()
+        }
+        return true
+    }
+
+    // Only while Radio content (or an overlay) owns the focus, so Back on the left menu
+    // still walks up the dashboard like every other page.
+    BackHandler(enabled = radioHasFocus || overlayOpen) {
+        handleRadioBack()
+    }
+
+    LaunchedEffect(imeVisible, searchEditing) {
+        if (searchEditing && imeVisible) imeSeen = true
+        if (searchEditing && imeSeen && !imeVisible) {
+            searchEditing = false
+            imeSeen = false
+        }
+        if (!searchEditing) imeSeen = false
     }
 
     LaunchedEffect(
@@ -149,18 +206,50 @@ fun RadioScreen(
         fullscreen = true
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(RADIO_BG)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(EnigmaColors.Canvas)
+            .onFocusChanged { radioHasFocus = it.hasFocus }
+            .onPreviewKeyEvent { event ->
+                if (event.key != Key.Back && event.key != Key.Escape) return@onPreviewKeyEvent false
+                val ours = radioHasFocus || overlayOpen
+                if (!ours) return@onPreviewKeyEvent false
+                // The system IME (its own window) gets Back first and hides itself.
+                if (imeVisible) return@onPreviewKeyEvent false
+                if (event.type == KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                if (event.type == KeyEventType.KeyUp) {
+                    handleRadioBack()
+                    return@onPreviewKeyEvent true
+                }
+                false
+            },
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             RadioTopBar(
                 query = state.query,
                 isTouch = isTouch,
                 contentFocus = contentFocus,
-                onBack = onBack,
+                anchors = anchors,
+                editing = searchEditing,
+                onEditingChange = { searchEditing = it },
+                onBack = { handleRadioBack() },
                 onQueryChange = viewModel::onQueryChange,
                 onRetry = viewModel::retryBrowse
             )
             RadioFilterRow(
                 state = state,
+                anchors = anchors,
+                countryMenuOpen = countryMenuOpen,
+                onCountryMenuOpenChange = {
+                    countryMenuOpen = it
+                    if (it) genreMenuOpen = false
+                },
+                genreMenuOpen = genreMenuOpen,
+                onGenreMenuOpenChange = {
+                    genreMenuOpen = it
+                    if (it) countryMenuOpen = false
+                },
                 onCountrySelected = viewModel::onCountrySelected,
                 onTagSelected = viewModel::onTagSelected,
                 onToggleCountryPinned = viewModel::toggleCountryPinned
@@ -177,7 +266,7 @@ fun RadioScreen(
                     state.isBrowseLoading && !state.isFilterActive -> {
                         CircularProgressIndicator(
                             modifier = Modifier.align(Alignment.Center),
-                            color = RADIO_ACCENT
+                            color = EnigmaColors.Focus
                         )
                     }
                     state.error == "browse_failed" && !state.isFilterActive -> {
@@ -203,24 +292,38 @@ fun RadioScreen(
             }
             RadioNowPlayingBar(
                 state = state,
+                anchors = anchors,
                 onTogglePlayPause = viewModel::togglePlayPause,
                 onToggleFavorite = { station -> toggleFavorite(station) },
+                onPlayPrevious = { viewModel.playAdjacent(-1) },
+                onPlayNext = { viewModel.playAdjacent(1) },
                 onOpenFullscreen = { station -> openFullscreen(station) }
             )
         }
 
         if (fullscreen) {
             state.nowPlaying?.let { station ->
-                RadioFullscreenPlayer(
-                    station = station,
-                    state = state,
-                    onBack = { fullscreen = false },
-                    onTogglePlayPause = viewModel::togglePlayPause,
-                    onToggleFavorite = { toggleFavorite(station) },
-                    onPlayPrevious = { viewModel.playAdjacent(-1) },
-                    onPlayNext = { viewModel.playAdjacent(1) },
-                    onCycleSleepTimer = viewModel::cycleSleepTimer
-                )
+                // A window-level dialog covers the whole activity, so the left menu is gone.
+                Dialog(
+                    onDismissRequest = { fullscreen = false },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false,
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = false,
+                    ),
+                ) {
+                    RadioFullscreenPlayer(
+                        station = station,
+                        state = state,
+                        onBack = { fullscreen = false },
+                        onTogglePlayPause = viewModel::togglePlayPause,
+                        onToggleFavorite = { toggleFavorite(station) },
+                        onPlayPrevious = { viewModel.playAdjacent(-1) },
+                        onPlayNext = { viewModel.playAdjacent(1) },
+                        onCycleSleepTimer = viewModel::cycleSleepTimer
+                    )
+                }
             }
         }
 
@@ -250,65 +353,69 @@ private fun RadioTopBar(
     query: String,
     isTouch: Boolean,
     contentFocus: FocusRequester? = null,
+    anchors: RadioFocusAnchors,
+    editing: Boolean,
+    onEditingChange: (Boolean) -> Unit,
     onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onRetry: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RadioIconButton(onClick = onBack) {
+        // On TV the Back key and Left-to-menu already leave the page, so the
+        // arrow is clickable for touch but skipped in the D-pad order.
+        RadioIconButton(
+            onClick = onBack,
+            modifier = if (isTouch) Modifier else Modifier.focusProperties { canFocus = false },
+        ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(id = R.string.back),
-                tint = RADIO_TEXT,
+                tint = EnigmaColors.Text,
                 modifier = Modifier.size(20.dp)
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Icon(Icons.Default.Radio, contentDescription = null, tint = RADIO_GOLD, modifier = Modifier.size(22.dp))
+        Icon(Icons.Default.Radio, contentDescription = null, tint = EnigmaColors.Cyan, modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = stringResource(id = R.string.menu_radio),
-            color = RADIO_TEXT,
+            color = EnigmaColors.Text,
             fontSize = if (isTouch) 18.sp else 20.sp,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.width(16.dp))
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f).height(52.dp).then(contentFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
-            singleLine = true,
-            placeholder = {
-                Text(stringResource(id = R.string.radio_search_hint), color = RADIO_MUTED, fontSize = 14.sp)
-            },
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null, tint = RADIO_MUTED)
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = RADIO_TEXT,
-                unfocusedTextColor = RADIO_TEXT,
-                focusedBorderColor = RADIO_ACCENT,
-                unfocusedBorderColor = RADIO_MUTED.copy(alpha = 0.4f),
-                cursorColor = RADIO_ACCENT,
-                focusedContainerColor = RADIO_SURFACE,
-                unfocusedContainerColor = RADIO_SURFACE
-            ),
-            shape = RoundedCornerShape(12.dp)
+        RadioSearchField(
+            query = query,
+            onQueryChange = onQueryChange,
+            editing = editing,
+            onEditingChange = onEditingChange,
+            contentFocus = contentFocus,
+            modifier = Modifier
+                .weight(1f)
+                .focusProperties {
+                    right = anchors.refresh
+                    down = anchors.country
+                },
         )
         Spacer(modifier = Modifier.width(8.dp))
-        RadioIconButton(onClick = onRetry) {
+        RadioIconButton(
+            onClick = onRetry,
+            modifier = Modifier
+                .focusRequester(anchors.refresh)
+                .focusProperties {
+                    left = contentFocus ?: FocusRequester.Default
+                    down = anchors.genre
+                },
+        ) {
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = stringResource(id = R.string.radio_refresh),
-                tint = RADIO_MUTED,
+                tint = EnigmaColors.Muted,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -324,20 +431,34 @@ private fun RadioFavoritesRow(
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         Text(
             text = stringResource(id = R.string.radio_favorites),
-            color = RADIO_TEXT,
+            color = EnigmaColors.Text,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
         )
         LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRestorer()
+                .focusProperties {
+                    onExit = {
+                        if (requestedFocusDirection == FocusDirection.Right) {
+                            cancelFocusChange()
+                        }
+                    }
+                }
+                .focusGroup(),
             contentPadding = PaddingValues(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(stations, key = { it.stationUuid }) { station ->
+            itemsIndexed(stations, key = { _, it -> it.stationUuid }) { index, station ->
                 RadioFavoriteChip(
                     station = station,
                     selected = station.stationUuid == nowPlayingId,
-                    onSelect = { onSelect(station) }
+                    onSelect = { onSelect(station) },
+                    modifier = Modifier.focusProperties {
+                        if (index == stations.lastIndex) right = FocusRequester.Cancel
+                    },
                 )
             }
         }
@@ -348,21 +469,22 @@ private fun RadioFavoritesRow(
 private fun RadioFavoriteChip(
     station: RadioStation,
     selected: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) RADIO_ACCENT.copy(alpha = 0.28f) else RADIO_SURFACE)
+        modifier = modifier
+            .clip(radioShape(16.dp))
+            .background(if (selected) EnigmaColors.Focus.copy(alpha = 0.28f) else EnigmaColors.Card)
             .border(
                 width = if (focused || selected) 2.dp else 1.dp,
                 color = when {
-                    focused -> RADIO_ACCENT
-                    selected -> RADIO_ACCENT.copy(alpha = 0.8f)
-                    else -> Color.White.copy(alpha = 0.08f)
+                    focused -> EnigmaColors.Focus
+                    selected -> EnigmaColors.Focus.copy(alpha = 0.8f)
+                    else -> EnigmaColors.CardBorder
                 },
-                shape = RoundedCornerShape(16.dp)
+                shape = radioShape(16.dp)
             )
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onSelect)
@@ -373,7 +495,7 @@ private fun RadioFavoriteChip(
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = station.name,
-            color = RADIO_TEXT,
+            color = EnigmaColors.Text,
             fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -385,6 +507,11 @@ private fun RadioFavoriteChip(
 @Composable
 private fun RadioFilterRow(
     state: RadioUiState,
+    anchors: RadioFocusAnchors,
+    countryMenuOpen: Boolean,
+    onCountryMenuOpenChange: (Boolean) -> Unit,
+    genreMenuOpen: Boolean,
+    onGenreMenuOpenChange: (Boolean) -> Unit,
     onCountrySelected: (RadioCategory?) -> Unit,
     onTagSelected: (RadioCategory?) -> Unit,
     onToggleCountryPinned: () -> Unit
@@ -398,10 +525,14 @@ private fun RadioFilterRow(
     ) {
         RadioFilterDropdown(
             modifier = Modifier.weight(1f),
+            fieldFocus = anchors.country,
+            rightFocus = anchors.pin,
             label = stringResource(id = R.string.radio_country),
             allLabel = stringResource(id = R.string.radio_all_countries),
             selected = state.selectedCountry,
             options = state.countries,
+            expanded = countryMenuOpen,
+            onExpandedChange = onCountryMenuOpenChange,
             onSelected = onCountrySelected
         )
         var pinFocused by remember { mutableStateOf(false) }
@@ -412,23 +543,29 @@ private fun RadioFilterRow(
                 .clip(CircleShape)
                 .background(
                     when {
-                        pinFocused -> RADIO_ACCENT
-                        state.countryPinned -> RADIO_GOLD.copy(alpha = 0.22f)
-                        else -> RADIO_SURFACE
+                        pinFocused -> EnigmaColors.Focus
+                        state.countryPinned -> EnigmaColors.Cyan.copy(alpha = 0.22f)
+                        else -> EnigmaColors.Card
                     }
                 )
                 .border(
                     BorderStroke(
                         width = if (pinFocused) 2.dp else 1.dp,
                         color = when {
-                            pinFocused -> Color.White
-                            state.countryPinned -> RADIO_GOLD
-                            else -> Color.White.copy(alpha = 0.14f)
+                            pinFocused -> EnigmaColors.OnFocus
+                            state.countryPinned -> EnigmaColors.Cyan
+                            else -> EnigmaColors.CardBorder
                         }
                     ),
                     shape = CircleShape
                 )
+                .focusRequester(anchors.pin)
+                .focusProperties {
+                    left = anchors.country
+                    right = anchors.genre
+                }
                 .onFocusChanged { pinFocused = it.isFocused }
+                .focusable()
                 .clickable(
                     enabled = pinEnabled,
                     onClick = onToggleCountryPinned
@@ -441,81 +578,124 @@ private fun RadioFilterRow(
                     id = if (state.countryPinned) R.string.radio_unpin_country else R.string.radio_pin_country
                 ),
                 tint = when {
-                    pinFocused -> Color.White
-                    state.countryPinned -> RADIO_GOLD
-                    pinEnabled -> RADIO_TEXT
-                    else -> RADIO_MUTED
+                    pinFocused -> EnigmaColors.OnFocus
+                    state.countryPinned -> EnigmaColors.Cyan
+                    pinEnabled -> EnigmaColors.Text
+                    else -> EnigmaColors.Muted
                 }
             )
         }
         RadioFilterDropdown(
             modifier = Modifier.weight(1f),
+            fieldFocus = anchors.genre,
+            leftFocus = anchors.pin,
             label = stringResource(id = R.string.radio_genre),
             allLabel = stringResource(id = R.string.radio_all_genres),
             selected = state.selectedTag,
             options = state.tags,
+            expanded = genreMenuOpen,
+            onExpandedChange = onGenreMenuOpenChange,
             onSelected = onTagSelected
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RadioFilterDropdown(
-    modifier: Modifier,
-    label: String,
-    allLabel: String,
-    selected: RadioCategory?,
-    options: List<RadioCategory>,
-    onSelected: (RadioCategory?) -> Unit
+private fun RadioSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    editing: Boolean,
+    onEditingChange: (Boolean) -> Unit,
+    contentFocus: FocusRequester?,
+    modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
+    val keyboard = LocalSoftwareKeyboardController.current
+    val inputFocus = remember { FocusRequester() }
+    var shellFocused by remember { mutableStateOf(false) }
+    var wasEditing by remember { mutableStateOf(false) }
+    val highlighted = shellFocused || editing
+    val shape = radioShape(12.dp)
+
+    LaunchedEffect(editing) {
+        if (editing) {
+            wasEditing = true
+            runCatching { inputFocus.requestFocus() }
+            keyboard?.show()
+        } else {
+            keyboard?.hide()
+            // The inner text field leaves the tree with the IME; put focus back
+            // on the browse shell so Back does not drop into the side menu.
+            if (wasEditing) {
+                wasEditing = false
+                runCatching { contentFocus?.requestFocus() }
+            }
+        }
+    }
+
+    Box(
         modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = selected?.name ?: allLabel,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label, color = RADIO_MUTED, fontSize = 11.sp) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = RADIO_TEXT,
-                unfocusedTextColor = RADIO_TEXT,
-                focusedBorderColor = RADIO_ACCENT,
-                unfocusedBorderColor = RADIO_MUTED.copy(alpha = 0.4f),
-                focusedContainerColor = RADIO_SURFACE,
-                unfocusedContainerColor = RADIO_SURFACE,
-                focusedLabelColor = RADIO_MUTED,
-                unfocusedLabelColor = RADIO_MUTED
-            ),
-            shape = RoundedCornerShape(10.dp),
-            singleLine = true
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(RADIO_SURFACE)
-        ) {
-            DropdownMenuItem(
-                text = { Text(allLabel, color = RADIO_TEXT) },
-                onClick = {
-                    onSelected(null)
-                    expanded = false
-                }
-            )
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.name, color = RADIO_TEXT, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
+            .height(52.dp)
+            .then(contentFocus?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .onFocusChanged { shellFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                    if (!editing) {
+                        if (event.type == KeyEventType.KeyUp) onEditingChange(true)
+                        return@onPreviewKeyEvent true
                     }
+                }
+                if ((event.key == Key.Back || event.key == Key.Escape) && editing) {
+                    // Let the Radio page handler stop editing; don't leave it to the text field.
+                    return@onPreviewKeyEvent false
+                }
+                false
+            }
+            .focusable()
+            .clip(shape)
+            .background(EnigmaColors.Card, shape)
+            .border(
+                width = if (highlighted) 2.dp else 1.dp,
+                color = if (highlighted) EnigmaColors.Focus else EnigmaColors.Muted.copy(alpha = 0.4f),
+                shape = shape,
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onEditingChange(true) },
+            )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Search, contentDescription = null, tint = EnigmaColors.Muted, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            if (editing) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(color = EnigmaColors.Text, fontSize = 14.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(EnigmaColors.Focus),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onEditingChange(false) }),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(inputFocus),
+                    decorationBox = { inner ->
+                        if (query.isEmpty()) {
+                            Text(stringResource(id = R.string.radio_search_hint), color = EnigmaColors.Muted, fontSize = 14.sp)
+                        }
+                        inner()
+                    },
+                )
+            } else {
+                Text(
+                    text = query.ifBlank { stringResource(id = R.string.radio_search_hint) },
+                    color = if (query.isBlank()) EnigmaColors.Muted else EnigmaColors.Text,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -523,7 +703,192 @@ private fun RadioFilterDropdown(
 }
 
 @Composable
+private fun RadioFilterDropdown(
+    modifier: Modifier,
+    fieldFocus: FocusRequester? = null,
+    leftFocus: FocusRequester? = null,
+    rightFocus: FocusRequester? = null,
+    label: String,
+    allLabel: String,
+    selected: RadioCategory?,
+    options: List<RadioCategory>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelected: (RadioCategory?) -> Unit
+) {
+    val entries = remember(options, allLabel) { listOf<RadioCategory?>(null) + options }
+    val selectedIndex = entries.indexOfFirst { option ->
+        if (selected == null) option == null
+        else option != null && (
+            (!selected.code.isNullOrBlank() && option.code.equals(selected.code, ignoreCase = true)) ||
+                option.name.equals(selected.name, ignoreCase = true)
+        )
+    }.coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+    val selectedFocus = remember { FocusRequester() }
+    val internalFieldFocus = remember { FocusRequester() }
+    val resolvedFieldFocus = fieldFocus ?: internalFieldFocus
+    val density = LocalDensity.current
+    var fieldWidthPx by remember { mutableStateOf(0) }
+    var fieldHeightPx by remember { mutableStateOf(0) }
+    var fieldFocused by remember { mutableStateOf(false) }
+    val highlighted = fieldFocused || expanded
+    val shape = radioShape(10.dp)
+
+    LaunchedEffect(expanded, selectedIndex) {
+        if (!expanded) return@LaunchedEffect
+        listState.scrollToItem(selectedIndex)
+        runCatching { selectedFocus.requestFocus() }
+    }
+
+    Box(
+        modifier = modifier.onGloballyPositioned { coords ->
+            fieldWidthPx = coords.size.width
+            fieldHeightPx = coords.size.height
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(resolvedFieldFocus)
+                .focusProperties {
+                    leftFocus?.let { left = it }
+                    rightFocus?.let { right = it }
+                }
+                .onFocusChanged { fieldFocused = it.isFocused }
+                .onPreviewKeyEvent { event ->
+                    if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                        if (!expanded) {
+                            if (event.type == KeyEventType.KeyUp) onExpandedChange(true)
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                    false
+                }
+                .focusable()
+                .clip(shape)
+                .background(EnigmaColors.Card, shape)
+                .border(
+                    width = if (highlighted) 2.dp else 1.dp,
+                    color = if (highlighted) EnigmaColors.Focus else EnigmaColors.Muted.copy(alpha = 0.4f),
+                    shape = shape,
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { onExpandedChange(!expanded) },
+                )
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+        ) {
+            Text(label, color = EnigmaColors.Muted, fontSize = 11.sp)
+            Text(
+                text = selected?.name ?: allLabel,
+                color = EnigmaColors.Text,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (expanded) {
+            Popup(
+                alignment = Alignment.TopStart,
+                offset = IntOffset(0, fieldHeightPx + with(density) { 4.dp.roundToPx() }),
+                onDismissRequest = { onExpandedChange(false) },
+                properties = PopupProperties(
+                    focusable = true,
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = true,
+                ),
+            ) {
+                val menuWidth = if (fieldWidthPx > 0) with(density) { fieldWidthPx.toDp() } else 360.dp
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .width(menuWidth)
+                        .heightIn(max = 420.dp)
+                        .clip(shape)
+                        .background(EnigmaColors.Card)
+                        .border(1.dp, EnigmaColors.Focus.copy(alpha = 0.5f), shape)
+                        .onPreviewKeyEvent { event ->
+                            if (event.key == Key.Back || event.key == Key.Escape) {
+                                if (event.type == KeyEventType.KeyUp) {
+                                    onExpandedChange(false)
+                                    runCatching { resolvedFieldFocus.requestFocus() }
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                            false
+                        }
+                ) {
+                    itemsIndexed(entries, key = { index, option -> option?.code ?: option?.name ?: "all-$index" }) { index, option ->
+                        val isCurrent = index == selectedIndex
+                        RadioDropdownOption(
+                            title = option?.name ?: allLabel,
+                            subtitle = option?.takeIf { it.stationCount > 0 }?.let { "${it.stationCount}" },
+                            selected = isCurrent,
+                            focusRequester = if (isCurrent) selectedFocus else null,
+                            onClick = {
+                                onSelected(option)
+                                onExpandedChange(false)
+                                runCatching { resolvedFieldFocus.requestFocus() }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadioDropdownOption(
+    title: String,
+    subtitle: String?,
+    selected: Boolean,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
+            .then(
+                when {
+                    focused -> Modifier.radioFocusBackground(true, radioShape(0.dp))
+                    selected -> Modifier.background(EnigmaColors.Selected)
+                    else -> Modifier
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            color = radioOnFocus(focused),
+            fontSize = 15.sp,
+            fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (subtitle != null) {
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = subtitle,
+                color = radioOnFocus(focused, EnigmaColors.Muted),
+                fontSize = 12.sp,
+            )
+        }
+    }
+}
+
+@Composable
 private fun RadioBrowseShelves(
+
     state: RadioUiState,
     onSelect: (RadioStation) -> Unit
 ) {
@@ -579,19 +944,33 @@ private fun RadioStationShelf(
     Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
         Text(
             text = title,
-            color = RADIO_TEXT,
+            color = EnigmaColors.Text,
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
         LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRestorer()
+                .focusProperties {
+                    onExit = {
+                        if (requestedFocusDirection == FocusDirection.Right) {
+                            cancelFocusChange()
+                        }
+                    }
+                }
+                .focusGroup(),
             contentPadding = PaddingValues(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(stations, key = { it.stationUuid }) { station ->
+            itemsIndexed(stations, key = { _, it -> it.stationUuid }) { index, station ->
                 RadioStationCard(
                     station = station,
-                    onSelect = { onSelect(station) }
+                    onSelect = { onSelect(station) },
+                    modifier = Modifier.focusProperties {
+                        if (index == stations.lastIndex) right = FocusRequester.Cancel
+                    },
                 )
             }
         }
@@ -606,12 +985,12 @@ private fun RadioSearchGrid(
     when {
         state.isSearching -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = RADIO_ACCENT)
+                CircularProgressIndicator(color = EnigmaColors.Focus)
             }
         }
         state.searchResults.isEmpty() -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(stringResource(id = R.string.radio_no_results), color = RADIO_MUTED)
+                Text(stringResource(id = R.string.radio_no_results), color = EnigmaColors.Muted)
             }
         }
         else -> {
@@ -620,7 +999,17 @@ private fun RadioSearchGrid(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRestorer()
+                    .focusProperties {
+                        onExit = {
+                            if (requestedFocusDirection == FocusDirection.Right) {
+                                cancelFocusChange()
+                            }
+                        }
+                    }
+                    .focusGroup()
             ) {
                 items(state.searchResults, key = { it.stationUuid }) { station ->
                     RadioStationCard(
@@ -636,18 +1025,19 @@ private fun RadioSearchGrid(
 @Composable
 private fun RadioStationCard(
     station: RadioStation,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(RADIO_CARD_WIDTH)
-            .clip(RoundedCornerShape(10.dp))
-            .background(RADIO_SURFACE)
+            .clip(radioShape(10.dp))
+            .background(EnigmaColors.Card)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) RADIO_ACCENT else Color.White.copy(alpha = 0.06f),
-                shape = RoundedCornerShape(10.dp)
+                color = if (focused) EnigmaColors.Focus else EnigmaColors.CardBorder,
+                shape = radioShape(10.dp)
             )
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onSelect)
@@ -663,7 +1053,7 @@ private fun RadioStationCard(
                 Icon(
                     imageVector = Icons.Default.Favorite,
                     contentDescription = null,
-                    tint = RADIO_GOLD,
+                    tint = EnigmaColors.Cyan,
                     modifier = Modifier
                         .padding(2.dp)
                         .size(14.dp)
@@ -673,7 +1063,7 @@ private fun RadioStationCard(
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = station.name,
-            color = RADIO_TEXT,
+            color = EnigmaColors.Text,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
@@ -681,7 +1071,7 @@ private fun RadioStationCard(
         )
         Text(
             text = station.metaLine.ifBlank { station.tagList.firstOrNull().orEmpty() },
-            color = RADIO_MUTED,
+            color = EnigmaColors.Muted,
             fontSize = 10.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -692,67 +1082,124 @@ private fun RadioStationCard(
 @Composable
 private fun RadioNowPlayingBar(
     state: RadioUiState,
+    anchors: RadioFocusAnchors,
     onTogglePlayPause: () -> Unit,
     onToggleFavorite: (RadioStation) -> Unit,
+    onPlayPrevious: () -> Unit,
+    onPlayNext: () -> Unit,
     onOpenFullscreen: (RadioStation) -> Unit
 ) {
     val station = state.nowPlaying ?: return
+    var infoFocused by remember { mutableStateOf(false) }
+    val infoShape = radioShape(10.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(RADIO_SURFACE)
-            .border(width = 1.dp, color = Color.White.copy(alpha = 0.06f))
-            .clickable { onOpenFullscreen(station) }
+            .background(EnigmaColors.Card)
+            .border(width = 1.dp, color = EnigmaColors.CardBorder)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         if (!state.playbackError.isNullOrBlank()) {
             Text(
                 text = stringResource(id = R.string.radio_stream_error),
-                color = Color(0xFFFF8A80),
+                color = EnigmaColors.Danger,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(bottom = 6.dp)
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioFavicon(url = station.favicon, size = 44.dp)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = station.name,
-                    color = RADIO_TEXT,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = state.nowPlayingTrackLine
-                        ?: station.metaLine.ifBlank { stringResource(id = R.string.radio_now_playing) },
-                    color = if (state.nowPlayingTrackLine != null) RADIO_GOLD else RADIO_MUTED,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            IconButton(onClick = { onToggleFavorite(station) }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRestorer(anchors.play)
+                .focusGroup(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(infoShape)
+                    .border(
+                        width = if (infoFocused) 2.dp else 0.dp,
+                        color = if (infoFocused) EnigmaColors.Focus else Color.Transparent,
+                        shape = infoShape
+                    )
+                    .onFocusChanged { infoFocused = it.isFocused }
+                    .clickable { onOpenFullscreen(station) }
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioFavicon(url = station.favicon, size = 44.dp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = station.name,
+                        color = EnigmaColors.Text,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = state.nowPlayingTrackLine
+                            ?: station.metaLine.ifBlank { stringResource(id = R.string.radio_now_playing) },
+                        color = if (state.nowPlayingTrackLine != null) EnigmaColors.Cyan else EnigmaColors.Muted,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Icon(
-                    imageVector = if (station.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = null,
-                    tint = if (station.isFavorite) RADIO_GOLD else RADIO_MUTED
+                    imageVector = Icons.Default.Fullscreen,
+                    contentDescription = stringResource(id = R.string.radio_fullscreen),
+                    tint = if (infoFocused) EnigmaColors.Text else EnigmaColors.Muted,
+                    modifier = Modifier.size(18.dp)
                 )
             }
-            RadioIconButton(onClick = onTogglePlayPause) {
+            RadioIconButton(onClick = onPlayPrevious) {
+                Icon(
+                    imageVector = Icons.Default.SkipPrevious,
+                    contentDescription = stringResource(id = R.string.radio_previous_station),
+                    tint = EnigmaColors.Text,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            RadioIconButton(
+                onClick = onTogglePlayPause,
+                modifier = Modifier.focusRequester(anchors.play),
+            ) {
                 if (state.isBuffering) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = RADIO_TEXT)
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = EnigmaColors.Text)
                 } else {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = stringResource(
                             id = if (state.isPlaying) R.string.radio_pause else R.string.radio_play
                         ),
-                        tint = RADIO_TEXT
+                        tint = EnigmaColors.Text
                     )
                 }
+            }
+            RadioIconButton(onClick = onPlayNext) {
+                Icon(
+                    imageVector = Icons.Default.SkipNext,
+                    contentDescription = stringResource(id = R.string.radio_next_station),
+                    tint = EnigmaColors.Text,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            RadioIconButton(onClick = { onToggleFavorite(station) }) {
+                Icon(
+                    imageVector = if (station.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = stringResource(
+                        id = if (station.isFavorite) {
+                            R.string.radio_remove_favorite
+                        } else {
+                            R.string.radio_add_favorite
+                        }
+                    ),
+                    tint = if (station.isFavorite) EnigmaColors.Cyan else EnigmaColors.Muted
+                )
             }
         }
     }
@@ -764,13 +1211,13 @@ internal fun RadioFavicon(
     size: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = radioShape(10.dp)
     val hasRemoteArt = !url.isNullOrBlank()
     Box(
         modifier = modifier
             .size(size)
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f)),
+            .background(EnigmaColors.Raised),
         contentAlignment = Alignment.Center
     ) {
         if (hasRemoteArt) {
@@ -804,7 +1251,7 @@ private fun RadioIconButton(
         modifier = modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(if (focused) RADIO_ACCENT else Color.Transparent)
+            .radioFocusBackground(focused, CircleShape)
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -820,10 +1267,10 @@ private fun RadioMessage(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text, color = RADIO_MUTED)
+        Text(text, color = EnigmaColors.Muted)
         Spacer(modifier = Modifier.height(12.dp))
         RadioIconButton(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, tint = RADIO_TEXT)
+            Icon(Icons.Default.Refresh, contentDescription = null, tint = EnigmaColors.Text)
         }
     }
 }
@@ -889,4 +1336,12 @@ private fun RadioActionsDialog(
         shape = RadioDialogDefaults.Shape,
         tonalElevation = 0.dp
     )
+}
+
+private class RadioFocusAnchors {
+    val refresh = FocusRequester()
+    val country = FocusRequester()
+    val pin = FocusRequester()
+    val genre = FocusRequester()
+    val play = FocusRequester()
 }

@@ -54,8 +54,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -76,6 +79,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import coil3.compose.AsyncImage
 import com.enigmacast.R
+import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.domain.radio.RadioStation
 import com.enigmacast.ui.radio.RadioUiState
 import kotlinx.coroutines.delay
@@ -103,6 +107,7 @@ fun RadioFullscreenPlayer(
 ) {
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
     var chromeVisible by remember { mutableStateOf(true) }
     var interactionNonce by remember { mutableIntStateOf(0) }
 
@@ -165,7 +170,7 @@ fun RadioFullscreenPlayer(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(RADIO_BG)
+            .background(EnigmaColors.Canvas)
             .focusRequester(rootFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
@@ -224,7 +229,7 @@ fun RadioFullscreenPlayer(
             ) {
                 Text(
                     text = clockText,
-                    color = RADIO_TEXT.copy(alpha = 0.82f),
+                    color = EnigmaColors.Text.copy(alpha = 0.82f),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 1.4.sp
@@ -236,7 +241,7 @@ fun RadioFullscreenPlayer(
                             formatRadioSleepRemaining(sleepRemainingMs),
                             "${state.sleepTimerPresetMinutes} min"
                         ),
-                        color = RADIO_GOLD.copy(alpha = 0.85f),
+                        color = EnigmaColors.Cyan.copy(alpha = 0.85f),
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -263,14 +268,14 @@ fun RadioFullscreenPlayer(
             ) {
                 Text(
                     text = stringResource(id = R.string.radio_now_playing).uppercase(),
-                    color = RADIO_GOLD,
+                    color = EnigmaColors.Cyan,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 1.2.sp
                 )
                 Text(
                     text = station.name,
-                    color = RADIO_TEXT,
+                    color = EnigmaColors.Text,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
@@ -279,7 +284,7 @@ fun RadioFullscreenPlayer(
                 if (station.metaLine.isNotBlank()) {
                     Text(
                         text = station.metaLine,
-                        color = RADIO_MUTED,
+                        color = EnigmaColors.Muted,
                         fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -303,20 +308,25 @@ fun RadioFullscreenPlayer(
                     },
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(16.dp),
+                        .padding(16.dp)
+                        .focusRequester(backFocus)
+                        .focusProperties { down = playFocus },
                     filled = false
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(id = R.string.back),
-                        tint = RADIO_TEXT
+                        tint = EnigmaColors.Text
                     )
                 }
 
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(horizontal = 36.dp, vertical = 28.dp),
+                        .padding(horizontal = 36.dp, vertical = 28.dp)
+                        .focusRestorer(playFocus)
+                        .focusGroup()
+                        .focusProperties { up = backFocus },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -329,7 +339,7 @@ fun RadioFullscreenPlayer(
                         Icon(
                             Icons.Default.SkipPrevious,
                             contentDescription = stringResource(id = R.string.radio_previous_station),
-                            tint = RADIO_TEXT,
+                            tint = EnigmaColors.Text,
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -338,7 +348,7 @@ fun RadioFullscreenPlayer(
                         modifier = Modifier
                             .size(56.dp)
                             .clip(CircleShape)
-                            .background(if (playFocused) RADIO_GOLD else RADIO_ACCENT)
+                            .then(if (playFocused) Modifier.radioFocusBackground(true, CircleShape) else Modifier.background(EnigmaColors.Accent))
                             .focusRequester(playFocus)
                             .onFocusChanged { playFocused = it.isFocused }
                             .clickable {
@@ -351,7 +361,7 @@ fun RadioFullscreenPlayer(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(26.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White
+                                color = if (playFocused) EnigmaColors.OnFocus else EnigmaColors.OnAccent
                             )
                         } else {
                             Icon(
@@ -359,7 +369,7 @@ fun RadioFullscreenPlayer(
                                 contentDescription = stringResource(
                                     id = if (state.isPlaying) R.string.radio_pause else R.string.radio_play
                                 ),
-                                tint = Color.White,
+                                tint = if (playFocused) EnigmaColors.OnFocus else EnigmaColors.OnAccent,
                                 modifier = Modifier.size(30.dp)
                             )
                         }
@@ -373,7 +383,7 @@ fun RadioFullscreenPlayer(
                         Icon(
                             Icons.Default.SkipNext,
                             contentDescription = stringResource(id = R.string.radio_next_station),
-                            tint = RADIO_TEXT,
+                            tint = EnigmaColors.Text,
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -392,7 +402,7 @@ fun RadioFullscreenPlayer(
                                     R.string.radio_add_favorite
                                 }
                             ),
-                            tint = if (station.isFavorite) RADIO_GOLD else RADIO_TEXT
+                            tint = if (station.isFavorite) EnigmaColors.Cyan else EnigmaColors.Text
                         )
                     }
                     RadioFsCircleButton(
@@ -405,7 +415,7 @@ fun RadioFullscreenPlayer(
                         Icon(
                             Icons.Default.Timer,
                             contentDescription = stringResource(id = R.string.player_sleep_timer),
-                            tint = if (state.sleepTimerEndsAtMs > 0L) RADIO_GOLD else RADIO_TEXT
+                            tint = if (state.sleepTimerEndsAtMs > 0L) EnigmaColors.Cyan else EnigmaColors.Text
                         )
                     }
                     if (state.sleepTimerEndsAtMs > 0L && sleepRemainingMs > 0L) {
@@ -415,7 +425,7 @@ fun RadioFullscreenPlayer(
                                 formatRadioSleepRemaining(sleepRemainingMs),
                                 "${state.sleepTimerPresetMinutes} min"
                             ),
-                            color = RADIO_GOLD,
+                            color = EnigmaColors.Cyan,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -439,7 +449,7 @@ private fun RadioNowPlayingTrack(state: RadioUiState) {
             if (!artist.isNullOrBlank()) {
                 Text(
                     text = artist,
-                    color = RADIO_GOLD,
+                    color = EnigmaColors.Cyan,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -449,7 +459,7 @@ private fun RadioNowPlayingTrack(state: RadioUiState) {
             if (!title.isNullOrBlank()) {
                 Text(
                     text = title,
-                    color = RADIO_TEXT.copy(alpha = 0.9f),
+                    color = EnigmaColors.Text.copy(alpha = 0.9f),
                     fontSize = 16.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -458,7 +468,7 @@ private fun RadioNowPlayingTrack(state: RadioUiState) {
                 Text(
                     text = trackLine
                         ?: stringResource(id = R.string.radio_waiting_track),
-                    color = RADIO_MUTED,
+                    color = EnigmaColors.Muted,
                     fontSize = 15.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -546,7 +556,7 @@ private fun RadioAmbientBackdrop(faviconUrl: String?, isPlaying: Boolean) {
             val h = size.height
             val pulse = if (isPlaying) 1f else 0.72f
             drawCircle(
-                color = RADIO_GOLD.copy(alpha = 0.14f * pulse),
+                color = EnigmaColors.Cyan.copy(alpha = 0.14f * pulse),
                 radius = w * 0.34f,
                 center = Offset(
                     w * (0.28f + 0.22f * sin(t1 * 2.0 * PI).toFloat()),
@@ -554,7 +564,7 @@ private fun RadioAmbientBackdrop(faviconUrl: String?, isPlaying: Boolean) {
                 )
             )
             drawCircle(
-                color = RADIO_ACCENT.copy(alpha = 0.16f * pulse),
+                color = EnigmaColors.Focus.copy(alpha = 0.16f * pulse),
                 radius = w * 0.3f,
                 center = Offset(
                     w * (0.72f + 0.18f * cos(t2 * 2.0 * PI).toFloat()),
@@ -562,7 +572,7 @@ private fun RadioAmbientBackdrop(faviconUrl: String?, isPlaying: Boolean) {
                 )
             )
             drawCircle(
-                color = Color(0xFF7C4DFF).copy(alpha = 0.12f * pulse),
+                color = EnigmaColors.Violet.copy(alpha = 0.12f * pulse),
                 radius = w * 0.26f,
                 center = Offset(
                     w * (0.5f + 0.24f * sin(t3 * 2.0 * PI).toFloat()),
@@ -597,8 +607,8 @@ private fun RadioKenBurnsArt(url: String?, isPlaying: Boolean) {
     Box(
         modifier = Modifier
             .size(280.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .clip(radioShape(18.dp))
+            .background(EnigmaColors.Card)
     ) {
         RadioFavicon(
             url = url,
@@ -639,8 +649,8 @@ private fun RadioVisualizerBars(isPlaying: Boolean) {
                 modifier = Modifier
                     .width(5.dp)
                     .height((8 + value * 28).dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(RADIO_GOLD.copy(alpha = 0.35f + value * 0.5f))
+                    .clip(radioShape(3.dp))
+                    .background(EnigmaColors.Cyan.copy(alpha = 0.35f + value * 0.5f))
             )
         }
     }
@@ -659,13 +669,15 @@ private fun RadioFsCircleButton(
         modifier = modifier
             .size(48.dp)
             .clip(CircleShape)
-            .background(
-                when {
-                    focused -> RADIO_ACCENT
-                    emphasized -> RADIO_ACCENT.copy(alpha = 0.28f)
-                    filled -> RADIO_SURFACE
-                    else -> Color.Transparent
-                }
+            .then(
+                if (focused) Modifier.radioFocusBackground(true, CircleShape)
+                else Modifier.background(
+                    when {
+                        emphasized -> EnigmaColors.Accent.copy(alpha = 0.28f)
+                        filled -> EnigmaColors.Card
+                        else -> Color.Transparent
+                    }
+                )
             )
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick),
