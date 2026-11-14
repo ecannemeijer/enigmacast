@@ -86,6 +86,17 @@ object NavIcons {
     }
 
     /** Settings as three sliders; softer and more readable than a detailed gear at 24dp. */
+    val Radio: ImageVector by lazy {
+        lineIcon(
+            "NavRadio",
+            "M12,3 L8,9",
+            "M4,10 H20",
+            "M4,10 L4,18 A2,2 0 0,0 6,20 H18 A2,2 0 0,0 20,18 L20,10",
+            "M8,15 a1.4,1.4 0 1,0 0.1,0",
+            "M16,15 a1.4,1.4 0 1,0 0.1,0",
+        )
+    }
+
     val Settings: ImageVector by lazy {
         lineIcon(
             "NavSettings",
