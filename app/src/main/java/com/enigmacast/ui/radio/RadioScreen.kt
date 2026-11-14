@@ -732,6 +732,8 @@ private fun RadioFilterDropdown(
     var fieldWidthPx by remember { mutableStateOf(0) }
     var fieldHeightPx by remember { mutableStateOf(0) }
     var fieldFocused by remember { mutableStateOf(false) }
+    // After OK selects a row, the matching key-up can land on this field once the popup is gone.
+    var suppressCenterUp by remember { mutableStateOf(false) }
     val highlighted = fieldFocused || expanded
     val shape = radioShape(10.dp)
 
@@ -758,6 +760,10 @@ private fun RadioFilterDropdown(
                 .onFocusChanged { fieldFocused = it.isFocused }
                 .onPreviewKeyEvent { event ->
                     if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                        if (suppressCenterUp && event.type == KeyEventType.KeyUp) {
+                            suppressCenterUp = false
+                            return@onPreviewKeyEvent true
+                        }
                         if (!expanded) {
                             if (event.type == KeyEventType.KeyUp) onExpandedChange(true)
                             return@onPreviewKeyEvent true
@@ -828,6 +834,7 @@ private fun RadioFilterDropdown(
                             selected = isCurrent,
                             focusRequester = if (isCurrent) selectedFocus else null,
                             onClick = {
+                                suppressCenterUp = true
                                 onSelected(option)
                                 onExpandedChange(false)
                                 runCatching { resolvedFieldFocus.requestFocus() }
@@ -855,6 +862,15 @@ private fun RadioDropdownOption(
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                    // Select on the first press (key-down). Consume the key-up so it cannot
+                    // reopen the menu after focus returns to the field.
+                    if (event.type == KeyEventType.KeyDown) onClick()
+                    return@onPreviewKeyEvent true
+                }
+                false
+            }
             .then(
                 when {
                     focused -> Modifier.radioFocusBackground(true, radioShape(0.dp))
