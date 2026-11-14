@@ -1259,6 +1259,7 @@ internal fun GuidePanel(
     }
     val focused = grid.focusedChannel
     val focusedCell = remember(grid, nowSec) { guideModel.grid.focused()?.second }
+    val noGuideInfo = stringResource(R.string.epg_no_guide_info)
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -1332,6 +1333,9 @@ internal fun GuidePanel(
                 cachedPicon = guideModel::cachedPicon,
                 autoSwitchKeys = autoSwitchKeys,
                 recordingReferences = guideModel.recordingReferences,
+                emptyLabel = { entry ->
+                    noGuideInfo.takeIf { grid.eventsOf(entry).isEmpty() }
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()

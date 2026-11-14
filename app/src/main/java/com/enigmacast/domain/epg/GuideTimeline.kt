@@ -35,6 +35,10 @@ object GuideTimeline {
      */
     fun cells(events: List<GuideEvent>, fromSec: Long, toSec: Long): List<GuideCell> {
         if (toSec <= fromSec) return emptyList()
+        // A channel with no programmes in this stretch gets one full-width placeholder
+        // so the row stays focusable and OK can zap to it.
+        val hasProgramme = events.any { it.durationSec > 0 && it.endEpochSec > fromSec && it.beginEpochSec < toSec }
+        if (!hasProgramme) return listOf(GuideCell(null, fromSec, toSec))
         val result = mutableListOf<GuideCell>()
         var cursor = fromSec
         for (event in events.sortedBy { it.beginEpochSec }) {

@@ -7,7 +7,9 @@ enum class IptvGuideOk { WATCH_LIVE, PLAY_CATCHUP, PROMPT_FUTURE, NONE }
 
 object IptvGuideAction {
     fun decide(item: XtreamItem?, event: XtreamEpg?, nowSec: Long): IptvGuideOk {
-        if (item == null || event == null) return IptvGuideOk.NONE
+        if (item == null) return IptvGuideOk.NONE
+        // No programme cell (the channel has no EPG): still zap to the live stream.
+        if (event == null) return IptvGuideOk.WATCH_LIVE
         if (event.startSec <= nowSec && nowSec < event.endSec) return IptvGuideOk.WATCH_LIVE
         if (event.endSec <= nowSec && Catchup.canPlay(item, event, nowSec)) return IptvGuideOk.PLAY_CATCHUP
         if (event.startSec > nowSec) return IptvGuideOk.PROMPT_FUTURE

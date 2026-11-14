@@ -299,11 +299,10 @@ class StreamGuideViewModel @Inject constructor(
         val (channel, cell) = grid.focused() ?: return
         val event = cell.event
         val now = System.currentTimeMillis() / 1000
-        if (cell.startSec <= now) {
+        if (event == null || cell.startSec <= now) {
             tune(channel, onStarted, onFullscreen)
             return
         }
-        if (event == null) return
         programmePrompt = ProgrammePrompt(event, channel.name, reminders.isScheduled(event.programmeKey))
     }
 
