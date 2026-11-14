@@ -38,6 +38,17 @@ interface FallbackEpgDao {
     @Query("DELETE FROM fallback_epg_channel WHERE country = :country")
     suspend fun deleteChannels(country: String)
 
+    @Query("DELETE FROM fallback_epg_meta WHERE country = :country")
+    suspend fun deleteMeta(country: String)
+
+    @Transaction
+    suspend fun dropCountry(country: String) {
+        val old = idsForCountry(country)
+        old.chunked(400).forEach { deleteProgrammes(it) }
+        deleteChannels(country)
+        deleteMeta(country)
+    }
+
     @Query("DELETE FROM fallback_epg_meta")
     suspend fun clearMeta()
 

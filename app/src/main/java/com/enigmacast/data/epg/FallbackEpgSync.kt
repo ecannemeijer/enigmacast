@@ -59,11 +59,13 @@ class FallbackEpgSync @Inject constructor(
     /** Countries that would be downloaded now (for Settings). */
     suspend fun automaticCountries(): Set<String> = withContext(Dispatchers.IO) {
         val snapshot = settings.current()
+        val collected = texts()
         FallbackEpgCountries.auto(
-            texts = texts(),
+            texts = collected.texts,
             appLanguage = AppLanguageStore.current(context).tag,
             localeCountry = runCatching { detector.country() }.getOrNull(),
             extra = emptyList(),
+            orbitalTenths = collected.orbitals,
         )
     }
 
@@ -89,15 +91,23 @@ class FallbackEpgSync @Inject constructor(
     private suspend fun refreshLocked(force: Boolean) {
         val snapshot = settings.current()
         if (!snapshot.fallbackEpgEnabled) return
-        val texts = texts()
+        val collected = texts()
         val countries = FallbackEpgCountries.auto(
-            texts = texts,
+            texts = collected.texts,
             appLanguage = AppLanguageStore.current(context).tag,
             localeCountry = runCatching { detector.country() }.getOrNull(),
             extra = snapshot.fallbackEpgCountries,
+            orbitalTenths = collected.orbitals,
         )
         if (countries.isEmpty()) return
-        val wanted = wanted(texts)
+        var dropped = 0
+        runCatching {
+            dao.allMeta().map { it.country }.filter { it !in countries }.forEach { stale ->
+                dao.dropCountry(stale)
+                dropped += 1
+            }
+        }
+        val wanted = wanted(collected.texts)
         if (wanted.isEmpty) return
         val now = System.currentTimeMillis()
         var stored = 0
@@ -106,7 +116,7 @@ class FallbackEpgSync @Inject constructor(
             if (!force && !FallbackEpgPolicy.isDue(fetched, now)) return@forEach
             stored += download(country, wanted, now)
         }
-        if (stored > 0) fallback.invalidate()
+        if (stored > 0 || dropped > 0) fallback.invalidate()
         EnigmaLog.service("fallback epg refresh countries=${countries.size} programmes=$stored")
     }
 
@@ -145,18 +155,27 @@ class FallbackEpgSync @Inject constructor(
         }
     }
 
-    /** Channel names and group titles used to pick countries and to match programmes. */
-    private suspend fun texts(): List<String> {
+    /** Channel names, bouquet titles, IPTV groups and satellite positions used to pick countries. */
+    private suspend fun texts(): Collected {
         val out = ArrayList<String>()
+        val orbitals = LinkedHashSet<Int>()
         val receiver = settings.current().activeReceiver()
         if (receiver != null) {
             val key = com.enigmacast.data.db.CacheMappers.receiverKey(receiver.id, receiver.host, receiver.httpPort)
-            runCatching { cache.channelNames(key) }.getOrDefault(emptyList()).forEach { out += it.name }
+            runCatching { cache.channelMatchRows(key) }.getOrDefault(emptyList()).forEach { row ->
+                if (row.name.isNotBlank()) out += row.name
+                com.enigmacast.domain.osdinfo.ServiceOrigin.orbital(row.reference)?.let { orbitals += it.tenths }
+            }
+            runCatching { cache.bouquets(key) }.getOrDefault(emptyList()).forEach { bouquet ->
+                if (bouquet.name.isNotBlank()) out += bouquet.name
+            }
         }
         runCatching { iptv.liveItemNames() }.getOrDefault(emptyList()).forEach { out += it }
         runCatching { iptv.liveCategoryNames() }.getOrDefault(emptyList()).forEach { out += it }
-        return out
+        return Collected(out, orbitals)
     }
+
+    private class Collected(val texts: List<String>, val orbitals: Set<Int>)
 
     /**
      * Keys of channels that still need a guide: satellite channels without events of their own,

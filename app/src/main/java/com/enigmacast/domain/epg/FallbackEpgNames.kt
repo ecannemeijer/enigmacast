@@ -29,22 +29,39 @@ object FallbackEpgNames {
         return out
     }
 
-    /** ISO country codes (lowercase) mentioned in [text], only when they are a known fallback country. */
+    /**
+     * ISO country codes (lowercase) mentioned in [text], only when they are a known fallback
+     * country. Two-letter tokens are accepted as `|NL|` / `[DE]` groups or as a prefix at the
+     * start of the text ("NL - ", "IT:"), not as words in the middle of a title ("Now You See
+     * Me:", "IS:" in a programme name). Country names, well-known German channel names and
+     * orbital positions in the text ("19.2°E") are also recognised.
+     */
     fun countriesIn(text: String): Set<String> {
         if (text.isBlank()) return emptySet()
         val found = LinkedHashSet<String>()
-        BRACKET_CODE.findAll(text).forEach { match ->
+        GROUP_CODE.findAll(text).forEach { match ->
             FallbackEpgCountries.canonical(match.groupValues[1])?.let { found += it }
         }
-        PREFIX_CODE.findAll(text).forEach { match ->
+        GUILLEMET_CODE.findAll(text).forEach { match ->
             FallbackEpgCountries.canonical(match.groupValues[1])?.let { found += it }
         }
+        START_PAREN.find(text)?.let { match ->
+            FallbackEpgCountries.canonical(match.groupValues[1])?.let { found += it }
+        }
+        PREFIX_CODE.find(text)?.let { match ->
+            FallbackEpgCountries.canonical(match.groupValues[1])?.let { found += it }
+        }
+        found += FallbackEpgCountries.countriesFromWords(text)
+        found += FallbackEpgCountries.countriesFromOrbitals(FallbackEpgCountries.orbitalsIn(text))
         return found
     }
 
     private val DOT_SUFFIX = Regex("""\.([a-z]{2,3})$""")
-    /** "|NL|", "[IT]", "(NL)", "« GB »". */
-    private val BRACKET_CODE = Regex("""[|\[(<«]\s*([A-Za-z]{2,3})\s*[|\])>»]""")
-    /** "NL - ", "NL: ", "IT | ", "NLD:" at the start or after a separator. */
-    private val PREFIX_CODE = Regex("""(?:^|[\s/])([A-Za-z]{2,3})\s*[:|\-\u2013\u2014\u25B6\u25B8\u27A4\u2022\u00BB/]+""")
+    /** "|NL|", "[IT]" — playlist group wrappers, not "(IS)" in the middle of a title. */
+    private val GROUP_CODE = Regex("""[|\[]\s*([A-Za-z]{2,3})\s*[|\]]""")
+    private val GUILLEMET_CODE = Regex("""«\s*([A-Za-z]{2,3})\s*»""")
+    /** "(DE) …" only when the text starts with a parenthesised code. */
+    private val START_PAREN = Regex("""^\s*\(\s*([A-Za-z]{2,3})\s*\)""")
+    /** "NL - ", "NL: ", "IT | ", "NLD:" only at the start, not a hyphenated name ("Bel-Air"). */
+    private val PREFIX_CODE = Regex("""^\s*([A-Za-z]{2,3})(?:\s*[:|]\s*|\s+[-\u2013\u2014]\s+|\s*[\u25B6\u25B8\u27A4\u2022\u00BB/]\s*)""")
 }
