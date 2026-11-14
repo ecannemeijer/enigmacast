@@ -1,8 +1,8 @@
 {
-  "versionCode": 141,
-  "versionName": "1.0.3",
+  "versionCode": 142,
+  "versionName": "1.0.4",
   "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
-  "notes": "What's new in EnigmaCast\n\nYou can now play catch-up from the TV guide, and set a reminder or AutoSwitch for a programme that has not started yet. Record IPTV now, or schedule a recording from the guide, to the TV's internal storage or a USB drive. For Xtream accounts, Settings shows whether the subscription is active, when it expires, and how many connections are in use. Each IPTV provider can have its own user-agent and extra HTTP headers. You can choose how often the playlist is refreshed: every 6, 12, 24 or 48 hours, or only when you refresh it yourself. Moving right in the TV guide now correctly reaches programmes that have not started yet.",
+  "notes": "What's new in EnigmaCast\n\nA new Radio section in the menu, with thousands of internet radio stations. You can search, filter by country or genre, save favourites, see recently played stations, and view now-playing information. The full-screen player has a sleep timer and screen-burn protection, and it follows your chosen theme.\n\nA backup TV guide automatically fills in programme information for channels that have none of their own, on satellite and IPTV. Countries are detected automatically, including Germany, Austria and Switzerland, and you can add extra countries in Settings.\n\nChannels without guide information can now be selected and watched from the TV guide. The guide shows saved programme information straight away. Settings pages use smaller, cleaner text, and remote control navigation has been improved.",
   "companion": {
     "versionCode": 120,
     "versionName": "1.0.0-beta.21",
