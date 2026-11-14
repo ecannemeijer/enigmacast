@@ -24,6 +24,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import com.enigmacast.ui.theme.EnigmaColors
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,15 +32,15 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 internal object RadioDialogColors {
-    val ContainerSolid = Color(0xFF181C27)
-    val Title = Color(0xFFF0F2F8)
-    val Body = Color(0xFFC5CBD8)
-    val Accent = Color(0xFF2979FF)
+    val ContainerSolid get() = EnigmaColors.Card
+    val Title get() = EnigmaColors.Text
+    val Body get() = EnigmaColors.Muted
+    val Accent get() = EnigmaColors.Focus
 }
 
 internal object RadioDialogDefaults {
     val MenuMaxWidth = 420.dp
-    val Shape = RoundedCornerShape(16.dp)
+    val Shape get() = radioShape(16.dp)
 }
 
 internal fun Modifier.radioDialogWidth(maxWidth: androidx.compose.ui.unit.Dp) =
@@ -65,17 +66,17 @@ internal fun RadioDialogMenuButton(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .background(if (focused) RadioDialogColors.Accent else Color.Transparent, RoundedCornerShape(8.dp))
+            .radioFocusBackground(focused, radioShape(8.dp))
             .onFocusChanged { focused = it.isFocused }
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = if (focused) Color.White else RADIO_TEXT, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = radioOnFocus(focused), modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
         Text(
             text = text,
-            color = if (focused) Color.White else RADIO_TEXT,
+            color = radioOnFocus(focused),
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
         )
