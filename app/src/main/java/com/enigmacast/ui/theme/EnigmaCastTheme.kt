@@ -56,6 +56,14 @@ object EnigmaType {
     val Body = 16.sp
     val Label = 13.sp
     val Caption = 11.sp
+    /**
+     * Right-hand settings options: titles, values and descriptions are always
+     * smaller than the settings category menu ([NavItem] uses 13.sp).
+     */
+    val SettingsTitle = 12.sp
+    val SettingsValue = 12.sp
+    val SettingsDescription = 11.sp
+    val SettingsDescriptionLine = 15.sp
     /** Weight of titles and labels that stand out; set by the skin. */
     val Strong: FontWeight get() = ActiveSkin.current.strongWeight
 }

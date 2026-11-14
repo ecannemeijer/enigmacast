@@ -317,9 +317,9 @@ fun ToggleRow(
         selected = false,
         onClick = { onCheckedChange(!checked) },
         modifier = modifier.edgeLeft().fillMaxWidth(),
-        headlineContent = { Text(title, fontSize = 15.sp) },
+        headlineContent = { Text(title, fontSize = EnigmaType.SettingsTitle) },
         supportingContent = if (description != null) {
-            { Text(description, fontSize = 12.sp, lineHeight = 16.sp) }
+            { Text(description, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine) }
         } else {
             null
         },
@@ -360,13 +360,13 @@ fun ChoiceRow(
     selectedOptionModifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = 15.sp)
+        Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
         if (!description.isNullOrBlank()) {
             Text(
                 description,
                 color = EnigmaColors.Muted,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
+                fontSize = EnigmaType.SettingsDescription,
+                lineHeight = EnigmaType.SettingsDescriptionLine,
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
@@ -416,7 +416,7 @@ fun ChoiceChip(
             Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
         }
-        Text(label, fontSize = 14.sp)
+        Text(label, fontSize = EnigmaType.SettingsValue)
     }
 }
 
@@ -453,8 +453,8 @@ fun StepperRow(
             Text(
                 description,
                 color = EnigmaColors.Muted,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
+                fontSize = EnigmaType.SettingsDescription,
+                lineHeight = EnigmaType.SettingsDescriptionLine,
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
@@ -467,7 +467,7 @@ fun StepperRow(
             Text(
                 value,
                 color = EnigmaColors.Accent,
-                fontSize = 15.sp,
+                fontSize = EnigmaType.SettingsValue,
                 fontWeight = EnigmaType.Strong,
                 modifier = Modifier.widthIn(min = 72.dp),
             )
@@ -527,7 +527,7 @@ fun ActionTile(
         Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!description.isNullOrBlank()) {
                 Text(
                     description,
@@ -613,8 +613,8 @@ fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
 fun InfoRow(label: String, value: String, modifier: Modifier = Modifier) {
     if (value.isBlank()) return
     Row(modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp)) {
-        Text(label, color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.width(110.dp))
-        Text(value, color = EnigmaColors.Text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(label, color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle, modifier = Modifier.width(110.dp))
+        Text(value, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsValue, modifier = Modifier.weight(1f))
     }
 }
 
@@ -862,14 +862,14 @@ fun ValueRow(
         selected = false,
         onClick = onClick,
         modifier = modifier.edgeLeft().fillMaxWidth(),
-        headlineContent = { Text(title, fontSize = 15.sp, maxLines = 1) },
+        headlineContent = { Text(title, fontSize = EnigmaType.SettingsTitle, maxLines = 1) },
         supportingContent = if (description != null) {
-            { Text(description, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2) }
+            { Text(description, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine, maxLines = 2) }
         } else {
             null
         },
         trailingContent = {
-            Text("$value  ›", fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
+            Text("$value  ›", fontSize = EnigmaType.SettingsValue, fontWeight = EnigmaType.Strong, maxLines = 1)
         },
         colors = rowColors(),
         shape = ListItemDefaults.shape(shape = RowShape),
@@ -915,14 +915,14 @@ fun OptionListDialog(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
+            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(start = 6.dp, bottom = 6.dp))
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 options.forEachIndexed { index, label ->
                     ListItem(
                         selected = index == selectedIndex,
                         onClick = { onSelect(index) },
                         modifier = Modifier.fillMaxWidth().focusRequesterIf(index == selectedIndex.coerceAtLeast(0), current),
-                        headlineContent = { Text(label, fontSize = 15.sp) },
+                        headlineContent = { Text(label, fontSize = EnigmaType.SettingsTitle) },
                         trailingContent = if (index == selectedIndex) {
                             { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
                         } else {
