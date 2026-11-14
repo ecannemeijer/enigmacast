@@ -13,7 +13,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class PlaybackOwner @Inject constructor() {
-    enum class Owner { ENIGMA2, IPTV, TORRENT }
+    enum class Owner { ENIGMA2, IPTV, TORRENT, RADIO }
 
     private val stoppers = LinkedHashMap<Owner, () -> Unit>()
 

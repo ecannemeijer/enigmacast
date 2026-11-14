@@ -13,14 +13,16 @@ import javax.inject.Singleton
 
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
-        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvCategoryRow::class, IptvItemRow::class, IptvRowEpgRow::class],
-    version = 11,
+        SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvCategoryRow::class, IptvItemRow::class, IptvRowEpgRow::class,
+        com.enigmacast.domain.radio.RadioStationFavorite::class, com.enigmacast.domain.radio.RadioStationRecent::class],
+    version = 12,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
     abstract fun cache(): CacheDao
     abstract fun soccer(): SoccerDao
     abstract fun iptv(): IptvDao
+    abstract fun radio(): com.enigmacast.data.radio.RadioDao
 
     companion object {
         const val NAME = "enigmacast-cache.db"
@@ -74,6 +76,14 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE iptv_item ADD COLUMN httpHeaders TEXT NOT NULL DEFAULT ''")
             }
         }
+
+        /** 11 → 12: internet-radio favourites and recently played stations. */
+        val MIGRATION_11_12 = object : androidx.room.migration.Migration(11, 12) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `radio_station_favorites` (`stationUuid` TEXT NOT NULL, `name` TEXT NOT NULL, `streamUrl` TEXT NOT NULL, `homepage` TEXT, `favicon` TEXT, `tags` TEXT NOT NULL, `country` TEXT NOT NULL, `countryCode` TEXT NOT NULL, `codec` TEXT NOT NULL, `bitrate` INTEGER NOT NULL, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`stationUuid`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `radio_station_recent` (`stationUuid` TEXT NOT NULL, `name` TEXT NOT NULL, `streamUrl` TEXT NOT NULL, `homepage` TEXT, `favicon` TEXT, `tags` TEXT NOT NULL, `country` TEXT NOT NULL, `countryCode` TEXT NOT NULL, `codec` TEXT NOT NULL, `bitrate` INTEGER NOT NULL, `playedAt` INTEGER NOT NULL, PRIMARY KEY(`stationUuid`))")
+            }
+        }
     }
 }
 
@@ -85,7 +95,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9, EnigmaDatabase.MIGRATION_9_10, EnigmaDatabase.MIGRATION_10_11)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9, EnigmaDatabase.MIGRATION_9_10, EnigmaDatabase.MIGRATION_10_11, EnigmaDatabase.MIGRATION_11_12)
             // A cache only: an older build reading a newer database just starts empty instead of crashing.
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .fallbackToDestructiveMigration(dropAllTables = true)
@@ -99,4 +109,7 @@ object DatabaseModule {
 
     @Provides
     fun soccerDao(db: EnigmaDatabase): SoccerDao = db.soccer()
+
+    @Provides
+    fun radioDao(db: EnigmaDatabase): com.enigmacast.data.radio.RadioDao = db.radio()
 }

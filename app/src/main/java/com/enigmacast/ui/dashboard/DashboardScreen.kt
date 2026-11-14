@@ -37,6 +37,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.widthIn
 import com.enigmacast.ui.theme.ValueRow
 import com.enigmacast.ui.theme.NavIconStyle
+import com.enigmacast.ui.radio.RadioScreen
 import com.enigmacast.ui.theme.NavIconMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -154,6 +155,8 @@ internal enum class DashSection {
     Stream,
     Guide,
     Radio,
+    /** Internet radio (Radio Browser). The left-menu Radio page; not SAT-TV radio bouquets. */
+    WebRadio,
     Search,
     MyItems,
     Settings,
@@ -273,6 +276,8 @@ fun DashboardScreen(
     val torrentAvailable = scraperStatus is com.enigmacast.data.torrent.ScraperStatus.Valid
     val soccerFocus = remember { FocusRequester() }
     val soccerContentFocus = remember { FocusRequester() }
+    val webRadioFocus = remember { FocusRequester() }
+    val webRadioContentFocus = remember { FocusRequester() }
     val streamFocus = remember { FocusRequester() }
     val guideFocus = remember { FocusRequester() }
     val guideGridFocus = remember { FocusRequester() }
@@ -378,6 +383,7 @@ fun DashboardScreen(
         DashSection.Stream -> streamFocus
         DashSection.Guide -> guideFocus
         DashSection.Radio -> radioFocus
+        DashSection.WebRadio -> webRadioFocus
         DashSection.Search -> searchMenuFocus
         DashSection.MyItems -> myItemsMenuFocus
         DashSection.Settings -> settingsMenuFocus
@@ -757,6 +763,19 @@ fun DashboardScreen(
                         .focusProperties { right = if (section == DashSection.Soccer && lockedFeature(DashSection.Soccer) == null) soccerContentFocus else FocusRequester.Cancel },
                     onClick = { enterSection(DashSection.Soccer) },
                 )
+                NavItem(
+                    icon = NavIconStyle.Radio,
+                    label = stringResource(R.string.nav_radio),
+                    selected = section == DashSection.WebRadio,
+                    showLabel = drawerExpanded,
+                    staggerIndex = 4,
+                    iconMotion = NavIconMotion.PULSE,
+                    modifier = Modifier
+                        .focusRequester(webRadioFocus)
+                        .onFocusChanged { if (it.isFocused) flyout = null }
+                        .focusProperties { right = if (section == DashSection.WebRadio) webRadioContentFocus else FocusRequester.Cancel },
+                    onClick = { enterSection(DashSection.WebRadio) },
+                )
                 // Search and My items: own items again (no flyout for a single page).
                 NavItem(
                     icon = NavIconStyle.Search,
@@ -984,6 +1003,16 @@ fun DashboardScreen(
                                 } ?: entry
                                 guideModel.tune(known, onStream, onStream)
                             },
+                        )
+                        }
+                        DashSection.WebRadio -> {
+                        LaunchedEffect(sectionEnter) {
+                            if (sectionEnter == 0) return@LaunchedEffect
+                            webRadioContentFocus.requestWhenReady()
+                        }
+                        RadioScreen(
+                            onBack = { runCatching { webRadioFocus.requestFocus() } },
+                            contentFocus = webRadioContentFocus,
                         )
                         }
                         DashSection.Stream -> LiveBrowser(

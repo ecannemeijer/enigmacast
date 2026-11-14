@@ -3,6 +3,7 @@ package com.enigmacast.ui.theme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -17,6 +18,7 @@ object ClassicNavIcons {
     val Enigma: ImageVector = EnigmaIcons.Tv
     val Iptv: ImageVector = EnigmaIcons.Tv
     val Sport: ImageVector = EnigmaIcons.Soccer
+    val Radio: ImageVector = Icons.Filled.Radio
     val Search: ImageVector = Icons.Filled.Search
     val MyItems: ImageVector = EnigmaIcons.Record
     val Torrent: ImageVector = Icons.Filled.PlayArrow
@@ -34,6 +36,7 @@ object NavIconStyle {
     val Enigma: ImageVector get() = if (CLASSIC) ClassicNavIcons.Enigma else NavIcons.Enigma
     val Iptv: ImageVector get() = if (CLASSIC) ClassicNavIcons.Iptv else NavIcons.Iptv
     val Sport: ImageVector get() = if (CLASSIC) ClassicNavIcons.Sport else NavIcons.Sport
+    val Radio: ImageVector get() = if (CLASSIC) ClassicNavIcons.Radio else NavIcons.Radio
     val Search: ImageVector get() = if (CLASSIC) ClassicNavIcons.Search else NavIcons.Search
     val MyItems: ImageVector get() = if (CLASSIC) ClassicNavIcons.MyItems else NavIcons.MyItems
     val Torrent: ImageVector get() = if (CLASSIC) ClassicNavIcons.Torrent else NavIcons.Torrent
