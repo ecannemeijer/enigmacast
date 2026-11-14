@@ -30,6 +30,11 @@ class IptvGuideActionTest {
     @Test
     fun missingCellDoesNothing() {
         assertEquals(IptvGuideOk.NONE, IptvGuideAction.decide(null, null, now))
-        assertEquals(IptvGuideOk.NONE, IptvGuideAction.decide(live, null, now))
+    }
+
+    @Test
+    fun channelWithoutEpgWatchesLive() {
+        assertEquals(IptvGuideOk.WATCH_LIVE, IptvGuideAction.decide(live, null, now))
+        assertEquals(IptvGuideOk.WATCH_LIVE, IptvGuideAction.decide(noArchive, null, now))
     }
 }

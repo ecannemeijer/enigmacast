@@ -78,9 +78,27 @@ class GuideTimelineTest {
     @Test
     fun emptyRowsStillMoveInHalfHours() {
         val now = base + 5 * 60
-        val move = GuideTimeline.moveHorizontal(emptyList(), GuideCursor(0, now, base), 1, now)
+        val row = listOf(event(1, 90, 30))
+        val move = GuideTimeline.moveHorizontal(row, GuideCursor(0, now, base), 1, now)
         assertEquals(base + slot, move.cursor.focusSec)
-        assertTrue(GuideTimeline.moveHorizontal(emptyList(), GuideCursor(0, now, base), -1, now).atLeftEdge)
+        assertTrue(GuideTimeline.moveHorizontal(row, GuideCursor(0, now, base), -1, now).atLeftEdge)
+    }
+
+    @Test
+    fun aChannelWithNoProgrammesGetsOneFocusablePlaceholder() {
+        val cells = GuideTimeline.cells(emptyList(), base, base + GuideTimeline.WINDOW_SEC)
+        assertEquals(1, cells.size)
+        assertEquals(null, cells[0].event)
+        assertEquals(base, cells[0].startSec)
+        assertEquals(base + GuideTimeline.WINDOW_SEC, cells[0].endSec)
+        val now = base + 10 * 60
+        val cursor = GuideCursor(0, now, base)
+        val right = GuideTimeline.moveHorizontal(emptyList(), cursor, 1, now)
+        assertEquals(now, right.cursor.focusSec)
+        assertFalse(right.atLeftEdge)
+        val focused = GuideTimeline.focusedCell(emptyList(), cursor, now)
+        assertEquals(null, focused?.event)
+        assertTrue(focused != null && focused.contains(now))
     }
 
     @Test
