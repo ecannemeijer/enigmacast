@@ -44,4 +44,39 @@ class FallbackEpgCountriesTest {
         )
         assertEquals(setOf("fr", "us"), extrasOnlyUs)
     }
+
+
+    @Test
+    fun nineteenPointTwoEastAddsGermanyAustriaAndSwitzerland() {
+        val picked = FallbackEpgCountries.auto(
+            texts = listOf("HD+ Deutschland", "Das Erste HD"),
+            appLanguage = "en",
+            orbitalTenths = listOf(192),
+        )
+        assertTrue(picked.containsAll(setOf("de", "at", "ch", "gb")))
+        assertEquals(setOf("de", "at", "ch"), FallbackEpgCountries.countriesFromOrbitals(listOf(192)))
+        assertTrue(FallbackEpgCountries.countriesFromOrbitals(listOf(130, 235, 282)).isEmpty())
+        assertTrue("de" in FallbackEpgCountries.auto(
+            texts = listOf("---------- ASTRA 19.2°E ----------"),
+            appLanguage = "it",
+        ))
+    }
+
+    @Test
+    fun midTitleTwoLetterTokensDoNotAddIcelandOrMontenegro() {
+        val picked = FallbackEpgCountries.auto(
+            texts = listOf(
+                "Now You See Me: Now You Don\'t",
+                "IT - ME-CONTRO-TE CHANNEL HD",
+                "NEXT | HANDBOLTAHÖLLIN (IS) | IS: LIVEY PPV 51",
+                "NL - NPO 1",
+            ),
+            appLanguage = "en",
+        )
+        assertTrue("nl" in picked)
+        assertTrue("gb" in picked)
+        assertTrue("it" in picked)
+        assertFalse("is" in picked)
+        assertFalse("me" in picked)
+    }
 }
