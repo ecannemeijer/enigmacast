@@ -57,24 +57,24 @@ fun PhotoQrDialog(state: PhotoQrState, onRetry: () -> Unit, onClose: () -> Unit)
                 .trapFocus(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.profile_photo_qr_title), color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = EnigmaType.Strong)
+            Text(stringResource(R.string.profile_photo_qr_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             when (state) {
-                PhotoQrState.Starting -> Text(stringResource(R.string.profile_photo_qr_starting), color = EnigmaColors.Muted, fontSize = 15.sp)
-                PhotoQrState.NoNetwork -> Text(stringResource(R.string.profile_photo_qr_no_network), color = EnigmaColors.Text, fontSize = 15.sp)
-                PhotoQrState.Expired -> Text(stringResource(R.string.profile_photo_qr_expired), color = EnigmaColors.Text, fontSize = 15.sp)
+                PhotoQrState.Starting -> Text(stringResource(R.string.profile_photo_qr_starting), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
+                PhotoQrState.NoNetwork -> Text(stringResource(R.string.profile_photo_qr_no_network), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
+                PhotoQrState.Expired -> Text(stringResource(R.string.profile_photo_qr_expired), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
                 PhotoQrState.Done -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(48.dp).background(Color(0xFF16A34A), skinShape(24.dp)), contentAlignment = Alignment.Center) {
                         Text("✓", color = Color.White, fontSize = 28.sp)
                     }
-                    Text(stringResource(R.string.profile_photo_qr_done), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+                    Text(stringResource(R.string.profile_photo_qr_done), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
                 }
                 is PhotoQrState.Ready -> Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     QrImage(state.qr, Modifier.size(260.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(stringResource(R.string.profile_photo_qr_steps), color = EnigmaColors.Text, fontSize = 15.sp)
-                        Text(stringResource(R.string.profile_photo_qr_same_network), color = EnigmaColors.Muted, fontSize = 13.sp)
+                        Text(stringResource(R.string.profile_photo_qr_steps), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
+                        Text(stringResource(R.string.profile_photo_qr_same_network), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
                         Text(stringResource(R.string.profile_photo_qr_url), color = EnigmaColors.Muted, fontSize = 12.sp)
-                        Text(state.url, color = EnigmaColors.Cyan, fontSize = 13.sp)
+                        Text(state.url, color = EnigmaColors.Cyan, fontSize = EnigmaType.SettingsDescription)
                         Countdown(state.expiresAt)
                     }
                 }
@@ -94,7 +94,7 @@ private fun Countdown(expiresAt: Long) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(expiresAt) { while (true) { now = System.currentTimeMillis(); delay(1_000) } }
     val left = ((expiresAt - now).coerceAtLeast(0) / 1000).toInt()
-    Text(stringResource(R.string.profile_photo_qr_expires, left / 60, left % 60), color = EnigmaColors.Muted, fontSize = 13.sp)
+    Text(stringResource(R.string.profile_photo_qr_expires, left / 60, left % 60), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
 }
 
 /** Black modules on white with a 4-module quiet zone. */

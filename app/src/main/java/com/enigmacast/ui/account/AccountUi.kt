@@ -130,26 +130,26 @@ fun AccountSettingsPanel(contentFocus: FocusRequester, model: AccountViewModel =
         modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.hasFocus) pageHadFocus = true },
     ) {
         if (current == null) {
-            Text(stringResource(R.string.account_signed_out), color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(stringResource(R.string.account_signed_out), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
             AccountForm(model, contentFocus)
             return@Column
         }
         val premium = model.isPremium(current)
-        Text(current.email, color = EnigmaColors.Text, fontSize = 17.sp, fontWeight = EnigmaType.Strong)
-        Text(planLine(current, premium), color = if (premium) EnigmaColors.Accent else EnigmaColors.Muted, fontSize = 14.sp)
+        Text(current.email, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
+        Text(planLine(current, premium), color = if (premium) EnigmaColors.Accent else EnigmaColors.Muted, fontSize = EnigmaType.SettingsValue)
         Text(
             stringResource(R.string.account_devices, current.devicesUsed, current.maxDevices),
             color = EnigmaColors.Muted,
-            fontSize = 13.sp,
+            fontSize = EnigmaType.SettingsDescription,
         )
         if (model.offline(current)) {
-            Text(stringResource(R.string.account_offline), color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp)
+            Text(stringResource(R.string.account_offline), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
         }
         if (!premium) {
-            Text(stringResource(R.string.premium_free_summary), color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(stringResource(R.string.premium_free_summary), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
         }
-        model.info?.let { Text(it.asString(), color = EnigmaColors.Accent, fontSize = 13.sp) }
-        model.message?.let { Text(it.asString(), color = Color(0xFFFFB4A8), fontSize = 13.sp, lineHeight = 18.sp) }
+        model.info?.let { Text(it.asString(), color = EnigmaColors.Accent, fontSize = EnigmaType.SettingsDescription) }
+        model.message?.let { Text(it.asString(), color = Color(0xFFFFB4A8), fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CompactButton(
                 label = stringResource(if (model.busy) R.string.account_busy else R.string.account_refresh),

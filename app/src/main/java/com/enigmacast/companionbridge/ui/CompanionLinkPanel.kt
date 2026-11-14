@@ -44,6 +44,7 @@ import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.ValueRow
+import com.enigmacast.ui.theme.EnigmaType
 import kotlinx.coroutines.delay
 
 /**
@@ -144,7 +145,7 @@ fun CompanionLinkPanel(
                 Text(
                     stringResource(R.string.companion_no_devices),
                     color = EnigmaColors.Muted,
-                    fontSize = 13.sp,
+                    fontSize = EnigmaType.SettingsDescription,
                 )
             } else {
                 state.devices.forEach { device ->
@@ -180,9 +181,9 @@ private fun CompanionDownloadCard() {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             QrImage(qr, Modifier.size(130.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.companion_step_install), color = EnigmaColors.Text, fontSize = 14.sp)
-                Text(stringResource(R.string.companion_step_enable, stringResource(R.string.companion_enable)), color = EnigmaColors.Text, fontSize = 14.sp)
-                Text(stringResource(R.string.companion_step_code), color = EnigmaColors.Text, fontSize = 14.sp)
+                Text(stringResource(R.string.companion_step_install), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
+                Text(stringResource(R.string.companion_step_enable, stringResource(R.string.companion_enable)), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
+                Text(stringResource(R.string.companion_step_code), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
                 Text(stringResource(R.string.companion_app_qr_update), color = EnigmaColors.Subtle, fontSize = 12.sp)
             }
         }
@@ -277,16 +278,16 @@ private fun PairingPopup(state: CompanionBridgeState, knownDevices: Set<String>,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.companion_popup_title), color = EnigmaColors.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.companion_popup_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = FontWeight.SemiBold)
             val code = state.pairingCode
             when {
                 paired != null -> Text(
                     stringResource(R.string.companion_paired_with, paired.name),
                     color = EnigmaColors.Success,
-                    fontSize = 18.sp,
+                    fontSize = EnigmaType.SettingsTitle,
                 )
                 state.running && code != null -> PairingCode(code = code, expiresAt = state.pairingExpiresAt, big = true)
-                else -> Text(stringResource(R.string.companion_starting), color = EnigmaColors.Muted, fontSize = 14.sp)
+                else -> Text(stringResource(R.string.companion_starting), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
             }
             Box(Modifier.widthIn(max = 240.dp)) {
                 ValueRow(

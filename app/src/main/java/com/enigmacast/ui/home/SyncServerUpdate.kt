@@ -167,7 +167,7 @@ fun SyncBusyRow(text: String, modifier: Modifier = Modifier) {
             strokeWidth = 3.dp,
             modifier = Modifier.size(22.dp),
         )
-        Text(text, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, lineHeight = 20.sp)
+        Text(text, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, lineHeight = EnigmaType.SettingsDescriptionLine)
     }
 }
 
@@ -227,19 +227,19 @@ fun SyncServerUpdateDialog(model: SyncServerUpdateViewModel) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.sync_update_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Text(stringResource(R.string.sync_update_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             last?.takeIf { !finished }?.let {
-                Text(availableMessage(it), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+                Text(availableMessage(it), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
             }
             syncUpdateStatus(state)?.takeIf { state !is State.Checked }?.let {
                 if (running || state is State.Checking) {
                     SyncBusyRow(it)
                 } else {
-                    Text(it, color = if (state is State.Failed) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+                    Text(it, color = if (state is State.Failed) EnigmaColors.Text else EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
                 }
             }
             if (!finished) {
-                Text(stringResource(R.string.sync_update_login_hint), color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 18.sp)
+                Text(stringResource(R.string.sync_update_login_hint), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
                 TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it }, browsable = !running)
                 TvTextField(
                     stringResource(R.string.sync_server_password),

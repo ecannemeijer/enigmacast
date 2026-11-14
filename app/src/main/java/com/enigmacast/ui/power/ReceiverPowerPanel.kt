@@ -45,6 +45,7 @@ import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.StatusPill
 import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.TvConfirmDialog
+import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 
@@ -213,7 +214,7 @@ private fun SleepTimerCard(viewModel: ReceiverPowerViewModel, menuFocus: FocusRe
             Text(
                 if (viewModel.sleepBusy) stringResource(R.string.busy) else PowerCopy.sleepSummary(status, viewModel.sleepTimerError).asString(),
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsDescription,
             )
         }
         ChoiceRow(
@@ -244,13 +245,13 @@ private fun ReceiverDetailsCard(viewModel: ReceiverPowerViewModel, modifier: Mod
             viewModel.detailsError.isNotEmpty() -> Text(
                 viewModel.detailsError.asString(),
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsDescription,
                 modifier = Modifier.padding(horizontal = 6.dp),
             )
             else -> Text(
                 stringResource(R.string.info_loading),
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsDescription,
                 modifier = Modifier.padding(horizontal = 6.dp),
             )
         }

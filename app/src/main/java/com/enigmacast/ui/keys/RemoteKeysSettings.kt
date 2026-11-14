@@ -220,9 +220,9 @@ private fun KeyRow(label: String, value: String, onClick: () -> Unit, modifier: 
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
     ) { _ ->
-        Text(label, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(label, fontSize = EnigmaType.SettingsTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
-        Text(value, fontSize = 12.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, fontSize = EnigmaType.SettingsValue, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -275,9 +275,9 @@ private fun KeyCaptureDialog(actionLabel: String, longPressMs: Long, onKey: (Key
                 .focusable(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(actionLabel, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
-            Text(stringResource(R.string.keys_press_now), color = EnigmaColors.Text, fontSize = 14.sp)
-            Text(stringResource(R.string.keys_press_hint), color = EnigmaColors.Muted, fontSize = 12.sp, lineHeight = 16.sp)
+            Text(actionLabel, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
+            Text(stringResource(R.string.keys_press_now), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsValue)
+            Text(stringResource(R.string.keys_press_hint), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
             if (fixed) Text(stringResource(R.string.keys_fixed_key), color = EnigmaColors.Accent, fontSize = 12.sp)
         }
     }

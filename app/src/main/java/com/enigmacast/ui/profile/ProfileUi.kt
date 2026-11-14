@@ -213,7 +213,7 @@ internal fun ProfileTile(name: String, avatar: Int, active: Boolean, managing: B
         }
         Text(
             name, color = if (focus.focused || active) EnigmaColors.Text else EnigmaColors.Muted,
-            fontSize = 15.sp, fontWeight = if (active) EnigmaType.Strong else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            fontSize = EnigmaType.SettingsTitle, fontWeight = if (active) EnigmaType.Strong else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -231,7 +231,7 @@ private fun AddTile(onClick: () -> Unit) {
                 .border(if (focus.focused) 4.dp else 1.dp, if (focus.focused) Color.White else EnigmaColors.CardBorder, skinShape(24.dp)),
             contentAlignment = Alignment.Center,
         ) { Text("+", color = EnigmaColors.Text, fontSize = 48.sp) }
-        Text(stringResource(R.string.profile_add), color = EnigmaColors.Muted, fontSize = 15.sp)
+        Text(stringResource(R.string.profile_add), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
     }
 }
 
@@ -292,7 +292,7 @@ fun ProfileEditor(
                 .trapFocus(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong)
+            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             TvTextField(stringResource(R.string.profile_name), name, { name = it.take(20) }, fieldFocus = field)
             Text(stringResource(R.string.profile_avatar), color = EnigmaColors.Muted, fontSize = 12.sp)
             for (row in 0 until 2) {

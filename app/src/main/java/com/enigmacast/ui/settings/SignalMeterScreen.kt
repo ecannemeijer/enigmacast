@@ -46,6 +46,7 @@ import com.enigmacast.ui.theme.ActionTile
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.PanelHeader
 import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.util.asString
 import java.util.Locale
 
@@ -87,7 +88,7 @@ fun SignalMeterScreen(
             modifier = Modifier.focusRequester(backFocus),
         )
         when {
-            state.noReceiver -> Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = 18.sp)
+            state.noReceiver -> Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
             state.loading -> Column(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.Center,
@@ -97,7 +98,7 @@ fun SignalMeterScreen(
                 Text(
                     stringResource(R.string.signal_loading),
                     color = EnigmaColors.Muted,
-                    fontSize = 18.sp,
+                    fontSize = EnigmaType.SettingsTitle,
                     modifier = Modifier.padding(top = 16.dp),
                 )
             }
@@ -122,7 +123,7 @@ fun SignalMeterScreen(
                                 focusedContentColor = EnigmaColors.OnFocus,
                             ),
                         ) {
-                            Text(tuner.label, fontSize = 16.sp)
+                            Text(tuner.label, fontSize = EnigmaType.SettingsTitle)
                         }
                     }
                     if (state.tunerIndex != null) state.satellites.forEachIndexed { index, satellite ->
@@ -138,7 +139,7 @@ fun SignalMeterScreen(
                                 focusedContentColor = EnigmaColors.OnFocus,
                             ),
                         ) {
-                            Text(satellite.label, fontSize = 16.sp)
+                            Text(satellite.label, fontSize = EnigmaType.SettingsTitle)
                         }
                     }
                 }
@@ -147,17 +148,17 @@ fun SignalMeterScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     state.tunedChannel?.let { channel ->
-                        Text(stringResource(R.string.signal_channel, channel), color = EnigmaColors.Text, fontSize = 18.sp)
+                        Text(stringResource(R.string.signal_channel, channel), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
                     }
                     Meter(state.reading)
                     if (state.busy) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             com.enigmacast.ui.components.EnigmaSpinner(color = EnigmaColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(22.dp))
-                            state.message?.let { Text(it.asString(), color = EnigmaColors.Muted, fontSize = 16.sp) }
+                            state.message?.let { Text(it.asString(), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle) }
                         }
                     } else {
                         state.message?.takeIf { state.satellites.isNotEmpty() }?.let {
-                            Text(it.asString(), color = EnigmaColors.Muted, fontSize = 16.sp)
+                            Text(it.asString(), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle)
                         }
                     }
                 }
@@ -165,7 +166,7 @@ fun SignalMeterScreen(
         }
         if (!state.loading && !state.noReceiver) {
             state.message?.takeIf { state.satellites.isEmpty() }?.let {
-                Text(it.asString(), color = EnigmaColors.Muted, fontSize = 16.sp)
+                Text(it.asString(), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle)
             }
         }
     }
@@ -183,13 +184,13 @@ private fun Meter(reading: SignalReading?) {
         extra = db?.let { stringResource(R.string.signal_db, it) },
     )
     reading?.ber?.let { ber ->
-        Text(stringResource(R.string.signal_ber, ber), color = EnigmaColors.Text, fontSize = 16.sp)
+        Text(stringResource(R.string.signal_ber, ber), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
     }
     reading?.tunerNumber?.let { tuner ->
-        Text(stringResource(R.string.signal_tuner, tuner + 1), color = EnigmaColors.Muted, fontSize = 16.sp)
+        Text(stringResource(R.string.signal_tuner, tuner + 1), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle)
     }
     if (reading != null && !locked) {
-        Text(stringResource(R.string.signal_no_lock), color = EnigmaColors.Danger, fontSize = 16.sp)
+        Text(stringResource(R.string.signal_no_lock), color = EnigmaColors.Danger, fontSize = EnigmaType.SettingsTitle)
     }
 }
 
@@ -199,8 +200,8 @@ private fun MeterBar(label: String, percent: Int?, extra: String? = null) {
     val caption = listOfNotNull(value?.let { "$it%" }, extra).joinToString(" · ")
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(label, color = EnigmaColors.Text, fontSize = 16.sp, modifier = Modifier.widthIn(min = 120.dp))
-            Text(caption.ifEmpty { "—" }, color = EnigmaColors.Muted, fontSize = 16.sp)
+            Text(label, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, modifier = Modifier.widthIn(min = 120.dp))
+            Text(caption.ifEmpty { "—" }, color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle)
         }
         Box(
             modifier = Modifier

@@ -157,13 +157,13 @@ fun PinPad(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 repeat(lengths.last) { i ->
                     Box(Modifier.size(14.dp).background(if (i < pin.length) EnigmaColors.Accent else EnigmaColors.Raised, CircleShape).border(1.dp, EnigmaColors.CardBorder, CircleShape))
                 }
             }
-            Text(error.orEmpty(), color = EnigmaColors.Danger, fontSize = 13.sp)
+            Text(error.orEmpty(), color = EnigmaColors.Danger, fontSize = EnigmaType.SettingsDescription)
             val keys = if (fixed) listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "✕")
             else listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK")
             keys.chunked(3).forEachIndexed { row, line ->

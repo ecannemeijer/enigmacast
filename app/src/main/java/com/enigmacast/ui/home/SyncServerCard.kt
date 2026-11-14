@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
+import com.enigmacast.ui.theme.EnigmaType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -602,7 +603,7 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
         model.probing -> SyncBusyRow(stringResource(R.string.sync_server_searching, model.host.trim()))
         server != null -> {
             InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_found, server.host, SyncServerOffer.label(server.version)))
-            Text(stringResource(R.string.sync_server_found_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+            Text(stringResource(R.string.sync_server_found_hint), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
         }
         model.searched.isNotBlank() -> InfoRow(stringResource(R.string.sync_server_status), stringResource(R.string.sync_server_not_found, model.searched))
     }
@@ -631,7 +632,7 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
     }
     if (server == null || model.reinstallForm) {
         if (server == null) {
-            Text(stringResource(R.string.sync_server_install_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+            Text(stringResource(R.string.sync_server_install_hint), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
         }
         TvTextField(stringResource(R.string.sync_server_host), model.host, { model.host = it }, kind = TvFieldKind.HOST)
         TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it })
@@ -666,7 +667,7 @@ private fun NotPairedSection(model: SyncServerViewModel, updates: SyncServerUpda
 @Composable
 private fun SyncManageSection(model: SyncServerViewModel) {
     var confirmRestore by remember { mutableStateOf<String?>(null) }
-    Text(stringResource(R.string.sync_manage_title), color = EnigmaColors.Text, fontSize = 16.sp)
+    Text(stringResource(R.string.sync_manage_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
     if (model.manageBusy) SyncBusyRow(stringResource(R.string.sync_manage_busy))
     model.manageMessage?.let { InfoRow(stringResource(R.string.sync_server_status), stringResource(it, model.manageDetail)) }
     if (model.serverStatus.isNotBlank()) InfoRow(stringResource(R.string.sync_manage_server), model.serverStatus)
@@ -678,7 +679,7 @@ private fun SyncManageSection(model: SyncServerViewModel) {
                 if (device.self) append(" · ").append(stringResource(R.string.sync_manage_this_device))
                 if (device.revoked) append(" · ").append(stringResource(R.string.sync_manage_revoked_tag))
             }
-            Text(label, color = if (device.revoked) EnigmaColors.Subtle else EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text(label, color = if (device.revoked) EnigmaColors.Subtle else EnigmaColors.Muted, fontSize = EnigmaType.SettingsTitle, modifier = Modifier.weight(1f))
             if (!device.self && !device.revoked) {
                 TvButton(stringResource(R.string.sync_manage_revoke), { model.revokeDevice(device.id) }, enabled = !model.manageBusy, compact = true)
             }
@@ -690,7 +691,7 @@ private fun SyncManageSection(model: SyncServerViewModel) {
     }
     model.backups.take(5).forEach { folder ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text(folder.substringAfterLast('/'), color = EnigmaColors.Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text(folder.substringAfterLast('/'), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsValue, modifier = Modifier.weight(1f))
             TvButton(stringResource(R.string.sync_manage_restore), { confirmRestore = folder }, enabled = !model.manageBusy, compact = true)
         }
     }
@@ -718,8 +719,8 @@ private fun SyncManageSection(model: SyncServerViewModel) {
 private fun SyncTvBackupSection(model: SyncServerViewModel) {
     var confirmRestore by remember { mutableStateOf<java.io.File?>(null) }
     val format = remember { java.text.SimpleDateFormat("dd-MM-yyyy HH:mm", java.util.Locale.getDefault()) }
-    Text(stringResource(R.string.sync_tv_backup_title), color = EnigmaColors.Text, fontSize = 16.sp)
-    Text(stringResource(R.string.sync_tv_backup_hint), color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+    Text(stringResource(R.string.sync_tv_backup_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
+    Text(stringResource(R.string.sync_tv_backup_hint), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
     TvTextField(stringResource(R.string.sync_server_user), model.user, { model.user = it })
     TvTextField(
         stringResource(R.string.sync_server_password),
@@ -735,14 +736,14 @@ private fun SyncTvBackupSection(model: SyncServerViewModel) {
         enabled = !model.tvBackupBusy && model.tvBackupPassword.isNotBlank(), compact = true,
     )
     if (model.tvBackups.isEmpty()) {
-        Text(stringResource(R.string.sync_tv_backup_none), color = EnigmaColors.Subtle, fontSize = 14.sp)
+        Text(stringResource(R.string.sync_tv_backup_none), color = EnigmaColors.Subtle, fontSize = EnigmaType.SettingsDescription)
     }
     model.tvBackups.take(5).forEach { item ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text(
                 "${format.format(java.util.Date(item.createdMs))} · ${item.sizeBytes / 1024} KB",
                 color = EnigmaColors.Muted,
-                fontSize = 14.sp,
+                fontSize = EnigmaType.SettingsDescription,
                 modifier = Modifier.weight(1f),
             )
             TvButton(

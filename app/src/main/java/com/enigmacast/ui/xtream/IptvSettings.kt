@@ -415,7 +415,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                 Text(
                     stringResource(R.string.iptv_provider_empty),
                     color = EnigmaColors.Muted,
-                    fontSize = 13.sp,
+                    fontSize = EnigmaType.SettingsDescription,
                 )
             }
             if (expiryWarning) {
@@ -431,7 +431,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                     }
                 }
                 warnings.forEach { line ->
-                    Text(line, color = EnigmaColors.Danger, fontSize = 13.sp)
+                    Text(line, color = EnigmaColors.Danger, fontSize = EnigmaType.SettingsDescription)
                 }
             }
             providers.forEach { provider ->
@@ -443,7 +443,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                         Text(
                             provider.displayName(),
                             color = EnigmaColors.Text,
-                            fontSize = 15.sp,
+                            fontSize = EnigmaType.SettingsTitle,
                             fontWeight = EnigmaType.Strong,
                             maxLines = 1,
                         )
@@ -465,7 +465,7 @@ fun IptvSettingsCard(model: IptvSettingsViewModel = hiltViewModel()) {
                             fontSize = 12.sp,
                         )
                     }
-                    Text("›", color = EnigmaColors.Subtle, fontSize = 18.sp)
+                    Text("›", color = EnigmaColors.Subtle, fontSize = EnigmaType.SettingsTitle)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -704,7 +704,7 @@ private fun IptvProviderDialog(
             Text(
                 provider?.displayName() ?: stringResource(R.string.iptv_provider_new_title),
                 color = EnigmaColors.Text,
-                fontSize = 18.sp,
+                fontSize = EnigmaType.SettingsTitle,
                 fontWeight = EnigmaType.Strong,
             )
             if (provider != null) {
@@ -790,7 +790,7 @@ private fun IptvProviderDialog(
                 Text(
                     stringResource(R.string.iptv_provider_actions),
                     color = EnigmaColors.Text,
-                    fontSize = 15.sp,
+                    fontSize = EnigmaType.SettingsTitle,
                     fontWeight = EnigmaType.Strong,
                     modifier = Modifier.padding(top = 6.dp),
                 )
@@ -858,7 +858,7 @@ private fun IptvLoadDialog(state: IptvLoadState, onCancel: () -> Unit, onClose: 
                 .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(stringResource(R.string.iptv_load_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Text(stringResource(R.string.iptv_load_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             if (state.busy) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     EnigmaLoadingIndicator()
@@ -873,7 +873,7 @@ private fun IptvLoadDialog(state: IptvLoadState, onCancel: () -> Unit, onClose: 
                             IptvLoadProgress.Step.SAVE -> stringResource(R.string.iptv_load_save, p.count)
                         },
                         color = EnigmaColors.Text,
-                        fontSize = 14.sp,
+                        fontSize = EnigmaType.SettingsDescription,
                     )
                 }
                 TvButton(stringResource(R.string.cancel), onCancel, modifier = Modifier.focusRequester(button))
@@ -889,7 +889,7 @@ private fun IptvLoadDialog(state: IptvLoadState, onCancel: () -> Unit, onClose: 
                         IptvLoadResult.Failure.EMPTY, null -> stringResource(R.string.iptv_err_empty)
                     },
                     color = if (r is IptvLoadResult.Done) EnigmaColors.Text else EnigmaColors.Muted,
-                    fontSize = 14.sp,
+                    fontSize = EnigmaType.SettingsDescription,
                 )
                 TvButton(stringResource(R.string.close), onClose, modifier = Modifier.focusRequester(button))
             }
@@ -932,7 +932,7 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.iptv_categories_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
+            Text(stringResource(R.string.iptv_categories_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
             if (page.providers.size > 1) {
                 Text(stringResource(R.string.iptv_provider_choose), color = EnigmaColors.Muted, fontSize = 12.sp)
                 val focusProvider = page.providerId.ifBlank { page.providers.firstOrNull()?.id.orEmpty() }
@@ -981,13 +981,13 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
             }
             when {
                 page.loading -> com.enigmacast.ui.components.EnigmaLoadingIndicator()
-                page.failed -> Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = 13.sp)
+                page.failed -> Text(stringResource(R.string.xtream_load_error), color = EnigmaColors.Danger, fontSize = EnigmaType.SettingsDescription)
                 page.providers.size > 1 && page.providerId.isBlank() -> Text(
                     stringResource(R.string.iptv_provider_choose),
                     color = EnigmaColors.Muted,
-                    fontSize = 13.sp,
+                    fontSize = EnigmaType.SettingsDescription,
                 )
-                page.categories.isEmpty() -> Text(stringResource(R.string.iptv_categories_none), color = EnigmaColors.Muted, fontSize = 13.sp)
+                page.categories.isEmpty() -> Text(stringResource(R.string.iptv_categories_none), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
                 else -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
                         com.enigmacast.ui.theme.CompactButton(
@@ -1003,7 +1003,7 @@ private fun IptvCategoriesDialog(page: IptvSettingsViewModel.CategoryPage, model
                         )
                         Text(
                             stringResource(R.string.iptv_categories_count, com.enigmacast.domain.xtream.IptvCategoryFilter.shown(page.categories, page.hidden), page.categories.size),
-                            color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1,
+                            color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription, maxLines = 1,
                         )
                     }
                     val keyed = remember(page.categories) { com.enigmacast.domain.xtream.LazyKeys.keyed(page.categories, "cat") { it.id } }
@@ -1057,7 +1057,7 @@ private fun IptvSubtitlesDialog(saved: List<String>?, model: IptvSettingsViewMod
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.iptv_subtitles_title), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Text(stringResource(R.string.iptv_subtitles_title), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.focusGroup()) {
                 CompactButton(
                     stringResource(R.string.import_select_all),
@@ -1072,7 +1072,7 @@ private fun IptvSubtitlesDialog(saved: List<String>?, model: IptvSettingsViewMod
                 )
                 Text(
                     stringResource(R.string.iptv_subtitles_count, selected.size, languages.size),
-                    color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1,
+                    color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription, maxLines = 1,
                 )
             }
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
@@ -1122,9 +1122,9 @@ private fun IptvHiddenChannelsDialog(channels: List<IptvSettingsViewModel.Hidden
                 .focusable(channels.isEmpty()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.iptv_hidden_channels), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
+            Text(stringResource(R.string.iptv_hidden_channels), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = com.enigmacast.ui.theme.EnigmaType.Strong)
             if (channels.isEmpty()) {
-                Text(stringResource(R.string.iptv_hidden_channels_none), color = EnigmaColors.Muted, fontSize = 13.sp)
+                Text(stringResource(R.string.iptv_hidden_channels_none), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
             } else {
                 com.enigmacast.ui.theme.CompactButton(
                     stringResource(R.string.iptv_show_all_channels),

@@ -126,7 +126,7 @@ fun SettingsImportScreen(
             CompactButton(stringResource(R.string.back), onBack, icon = Icons.AutoMirrored.Filled.ArrowBack)
         }
         if (viewModel.receivers.isEmpty()) {
-            Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = 16.sp)
+            Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
             return@Column
         }
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -227,7 +227,7 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
                     modifier = Modifier.listRow(focus, pkg.id, pkg.id == targetKey),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
                 ) { _ ->
-                    Text(pkg.displayName, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(pkg.displayName, fontSize = EnigmaType.SettingsTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(stringResource(R.string.import_package_short, pkg.tvBouquets, pkg.radioBouquets), fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
                 }
             }
@@ -239,7 +239,7 @@ private fun androidx.compose.foundation.layout.RowScope.ListTab(viewModel: Setti
             if (pkg == null) {
                 Muted(stringResource(R.string.import_choose_list))
             } else {
-                Text(pkg.displayName, color = EnigmaColors.Text, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
+                Text(pkg.displayName, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
                 InfoRow(stringResource(R.string.import_source), "${pkg.provider.title} · ${pkg.folder}")
                 InfoRow(stringResource(R.string.import_updated), viewModel.selectedDate?.let { DATE.format(it.atZone(ZoneId.systemDefault())) } ?: "–")
                 InfoRow(
@@ -340,7 +340,7 @@ private fun androidx.compose.foundation.layout.RowScope.IptvTab(viewModel: Setti
                 Text(
                     stringResource(R.string.import_groups_count, viewModel.chosenGroups.size, viewModel.groups.size),
                     color = EnigmaColors.Text,
-                    fontSize = 13.sp,
+                    fontSize = EnigmaType.SettingsValue,
                     fontWeight = EnigmaType.Strong,
                     maxLines = 1,
                     textAlign = androidx.compose.ui.text.style.TextAlign.End,
@@ -449,7 +449,7 @@ private fun SectionLabel(text: String) {
 
 @Composable
 private fun OptionLabel(text: String) {
-    Text(text, color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
+    Text(text, color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, maxLines = 1, modifier = Modifier.padding(start = 6.dp, bottom = 2.dp))
 }
 
 /** The Load action: full width and accent coloured; when it cannot run, the reason shows under it. */
@@ -475,7 +475,7 @@ private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, lef
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 Icon(EnigmaIcons.Layers, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(label, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
+                Text(label, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, maxLines = 1)
             }
         }
         if (!enabled && disabledHint != null) {
@@ -488,7 +488,7 @@ private fun LoadButton(label: String, onClick: () -> Unit, enabled: Boolean, lef
 @Composable
 private fun ProgressLine(fraction: Float?, text: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(text, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsValue, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val barModifier = Modifier.fillMaxWidth().height(6.dp).clip(skinShape(3.dp))
         if (fraction == null) {
             com.enigmacast.ui.components.EnigmaIndeterminateBar(modifier = barModifier, color = EnigmaColors.Cyan, trackColor = EnigmaColors.Raised)
@@ -535,7 +535,7 @@ internal fun CompactToggle(title: String, checked: Boolean, onToggle: () -> Unit
     ) { focused ->
         CheckBox(checked, focused)
         Spacer(Modifier.width(10.dp))
-        Text(title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(title, fontSize = EnigmaType.SettingsTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (trailing != null) {
             Text(
                 trailing,
@@ -589,7 +589,7 @@ private fun ProviderField(viewModel: SettingsImportViewModel, focus: PanelFocus)
                 color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Muted,
                 maxLines = 1,
             )
-            Text(provider.title, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(provider.title, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 provider.repoPath,
                 fontSize = 12.sp,
@@ -632,14 +632,14 @@ private fun ProviderPickerDialog(viewModel: SettingsImportViewModel) {
             Text(
                 stringResource(R.string.import_list_source_title),
                 color = EnigmaColors.Text,
-                fontSize = 17.sp,
+                fontSize = EnigmaType.SettingsTitle,
                 fontWeight = EnigmaType.Strong,
                 modifier = Modifier.padding(start = 6.dp),
             )
             Text(
                 stringResource(R.string.import_list_source_hint),
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsDescription,
                 modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
             )
             Column(Modifier.verticalScroll(rememberScrollState()).focusGroup()) {
@@ -660,7 +660,7 @@ private fun ProviderPickerDialog(viewModel: SettingsImportViewModel) {
                     ) { focused ->
                         val subtle = if (focused) EnigmaColors.OnFocus else EnigmaColors.Subtle
                         Column(Modifier.weight(1f)) {
-                            Text(provider.title, fontSize = 15.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
+                            Text(provider.title, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, maxLines = 1)
                             Text(provider.repoPath, fontSize = 12.sp, color = subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Column(Modifier.padding(start = 10.dp), horizontalAlignment = Alignment.End) {
@@ -733,7 +733,7 @@ private fun Segmented(
             ) {
                 Text(
                     label,
-                    fontSize = 13.sp,
+                    fontSize = EnigmaType.SettingsTitle,
                     fontWeight = if (selected) EnigmaType.Strong else FontWeight.Normal,
                     maxLines = 1,
                     softWrap = false,
@@ -773,7 +773,7 @@ private fun androidx.compose.foundation.layout.RowScope.RestoreTab(viewModel: Se
         item { Muted(stringResource(R.string.import_restore_hint)) }
         viewModel.receivers.forEach { receiver ->
             item(key = "h-${receiver.id}") {
-                Text(receiver.name, color = EnigmaColors.Text, fontSize = 16.sp, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(top = 8.dp))
+                Text(receiver.name, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, modifier = Modifier.padding(top = 8.dp))
             }
             val list = viewModel.backupList[receiver.id].orEmpty()
             if (list.isEmpty()) {
@@ -783,7 +783,7 @@ private fun androidx.compose.foundation.layout.RowScope.RestoreTab(viewModel: Se
                 ListItem(
                     selected = false,
                     onClick = { if (!viewModel.busy) viewModel.askRestore(backup) },
-                    headlineContent = { Text(stringResource(R.string.import_restore_item, backup.label), fontSize = 15.sp) },
+                    headlineContent = { Text(stringResource(R.string.import_restore_item, backup.label), fontSize = EnigmaType.SettingsTitle) },
                     supportingContent = { Text(stringResource(R.string.import_backup_files, backup.files.size), fontSize = 12.sp) },
                     scale = androidx.tv.material3.ListItemDefaults.scale(scale = 1f, focusedScale = 1f),
                 )
@@ -856,10 +856,10 @@ private fun Results(viewModel: SettingsImportViewModel) {
                                     },
                                 ),
                                 color = if (cancelled == CancelState.ROLLBACK_FAILED) EnigmaColors.Danger else EnigmaColors.Text,
-                                fontSize = 14.sp,
+                                fontSize = EnigmaType.SettingsDescription,
                             )
                         } else if (outcome.ok) {
-                            Text(stringResource(R.string.import_done, outcome.bouquets), color = EnigmaColors.Text, fontSize = 14.sp)
+                            Text(stringResource(R.string.import_done, outcome.bouquets), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsDescription)
                         } else {
                             FailureText(outcome.failure!!)
                         }
@@ -874,7 +874,7 @@ private fun Results(viewModel: SettingsImportViewModel) {
 
 @Composable
 private fun FailureText(error: TransferException) {
-    Text(failureMessage(error), color = EnigmaColors.Danger, fontSize = 14.sp)
+    Text(failureMessage(error), color = EnigmaColors.Danger, fontSize = EnigmaType.SettingsDescription)
 }
 
 @Composable
@@ -902,7 +902,7 @@ private fun failureMessage(error: TransferException): String {
 
 @Composable
 private fun Muted(text: String) {
-    Text(text, color = EnigmaColors.Muted, fontSize = 13.sp, lineHeight = 17.sp)
+    Text(text, color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine)
 }
 
 /**
@@ -940,14 +940,14 @@ private fun LoadDialog(viewModel: SettingsImportViewModel) {
                     },
                 ),
                 color = EnigmaColors.Text,
-                fontSize = 18.sp,
+                fontSize = EnigmaType.SettingsTitle,
                 fontWeight = EnigmaType.Strong,
             )
             if (busy) {
                 LoadProgressCard(viewModel.progress)
                 if (viewModel.cancelling) Muted(stringResource(R.string.import_cancelling))
             } else {
-                Text(stringResource(R.string.import_results), color = EnigmaColors.Muted, fontSize = 13.sp)
+                Text(stringResource(R.string.import_results), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
             }
             Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 if (!busy) Results(viewModel)
@@ -984,7 +984,7 @@ private fun ReceiverChoiceDialog(viewModel: SettingsImportViewModel) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.import_choose_receivers), color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
+            Text(stringResource(R.string.import_choose_receivers), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             Muted(stringResource(R.string.import_choose_receivers_hint))
             Row(Modifier.focusGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TvButton(stringResource(R.string.import_active_receiver), viewModel::chooseActiveOnly, modifier = Modifier.focusRequester(first))
