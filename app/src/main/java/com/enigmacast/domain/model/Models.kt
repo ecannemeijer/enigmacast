@@ -357,6 +357,13 @@ data class AppSettings(
     val liveSubtitles: com.enigmacast.domain.player.LiveSubtitles = com.enigmacast.domain.player.LiveSubtitles(),
     /** Subtitle choice per series (IPTV/torrent episodes), see [com.enigmacast.domain.player.SeriesSubtitles]; per profile and synced. */
     val seriesSubtitles: Map<String, com.enigmacast.domain.player.LiveSubtitles> = emptyMap(),
+    /**
+     * When a channel has no guide of its own, fill it from iptv-epg.org. On by default;
+     * a real receiver or provider guide is never replaced.
+     */
+    val fallbackEpgEnabled: Boolean = true,
+    /** Extra iptv-epg.org country codes (lowercase), on top of the ones chosen automatically. */
+    val fallbackEpgCountries: List<String> = emptyList(),
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()

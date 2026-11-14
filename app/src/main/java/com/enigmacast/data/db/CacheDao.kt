@@ -86,6 +86,12 @@ interface CacheDao {
     @Query("SELECT COUNT(*) FROM channels WHERE receiverKey = :receiverKey")
     suspend fun channelCount(receiverKey: String): Int
 
+    @Query("SELECT name FROM channels WHERE receiverKey = :receiverKey AND serviceKey = :serviceKey LIMIT 1")
+    suspend fun nameForService(receiverKey: String, serviceKey: String): String?
+
+    @Query("SELECT DISTINCT serviceKey FROM epg_events WHERE receiverKey = :receiverKey AND endSec > :nowSec")
+    suspend fun serviceKeysWithEvents(receiverKey: String, nowSec: Long): List<String>
+
     // EPG
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvents(rows: List<EpgRow>)

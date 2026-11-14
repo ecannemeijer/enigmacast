@@ -33,6 +33,7 @@ class RoomGuideCache @Inject constructor(
     private val settings: SyncSettings,
     private val aliases: IptvEpgAliases,
     private val dispatchers: com.enigmacast.util.AppDispatchers,
+    private val fallback: com.enigmacast.domain.epg.FallbackEpgLookup,
 ) : GuideCacheReader {
     @Volatile private var lastSyncAskMs = 0L
 
@@ -50,7 +51,10 @@ class RoomGuideCache @Inject constructor(
             ?.size ?: -1
         return when (GuideCachePolicy.decide(rows.size, fromSec, toSec, today.startSec, horizon, covered, channelCount)) {
             // A bouquet block is thousands of rows: mapped off the caller (often Main).
-            GuideCachePolicy.Decision.CACHE -> withContext(dispatchers.default) { rows.map(CacheMappers::event) } + aliasEvents(receiver, bouquetReference, fromSec, toSec)
+            GuideCachePolicy.Decision.CACHE -> {
+                val own = withContext(dispatchers.default) { rows.map(CacheMappers::event) } + aliasEvents(receiver, bouquetReference, fromSec, toSec)
+                own + fallbackEvents(receiver, bouquetReference, own, fromSec, toSec)
+            }
             GuideCachePolicy.Decision.NETWORK_AND_SYNC -> { askSync(now); null }
             GuideCachePolicy.Decision.NETWORK -> null
         }
@@ -61,9 +65,15 @@ class RoomGuideCache @Inject constructor(
         // An IPTV channel reads the guide of the satellite channel with the same name.
         val source = aliases.resolve(key(receiver), serviceReference) ?: serviceReference
         val rows = runCatching { dao.serviceEvents(key(receiver), NowEvents.key(source), now / 1000) }.getOrNull()
-        if (rows.isNullOrEmpty()) return null
-        // Programmes that started earlier today are kept by the query (it filters on end time).
-        return withContext(dispatchers.default) { rows.map { CacheMappers.event(it).copy(reference = serviceReference) } }
+        if (!rows.isNullOrEmpty()) {
+            // Programmes that started earlier today are kept by the query (it filters on end time).
+            return withContext(dispatchers.default) { rows.map { CacheMappers.event(it).copy(reference = serviceReference) } }
+        }
+        val nowSec = now / 1000
+        val name = runCatching { dao.nameForService(key(receiver), NowEvents.key(source)) }.getOrNull().orEmpty()
+        if (name.isBlank()) return null
+        val fallbackEvents = runCatching { fallback.eventsFor(name, serviceReference, fromSec = nowSec, toSec = nowSec + 7 * 24 * 3600L) }.getOrNull()
+        return fallbackEvents?.takeIf { it.isNotEmpty() }
     }
 
     override suspend fun aliasEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long): List<GuideEvent> {
@@ -97,6 +107,24 @@ class RoomGuideCache @Inject constructor(
             ?.let { BouquetNameRow(it.name, it.reference) }
         row?.let { BouquetEntry(it.name, it.reference) }
     }.getOrNull()
+
+    private suspend fun fallbackEvents(
+        receiver: ReceiverConfig,
+        bouquetReference: String,
+        already: List<GuideEvent>,
+        fromSec: Long,
+        toSec: Long,
+    ): List<GuideEvent> {
+        val covered = already.mapTo(HashSet()) { NowEvents.key(it.reference) }
+        val channels = runCatching { dao.channelsIn(key(receiver), bouquetReference) }.getOrDefault(emptyList())
+            .filter { BouquetChannels.isPlayableChannel(it.reference) && NowEvents.key(it.reference) !in covered && it.name.isNotBlank() }
+        if (channels.isEmpty()) return emptyList()
+        val byName = runCatching { fallback.eventsByName(channels.map { it.name }.distinct(), fromSec = fromSec, toSec = toSec) }.getOrDefault(emptyMap())
+        if (byName.isEmpty()) return emptyList()
+        return channels.flatMap { channel ->
+            byName[channel.name].orEmpty().map { it.copy(reference = channel.reference) }
+        }
+    }
 
     private fun askSync(nowMs: Long) {
         if (nowMs - lastSyncAskMs < 60_000) return

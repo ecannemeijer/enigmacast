@@ -1999,4 +1999,12 @@
     <string name="player_sleep_timer_set">Sleep timer set: %1$s</string>
     <string name="player_sleep_timer_selected">Sleep %1$s</string>
     <string name="player_sleep_timer_remaining">%1$s left • %2$s</string>
+    <string name="fallback_epg">Yedek TV rehberi</string>
+    <string name="fallback_epg_desc">Bir kanalın kendi kaynağından rehberi yoksa, iptv-epg.org genel listelerinden tamamlanır. Gerçek bir rehber asla değiştirilmez.</string>
+    <string name="fallback_epg_countries">Ek ülkeler</string>
+    <string name="fallback_epg_countries_desc">Ülkeler ayrıca kanallarınız, gruplarınız ve uygulama dilinden otomatik seçilir.</string>
+    <string name="fallback_epg_countries_none">Hiçbiri seçilmedi</string>
+    <string name="fallback_epg_countries_count">%1$d seçildi</string>
+    <string name="fallback_epg_countries_title">Ek rehber ülkeleri</string>
+    <string name="fallback_epg_automatic">Otomatik</string>
 </resources>

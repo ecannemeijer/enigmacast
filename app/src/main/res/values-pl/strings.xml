@@ -1999,4 +1999,12 @@
     <string name="player_sleep_timer_set">Timer snu ustawiony: %1$s</string>
     <string name="player_sleep_timer_selected">Sen za %1$s</string>
     <string name="player_sleep_timer_remaining">Pozostało %1$s · %2$s</string>
+    <string name="fallback_epg">Zapasowy przewodnik TV</string>
+    <string name="fallback_epg_desc">Gdy kanał nie ma przewodnika z własnego źródła, uzupełniany jest publicznymi listami iptv-epg.org. Prawdziwy przewodnik nigdy nie jest zastępowany.</string>
+    <string name="fallback_epg_countries">Dodatkowe kraje</string>
+    <string name="fallback_epg_countries_desc">Kraje są też wybierane automatycznie na podstawie Twoich kanałów, grup i języka aplikacji.</string>
+    <string name="fallback_epg_countries_none">Nie wybrano</string>
+    <string name="fallback_epg_countries_count">Wybrano: %1$d</string>
+    <string name="fallback_epg_countries_title">Dodatkowe kraje przewodnika</string>
+    <string name="fallback_epg_automatic">Automatycznie</string>
 </resources>

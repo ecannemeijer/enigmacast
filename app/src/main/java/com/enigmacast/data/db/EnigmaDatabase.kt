@@ -14,8 +14,9 @@ import javax.inject.Singleton
 @Database(
     entities = [BouquetRow::class, ChannelRow::class, EpgRow::class, TmdbMatchRow::class, TmdbMovieRow::class, HomeFilmRow::class, SyncStateRow::class,
         SoccerMatchRow::class, SoccerStandingsRow::class, SoccerFetchRow::class, IptvCategoryRow::class, IptvItemRow::class, IptvRowEpgRow::class,
-        com.enigmacast.domain.radio.RadioStationFavorite::class, com.enigmacast.domain.radio.RadioStationRecent::class],
-    version = 12,
+        com.enigmacast.domain.radio.RadioStationFavorite::class, com.enigmacast.domain.radio.RadioStationRecent::class,
+        FallbackEpgMetaRow::class, FallbackEpgChannelRow::class, FallbackEpgProgrammeRow::class],
+    version = 13,
     exportSchema = false,
 )
 abstract class EnigmaDatabase : RoomDatabase() {
@@ -23,6 +24,7 @@ abstract class EnigmaDatabase : RoomDatabase() {
     abstract fun soccer(): SoccerDao
     abstract fun iptv(): IptvDao
     abstract fun radio(): com.enigmacast.data.radio.RadioDao
+    abstract fun fallbackEpg(): FallbackEpgDao
 
     companion object {
         const val NAME = "enigmacast-cache.db"
@@ -84,6 +86,18 @@ abstract class EnigmaDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `radio_station_recent` (`stationUuid` TEXT NOT NULL, `name` TEXT NOT NULL, `streamUrl` TEXT NOT NULL, `homepage` TEXT, `favicon` TEXT, `tags` TEXT NOT NULL, `country` TEXT NOT NULL, `countryCode` TEXT NOT NULL, `codec` TEXT NOT NULL, `bitrate` INTEGER NOT NULL, `playedAt` INTEGER NOT NULL, PRIMARY KEY(`stationUuid`))")
             }
         }
+
+        /** 12 → 13: iptv-epg.org fallback guide cache. Only adds tables; the rest of the cache stays. */
+        val MIGRATION_12_13 = object : androidx.room.migration.Migration(12, 13) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `fallback_epg_meta` (`country` TEXT NOT NULL, `fetchedAtMs` INTEGER NOT NULL, `programmeCount` INTEGER NOT NULL, PRIMARY KEY(`country`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `fallback_epg_channel` (`xmltvId` TEXT NOT NULL, `country` TEXT NOT NULL, `displayName` TEXT NOT NULL, `nameKey` TEXT NOT NULL, PRIMARY KEY(`xmltvId`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_fallback_epg_channel_country` ON `fallback_epg_channel` (`country`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_fallback_epg_channel_nameKey` ON `fallback_epg_channel` (`nameKey`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `fallback_epg_programme` (`xmltvId` TEXT NOT NULL, `beginSec` INTEGER NOT NULL, `endSec` INTEGER NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, PRIMARY KEY(`xmltvId`, `beginSec`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_fallback_epg_programme_xmltvId_endSec` ON `fallback_epg_programme` (`xmltvId`, `endSec`)")
+            }
+        }
     }
 }
 
@@ -95,7 +109,7 @@ object DatabaseModule {
     @Singleton
     fun database(@ApplicationContext context: Context): EnigmaDatabase =
         Room.databaseBuilder(context, EnigmaDatabase::class.java, EnigmaDatabase.NAME)
-            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9, EnigmaDatabase.MIGRATION_9_10, EnigmaDatabase.MIGRATION_10_11, EnigmaDatabase.MIGRATION_11_12)
+            .addMigrations(EnigmaDatabase.MIGRATION_4_5, EnigmaDatabase.MIGRATION_5_7, EnigmaDatabase.MIGRATION_6_7, EnigmaDatabase.MIGRATION_7_8, EnigmaDatabase.MIGRATION_8_9, EnigmaDatabase.MIGRATION_9_10, EnigmaDatabase.MIGRATION_10_11, EnigmaDatabase.MIGRATION_11_12, EnigmaDatabase.MIGRATION_12_13)
             // A cache only: an older build reading a newer database just starts empty instead of crashing.
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .fallbackToDestructiveMigration(dropAllTables = true)
@@ -112,4 +126,7 @@ object DatabaseModule {
 
     @Provides
     fun radioDao(db: EnigmaDatabase): com.enigmacast.data.radio.RadioDao = db.radio()
+
+    @Provides
+    fun fallbackEpgDao(db: EnigmaDatabase): FallbackEpgDao = db.fallbackEpg()
 }

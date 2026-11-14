@@ -1997,4 +1997,12 @@
     <string name="player_sleep_timer_set">Sleep-Timer gesetzt: %1$s</string>
     <string name="player_sleep_timer_selected">Schlaf in %1$s</string>
     <string name="player_sleep_timer_remaining">%1$s verbleibend • %2$s</string>
+    <string name="fallback_epg">Reserveführer (EPG)</string>
+    <string name="fallback_epg_desc">Wenn ein Sender keinen eigenen Guide hat, wird er aus den öffentlichen Listen von iptv-epg.org ergänzt. Ein echter Guide wird nie ersetzt.</string>
+    <string name="fallback_epg_countries">Weitere Länder</string>
+    <string name="fallback_epg_countries_desc">Länder werden außerdem automatisch aus Ihren Sendern, Gruppen und der App-Sprache gewählt.</string>
+    <string name="fallback_epg_countries_none">Keine ausgewählt</string>
+    <string name="fallback_epg_countries_count">%1$d ausgewählt</string>
+    <string name="fallback_epg_countries_title">Weitere Guide-Länder</string>
+    <string name="fallback_epg_automatic">Automatisch</string>
 </resources>

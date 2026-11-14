@@ -1992,4 +1992,12 @@
     <string name="player_sleep_timer_set">Slaaptimer ingesteld: %1$s</string>
     <string name="player_sleep_timer_selected">Slapen over %1$s</string>
     <string name="player_sleep_timer_remaining">%1$s resterend | %2$s</string>
+    <string name="fallback_epg">Reservegids (EPG)</string>
+    <string name="fallback_epg_desc">Als een zender geen gids van de ontvanger of de IPTV-aanbieder heeft, wordt die aangevuld met de openbare lijsten van iptv-epg.org. Een echte gids wordt nooit overschreven.</string>
+    <string name="fallback_epg_countries">Extra landen</string>
+    <string name="fallback_epg_countries_desc">Landen worden ook automatisch gekozen aan de hand van je zenders, groepen en de taal van de app.</string>
+    <string name="fallback_epg_countries_none">Geen geselecteerd</string>
+    <string name="fallback_epg_countries_count">%1$d geselecteerd</string>
+    <string name="fallback_epg_countries_title">Extra gids-landen</string>
+    <string name="fallback_epg_automatic">Automatisch</string>
 </resources>
