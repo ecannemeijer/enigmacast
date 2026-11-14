@@ -28,6 +28,7 @@ import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
 import com.enigmacast.ui.theme.edgeLeft
+import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 
@@ -74,7 +75,7 @@ fun ReceiverSetup(
             Text(
                 stringResource(R.string.receiver_current, "${viewModel.name}  ·  ${viewModel.host}"),
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsDescription,
             )
         }
         Row(
@@ -112,7 +113,7 @@ fun ReceiverSetup(
                         if (viewModel.useHttps) "HTTPS" else "HTTP",
                     ),
                     color = EnigmaColors.Text,
-                    fontSize = 14.sp,
+                    fontSize = EnigmaType.SettingsTitle,
                 )
                 HttpWarning(viewModel)
                 LoginFields(viewModel)
@@ -216,7 +217,7 @@ private fun HttpWarning(viewModel: ConnectionViewModel) {
     Text(
         stringResource(if (internet) R.string.conn_http_internet_warning else R.string.conn_http_warning),
         color = if (internet) EnigmaColors.Danger else EnigmaColors.Accent,
-        fontSize = 13.sp,
+        fontSize = EnigmaType.SettingsDescription,
     )
 }
 
@@ -243,6 +244,6 @@ private fun SetupActions(
         }
     }
     if (viewModel.status.isNotEmpty()) {
-        Text(viewModel.status.asString(), color = EnigmaColors.Muted, fontSize = 13.sp)
+        Text(viewModel.status.asString(), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
     }
 }

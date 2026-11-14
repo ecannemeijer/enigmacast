@@ -30,6 +30,7 @@ import com.enigmacast.ui.theme.CompactButton
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvTextField
+import com.enigmacast.ui.theme.EnigmaType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -71,10 +72,10 @@ fun ScraperSettingsPanel(contentFocus: FocusRequester, model: ScraperSettingsVie
     val status by model.status.collectAsStateWithLifecycle()
     Column(Modifier.focusRequester(contentFocus).focusGroup(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingsCard(stringResource(R.string.settings_scrapers)) {
-            Text(stringResource(R.string.scraper_help), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
+            Text(stringResource(R.string.scraper_help), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, modifier = Modifier.padding(horizontal = 8.dp))
             Text(
                 stringResource(R.string.scraper_current, model.masked ?: stringResource(R.string.scraper_none)),
-                color = EnigmaColors.Text, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             )
             TvTextField(
                 label = stringResource(R.string.scraper_url_label),
@@ -90,7 +91,7 @@ fun ScraperSettingsPanel(contentFocus: FocusRequester, model: ScraperSettingsVie
                     CompactButton(stringResource(R.string.scraper_remove), onClick = model::remove, modifier = Modifier.focusProperties { right = FocusRequester.Cancel })
                 }
             }
-            Text(baseStatus(status), color = if (status is ScraperStatus.Invalid) EnigmaColors.Danger else EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+            Text(baseStatus(status), color = if (status is ScraperStatus.Invalid) EnigmaColors.Danger else EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, modifier = Modifier.padding(8.dp))
         }
     }
 }

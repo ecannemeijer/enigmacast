@@ -21,6 +21,7 @@ import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.SettingsCard
 import com.enigmacast.ui.theme.TvButton
+import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 
@@ -80,8 +81,8 @@ internal fun StreamTypeCard(viewModel: ConnectionViewModel = hiltViewModel()) {
             Text(
                 stringResource(R.string.stream_type_port_hint),
                 color = EnigmaColors.Muted,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
+                fontSize = EnigmaType.SettingsDescription,
+                lineHeight = EnigmaType.SettingsDescriptionLine,
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
         }
@@ -89,14 +90,14 @@ internal fun StreamTypeCard(viewModel: ConnectionViewModel = hiltViewModel()) {
             Text(
                 viewModel.streamTypeStatus.asString(),
                 color = EnigmaColors.Accent,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsDescription,
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
         }
         Text(
             stringResource(R.string.stream_type_applies),
             color = EnigmaColors.Subtle,
-            fontSize = 12.sp,
+            fontSize = EnigmaType.SettingsDescription,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
         )
     }

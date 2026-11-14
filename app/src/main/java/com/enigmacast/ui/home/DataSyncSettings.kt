@@ -246,7 +246,7 @@ private fun FallbackEpgCountriesDialog(
             Text(
                 stringResource(R.string.fallback_epg_countries_title),
                 color = EnigmaColors.Text,
-                fontSize = 18.sp,
+                fontSize = EnigmaType.SettingsTitle,
                 fontWeight = EnigmaType.Strong,
             )
             LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {

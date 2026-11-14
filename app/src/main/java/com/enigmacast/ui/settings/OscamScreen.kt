@@ -46,6 +46,7 @@ import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.TvConfirmDialog
 import com.enigmacast.ui.theme.TvFieldKind
 import com.enigmacast.ui.theme.TvTextField
+import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.util.asString
 
 private val debugLevels = listOf(
@@ -118,7 +119,7 @@ fun OscamScreen(
             )
         }
         if (state.noReceiver) {
-            Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = 16.sp)
+            Text(stringResource(R.string.no_receiver), color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle)
             return@Column
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -143,7 +144,7 @@ fun OscamScreen(
                 modifier = Modifier.weight(1f),
             )
         }
-        state.message?.let { Text(it.asString(), color = EnigmaColors.Muted, fontSize = 13.sp, maxLines = 1) }
+        state.message?.let { Text(it.asString(), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, maxLines = 1) }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 modifier = Modifier.weight(0.42f).fillMaxHeight().verticalScroll(rememberScrollState()),
@@ -151,7 +152,7 @@ fun OscamScreen(
             ) {
                 SettingsCard(stringResource(R.string.oscam_readers)) {
                     if (state.readers.isEmpty()) {
-                        Text(stringResource(R.string.oscam_no_readers), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+                        Text(stringResource(R.string.oscam_no_readers), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, modifier = Modifier.padding(8.dp))
                     } else {
                         state.readers.forEach { reader ->
                             ReaderRow(reader, enabled = controlsEnabled, onRestart = { viewModel.askRestartReader(reader.name) })
@@ -160,7 +161,7 @@ fun OscamScreen(
                 }
                 SettingsCard(stringResource(R.string.oscam_users)) {
                     if (state.users.isEmpty()) {
-                        Text(stringResource(R.string.oscam_no_users), color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+                        Text(stringResource(R.string.oscam_no_users), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription, modifier = Modifier.padding(8.dp))
                     } else {
                         state.users.forEach { user -> UserRow(user) }
                     }
@@ -272,7 +273,7 @@ private fun ReaderRow(reader: OscamReader, enabled: Boolean, onRestart: () -> Un
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(reader.name, color = EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(reader.name, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val detail = readerDetail(reader)
             if (detail.isNotBlank()) {
                 Text(detail, color = EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -286,7 +287,7 @@ private fun ReaderRow(reader: OscamReader, enabled: Boolean, onRestart: () -> Un
 @Composable
 private fun UserRow(user: OscamUser) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp)) {
-        Text(user.name, color = EnigmaColors.Text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(user.name, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val detail = listOfNotNull(
             user.channel.takeIf { it.isNotBlank() },
             user.answeredBy.takeIf { it.isNotBlank() },

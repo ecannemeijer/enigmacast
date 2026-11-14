@@ -108,8 +108,8 @@ fun ReceiversSettingsPanel(
         Text(
             stringResource(R.string.receivers_intro),
             color = EnigmaColors.Muted,
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
+            fontSize = EnigmaType.SettingsDescription,
+            lineHeight = EnigmaType.SettingsDescriptionLine,
         )
         CompactButton(
             label = stringResource(R.string.receivers_add_enigma2),
@@ -126,7 +126,7 @@ fun ReceiversSettingsPanel(
             modifier = Modifier.focusRequester(addFocus).focusRequester(contentFocus).edgeLeft(),
         )
         if (receivers.isEmpty()) {
-            Text(stringResource(R.string.receivers_empty), color = EnigmaColors.Muted, fontSize = 14.sp)
+            Text(stringResource(R.string.receivers_empty), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
         }
         receivers.forEach { receiver ->
             val inUse = receiver.id == activeId
@@ -142,7 +142,7 @@ fun ReceiversSettingsPanel(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                 ) { _ ->
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(receiver.name.ifBlank { receiver.host }, fontSize = 14.sp, fontWeight = EnigmaType.Strong, maxLines = 1)
+                        Text(receiver.name.ifBlank { receiver.host }, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong, maxLines = 1)
                         if (receiver.name.isNotBlank()) {
                             Text(receiver.host, fontSize = 12.sp, maxLines = 1)
                         }

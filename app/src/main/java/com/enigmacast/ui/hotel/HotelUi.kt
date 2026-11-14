@@ -619,7 +619,7 @@ private fun HotelListDialog(
                 .closedBoundary(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.Title, fontWeight = EnigmaType.Strong)
+            Text(title, color = EnigmaColors.Text, fontSize = EnigmaType.SettingsTitle, fontWeight = EnigmaType.Strong)
             header()
             body()
             CompactButton(label = stringResource(R.string.hotel_close), onClick = onDismiss)

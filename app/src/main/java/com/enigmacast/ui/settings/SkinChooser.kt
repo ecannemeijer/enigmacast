@@ -109,7 +109,7 @@ private fun SkinTile(skin: Skin, selected: Boolean, onClick: () -> Unit, modifie
             Text(
                 stringResource(skin.id.label),
                 color = if (focused) EnigmaColors.OnFocus else EnigmaColors.Text,
-                fontSize = 13.sp,
+                fontSize = EnigmaType.SettingsTitle,
                 fontWeight = EnigmaType.Strong,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

@@ -36,6 +36,7 @@ import com.enigmacast.ui.theme.TileTone
 import com.enigmacast.ui.theme.ToggleRow
 import com.enigmacast.ui.theme.TvButton
 import com.enigmacast.ui.theme.edgeLeft
+import com.enigmacast.ui.theme.EnigmaType
 import com.enigmacast.util.asString
 import com.enigmacast.util.isNotEmpty
 
@@ -59,7 +60,7 @@ internal fun RemoteAccessSettingsPanel(
     Text(
         stringResource(R.string.remote_settings_intro, viewModel.name.trim(), viewModel.host.trim()),
         color = EnigmaColors.Muted,
-        fontSize = 13.sp,
+        fontSize = EnigmaType.SettingsDescription,
     )
     SettingsCard(stringResource(R.string.conn_access_mode)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(horizontal = 6.dp)) {
@@ -176,13 +177,13 @@ internal fun RemoteAccessSettingsPanel(
         }
     }
     if (viewModel.status.isNotEmpty()) {
-        Text(viewModel.status.asString(), color = EnigmaColors.Muted, fontSize = 14.sp)
+        Text(viewModel.status.asString(), color = EnigmaColors.Muted, fontSize = EnigmaType.SettingsDescription)
     }
 }
 
 @Composable
 private fun Hint(text: String, color: Color = EnigmaColors.Muted) {
-    Text(text, color = color, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(horizontal = 6.dp))
+    Text(text, color = color, fontSize = EnigmaType.SettingsDescription, lineHeight = EnigmaType.SettingsDescriptionLine, modifier = Modifier.padding(horizontal = 6.dp))
 }
 
 /** The pasted WireGuard config; private and preshared keys are shown as dots. */
