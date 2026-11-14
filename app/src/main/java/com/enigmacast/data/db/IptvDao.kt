@@ -76,6 +76,14 @@ interface IptvDao {
 
     @Query("SELECT COUNT(*) FROM iptv_category WHERE source = :source")
     suspend fun categoryCount(source: String): Int
+
+    /** Live channel names across every stored playlist, for fallback-guide matching. */
+    @Query("SELECT DISTINCT name FROM iptv_item WHERE section = 'LIVE'")
+    suspend fun liveItemNames(): List<String>
+
+    /** Live category / group titles, used to pick fallback-guide countries. */
+    @Query("SELECT DISTINCT name FROM iptv_category WHERE section = 'LIVE'")
+    suspend fun liveCategoryNames(): List<String>
 }
 
 /** Result row of [IptvDao.countsByCategory]. */

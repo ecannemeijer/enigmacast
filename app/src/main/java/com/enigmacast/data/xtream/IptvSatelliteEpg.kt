@@ -26,6 +26,7 @@ class IptvSatelliteEpg @Inject constructor(
     private val dao: CacheDao,
     private val settings: SettingsRepository,
     private val engine: SyncEngine,
+    private val fallback: com.enigmacast.domain.epg.FallbackEpgLookup,
 ) {
     private class Built(val stamp: SatEpgNames.Stamp, val atMs: Long, val index: SatEpgNames.Index)
 
@@ -75,7 +76,17 @@ class IptvSatelliteEpg @Inject constructor(
             name to rows[service].orEmpty().map { XtreamEpg(it.title, it.beginSec, it.endSec, it.shortDescription.ifBlank { it.longDescription }) }
         }.toMap()
         log("iptv sat-epg: matched ${result.size} of ${unique.size} (by name ${candidates.size})")
-        result
+        val missing = unique.filter { result[it].isNullOrEmpty() }
+        if (missing.isEmpty()) return@withContext result
+        val fromSec = now - pastHours * 3600L
+        val toSec = now + hours * 3600L
+        val extra = runCatching { fallback.eventsByName(missing, fromSec = fromSec, toSec = toSec) }.getOrDefault(emptyMap())
+        if (extra.isEmpty()) return@withContext result
+        val filled = result + extra.mapValues { (_, events) ->
+            events.map { com.enigmacast.domain.xtream.XtreamEpg(it.title, it.beginEpochSec, it.endEpochSec, it.description) }
+        }.filterKeys { result[it].isNullOrEmpty() }
+        log("iptv fallback-epg: filled ${filled.size - result.size} of ${missing.size}")
+        filled
     }
 
     private fun log(message: String) {

@@ -8,6 +8,8 @@ import com.enigmacast.domain.source.EpgSource
 import com.enigmacast.domain.sync.GuideCacheReader
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import com.enigmacast.domain.epg.FallbackEpgLookup
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GuideRepositoryCacheTest {
@@ -24,11 +26,15 @@ class GuideRepositoryCacheTest {
         override suspend fun search(config: ReceiverConfig, query: String) = emptyList<com.enigmacast.domain.search.EpgSearchEvent>()
     }
 
-    private class Cache(val e: GuideEvent?) : GuideCacheReader {
+    private class Cache(
+        val e: GuideEvent?,
+        val channels: List<BouquetEntry> = emptyList(),
+    ) : GuideCacheReader {
         override suspend fun bouquetEvents(receiver: ReceiverConfig, bouquetReference: String, fromSec: Long, toSec: Long) = e?.let { listOf(it) }
         override suspend fun serviceEvents(receiver: ReceiverConfig, serviceReference: String) = e?.let { listOf(it) }
         override suspend fun televisionBouquets(receiver: ReceiverConfig): List<BouquetEntry>? = null
-        override suspend fun channelsInBouquet(receiver: ReceiverConfig, bouquetReference: String): List<BouquetEntry>? = null
+        override suspend fun channelsInBouquet(receiver: ReceiverConfig, bouquetReference: String): List<BouquetEntry>? =
+            channels.takeIf { it.isNotEmpty() }
     }
 
     @Test fun cacheHitSkipsTheReceiver() = runTest {
@@ -45,5 +51,40 @@ class GuideRepositoryCacheTest {
         assertEquals(listOf(net), repo.bouquetChunk(receiver, "bq", 0))
         assertEquals(listOf(net), repo.serviceEvents(receiver, ref))
         assertEquals(2, epg.calls)
+    }
+
+    private class OfflineEpg : EpgSource {
+        var calls = 0
+        override suspend fun serviceEvents(config: ReceiverConfig, serviceReference: String): List<GuideEvent> {
+            calls++
+            error("offline")
+        }
+        override suspend fun bouquetEvents(config: ReceiverConfig, bouquetReference: String, startSec: Long, minutes: Int): List<GuideEvent> {
+            calls++
+            error("offline")
+        }
+        override suspend fun record(config: ReceiverConfig, serviceReference: String, eventId: Int) = TimerResult(true, "")
+        override suspend fun search(config: ReceiverConfig, query: String) = emptyList<com.enigmacast.domain.search.EpgSearchEvent>()
+    }
+
+    private class NamedFallback(val event: GuideEvent) : FallbackEpgLookup {
+        override suspend fun eventsFor(name: String, reference: String, tvgId: String, fromSec: Long, toSec: Long) =
+            if (name.isNotBlank()) listOf(event.copy(reference = reference)) else emptyList()
+        override suspend fun eventsByName(names: Collection<String>, tvgIds: Map<String, String>, fromSec: Long, toSec: Long) =
+            names.filter { it.isNotBlank() }.associateWith { listOf(event) }
+    }
+
+    @Test fun localChunkShowsFallbackWhenTheReceiverFails() = runTest {
+        val channel = BouquetEntry("Italia1 HD", ref)
+        val fb = GuideEvent(9, ref, "The Tom and Jerry Show", "", "", 1000, 600)
+        val epg = OfflineEpg()
+        val repo = GuideRepository(epg, Cache(null, listOf(channel)), NamedFallback(fb))
+        val local = repo.localBouquetChunk(receiver, "bq", 0)
+        assertEquals("The Tom and Jerry Show", local.single().title)
+        assertEquals(ref, local.single().reference)
+        assertEquals(0, epg.calls)
+        val chunk = repo.bouquetChunk(receiver, "bq", 0)
+        assertEquals("The Tom and Jerry Show", chunk!!.single().title)
+        assertTrue(epg.calls >= 1)
     }
 }

@@ -2001,4 +2001,12 @@
     <string name="player_sleep_timer_set">Sleep timer set: %1$s</string>
     <string name="player_sleep_timer_selected">Sleep %1$s</string>
     <string name="player_sleep_timer_remaining">%1$s left • %2$s</string>
+    <string name="fallback_epg">Guida TV di riserva</string>
+    <string name="fallback_epg_desc">Se un canale non ha una guida propria, viene completata con gli elenchi pubblici di iptv-epg.org. Una guida reale non viene mai sostituita.</string>
+    <string name="fallback_epg_countries">Paesi aggiuntivi</string>
+    <string name="fallback_epg_countries_desc">I paesi vengono anche scelti automaticamente dai tuoi canali, gruppi e dalla lingua dell\'app.</string>
+    <string name="fallback_epg_countries_none">Nessuno selezionato</string>
+    <string name="fallback_epg_countries_count">%1$d selezionati</string>
+    <string name="fallback_epg_countries_title">Paesi aggiuntivi della guida</string>
+    <string name="fallback_epg_automatic">Automatico</string>
 </resources>

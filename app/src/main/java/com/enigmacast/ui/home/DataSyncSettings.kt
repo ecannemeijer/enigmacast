@@ -2,6 +2,27 @@ package com.enigmacast.ui.home
 
 import android.text.format.Formatter
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Text
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.enigmacast.ui.theme.EnigmaColors
+import com.enigmacast.ui.theme.EnigmaType
+import com.enigmacast.ui.theme.NavigationSoundsForWindow
+import com.enigmacast.ui.theme.ToggleRow
+import com.enigmacast.ui.theme.requestWhenReady
+import com.enigmacast.ui.theme.skinShape
+import com.enigmacast.ui.theme.skinSurface
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -52,6 +73,7 @@ class DataSyncViewModel @Inject constructor(
     private val repository: HomeFilmsRepository,
     private val settingsRepository: SettingsRepository,
     val syncSettings: SyncSettings,
+    private val fallbackEpgSync: com.enigmacast.data.epg.FallbackEpgSync,
 ) : ViewModel() {
     val progress: StateFlow<SyncProgress?> = repository.progress
 
@@ -59,6 +81,42 @@ class DataSyncViewModel @Inject constructor(
         .map { it.activeReceiver() }
         .flatMapLatest { receiver -> if (receiver == null) flowOf(emptyList()) else repository.syncState(repository.receiverKey(receiver)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val appSettings = settingsRepository.settings.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        com.enigmacast.domain.model.AppSettings(),
+    )
+
+    private val _countriesOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val countriesOpen: kotlinx.coroutines.flow.StateFlow<Boolean> = _countriesOpen
+    fun openCountries() { _countriesOpen.value = true }
+    fun closeCountries() { _countriesOpen.value = false }
+
+    val automaticCountries = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+
+    init {
+        viewModelScope.launch {
+            automaticCountries.value = runCatching { fallbackEpgSync.automaticCountries() }.getOrDefault(emptySet())
+        }
+    }
+
+    fun setFallbackEpgEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.update { it.copy(fallbackEpgEnabled = enabled) }
+            if (enabled) runCatching { fallbackEpgSync.refreshIfDue(force = true) }
+        }
+    }
+
+    fun setFallbackEpgCountries(codes: List<String>) {
+        viewModelScope.launch {
+            val clean = codes.mapNotNull { com.enigmacast.domain.epg.FallbackEpgCountries.canonical(it) }.distinct()
+            settingsRepository.update { it.copy(fallbackEpgCountries = clean) }
+            if (settingsRepository.current().fallbackEpgEnabled) {
+                runCatching { fallbackEpgSync.refreshIfDue(force = true) }
+            }
+        }
+    }
 
     suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) { repository.cacheBytes() }
 
@@ -115,6 +173,27 @@ fun DataSyncSettingsCard(model: DataSyncViewModel = hiltViewModel()) {
             selectedIndex = (values.epgDays - 1).coerceIn(0, 2),
             onSelect = { model.syncSettings.setEpgDays(it + 1) },
         )
+        val appSettings by model.appSettings.collectAsStateWithLifecycle()
+        val countriesOpen by model.countriesOpen.collectAsStateWithLifecycle()
+        val automatic by model.automaticCountries.collectAsStateWithLifecycle()
+        ToggleRow(
+            title = stringResource(R.string.fallback_epg),
+            description = stringResource(R.string.fallback_epg_desc),
+            checked = appSettings.fallbackEpgEnabled,
+            onCheckedChange = model::setFallbackEpgEnabled,
+        )
+        val extraCount = appSettings.fallbackEpgCountries.size
+        ValueSetting(
+            title = stringResource(R.string.fallback_epg_countries),
+            description = stringResource(R.string.fallback_epg_countries_desc),
+            options = listOf(
+                if (extraCount == 0) stringResource(R.string.fallback_epg_countries_none)
+                else stringResource(R.string.fallback_epg_countries_count, extraCount),
+            ),
+            selectedIndex = 0,
+            onSelect = { model.openCountries() },
+        )
+        if (countriesOpen) FallbackEpgCountriesDialog(appSettings.fallbackEpgCountries, automatic, model)
         fun last(kind: SyncKind): String {
             val row = states.firstOrNull { it.kind == kind.name } ?: return context.getString(R.string.sync_never)
             val whenText = if (row.lastSuccessMs > 0) DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(row.lastSuccessMs)) else context.getString(R.string.sync_never)
@@ -131,4 +210,67 @@ fun DataSyncSettingsCard(model: DataSyncViewModel = hiltViewModel()) {
         }
     }
     SyncServerCard()
+}
+
+
+@Composable
+private fun FallbackEpgCountriesDialog(
+    extra: List<String>,
+    automatic: Set<String>,
+    model: DataSyncViewModel,
+) {
+    val context = LocalContext.current
+    val locale = context.resources.configuration.locales[0] ?: java.util.Locale.getDefault()
+    val countries = remember(locale) {
+        com.enigmacast.domain.epg.FallbackEpgCountries.CODES
+            .map { it to java.util.Locale("", it.uppercase()).getDisplayCountry(locale).ifBlank { it.uppercase() } }
+            .sortedBy { it.second.lowercase(locale) }
+    }
+    val selected = extra.toSet()
+    Dialog(
+        onDismissRequest = model::closeCountries,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        NavigationSoundsForWindow()
+        val listFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { listFocus.requestWhenReady() }
+        val Cancel = FocusRequester.Cancel
+        Column(
+            Modifier
+                .width(520.dp)
+                .heightIn(max = 560.dp)
+                .skinSurface(EnigmaColors.Selected, skinShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                stringResource(R.string.fallback_epg_countries_title),
+                color = EnigmaColors.Text,
+                fontSize = 18.sp,
+                fontWeight = EnigmaType.Strong,
+            )
+            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                itemsIndexed(countries, key = { _, pair -> pair.first }) { index, (code, label) ->
+                    val auto = code in automatic
+                    com.enigmacast.ui.settingsimport.CompactToggle(
+                        title = if (auto) "$label  (${stringResource(R.string.fallback_epg_automatic)})" else label,
+                        checked = auto || code in selected,
+                        onToggle = {
+                            if (auto) return@CompactToggle
+                            val next = if (code in selected) extra - code else extra + code
+                            model.setFallbackEpgCountries(next)
+                        },
+                        modifier = Modifier
+                            .then(if (index == 0) Modifier.focusRequester(listFocus) else Modifier)
+                            .focusProperties {
+                                left = Cancel
+                                right = Cancel
+                                if (index == 0) up = Cancel
+                                if (index == countries.lastIndex) down = Cancel
+                            },
+                    )
+                }
+            }
+        }
+    }
 }

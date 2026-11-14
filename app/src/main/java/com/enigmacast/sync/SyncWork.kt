@@ -27,6 +27,7 @@ interface SyncEntryPoint {
     fun settings(): SettingsRepository
     fun iptvPlaylist(): com.enigmacast.data.xtream.IptvPlaylistSync
     fun tvHome(): com.enigmacast.data.tvhome.TvHomePublisher
+    fun fallbackEpg(): com.enigmacast.data.epg.FallbackEpgSync
 }
 
 /** Runs [SyncEngine] for the active receiver. Hourly it only does the steps that are due. */
@@ -51,6 +52,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         // Android TV home rows: programme on now and the newest recordings (removes them in hotel mode).
         entry.tvHome().refresh()
+        // Public fallback guide: silent, and only when a country file is due (about every 12 hours).
+        runCatching { entry.fallbackEpg().refreshIfDue() }
         return Result.success()
     }
 

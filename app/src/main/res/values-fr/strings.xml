@@ -2001,4 +2001,12 @@
     <string name="player_sleep_timer_set">Minuterie de veille définie : %1$s</string>
     <string name="player_sleep_timer_selected">Veille dans %1$s</string>
     <string name="player_sleep_timer_remaining">%1$s restant • %2$s</string>
+    <string name="fallback_epg">Guide TV de secours</string>
+    <string name="fallback_epg_desc">Lorsqu\'une chaîne n\'a pas de guide de sa propre source, il est complété avec les listes publiques d\'iptv-epg.org. Un vrai guide n\'est jamais remplacé.</string>
+    <string name="fallback_epg_countries">Pays supplémentaires</string>
+    <string name="fallback_epg_countries_desc">Les pays sont aussi choisis automatiquement d\'après vos chaînes, groupes et la langue de l\'app.</string>
+    <string name="fallback_epg_countries_none">Aucun sélectionné</string>
+    <string name="fallback_epg_countries_count">%1$d sélectionné(s)</string>
+    <string name="fallback_epg_countries_title">Pays supplémentaires du guide</string>
+    <string name="fallback_epg_automatic">Automatique</string>
 </resources>

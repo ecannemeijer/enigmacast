@@ -26,6 +26,7 @@ import javax.inject.Singleton
 class HomeFilmsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: CacheDao,
+    private val fallbackEpgDao: com.enigmacast.data.db.FallbackEpgDao,
     private val engine: SyncEngine,
     private val tmdb: com.enigmacast.data.tmdb.TmdbHttp,
     private val bouquetStore: com.enigmacast.data.tmdb.HomeBouquetStore,
@@ -75,6 +76,7 @@ class HomeFilmsRepository @Inject constructor(
 
     suspend fun clearCache() {
         dao.clearAll()
+        runCatching { fallbackEpgDao.clearAll() }
         File(context.cacheDir, "tmdb").deleteRecursively()
     }
 }

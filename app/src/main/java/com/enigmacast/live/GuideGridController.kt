@@ -42,6 +42,11 @@ class GuideGridController(
     private val loadChunk: suspend (bouquetReference: String, chunkStartSec: Long) -> List<GuideEvent>?,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
     private val lookbackSec: Long = 0L,
+    /**
+     * Programmes already on disk (Room or the public fallback) for the same block. Applied first
+     * so empty rows fill while [loadChunk] is still asking the receiver.
+     */
+    private val loadLocal: (suspend (bouquetReference: String, chunkStartSec: Long) -> List<GuideEvent>?)? = null,
 ) {
     /** The receiver's bouquets (OpenWebif, cached in [GuideRepository]). */
     constructor(
@@ -49,7 +54,12 @@ class GuideGridController(
         repository: GuideRepository,
         receiver: suspend () -> ReceiverConfig?,
         clock: () -> Long = { System.currentTimeMillis() / 1000 },
-    ) : this(scope, { bouquet, chunk -> receiver()?.let { repository.bouquetChunk(it, bouquet, chunk) } }, clock)
+    ) : this(
+        scope,
+        { bouquet, chunk -> receiver()?.let { repository.bouquetChunk(it, bouquet, chunk) } },
+        clock,
+        loadLocal = { bouquet, chunk -> receiver()?.let { repository.localBouquetChunk(it, bouquet, chunk) } },
+    )
 
     private val _state = MutableStateFlow(GuideGridState())
     val state: StateFlow<GuideGridState> = _state.asStateFlow()
@@ -176,11 +186,21 @@ class GuideGridController(
             if (chunk in loaded || chunk in pending) return@forEach
             pending += chunk
             scope.launch {
+                val local = loadLocal?.invoke(bouquet, chunk)
+                if (bouquet != _state.value.bouquetReference) return@launch
+                if (!local.isNullOrEmpty()) {
+                    _state.update {
+                        val matched = ServiceMatch.guideEvents(local, it.channels)
+                        it.copy(events = GuideTimeline.merge(it.events, matched), failed = false)
+                    }
+                }
                 val events = loadChunk(bouquet, chunk)
                 if (bouquet != _state.value.bouquetReference) return@launch
                 pending -= chunk
                 if (events == null) {
-                    _state.update { it.copy(failed = true, loading = pending.isNotEmpty()) }
+                    _state.update { current ->
+                        current.copy(failed = current.events.isEmpty(), loading = pending.isNotEmpty())
+                    }
                     return@launch
                 }
                 loaded += chunk

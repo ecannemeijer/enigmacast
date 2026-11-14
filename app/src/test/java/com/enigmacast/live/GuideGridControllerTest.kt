@@ -7,6 +7,8 @@ import com.enigmacast.domain.model.ReceiverConfig
 import com.enigmacast.domain.source.EpgSource
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -162,5 +164,46 @@ class GuideGridControllerTest {
         assertTrue(grid.state.value.eventsOf(two).isEmpty())
         grid.putEvents("iptvcat:a", listOf(airing, next))
         assertEquals(listOf(airing, next), grid.state.value.eventsOf(two))
+    }
+
+    @Test
+    fun localProgrammesShowWhileTheReceiverIsStillAsked() = runTest {
+        val local = event(9, two, now - 600, 30)
+        val grid = GuideGridController(
+            this,
+            loadChunk = { _, _ ->
+                delay(10_000)
+                listOf(airing)
+            },
+            clock = { now },
+            loadLocal = { _, _ -> listOf(local) },
+        )
+        grid.show("bouquet-a", channels, two.reference)
+        advanceTimeBy(1)
+        assertEquals(local, grid.focused()?.second?.event)
+        assertFalse(grid.state.value.failed)
+        advanceTimeBy(10_000)
+        advanceUntilIdle()
+        assertEquals(airing, grid.focused()?.second?.event)
+    }
+
+    @Test
+    fun aFailedBlockKeepsLocalProgrammes() = runTest {
+        val local = event(9, two, now - 600, 30)
+        val epg = FakeEpg(listOf(airing, next))
+        epg.fail = true
+        val grid = GuideGridController(
+            this,
+            loadChunk = { bouquet, start ->
+                // Same path as the repository constructor, but with a local fill first.
+                GuideRepository(epg).bouquetChunk(receiver, bouquet, start)
+            },
+            clock = { now },
+            loadLocal = { _, _ -> listOf(local) },
+        )
+        grid.show("bouquet-a", channels, two.reference)
+        advanceUntilIdle()
+        assertEquals(local, grid.focused()?.second?.event)
+        assertFalse(grid.state.value.failed)
     }
 }

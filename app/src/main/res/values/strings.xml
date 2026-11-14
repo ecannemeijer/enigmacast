@@ -2000,4 +2000,12 @@
     <string name="player_sleep_timer_set">Sleep timer set: %1$s</string>
     <string name="player_sleep_timer_selected">Sleep in %1$s</string>
     <string name="player_sleep_timer_remaining">%1$s left · %2$s</string>
+    <string name="fallback_epg">Fallback TV guide</string>
+    <string name="fallback_epg_desc">When a channel has no guide from its own source, fill it from the public iptv-epg.org listings. A real receiver or provider guide is never replaced.</string>
+    <string name="fallback_epg_countries">Extra countries</string>
+    <string name="fallback_epg_countries_desc">Countries are also chosen automatically from your channels, groups and app language.</string>
+    <string name="fallback_epg_countries_none">None selected</string>
+    <string name="fallback_epg_countries_count">%1$d selected</string>
+    <string name="fallback_epg_countries_title">Extra guide countries</string>
+    <string name="fallback_epg_automatic">Automatic</string>
 </resources>
