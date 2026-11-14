@@ -149,11 +149,12 @@ fun RadioScreen(
         fullscreen = true
     }
 
-    Box(modifier = Modifier.fillMaxSize().then(contentFocus?.let { Modifier.focusRequester(it).focusable() } ?: Modifier).background(RADIO_BG)) {
+    Box(modifier = Modifier.fillMaxSize().background(RADIO_BG)) {
         Column(modifier = Modifier.fillMaxSize()) {
             RadioTopBar(
                 query = state.query,
                 isTouch = isTouch,
+                contentFocus = contentFocus,
                 onBack = onBack,
                 onQueryChange = viewModel::onQueryChange,
                 onRetry = viewModel::retryBrowse
@@ -248,6 +249,7 @@ fun RadioScreen(
 private fun RadioTopBar(
     query: String,
     isTouch: Boolean,
+    contentFocus: FocusRequester? = null,
     onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onRetry: () -> Unit
@@ -280,7 +282,7 @@ private fun RadioTopBar(
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f).height(52.dp),
+            modifier = Modifier.weight(1f).height(52.dp).then(contentFocus?.let { Modifier.focusRequester(it) } ?: Modifier),
             singleLine = true,
             placeholder = {
                 Text(stringResource(id = R.string.radio_search_hint), color = RADIO_MUTED, fontSize = 14.sp)
