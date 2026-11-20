@@ -1,8 +1,8 @@
 {
-  "versionCode": 142,
-  "versionName": "1.0.4",
+  "versionCode": 143,
+  "versionName": "1.0.5",
   "apkUrl": "https://github.com/ecannemeijer/enigmacast/releases/latest/download/enigmacast.apk",
-  "notes": "What's new in EnigmaCast\n\nA new Radio section in the menu, with thousands of internet radio stations. You can search, filter by country or genre, save favourites, see recently played stations, and view now-playing information. The full-screen player has a sleep timer and screen-burn protection, and it follows your chosen theme.\n\nA backup TV guide automatically fills in programme information for channels that have none of their own, on satellite and IPTV. Countries are detected automatically, including Germany, Austria and Switzerland, and you can add extra countries in Settings.\n\nChannels without guide information can now be selected and watched from the TV guide. The guide shows saved programme information straight away. Settings pages use smaller, cleaner text, and remote control navigation has been improved.",
+  "notes": "What's new in EnigmaCast\n\nThe left menu now follows your chosen theme, with new fonts, and is a little slimmer so more of the screen is left for TV.\n\nThe on-screen controls in the video player also follow your theme, including when you watch films and series.\n\nThe IPTV provider screen now fits on one page, so you no longer need to scroll to see everything.\n\nYou can download IPTV movies and episodes to this TV and watch them later without a connection. Find them under My Items > Downloads. Your watch progress is synced when you are back home.\n\nNew installations start with smoother, faster display settings. Existing TVs keep the settings you already chose.\n\nThis release also includes stability fixes, including more reliable downloads and a fix for My Items.",
   "companion": {
     "versionCode": 120,
     "versionName": "1.0.0-beta.21",
