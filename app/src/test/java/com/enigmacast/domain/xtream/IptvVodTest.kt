@@ -36,7 +36,7 @@ class IptvVodTest {
     @Test fun vodInfoParses() {
         val body = """{"info":{"plot":"P","rating":"7.5","releasedate":"2010-07-16","backdrop_path":["http://b.invalid/1.jpg"],"duration_secs":"8880","tmdb_id":"27205"}}"""
         val info = XtreamJson.vodInfo(body)!!
-        assertEquals(2010, info.year); assertEquals(148, info.runtimeMin); assertEquals("http://b.invalid/1.jpg", info.backdrop); assertEquals(27205, info.tmdbId)
+        assertEquals("P", info.plot); assertEquals(2010, info.year); assertEquals(148, info.runtimeMin); assertEquals("http://b.invalid/1.jpg", info.backdrop); assertEquals(27205, info.tmdbId)
         Json.parseToJsonElement(body)
     }
 }

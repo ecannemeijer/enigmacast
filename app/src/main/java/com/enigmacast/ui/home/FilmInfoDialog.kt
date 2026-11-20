@@ -1,4 +1,9 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.enigmacast.ui.home
+
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 
 import com.enigmacast.ui.theme.skinCanvas
 import com.enigmacast.ui.theme.skinPane
@@ -99,7 +104,7 @@ fun FilmInfoDialog(
         val airing = film.event.isAiring(nowSec)
         val ended = film.event.endEpochSec <= nowSec
         // A series: this episode's guide text first, the show's overview when the guide has none.
-        val plot = if (movie.isSeries) film.event.description.ifBlank { movie.overview } else movie.overview.ifBlank { film.event.description }
+        val plot = filmInfoPlot(movie.isSeries, movie.overview, film.event.description)
         var showPlot by remember(film.key) { mutableStateOf(false) }
         Box(Modifier.fillMaxSize().skinCanvas()) {
             if (movie.backdropPath != null) {
@@ -146,7 +151,13 @@ fun FilmInfoDialog(
                             )
                         }
                     }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Column(
+                        // width(0.dp) + weight: the action row's min width must not be used
+                        // as this column's width, or a wide Download button row measures the
+                        // flexible plot text at 0 height and it disappears.
+                        Modifier.weight(1f).width(0.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
                         TitleOrLogo(film, height = 56.dp, fontSize = 28.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             RatingStars(movie.voteAverage, size = 13.sp)
@@ -174,7 +185,7 @@ fun FilmInfoDialog(
                             Text(line, color = EnigmaColors.Cyan, fontSize = 13.sp)
                         }
                         if (plot.isNotBlank()) {
-                            Text(plot, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp)
+                            Text(plot, color = EnigmaColors.Muted, fontSize = 14.sp, lineHeight = 19.sp, modifier = Modifier.fillMaxWidth())
                         }
                         if (movie.directors.isNotEmpty()) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -191,7 +202,7 @@ fun FilmInfoDialog(
                         }
                         if (airing && vod == null) EnigmaProgramProgress(film.event.progress(nowSec), Modifier.width(320.dp))
                         if (vod?.watch != null) com.enigmacast.ui.components.VodWatchLine(vod.watch)
-                        if (vod != null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp).onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(0) } }) {
+                        if (vod != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp).onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(0) } }) {
                             if (vod.resumeLabel != null && vod.onResume != null) {
                                 EnigmaGlassButton(vod.resumeLabel, vod.onResume, Modifier.focusRequester(watchFocus))
                                 vod.onPlay?.let { EnigmaGlassButton(stringResource(R.string.iptv_play_start), it) }
@@ -212,7 +223,7 @@ fun FilmInfoDialog(
                                 if (vod.onPlay == null && vod.onResume == null) Modifier.focusRequester(watchFocus) else Modifier,
                             )
                         }
-                        if (vod == null) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp).onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(0) } }) {
+                        if (vod == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp).onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(0) } }) {
                             EnigmaGlassButton(
                                 stringResource(if (airing || ended) R.string.home_watch else R.string.home_watch_channel),
                                 onWatch,
@@ -249,6 +260,11 @@ fun FilmInfoDialog(
 }
 
 internal const val PLOT_MORE_CHARS = 260
+
+/** Plot on the film / series info page. IPTV items carry it on the movie overview. */
+internal fun filmInfoPlot(isSeries: Boolean, overview: String, eventDescription: String): String =
+    if (isSeries) eventDescription.ifBlank { overview } else overview.ifBlank { eventDescription }
+
 
 /** The IPTV part of [FilmInfoDialog]. */
 data class VodDetail(
