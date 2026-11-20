@@ -5,6 +5,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
 import org.junit.Test
 
 class SkinsTest {
@@ -57,18 +58,26 @@ class SkinsTest {
         assertEquals(2, glass.map { it.glass!!.backdrop }.toSet().size)
         assertEquals(setOf(Skins.Inter), glass.map { it.fontFamily }.toSet())
         assertEquals(null, Skins.EnigmaCast.glass)
-        assertEquals(null, Skins.EnigmaCast.fontFamily)
+        assertEquals(Skins.IbmPlexSans, Skins.EnigmaCast.fontFamily)
     }
 
     @Test
-    fun openPliUsesThePliHdSkinColours() {
+    fun openPliStaysOpenPliLikeWithoutACustomFont() {
         val p = Skins.OpenPli.palette
-        assertEquals(androidx.compose.ui.graphics.Color(0xFF101214), p.canvas)   // noTransBG
-        assertEquals(androidx.compose.ui.graphics.Color(0xFFFCC000), p.onFocus)  // selectedFG
-        assertEquals(androidx.compose.ui.graphics.Color(0xFFF0F0F0), p.text)     // foreground
-        assertEquals(androidx.compose.ui.graphics.Color(0xFFAAAAAA), p.muted)    // grey
+        // Navy PLi-HD style: glossy blue selection, pale focus text, square corners.
+        // Yellow is reserved for the colour-key hints, not the skin accents.
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF0A1428), p.canvas)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFF0F4FA), p.onFocus)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFF0F4FA), p.text)
         assertEquals(0f, Skins.OpenPli.cornerScale)
         assertEquals(6, p.focusBrush?.size)
+        assertEquals(null, Skins.OpenPli.fontFamily)
+        assertEquals(null, Skins.Metrix.fontFamily)
+        val nav = SkinNav.of(Skins.OpenPli)
+        assertEquals(0.dp, nav.endRadius)
+        assertEquals(1f, nav.focusIconScale)
+        assertEquals(1f, nav.focusLabelScale)
+        assertEquals(6, nav.cursorFill.size)
     }
 
     @Test
@@ -85,5 +94,33 @@ class SkinsTest {
             assert(ratio(p.onFocus, p.focus) >= 4.5f) { "${skin.id} focus" }
             assert(ratio(p.onAccent, p.accent) >= 3f) { "${skin.id} accent" }
         }
+    }
+
+    @Test
+    fun everySkinHasNavChromeFromItsPalette() {
+        for (skin in Skins.all) {
+            val nav = SkinNav.of(skin)
+            assert(nav.gradient.size >= 2) { "${skin.id} gradient" }
+            assert(nav.cursorFill.isNotEmpty()) { "${skin.id} cursor" }
+            assert(nav.selectedBarWidth > 0.dp) { "${skin.id} selected bar" }
+            assert(nav.focusIconScale >= 1f && nav.focusIconScale <= 1.12f) { "${skin.id} icon scale" }
+            assert(nav.focusLabelScale >= 1f && nav.focusLabelScale <= 1.10f) { "${skin.id} label scale" }
+        }
+        assertEquals(0.dp, SkinNav.of(Skins.Metrix).endRadius)
+        assertEquals(1f, SkinNav.of(Skins.Metrix).focusIconScale)
+    }
+
+    @Test
+    fun bundledFontsAreAssignedWithoutReuseAcrossFamilies() {
+        assertEquals(Skins.IbmPlexSans, Skins.Midnight.fontFamily)
+        assertEquals(Skins.IbmPlexSans, Skins.SlateCalm.fontFamily)
+        assertEquals(Skins.IbmPlexSans, Skins.CinemaBlack.fontFamily)
+        assertEquals(Skins.PlusJakartaSans, Skins.Aurora.fontFamily)
+        assertEquals(Skins.PlusJakartaSans, Skins.Lumen.fontFamily)
+        assertEquals(Skins.Barlow, Skins.Arena.fontFamily)
+        assertEquals(Skins.Exo2, Skins.Starbridge.fontFamily)
+        assertEquals(Skins.Inter, Skins.GlassEarth.fontFamily)
+        // OpenPLi and Metrix keep the system font so they stay close to the STB originals.
+        assertEquals(setOf(Skins.OpenPli, Skins.Metrix), Skins.all.filter { it.fontFamily == null }.toSet())
     }
 }

@@ -156,6 +156,19 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-## Glass skin backgrounds (`app/src/main/res/drawable-nodpi/skin_glass_earth.webp`, `skin_glass_wave.webp`)
+## Theme fonts (`app/src/main/res/font/`)
+
+Besides Inter (above), four more families are bundled so most skins have their own typeface. Each file is a static TTF, subset with fontTools to Latin, Latin-1, Latin Extended-A and common punctuation (the same inventory as Inter). Full SIL OFL 1.1 texts, including the copyright of each family, are in `docs/licenses/fonts/`. OpenPLi and Metrix keep the system font so they stay close to the original STB skins.
+
+| Files | Family | Licence | Used by |
+|---|---|---|---|
+| `ibm_plex_sans_*.ttf` | IBM Plex Sans, IBM Corp. (Reserved Font Name "Plex") | SIL OFL 1.1, `docs/licenses/fonts/OFL-IBM-Plex-Sans.txt` | EnigmaCast, Midnight, Slate Calm, Cinema Black |
+| `plus_jakarta_sans_*.ttf` | Plus Jakarta Sans, Tokotype | SIL OFL 1.1, `docs/licenses/fonts/OFL-Plus-Jakarta-Sans.txt` | Aurora, Lumen |
+| `barlow_*.ttf` | Barlow, Jeremy Tribby | SIL OFL 1.1, `docs/licenses/fonts/OFL-Barlow.txt` | Arena |
+| `exo2_*.ttf` | Exo 2, Natanael Gama, instanced at 400 and 600 from the variable font on google/fonts (`ofl/exo2`) | SIL OFL 1.1, `docs/licenses/fonts/OFL-Exo-2.txt` | Starbridge |
+| `inter_*.ttf` | Inter, The Inter Project Authors | SIL OFL 1.1 (see the section above, and `docs/licenses/fonts/OFL-Inter.txt`) | Glass Earth, Glass Wave |
+
+## Glass skin backgrounds
+ (`app/src/main/res/drawable-nodpi/skin_glass_earth.webp`, `skin_glass_wave.webp`)
 
 Supplied by the developer (E. Cannemeijer) for this app: a glowing blue Earth horizon in space, and blue particle waves with a light flare. Cropped to 16:9 and converted to 1920×1080 WebP (quality 80).

@@ -74,6 +74,8 @@ fun CompactListRow(
     val background by animateColorAsState(
         targetValue = when {
             focused && drawFocus -> EnigmaColors.Focus
+            // The side menu draws its own sliding pill; keep this row clear while it has focus.
+            focused && !drawFocus -> Color.Transparent
             selected -> EnigmaColors.Selected
             else -> Color.Transparent
         },
@@ -88,7 +90,7 @@ fun CompactListRow(
     val contentColor = when {
         focused -> EnigmaColors.OnFocus
         selected -> EnigmaColors.Accent
-        else -> Color.White
+        else -> EnigmaColors.Text
     }
     Row(
         modifier = modifier

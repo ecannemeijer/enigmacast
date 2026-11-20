@@ -45,6 +45,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import com.enigmacast.ui.animation.focusTween
 import androidx.compose.ui.graphics.TransformOrigin
@@ -125,13 +129,16 @@ fun NavItem(
         ),
         label = "navLabel",
     )
+    val chrome = SkinNav.of()
     CompactListRow(
         onClick = onClick,
-        // The drawer draws one sliding pill. A selected row must stay transparent or that pill
-        // disappears behind the selected colour when focus lands on the open page.
-        selected = selected && cursor == null,
+        // The drawer draws one sliding pill on the focused row. The open section still uses
+        // the selected colour (and a thin accent bar) while focus is on the page.
+        selected = selected,
         drawFocus = cursor == null,
-        modifier = modifier.onFocusChanged {
+        modifier = modifier
+            .navSelectedBar(selected, chrome)
+            .onFocusChanged {
             if (it.isFocused) onFocus()
             else if (cursor?.owner == token) cursor.visible = false
         },
@@ -145,12 +152,12 @@ fun NavItem(
         },
     ) { focused ->
         val iconScale by animateFloatAsState(
-            targetValue = if (focused && spec.animate) 1.14f else 1f,
+            targetValue = if (focused && spec.animate) chrome.focusIconScale else 1f,
             animationSpec = spec.focusTween(),
             label = "navIcon",
         )
         val labelScale by animateFloatAsState(
-            targetValue = if (focused && spec.animate) 1.16f else 1f,
+            targetValue = if (focused && spec.animate) chrome.focusLabelScale else 1f,
             animationSpec = spec.focusTween(),
             label = "navLabelScale",
         )
@@ -211,6 +218,8 @@ fun NavItem(
                 label,
                 color = LocalContentColor.current,
                 fontSize = 13.sp,
+                fontWeight = if (focused || selected) EnigmaType.Strong else FontWeight.Normal,
+                letterSpacing = chrome.letterSpacing,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.graphicsLayer {
@@ -251,19 +260,56 @@ fun NavItem(
     }
 }
 
+
+/** A thin accent bar on the open section, drawn without shifting the icon or label. */
+private fun Modifier.navSelectedBar(selected: Boolean, chrome: NavChrome): Modifier {
+    if (!selected || chrome.selectedBarWidth <= 0.dp) return this
+    val bar = chrome.selectedBar
+    val width = chrome.selectedBarWidth
+    return drawBehind {
+        val w = width.toPx()
+        val inset = 3.dp.toPx()
+        drawRoundRect(
+            color = bar,
+            topLeft = Offset(0f, inset),
+            size = Size(w, size.height - inset * 2),
+            cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx()),
+        )
+    }
+}
+
 @Composable
 fun PanelHeader(title: String, subtitle: String = "", modifier: Modifier = Modifier) {
-    Column(modifier.padding(bottom = 8.dp)) {
-        Text(title, color = EnigmaColors.Text, fontSize = 18.sp, fontWeight = EnigmaType.Strong)
-        if (subtitle.isNotBlank()) {
+    val chrome = SkinNav.of()
+    Row(
+        modifier.padding(bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .padding(end = 10.dp)
+                .width(chrome.selectedBarWidth)
+                .height(16.dp)
+                .background(EnigmaColors.Accent, RoundedCornerShape(1.dp)),
+        )
+        Column {
             Text(
-                subtitle,
-                color = EnigmaColors.Muted,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
+                title,
+                color = EnigmaColors.Text,
+                fontSize = 18.sp,
+                fontWeight = EnigmaType.Strong,
+                letterSpacing = chrome.headerLetterSpacing,
             )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    color = EnigmaColors.Muted,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
     }
 }

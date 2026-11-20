@@ -49,20 +49,21 @@ fun EnigmaCastLogo(
             modifier = Modifier.size(if (expanded) 36.dp else 28.dp),
         )
         if (expanded) {
+            val tracking = com.enigmacast.ui.theme.SkinNav.of().headerLetterSpacing
             Spacer(Modifier.width(8.dp))
             Text(
                 text = "Enigma",
                 color = EnigmaColors.Text,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 0.3.sp,
+                letterSpacing = tracking,
             )
             Text(
                 text = "Cast",
                 color = EnigmaColors.Cyan,
                 fontSize = 16.sp,
                 fontWeight = EnigmaType.Strong,
-                letterSpacing = 0.3.sp,
+                letterSpacing = tracking,
             )
         }
     }

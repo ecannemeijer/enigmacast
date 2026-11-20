@@ -176,6 +176,40 @@ data class GlassLook(
 )
 
 object Skins {
+    /**
+     * Inter (SIL OFL 1.1), subset to Latin, three weights; the glass skins use it.
+     */
+    val Inter = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_medium, FontWeight.Medium),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_semibold, FontWeight.SemiBold),
+    )
+
+    /** IBM Plex Sans (SIL OFL 1.1), subset to Latin. EnigmaCast, Midnight, Slate Calm, Cinema Black. */
+    val IbmPlexSans = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.ibm_plex_sans_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.ibm_plex_sans_medium, FontWeight.Medium),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.ibm_plex_sans_semibold, FontWeight.SemiBold),
+    )
+
+    /** Plus Jakarta Sans (SIL OFL 1.1), subset to Latin. Aurora and Lumen. */
+    val PlusJakartaSans = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.plus_jakarta_sans_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
+    )
+
+    /** Barlow (SIL OFL 1.1), subset to Latin. Arena's scoreboard labels. */
+    val Barlow = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.barlow_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.barlow_bold, FontWeight.Bold),
+    )
+
+    /** Exo 2 (SIL OFL 1.1), subset to Latin, instanced at 400 and 600. Starbridge. */
+    val Exo2 = androidx.compose.ui.text.font.FontFamily(
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.exo2_regular, FontWeight.Normal),
+        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.exo2_semibold, FontWeight.SemiBold),
+    )
+
     val EnigmaCast = Skin(
         id = OsdSkinId.STANDARD,
         palette = SkinPalette(
@@ -188,6 +222,7 @@ object Skins {
             osdFill = Color(0xFF10192B), osdFillEnd = Color(0xFF10192B), osdEdge = Color(0x4024D9FF),
         ),
         cornerScale = 1f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.FILL, osd = OsdLayout.CARD,
+        fontFamily = IbmPlexSans,
     )
 
     /**
@@ -224,6 +259,7 @@ object Skins {
             osdFill = Color.Black, osdFillEnd = Color.Black, osdEdge = Color(0xFF262626),
         ),
         cornerScale = 0.8f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.OUTLINE, osd = OsdLayout.MINIMAL,
+        fontFamily = IbmPlexSans,
     )
 
     /** openATV MetrixHD: flat dark tiles, square corners, one coloured accent. */
@@ -254,13 +290,7 @@ object Skins {
             osdFill = Color(0xFF1D2550), osdFillEnd = Color(0xFF102A3A), osdEdge = Color(0x803DE0C9),
         ),
         cornerScale = 1.4f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.GLASS,
-    )
-
-    /** Inter (SIL OFL 1.1), subset to Latin, three weights; only the glass skins use it. */
-    val Inter = androidx.compose.ui.text.font.FontFamily(
-        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_regular, FontWeight.Normal),
-        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_medium, FontWeight.Medium),
-        androidx.compose.ui.text.font.Font(com.enigmacast.R.font.inter_semibold, FontWeight.SemiBold),
+        fontFamily = PlusJakartaSans,
     )
 
     /** Glass over a dark space photo with a glowing blue Earth horizon: sky blue accents. */
@@ -318,6 +348,7 @@ object Skins {
             osdFill = Color(0xFF1C252C), osdFillEnd = Color(0xFF1F2C2A), osdEdge = Color(0x408FB3A0),
         ),
         cornerScale = 1.1f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.GLOW, osd = OsdLayout.CALM,
+        fontFamily = IbmPlexSans,
     )
 
     /**
@@ -336,6 +367,7 @@ object Skins {
             osdFill = Color(0xFF1C1822), osdFillEnd = Color(0xFF2E1830), osdEdge = Color(0x40FF4F8B),
         ),
         cornerScale = 1.6f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.GLOW, osd = OsdLayout.LUMEN,
+        fontFamily = PlusJakartaSans,
     )
 
     /**
@@ -354,6 +386,7 @@ object Skins {
             osdFill = Color(0xFF0B0C0E), osdFillEnd = Color(0xFF16181C), osdEdge = Color(0x338AB8F5),
         ),
         cornerScale = 1.2f, strongWeight = FontWeight.Medium, focusStyle = FocusStyle.FILL, osd = OsdLayout.CINEMA,
+        fontFamily = IbmPlexSans,
     )
 
     /**
@@ -372,6 +405,7 @@ object Skins {
             osdFill = Color(0xFF0E1510), osdFillEnd = Color(0xFF0E1510), osdEdge = Color(0xFF26342A),
         ),
         cornerScale = 0.15f, strongWeight = FontWeight.Bold, focusStyle = FocusStyle.FILL, osd = OsdLayout.SCOREBOARD,
+        fontFamily = Barlow,
     )
 
     /**
@@ -390,6 +424,7 @@ object Skins {
             osdFill = Color(0xFF07060B), osdFillEnd = Color(0xFF130F1D), osdEdge = Color(0x66A9A3FF),
         ),
         cornerScale = 2f, strongWeight = FontWeight.SemiBold, focusStyle = FocusStyle.FILL, osd = OsdLayout.ELBOW,
+        fontFamily = Exo2,
     )
 
     val all: List<Skin> = listOf(EnigmaCast, OpenPli, Midnight, Metrix, Aurora, GlassEarth, GlassWave, SlateCalm, Lumen, CinemaBlack, Arena, Starbridge)

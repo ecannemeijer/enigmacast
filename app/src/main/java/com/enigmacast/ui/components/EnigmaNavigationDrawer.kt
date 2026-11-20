@@ -47,8 +47,10 @@ import com.enigmacast.ui.animation.travelTween
 import com.enigmacast.ui.theme.EnigmaColors
 import kotlin.math.roundToInt
 
-private val DrawerShape = RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
 private val CursorShape get() = skinShape(8.dp)
+
+private fun drawerShape(endRadius: androidx.compose.ui.unit.Dp) =
+    RoundedCornerShape(topEnd = endRadius, bottomEnd = endRadius)
 
 /**
  * One sliding highlight for the side menu. A focused row writes its place;
@@ -88,6 +90,9 @@ fun EnigmaNavigationDrawer(
     val travel = if (cursor.seen) spec.travelTween() else snap()
     val top = animateFloatAsState(cursor.topPx, travel, label = "navCursorTop")
     val pillHeight = animateFloatAsState(cursor.heightPx, travel, label = "navCursorHeight")
+    val chrome = com.enigmacast.ui.theme.SkinNav.of()
+    val railShape = drawerShape(chrome.endRadius)
+    val skin = com.enigmacast.ui.theme.ActiveSkin.current
     Box(
         modifier
             .layout { measurable, constraints ->
@@ -96,26 +101,38 @@ fun EnigmaNavigationDrawer(
                 layout(w, placeable.height) { placeable.place(0, 0) }
             }
             .fillMaxHeight()
-            .clip(DrawerShape)
-            // Flat skins: the gradient they always had. Glass skins: frosted glass over the photo.
-            .then(if (com.enigmacast.ui.theme.ActiveSkin.current.glass == null)
-                Modifier.background(Brush.verticalGradient(listOf(Color(0xF0141E33), Color(0xF0080D1C))))
-                    .border(1.dp, Color(0x332488FF), DrawerShape)
-            else Modifier.skinSurface(com.enigmacast.ui.theme.EnigmaColors.Card, DrawerShape))
+            .clip(railShape)
+            // Flat skins: a gradient from the skin palette. Glass skins: frosted glass over the photo.
+            .then(
+                if (skin.glass == null) Modifier
+                    .background(Brush.verticalGradient(chrome.gradient))
+                    .border(chrome.edgeWidth, chrome.edge, railShape)
+                else Modifier.skinSurface(com.enigmacast.ui.theme.EnigmaColors.Card, railShape)
+                    .border(chrome.edgeWidth, chrome.edge, railShape),
+            )
             .onGloballyPositioned { cursor.originY = it.positionInRoot().y },
     ) {
         if (cursor.visible && cursor.heightPx > 0f) {
+            val cursorBrush = if (chrome.cursorFill.size > 1)
+                Modifier.background(Brush.verticalGradient(chrome.cursorFill), CursorShape)
+            else
+                Modifier.background(chrome.cursorFill.first(), CursorShape)
             Box(
                 Modifier
                     .offset { IntOffset(0, top.value.roundToInt()) }
-                    .padding(horizontal = 8.dp)
+                    .padding(horizontal = chrome.horizontalPadding)
                     .fillMaxWidth()
                     .layout { measurable, constraints ->
                         val h = pillHeight.value.roundToInt().coerceAtLeast(0)
                         val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
                         layout(placeable.width, h) { placeable.place(0, 0) }
                     }
-                    .background(EnigmaColors.Focus, CursorShape),
+                    .then(cursorBrush)
+                    .then(
+                        if (chrome.cursorEdge != null && chrome.cursorEdgeWidth > 0.dp)
+                            Modifier.border(chrome.cursorEdgeWidth, chrome.cursorEdge, CursorShape)
+                        else Modifier
+                    ),
             )
         }
         CompositionLocalProvider(LocalNavCursor provides cursor) {
@@ -123,8 +140,8 @@ fun EnigmaNavigationDrawer(
                 Modifier
                     .fillMaxHeight()
                     .drawerEdges(leftEntry)
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                    .padding(horizontal = chrome.horizontalPadding, vertical = chrome.verticalPadding),
+                verticalArrangement = Arrangement.spacedBy(chrome.itemSpacing),
                 content = content,
             )
         }
