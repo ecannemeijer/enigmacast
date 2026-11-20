@@ -38,7 +38,9 @@ class MyItemsViewModel @Inject constructor(
     private val profiles: com.enigmacast.data.profile.ProfileStore,
     private val torrents: com.enigmacast.data.torrent.TorrentLibrary,
     private val scraper: com.enigmacast.data.torrent.ScraperRepository,
+    private val downloads: com.enigmacast.data.download.VodDownloadManager,
 ) : ViewModel() {
+    val vodDownloads = downloads.items
     /** Playlist accounts that are configured now; Library hides (keeps) entries of others. */
     private val activeSources = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
 
@@ -95,6 +97,18 @@ class MyItemsViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     /** The rows are already limited to what may be shown; this only hides them for free accounts. */
     fun iptvAllowed(): Boolean = gate.allows(com.enigmacast.domain.account.PremiumFeature.XTREAM) || torrentAllowed()
+
+    fun playDownload(item: com.enigmacast.domain.download.VodDownload, onXtream: () -> Unit) {
+        if (item.state != com.enigmacast.domain.download.VodDownloadState.DONE) return
+        downloads.requestPlay(item)
+        onXtream()
+    }
+
+    fun pauseDownload(id: String) = downloads.pause(id)
+    fun resumeDownload(id: String) = downloads.resume(id)
+    fun cancelDownload(id: String) = downloads.cancel(id)
+    fun deleteDownload(id: String) = downloads.delete(id)
+
 
     /** TMDB matches for the IPTV cards, the same artwork the film and series lists use. */
     val iptvPosters: StateFlow<Map<String, com.enigmacast.domain.films.TmdbMovie?>> = iptvArt.movies

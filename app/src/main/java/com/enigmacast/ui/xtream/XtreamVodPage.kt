@@ -78,6 +78,7 @@ import com.enigmacast.ui.home.Backdrop
 import com.enigmacast.ui.home.FilmInfoDialog
 import com.enigmacast.ui.home.PosterCard
 import com.enigmacast.ui.home.VodDetail
+import com.enigmacast.ui.components.EnigmaGlassButton
 import com.enigmacast.ui.theme.CompactListRow
 import com.enigmacast.ui.theme.EnigmaColors
 import com.enigmacast.ui.theme.EnigmaType
@@ -414,6 +415,9 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
             favorite = remember(item, model.favoriteVersion) { model.isFavorite(item) },
             onFavorite = { model.toggleFavorite(item) },
             watch = watch,
+            onDownload = if (isSeries) null else ({ model.enqueueDownload(item) }),
+            downloadLabel = if (isSeries) null else remember(item, model.downloadVersion) { model.downloadLabel(item) },
+            onDownloadSeason = null,
         ),
     )
 }
@@ -422,6 +426,7 @@ internal fun IptvInfoDialog(model: XtreamViewModel, onClose: () -> Unit = model:
 @Composable
 private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> Unit) {
     val episodes = model.detailEpisodes
+    val downloadVersion = model.downloadVersion
     if (episodes.isEmpty()) {
         if (model.detailLoading) EnigmaLoadingIndicator() else Text(stringResource(R.string.iptv_no_episodes), color = EnigmaColors.Muted, fontSize = 13.sp)
         return
@@ -443,17 +448,27 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
             }
         }
         val list = remember(episodes, season) { com.enigmacast.domain.xtream.LazyKeys.keyed(episodes.filter { it.season == season }, "ep") { it.id } }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
+            EnigmaGlassButton(stringResource(R.string.iptv_download_season), { model.enqueueSeasonDownload(show, season, episodes) })
+        }
+
         // Kept for good (also after the Continue watching card is removed): the bars stay.
         val history by model.history.collectAsState()
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(list, key = { _, k -> k.key }) { index, k ->
                 val e = k.value
                 val seen = model.historyOf(e, history, show)
-                EpisodeCard(e, model.resumeOf(e, show) > 0 && seen?.watched != true, seen, Modifier.focusProperties {
-                    if (index == 0) left = FocusRequester.Cancel
-                    if (index == list.lastIndex) right = FocusRequester.Cancel
-                    // Down goes on to the cast row under the episodes (the info page scrolls).
-                }) {
+                EpisodeCard(
+                    e,
+                    model.resumeOf(e, show) > 0 && seen?.watched != true,
+                    seen,
+                    Modifier.focusProperties {
+                        if (index == 0) left = FocusRequester.Cancel
+                        if (index == list.lastIndex) right = FocusRequester.Cancel
+                    },
+                    downloadLabel = model.downloadLabel(e, show),
+                    onDownload = { model.enqueueEpisodeDownload(e, show) },
+                ) {
                     model.holdEpisodes(episodes)
                     model.closeDetail()
                     model.requestEpisode(e, show, onPlayed)
@@ -466,7 +481,15 @@ private fun Episodes(model: XtreamViewModel, show: XtreamItem, onPlayed: () -> U
 private val EPISODE_WIDTH = 88.dp
 
 @Composable
-private fun EpisodeCard(e: XtreamEpisode, started: Boolean, seen: com.enigmacast.data.db.EpisodeHistoryRow?, modifier: Modifier, onClick: () -> Unit) {
+private fun EpisodeCard(
+    e: XtreamEpisode,
+    started: Boolean,
+    seen: com.enigmacast.data.db.EpisodeHistoryRow?,
+    modifier: Modifier,
+    downloadLabel: String,
+    onDownload: () -> Unit,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val shape = RoundedCornerShape(8.dp)
@@ -529,6 +552,9 @@ private fun EpisodeCard(e: XtreamEpisode, started: Boolean, seen: com.enigmacast
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+        CompactListRow(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
+            Text(downloadLabel, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 

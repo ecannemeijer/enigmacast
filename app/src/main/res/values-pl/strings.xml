@@ -2007,4 +2007,21 @@
     <string name="fallback_epg_countries_count">Wybrano: %1$d</string>
     <string name="fallback_epg_countries_title">Dodatkowe kraje przewodnika</string>
     <string name="fallback_epg_automatic">Automatycznie</string>
+    <string name="iptv_download">Pobierz</string>
+    <string name="iptv_download_season">Pobierz sezon</string>
+    <string name="iptv_download_cancel">Anuluj pobieranie</string>
+    <string name="iptv_download_pause">Wstrzymaj</string>
+    <string name="iptv_download_resume">Wznów</string>
+    <string name="iptv_downloads">Pobrane</string>
+    <string name="iptv_download_queued">Oczekuje</string>
+    <string name="iptv_download_running">Pobieranie</string>
+    <string name="iptv_download_paused">Wstrzymane</string>
+    <string name="iptv_download_failed">Nie udało się pobrać</string>
+    <string name="iptv_download_done">Pobrano</string>
+    <string name="iptv_download_no_space">Za mało wolnego miejsca na tym nośniku</string>
+    <string name="iptv_download_delete_title">Usunąć pobrany plik?</string>
+    <string name="iptv_download_delete_message">Usunąć %1$s z tego telewizora? Pobrany plik zostanie skasowany.</string>
+    <string name="iptv_download_channel">Pobrane</string>
+    <string name="iptv_download_season_added">Dodano %1$d odcinków do Pobranych</string>
+    <string name="iptv_download_already">Już pobrano</string>
 </resources>

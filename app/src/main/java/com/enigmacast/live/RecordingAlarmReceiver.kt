@@ -14,6 +14,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         val id = if (intent.action == Intent.ACTION_BOOT_COMPLETED) null else intent.getStringExtra(RecordingCaptureService.EXTRA_ID)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) VodDownloadService.start(context)
         book.enqueue(id) { pending.finish() }
     }
 

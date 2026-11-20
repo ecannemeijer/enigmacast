@@ -204,6 +204,8 @@ fun FilmInfoDialog(
                             vod.onFavorite?.let { toggle ->
                                 EnigmaGlassButton(stringResource(if (vod.favorite) R.string.iptv_library_remove else R.string.iptv_library_add), toggle)
                             }
+                            vod.onDownload?.let { EnigmaGlassButton(vod.downloadLabel ?: stringResource(R.string.iptv_download), it) }
+                            vod.onDownloadSeason?.let { EnigmaGlassButton(stringResource(R.string.iptv_download_season), it) }
                             EnigmaGlassButton(
                                 stringResource(R.string.home_close),
                                 onClose,
@@ -259,6 +261,9 @@ data class VodDetail(
     val onFavorite: (() -> Unit)? = null,
     /** A film's progress / watched mark (IPTV and Torrent); series show theirs on the episodes. */
     val watch: com.enigmacast.data.db.EpisodeHistoryRow? = null,
+    val onDownload: (() -> Unit)? = null,
+    val downloadLabel: String? = null,
+    val onDownloadSeason: (() -> Unit)? = null,
 )
 
 /** "More": the whole plot (and tagline) in a small window; Back or OK closes it. */

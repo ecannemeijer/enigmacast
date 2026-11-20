@@ -3,6 +3,7 @@
 package com.enigmacast.ui.xtream
 
 import android.content.Context
+import com.enigmacast.R
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Looper
@@ -106,6 +107,7 @@ class XtreamViewModel @Inject constructor(
     private val boostStore: com.enigmacast.data.player.AudioBoostStore,
     private val reminders: com.enigmacast.live.ReminderScheduler,
     private val recordings: com.enigmacast.live.RecordingBook,
+    private val downloads: com.enigmacast.data.download.VodDownloadManager,
 ) : ViewModel() {
     private val _detection = MutableStateFlow<XtreamDetection?>(null)
     /** Null until the active receiver was checked. The menu item shows when it has playlists. */
@@ -920,6 +922,74 @@ class XtreamViewModel @Inject constructor(
         resumeKeyOf(kind, id, providerId)?.let { library.resumeMap.value[it] }
 
     /** Where a film or episode was left, in ms; 0 when it was not started or watched to the end. */
+    private fun localDownloadUrl(source: String, kind: String, id: String): String? =
+        downloads.of(source, kind, id)?.let { downloads.fileUri(it) }
+
+    fun enqueueDownload(item: XtreamItem) {
+        val account = accountFor(item.providerId) ?: account ?: return
+        downloads.enqueueMovie(account, item)
+        downloadVersion++
+    }
+
+    fun enqueueEpisodeDownload(episode: XtreamEpisode, show: XtreamItem) {
+        val account = accountFor(show.providerId) ?: account ?: return
+        downloads.enqueueEpisode(account, show, episode)
+        downloadVersion++
+    }
+
+    fun enqueueSeasonDownload(show: XtreamItem, season: Int, episodes: List<XtreamEpisode>) {
+        val account = accountFor(show.providerId) ?: account ?: return
+        val count = episodes.count { it.season == season }
+        downloads.enqueueSeason(account, show, season, episodes) { XtreamUrls.episode(account, it.id, it.extension) }
+        downloadVersion++
+        if (count > 0) showNotice(context.getString(R.string.iptv_download_season_added, count))
+    }
+
+    var downloadVersion by mutableStateOf(0)
+        private set
+
+    fun downloadLabel(item: XtreamItem): String {
+        val account = accountFor(item.providerId) ?: account ?: return context.getString(R.string.iptv_download)
+        return labelFor(downloads.of(account.key, "m", item.id))
+    }
+
+    fun downloadLabel(episode: XtreamEpisode, show: XtreamItem): String {
+        val account = accountFor(show.providerId) ?: account ?: return context.getString(R.string.iptv_download)
+        return labelFor(downloads.of(account.key, "e", episode.id))
+    }
+
+    private fun labelFor(item: com.enigmacast.domain.download.VodDownload?): String = when (item?.state) {
+        com.enigmacast.domain.download.VodDownloadState.QUEUED -> context.getString(R.string.iptv_download_queued)
+        com.enigmacast.domain.download.VodDownloadState.RUNNING -> context.getString(R.string.iptv_download_running)
+        com.enigmacast.domain.download.VodDownloadState.PAUSED -> context.getString(R.string.iptv_download_paused)
+        com.enigmacast.domain.download.VodDownloadState.FAILED -> context.getString(R.string.iptv_download_failed)
+        com.enigmacast.domain.download.VodDownloadState.DONE -> context.getString(R.string.iptv_download_already)
+        else -> context.getString(R.string.iptv_download)
+    }
+
+    fun playOffline(item: com.enigmacast.domain.download.VodDownload) {
+        val account = providerAccounts.values.firstOrNull { it.key == item.source } ?: account ?: return
+        val url = downloads.fileUri(item) ?: return
+        val vodItem = XtreamItem(
+            id = item.streamId,
+            name = item.title,
+            section = if (item.kind == "e") XtreamSection.SERIES else XtreamSection.MOVIES,
+            categoryId = "",
+            icon = item.poster.orEmpty(),
+            extension = item.extension,
+            providerId = "",
+        )
+        val episode = if (item.kind == "e") XtreamEpisode(item.streamId, item.season, item.episode, item.title, item.extension, item.poster.orEmpty()) else null
+        start(
+            url,
+            XtreamPlaying(item.title, vodItem, episode),
+            live = false,
+            account = account,
+            startMs = library.resumeMap.value[item.libraryKey]?.positionMs ?: 0L,
+            resume = item.libraryKey,
+        )
+    }
+
     fun resumeOf(item: XtreamItem): Long = resumeRow("m", item.id, item.providerId)?.positionMs ?: 0L
     /** An episode's rows are kept under its series' provider account ([show], else the open series). */
     fun resumeOf(episode: XtreamEpisode, show: XtreamItem? = series): Long = resumeRow("e", episode.id, show?.providerId.orEmpty())?.positionMs ?: 0L
@@ -1278,7 +1348,8 @@ class XtreamViewModel @Inject constructor(
     fun playFilm(item: XtreamItem, fromStart: Boolean) {
         val account = accountFor(item.providerId) ?: return
         if (launchOrigin == null) vodFromDashboard = true
-        val url = item.url.ifBlank { XtreamUrls.movie(account, item.id, item.extension) }
+        val remote = item.url.ifBlank { XtreamUrls.movie(account, item.id, item.extension) }
+        val url = localDownloadUrl(account.key, "m", item.id) ?: remote
         start(url, XtreamPlaying(item.name, item), live = false, account = account, startMs = if (fromStart) 0L else resumeOf(item), resume = resumeKeyOf("m", item.id, item.providerId))
     }
 
@@ -1294,6 +1365,16 @@ class XtreamViewModel @Inject constructor(
     private var epgJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            downloads.pendingPlay.collect { job ->
+                val item = job ?: return@collect
+                downloads.consumePlay()
+                playOffline(item)
+            }
+        }
+        viewModelScope.launch {
+            downloads.items.collect { downloadVersion++ }
+        }
         viewModelScope.launch {
             channelSwitch.request.collect { request ->
                 if (request is com.enigmacast.domain.channel.ChannelSwitchRequest.Iptv) {
@@ -1990,7 +2071,7 @@ class XtreamViewModel @Inject constructor(
         when (item.section) {
             XtreamSection.SERIES -> openSeries(item)
             XtreamSection.LIVE -> start(XtreamUrls.live(account, item.id), XtreamPlaying(item.name, item), live = true, account = account).also { loadPlayingGuide(item) }
-            XtreamSection.MOVIES -> start(XtreamUrls.movie(account, item.id, item.extension), XtreamPlaying(item.name, item), live = false, account = account)
+            XtreamSection.MOVIES -> start(localDownloadUrl(account.key, "m", item.id) ?: XtreamUrls.movie(account, item.id, item.extension), XtreamPlaying(item.name, item), live = false, account = account)
         }
     }
 
@@ -2020,8 +2101,9 @@ class XtreamViewModel @Inject constructor(
             }
         }
         val title = listOfNotNull(series?.name, "S${episode.season}E${episode.episode}".takeIf { episode.season > 0 }).joinToString(" · ")
+        val remote = XtreamUrls.episode(account, episode.id, episode.extension)
         start(
-            XtreamUrls.episode(account, episode.id, episode.extension),
+            localDownloadUrl(account.key, "e", episode.id) ?: remote,
             XtreamPlaying("$title · ${episode.title}".trim(' ', '·'), series, episode),
             live = false,
             account = account,

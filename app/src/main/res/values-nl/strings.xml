@@ -2000,4 +2000,21 @@
     <string name="fallback_epg_countries_count">%1$d geselecteerd</string>
     <string name="fallback_epg_countries_title">Extra gids-landen</string>
     <string name="fallback_epg_automatic">Automatisch</string>
+    <string name="iptv_download">Downloaden</string>
+    <string name="iptv_download_season">Seizoen downloaden</string>
+    <string name="iptv_download_cancel">Download annuleren</string>
+    <string name="iptv_download_pause">Pauzeren</string>
+    <string name="iptv_download_resume">Hervatten</string>
+    <string name="iptv_downloads">Downloads</string>
+    <string name="iptv_download_queued">In de wachtrij</string>
+    <string name="iptv_download_running">Bezig met downloaden</string>
+    <string name="iptv_download_paused">Gepauzeerd</string>
+    <string name="iptv_download_failed">Downloaden is mislukt</string>
+    <string name="iptv_download_done">Gedownload</string>
+    <string name="iptv_download_no_space">Onvoldoende vrije ruimte op deze opslag</string>
+    <string name="iptv_download_delete_title">Download verwijderen?</string>
+    <string name="iptv_download_delete_message">%1$s van deze TV verwijderen? Het gedownloade bestand wordt gewist.</string>
+    <string name="iptv_download_channel">Downloads</string>
+    <string name="iptv_download_season_added">%1$d afleveringen toegevoegd aan Downloads</string>
+    <string name="iptv_download_already">Al gedownload</string>
 </resources>

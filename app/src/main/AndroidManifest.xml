@@ -112,6 +112,10 @@
             android:name=".torrent.TorrentStreamingService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".live.VodDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <receiver
             android:name=".live.RecordingAlarmReceiver"
             android:exported="false">

@@ -53,8 +53,9 @@ interface ResumeDao {
     entities = [
         ResumeRow::class, SeriesRuleRow::class, IptvLibraryRow::class, IptvResumeRow::class,
         SyncOutboxRow::class, SyncCursorRow::class, EpisodeHistoryRow::class, AudioBoostRow::class,
+        VodDownloadRow::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class UserDatabase : RoomDatabase() {
@@ -63,6 +64,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun iptvLibrary(): IptvLibraryDao
     abstract fun syncOutbox(): SyncOutboxDao
     abstract fun audioBoost(): AudioBoostDao
+    abstract fun vodDownloads(): VodDownloadDao
 
     companion object {
         const val NAME = "enigmacast-user.db"
@@ -76,7 +78,7 @@ object UserDatabaseModule {
     @Singleton
     fun userDatabase(@ApplicationContext context: Context): UserDatabase =
         Room.databaseBuilder(context, UserDatabase::class.java, UserDatabase.NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
 
     private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
@@ -126,8 +128,25 @@ object UserDatabaseModule {
         }
     }
 
+    /** Additive: queued IPTV film and episode downloads for offline playback. */
+    internal val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+        override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `vod_downloads` (`id` TEXT NOT NULL, `profileId` TEXT NOT NULL, `source` TEXT NOT NULL, " +
+                    "`kind` TEXT NOT NULL, `streamId` TEXT NOT NULL, `title` TEXT NOT NULL, `seriesId` TEXT, `seriesTitle` TEXT, " +
+                    "`season` INTEGER NOT NULL, `episode` INTEGER NOT NULL, `poster` TEXT, `url` TEXT NOT NULL, `extension` TEXT NOT NULL, " +
+                    "`userAgent` TEXT NOT NULL, `httpHeaders` TEXT NOT NULL, `volumeIndex` INTEGER NOT NULL, `fileName` TEXT NOT NULL, " +
+                    "`totalBytes` INTEGER NOT NULL, `downloadedBytes` INTEGER NOT NULL, `state` TEXT NOT NULL, `error` TEXT NOT NULL, " +
+                    "`addedMs` INTEGER NOT NULL, `updatedMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+        }
+    }
+
     @Provides
     fun audioBoostDao(db: UserDatabase): AudioBoostDao = db.audioBoost()
+
+    @Provides
+    fun vodDownloadDao(db: UserDatabase): VodDownloadDao = db.vodDownloads()
 
     @Provides
     fun iptvLibraryDao(db: UserDatabase): IptvLibraryDao = db.iptvLibrary()

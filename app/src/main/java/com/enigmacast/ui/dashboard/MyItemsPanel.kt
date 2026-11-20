@@ -52,6 +52,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Text
 import com.enigmacast.R
+import com.enigmacast.domain.download.VodDownload
+import com.enigmacast.domain.download.VodDownloadState
 import com.enigmacast.domain.recording.Recording
 import com.enigmacast.domain.recording.RecordingPlace
 import com.enigmacast.domain.recording.RecordingStatus
@@ -107,6 +109,8 @@ fun MyItemsPanel(
     val iptvFavorites by viewModel.iptvFavorites.collectAsStateWithLifecycle()
     val torrentFavorites by viewModel.torrentFavorites.collectAsStateWithLifecycle()
     val iptvArt by viewModel.iptvPosters.collectAsStateWithLifecycle()
+    val vodDownloads by viewModel.vodDownloads.collectAsStateWithLifecycle()
+    var deleteDownload by remember { mutableStateOf<VodDownload?>(null) }
     val iptvBlocks = if (viewModel.iptvAllowed()) {
         listOf(
             R.string.library_continue to iptvContinue,
@@ -178,6 +182,36 @@ fun MyItemsPanel(
             Text(notice, color = EnigmaColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
         // One IPTV row (header + sideways cards); inside the LazyColumn when recordings exist so everything scrolls.
+        val downloadRow: @Composable () -> Unit = {
+            if (vodDownloads.isNotEmpty()) {
+                Column {
+                    Text(stringResource(R.string.iptv_downloads), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 4.dp))
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    ) {
+                        itemsIndexed(vodDownloads, key = { _, d -> d.id }) { i, item ->
+                            DownloadCard(
+                                item = item,
+                                modifier = Modifier
+                                    .trackedFocusRequesterIf(i == 0 && iptvBlocks.isEmpty() && recordingEntry == null, listFocus)
+                                    .focusRequester(keyFocus("dl/${item.id}"))
+                                    .focusProperties {
+                                        canFocus = rowsFocusable
+                                        if (i == 0) left = menuFocus
+                                        if (i == vodDownloads.lastIndex) right = FocusRequester.Cancel
+                                    },
+                                onPlay = { viewModel.playDownload(item, onXtream) },
+                                onPause = { viewModel.pauseDownload(item.id) },
+                                onResume = { viewModel.resumeDownload(item.id) },
+                                onCancel = { viewModel.cancelDownload(item.id) },
+                                onDelete = { deleteDownload = item },
+                            )
+                        }
+                    }
+                }
+            }
+        }
         val iptvRow: @Composable (Int, List<com.enigmacast.domain.xtream.IptvLibraryCard>) -> Unit = { header, cards ->
             Column {
                 Text(stringResource(header), color = EnigmaColors.Cyan, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 4.dp))
@@ -211,7 +245,7 @@ fun MyItemsPanel(
         val boxMovies = sections.onReceiver
         val boxTimers = sections.scheduledOnReceiver
         val all = iptvRecordings + items + boxMovies + boxTimers
-        if (all.isEmpty()) {
+        if (all.isEmpty() && vodDownloads.isEmpty()) {
             iptvBlocks.forEach { (h, c) -> iptvRow(h, c) }
             Text(
                 stringResource(R.string.my_items_empty),
@@ -233,6 +267,7 @@ fun MyItemsPanel(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                if (vodDownloads.isNotEmpty()) item(key = "downloads") { downloadRow() }
                 iptvBlocks.forEach { (h, c) -> item(key = "iptv-$h") { iptvRow(h, c) } }
                 // Sections: this app's recordings, recordings on the box, timers on the box. Headers are not focusable.
                 val box = boxName.ifBlank { null }
@@ -405,6 +440,18 @@ fun MyItemsPanel(
             dismissLabel = stringResource(R.string.cancel),
             onConfirm = { removeFocus(item.id); viewModel.confirmDelete(restoreFocus = false) },
             onDismiss = viewModel::dismissDelete,
+            destructive = true,
+            compact = true,
+        )
+    }
+    deleteDownload?.let { item ->
+        TvConfirmDialog(
+            title = stringResource(R.string.iptv_download_delete_title),
+            message = stringResource(R.string.iptv_download_delete_message, item.title),
+            confirmLabel = stringResource(R.string.my_items_delete),
+            dismissLabel = stringResource(R.string.cancel),
+            onConfirm = { viewModel.deleteDownload(item.id); deleteDownload = null },
+            onDismiss = { deleteDownload = null },
             destructive = true,
             compact = true,
         )
@@ -690,3 +737,78 @@ internal fun myItemsPageRows(
     }
     return out
 }
+
+@Composable
+private fun DownloadCard(
+    item: VodDownload,
+    modifier: Modifier,
+    onPlay: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val focus = com.enigmacast.ui.soccer.rememberTvFocus()
+    val film = com.enigmacast.domain.films.HomeFilm(
+        com.enigmacast.domain.films.FilmCandidate(
+            com.enigmacast.domain.epg.GuideEvent(-1, "iptv:${item.streamId}", item.title, "", "", 0, 0), "", item.title, null,
+        ),
+        com.enigmacast.domain.films.TmdbMovie(id = 0, title = item.title, posterPath = item.poster, isSeries = item.kind != "m"),
+    )
+    val stateLabel = when (item.state) {
+        VodDownloadState.QUEUED -> stringResource(R.string.iptv_download_queued)
+        VodDownloadState.RUNNING -> stringResource(R.string.iptv_download_running)
+        VodDownloadState.PAUSED -> stringResource(R.string.iptv_download_paused)
+        VodDownloadState.FAILED -> stringResource(R.string.iptv_download_failed)
+        VodDownloadState.DONE -> stringResource(R.string.iptv_download_done)
+        VodDownloadState.CANCELED -> stringResource(R.string.iptv_download_cancel)
+    }
+    Column(
+        modifier
+            .width(100.dp)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyUp) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.Menu -> { onDelete(); true }
+                    else -> false
+                }
+            }
+            .tvClick(focus) {
+                when (item.state) {
+                    VodDownloadState.DONE -> onPlay()
+                    VodDownloadState.RUNNING, VodDownloadState.QUEUED -> onPause()
+                    VodDownloadState.PAUSED, VodDownloadState.FAILED -> onResume()
+                    VodDownloadState.CANCELED -> onDelete()
+                }
+            },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Box(
+            Modifier
+                .width(100.dp)
+                .height(150.dp)
+                .border(if (focus.focused) 3.dp else 0.dp, if (focus.focused) EnigmaColors.Cyan else androidx.compose.ui.graphics.Color.Transparent, skinShape(12.dp)),
+        ) {
+            com.enigmacast.ui.home.PosterBox(film, Modifier.fillMaxSize())
+            if (item.state == VodDownloadState.RUNNING && item.totalBytes > 0L) {
+                val progress = (item.downloadedBytes.toFloat() / item.totalBytes.toFloat()).coerceIn(0f, 1f)
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(androidx.compose.ui.graphics.Color(0x66000000))) {
+                    Box(Modifier.fillMaxWidth(progress).height(4.dp).background(EnigmaColors.Cyan))
+                }
+            }
+        }
+        Text(item.title, color = if (focus.focused) EnigmaColors.Text else EnigmaColors.Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(listOf(stateLabel, VodDownloadSize.label(item)).filter { it.isNotBlank() }.joinToString(" · "), color = EnigmaColors.Subtle, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private object VodDownloadSize {
+    fun label(item: VodDownload): String {
+        val bytes = if (item.totalBytes > 0L) item.totalBytes else item.downloadedBytes
+        if (bytes <= 0L) return ""
+        if (bytes < 1024L * 1024L) return "${(bytes / 1024L).coerceAtLeast(1)} KB"
+        if (bytes < 1024L * 1024L * 1024L) return "${bytes / (1024L * 1024L)} MB"
+        return "${"%.1f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
+    }
+}
+

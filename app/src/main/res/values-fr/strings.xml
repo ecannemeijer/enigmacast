@@ -2009,4 +2009,21 @@
     <string name="fallback_epg_countries_count">%1$d sélectionné(s)</string>
     <string name="fallback_epg_countries_title">Pays supplémentaires du guide</string>
     <string name="fallback_epg_automatic">Automatique</string>
+    <string name="iptv_download">Télécharger</string>
+    <string name="iptv_download_season">Télécharger la saison</string>
+    <string name="iptv_download_cancel">Annuler le téléchargement</string>
+    <string name="iptv_download_pause">Pause</string>
+    <string name="iptv_download_resume">Reprendre</string>
+    <string name="iptv_downloads">Téléchargements</string>
+    <string name="iptv_download_queued">En attente</string>
+    <string name="iptv_download_running">Téléchargement</string>
+    <string name="iptv_download_paused">En pause</string>
+    <string name="iptv_download_failed">Échec du téléchargement</string>
+    <string name="iptv_download_done">Téléchargé</string>
+    <string name="iptv_download_no_space">Pas assez d'espace libre sur ce stockage</string>
+    <string name="iptv_download_delete_title">Supprimer le téléchargement ?</string>
+    <string name="iptv_download_delete_message">Retirer %1$s de ce téléviseur ? Le fichier téléchargé sera supprimé.</string>
+    <string name="iptv_download_channel">Téléchargements</string>
+    <string name="iptv_download_season_added">%1$d épisodes ajoutés aux Téléchargements</string>
+    <string name="iptv_download_already">Déjà téléchargé</string>
 </resources>

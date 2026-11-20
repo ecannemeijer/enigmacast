@@ -2005,4 +2005,21 @@
     <string name="fallback_epg_countries_count">%1$d ausgewählt</string>
     <string name="fallback_epg_countries_title">Weitere Guide-Länder</string>
     <string name="fallback_epg_automatic">Automatisch</string>
+    <string name="iptv_download">Herunterladen</string>
+    <string name="iptv_download_season">Staffel herunterladen</string>
+    <string name="iptv_download_cancel">Download abbrechen</string>
+    <string name="iptv_download_pause">Pause</string>
+    <string name="iptv_download_resume">Fortsetzen</string>
+    <string name="iptv_downloads">Downloads</string>
+    <string name="iptv_download_queued">Wartet</string>
+    <string name="iptv_download_running">Wird heruntergeladen</string>
+    <string name="iptv_download_paused">Pausiert</string>
+    <string name="iptv_download_failed">Download fehlgeschlagen</string>
+    <string name="iptv_download_done">Heruntergeladen</string>
+    <string name="iptv_download_no_space">Nicht genug freier Speicher auf diesem Datenträger</string>
+    <string name="iptv_download_delete_title">Download löschen?</string>
+    <string name="iptv_download_delete_message">%1$s von diesem TV entfernen? Die heruntergeladene Datei wird gelöscht.</string>
+    <string name="iptv_download_channel">Downloads</string>
+    <string name="iptv_download_season_added">%1$d Folgen zu Downloads hinzugefügt</string>
+    <string name="iptv_download_already">Bereits heruntergeladen</string>
 </resources>

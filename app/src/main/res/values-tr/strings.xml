@@ -2007,4 +2007,21 @@
     <string name="fallback_epg_countries_count">%1$d seçildi</string>
     <string name="fallback_epg_countries_title">Ek rehber ülkeleri</string>
     <string name="fallback_epg_automatic">Otomatik</string>
+    <string name="iptv_download">İndir</string>
+    <string name="iptv_download_season">Sezonu indir</string>
+    <string name="iptv_download_cancel">İndirmeyi iptal et</string>
+    <string name="iptv_download_pause">Duraklat</string>
+    <string name="iptv_download_resume">Sürdür</string>
+    <string name="iptv_downloads">İndirilenler</string>
+    <string name="iptv_download_queued">Bekliyor</string>
+    <string name="iptv_download_running">İndiriliyor</string>
+    <string name="iptv_download_paused">Duraklatıldı</string>
+    <string name="iptv_download_failed">İndirilemedi</string>
+    <string name="iptv_download_done">İndirildi</string>
+    <string name="iptv_download_no_space">Bu depolamada yeterli boş alan yok</string>
+    <string name="iptv_download_delete_title">İndirme silinsin mi?</string>
+    <string name="iptv_download_delete_message">%1$s bu TV'den kaldırılsın mı? İndirilen dosya silinir.</string>
+    <string name="iptv_download_channel">İndirilenler</string>
+    <string name="iptv_download_season_added">İndirilenler'e %1$d bölüm eklendi</string>
+    <string name="iptv_download_already">Zaten indirildi</string>
 </resources>
