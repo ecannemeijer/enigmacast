@@ -1,5 +1,7 @@
 package com.enigmacast
 
+import com.enigmacast.R
+
 import android.content.Intent
 import android.os.Bundle
 import android.content.res.Configuration
@@ -80,11 +82,15 @@ class SkinPreviewActivity : ComponentActivity() {
         val mode = intent.getStringExtra("mode").orEmpty().lowercase()
         val lang = intent.getStringExtra("lang")
         val flyout = intent.getStringExtra("flyout").orEmpty().lowercase()
-        val previewContext = if (lang.isNullOrBlank()) this else {
+        if (!lang.isNullOrBlank()) {
+            val locale = java.util.Locale.forLanguageTag(lang)
+            java.util.Locale.setDefault(locale)
             val config = Configuration(resources.configuration)
-            config.setLocale(java.util.Locale.forLanguageTag(lang))
-            createConfigurationContext(config)
+            config.setLocale(locale)
+            @Suppress("DEPRECATION")
+            resources.updateConfiguration(config, resources.displayMetrics)
         }
+        val previewContext = this
         ActiveSkin.apply(id)
         val now = System.currentTimeMillis() / 1000
         val start = now - 25 * 60
@@ -101,6 +107,8 @@ class SkinPreviewActivity : ComponentActivity() {
                     "epg" -> PliEpgPreview(now, events)
                     "infobar" -> InfobarOnlyPreview(id, events)
                     "chooser" -> ChooserPreview(id)
+                    "iptv-provider" -> IptvProviderPreview(before = false)
+                    "iptv-provider-before" -> IptvProviderPreview(before = true)
                     else -> DefaultPreview(id, events, start)
                 }
             }
@@ -404,6 +412,39 @@ class SkinPreviewActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    @Composable
+    private fun IptvProviderPreview(before: Boolean) {
+        val provider = com.enigmacast.data.xtream.IptvProvider(
+            id = "preview",
+            name = "Demo IPTV",
+            kind = com.enigmacast.domain.model.IptvPlaylistKind.XTREAM,
+            server = "http://xtream.example:8080",
+            username = "demo",
+            password = "secret",
+            enabled = true,
+        )
+        val accountLine = listOf(
+            "Active",
+            stringResource(R.string.iptv_account_days_left, 12, "1 Dec 2026"),
+            stringResource(R.string.iptv_account_connections, 1, 3),
+        ).joinToString("  ·  ")
+        Box(Modifier.fillMaxSize().background(Color(0xFF101218))) {
+            com.enigmacast.ui.xtream.IptvProviderEditorDialog(
+                provider = provider,
+                accountLine = accountLine,
+                accountWarn = false,
+                onSave = {},
+                onClose = {},
+                onToggleEnabled = {},
+                onMoveUp = {},
+                onMoveDown = {},
+                onReload = {},
+                onRequestDelete = {},
+                twoColumn = !before,
+            )
         }
     }
 
