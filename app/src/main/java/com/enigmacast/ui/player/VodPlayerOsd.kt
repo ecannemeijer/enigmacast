@@ -77,7 +77,12 @@ import com.enigmacast.domain.player.VodOsdKeys
 import com.enigmacast.playback.AudioSync
 import com.enigmacast.playback.SubtitleSync
 import com.enigmacast.playback.TrackMenu
+import com.enigmacast.ui.theme.ActiveSkin
+import com.enigmacast.ui.theme.FocusStyle
 import com.enigmacast.ui.theme.NavigationSoundsForWindow
+import com.enigmacast.ui.theme.osdOrnament
+import com.enigmacast.ui.theme.skinFocusEdge
+import com.enigmacast.ui.theme.skinShape
 import com.enigmacast.ui.theme.requestWhenReady
 import com.enigmacast.util.asString
 import kotlinx.coroutines.Job
@@ -169,24 +174,25 @@ private val SettingsSubmenus = setOf(VodMenu.SPEED, VodMenu.SUBTITLE_DELAY, VodM
 private val Scrim = Brush.verticalGradient(listOf(Color.Transparent, Color(0x99000000), Color(0xE0000000)))
 private val MenuBackground = Color(0xF2141418)
 
-/** Glass skins tint the Stremio-style OSD in their navy; the others keep the black scrim. */
+/** Bottom fade in the active skin's OSD fill, the same colours as the Live TV banner. */
 private fun vodScrim(): Brush {
-    val skin = com.enigmacast.ui.theme.ActiveSkin.current
-    if (skin.glass == null) return Scrim
-    val fill = skin.palette.osdFill
-    return Brush.verticalGradient(listOf(Color.Transparent, fill.copy(alpha = 0.6f), fill.copy(alpha = 0.88f)))
+    val skin = ActiveSkin.current
+    val start = skin.palette.osdFill
+    val end = skin.palette.osdFillEnd
+    return Brush.verticalGradient(listOf(Color.Transparent, start.copy(alpha = 0.58f), end.copy(alpha = 0.94f)))
 }
 
 private fun vodMenuBackground(): Color {
-    val skin = com.enigmacast.ui.theme.ActiveSkin.current
-    return if (skin.glass == null) MenuBackground else skin.palette.osdFill.copy(alpha = 0.86f)
+    val skin = ActiveSkin.current
+    val alpha = if (skin.glass == null) 0.94f else 0.86f
+    return skin.palette.osdFill.copy(alpha = alpha)
 }
 
 /**
  * The VOD OSD after the Stremio Android TV player: title, Play/Pause · Rewind (· Next), a thin
  * seek bar with a round thumb, and a row of small outline icons (subtitles, audio, video,
- * settings, sources) with elapsed / total on the right. White on a dark gradient; the focused
- * control is a filled white circle.
+ * settings, sources) with elapsed / total on the right. Colours, type and focus follow the
+ * active skin, the same tokens as the Live TV OSD.
  */
 @Composable
 fun VodPlayerOsd(
@@ -235,12 +241,17 @@ fun VodPlayerOsd(
         modifier
             .fillMaxWidth()
             .background(vodScrim())
+            .osdOrnament(ActiveSkin.current.osd, ActiveSkin.current.palette)
             .padding(start = 56.dp, end = 56.dp, top = 64.dp, bottom = 28.dp),
     ) {
         if (!model.titleOnTop) {
+            val skin = ActiveSkin.current
             Text(
                 model.title,
-                color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Medium,
+                color = skin.palette.text,
+                fontSize = 30.sp,
+                fontWeight = skin.strongWeight,
+                fontFamily = skin.fontFamily,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(18.dp))
@@ -339,7 +350,10 @@ fun VodPlayerOsd(
             Spacer(Modifier.weight(1f))
             Text(
                 VodOsdKeys.times(model.player.positionMs, model.player.durationMs),
-                color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                color = ActiveSkin.current.palette.text,
+                fontSize = 15.sp,
+                fontWeight = ActiveSkin.current.strongWeight,
+                fontFamily = ActiveSkin.current.fontFamily,
             )
         }
     }
@@ -358,10 +372,22 @@ private fun OsdButton(
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val pressed = remember { booleanArrayOf(false) }
+    val skin = ActiveSkin.current
+    val shape = skinShape(size / 2)
+    val focusFill = when {
+        !focused -> Color.Transparent
+        skin.focusStyle == FocusStyle.OUTLINE -> skin.palette.focus.copy(alpha = 0.22f)
+        else -> skin.palette.focus
+    }
+    val brush = skin.palette.focusBrush?.takeIf { focused && skin.focusStyle != FocusStyle.OUTLINE }
     Box(
         modifier
             .size(size)
-            .background(if (focused) Color.White else Color.Transparent, CircleShape)
+            .then(
+                if (brush != null) Modifier.background(Brush.verticalGradient(brush), shape)
+                else Modifier.background(focusFill, shape)
+            )
+            .skinFocusEdge(focused, size / 2)
             .onKeyEvent { e ->
                 if (!isOk(e.key)) return@onKeyEvent false
                 when (e.type) {
@@ -373,7 +399,7 @@ private fun OsdButton(
             .focusable(interactionSource = interaction),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = if (focused) Color.Black else Color.White, modifier = Modifier.size(iconSize))
+        Icon(icon, contentDescription = label, tint = if (focused) skin.palette.onFocus else skin.palette.text, modifier = Modifier.size(iconSize))
     }
 }
 
@@ -455,27 +481,31 @@ private fun SeekBar(
         val played = maxWidth * fraction
         // Track, then how far the file is available ahead (lighter), then the played part.
         val buffered = maxWidth * VodOsdKeys.bufferedFraction(positionMs, bufferedMs, durationMs)
-        Box(Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(2.dp)))
-        if (buffered > 0.dp) Box(Modifier.width(buffered).height(4.dp).background(Color.White.copy(alpha = 0.55f), RoundedCornerShape(2.dp)))
-        Box(Modifier.width(played).height(4.dp).background(Color.White, RoundedCornerShape(2.dp)))
+        val palette = ActiveSkin.current.palette
+        val trackShape = skinShape(2.dp)
+        Box(Modifier.fillMaxWidth().height(4.dp).background(palette.text.copy(alpha = 0.25f), trackShape))
+        if (buffered > 0.dp) Box(Modifier.width(buffered).height(4.dp).background(palette.text.copy(alpha = 0.5f), trackShape))
+        Box(Modifier.width(played).height(4.dp).background(palette.accent, trackShape))
         val thumb = if (focused) 18.dp else 12.dp
+        val thumbShape = skinShape(thumb / 2)
         Box(
             Modifier
                 .offset(x = (played - thumb / 2).coerceIn(0.dp, maxWidth - thumb))
                 .size(thumb)
-                .then(if (focused) Modifier.border(4.dp, Color.White.copy(alpha = 0.35f), CircleShape) else Modifier)
+                .then(if (focused) Modifier.border(4.dp, palette.focus.copy(alpha = 0.45f), thumbShape) else Modifier)
                 .padding(if (focused) 2.dp else 0.dp)
-                .background(Color.White, CircleShape),
+                .background(if (focused) palette.focus else palette.accent, thumbShape),
         )
         if (scrubbing) {
             // Seek preview: the time the file will play from.
             val label = VodOsdKeys.clock(shown)
             Text(
                 label,
-                color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                color = palette.onFocus, fontSize = 13.sp, fontWeight = ActiveSkin.current.strongWeight,
+                fontFamily = ActiveSkin.current.fontFamily,
                 modifier = Modifier
                     .offset(x = (played - 32.dp).coerceIn(0.dp, maxWidth - 64.dp), y = (-26).dp)
-                    .background(Color.White, RoundedCornerShape(6.dp))
+                    .background(palette.focus, skinShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             )
         }
@@ -577,16 +607,19 @@ private fun VodMenuPopup(
     }
     Popup(popupPositionProvider = anchor, onDismissRequest = onClose, properties = PopupProperties(focusable = true)) {
         NavigationSoundsForWindow()
+        val skin = ActiveSkin.current
+        val menuShape = skinShape(14.dp)
         Column(
             Modifier
                 .widthIn(min = 240.dp, max = if (menu == VodMenu.SUBTITLES) 560.dp else 380.dp)
-                .background(vodMenuBackground(), RoundedCornerShape(14.dp))
-                .glassSheen(RoundedCornerShape(14.dp))
+                .background(vodMenuBackground(), menuShape)
+                .border(1.dp, skin.palette.osdEdge, menuShape)
+                .glassSheen(menuShape)
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(title, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 6.dp))
-            info.forEach { Text(it, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)) }
+            Text(title, color = skin.palette.muted, fontSize = 13.sp, fontFamily = skin.fontFamily, fontWeight = skin.strongWeight, modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 6.dp))
+            info.forEach { Text(it, color = skin.palette.text, fontSize = 13.sp, fontFamily = skin.fontFamily, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)) }
             if (items.isEmpty()) {
                 // Something to hold the focus, so OK and Back close the menu.
                 val okFocus = remember { FocusRequester() }
@@ -615,6 +648,14 @@ private fun MenuRow(item: MenuItem, focus: FocusRequester?, first: Boolean, last
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val pressed = remember { booleanArrayOf(false) }
+    val skin = ActiveSkin.current
+    val shape = skinShape(50.dp)
+    val brush = skin.palette.focusBrush?.takeIf { focused && skin.focusStyle != FocusStyle.OUTLINE }
+    val fill = when {
+        !focused -> Color.Transparent
+        skin.focusStyle == FocusStyle.OUTLINE -> skin.palette.focus.copy(alpha = 0.22f)
+        else -> skin.palette.focus
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -624,7 +665,8 @@ private fun MenuRow(item: MenuItem, focus: FocusRequester?, first: Boolean, last
                 if (first) up = FocusRequester.Cancel
                 if (last) down = FocusRequester.Cancel
             }
-            .background(if (focused) Color.White else Color.Transparent, RoundedCornerShape(50))
+            .then(if (brush != null) Modifier.background(Brush.verticalGradient(brush), shape) else Modifier.background(fill, shape))
+            .skinFocusEdge(focused, 50.dp)
             .onKeyEvent { e ->
                 if (!isOk(e.key)) return@onKeyEvent false
                 when (e.type) {
@@ -637,9 +679,9 @@ private fun MenuRow(item: MenuItem, focus: FocusRequester?, first: Boolean, last
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val color = if (focused) Color.Black else Color.White
-        Text(if (item.selected) "✓" else "", color = color, fontSize = 14.sp, modifier = Modifier.width(22.dp))
-        Text(item.label, color = color, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        val color = if (focused) skin.palette.onFocus else skin.palette.text
+        Text(if (item.selected) "✓" else "", color = color, fontSize = 14.sp, fontFamily = skin.fontFamily, modifier = Modifier.width(22.dp))
+        Text(item.label, color = color, fontSize = 15.sp, fontFamily = skin.fontFamily, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -27,14 +27,25 @@ import com.enigmacast.ui.player.VodOsdActions
 import com.enigmacast.ui.player.VodOsdController
 import com.enigmacast.ui.player.VodOsdModel
 import com.enigmacast.ui.player.VodPlayerOsd
+import com.enigmacast.domain.model.OsdSkinId
+import com.enigmacast.ui.theme.ActiveSkin
 import com.enigmacast.ui.theme.EnigmaCastTheme
+import android.content.Intent
 import com.enigmacast.util.UiText
 import kotlinx.coroutines.delay
 
 /** Debug-only: the VOD OSD over a sample frame, for screenshots (am start -n com.enigmacast/.OsdPreviewActivity). */
 class OsdPreviewActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recreate()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val id = runCatching { OsdSkinId.valueOf(intent.getStringExtra("skin").orEmpty()) }.getOrDefault(OsdSkinId.STANDARD)
+        ActiveSkin.apply(id)
         setContent {
             EnigmaCastTheme {
                 val osd = remember { VodOsdController() }
