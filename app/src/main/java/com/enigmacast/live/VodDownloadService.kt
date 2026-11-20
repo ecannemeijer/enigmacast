@@ -40,7 +40,13 @@ class VodDownloadService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        ensureForeground()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        ensureForeground()
         when (intent?.action) {
             ACTION_PAUSE -> intent.getStringExtra(EXTRA_ID)?.let { id ->
                 paused.set(true)
@@ -91,6 +97,7 @@ class VodDownloadService : Service() {
             streamUserAgent = "",
             streamHeaders = emptyMap(),
         )
+        var lastProgressAt = 0L
         val result: VodDownloadResult = downloader.download(
             url = item.url,
             destination = dest,
@@ -98,6 +105,9 @@ class VodDownloadService : Service() {
             cancel = { canceled.get() && currentId.get() == item.id },
             paused = { paused.get() && currentId.get() == item.id },
             onProgress = { downloaded, total ->
+                val now = System.currentTimeMillis()
+                if (now - lastProgressAt < 500L) return@download
+                lastProgressAt = now
                 scope.launch { store.setState(item.id, VodDownloadState.RUNNING, downloadedBytes = downloaded, totalBytes = total) }
                 notify(item.copy(state = VodDownloadState.RUNNING, downloadedBytes = downloaded, totalBytes = total))
             },
@@ -114,6 +124,25 @@ class VodDownloadService : Service() {
             else -> store.setState(item.id, VodDownloadState.FAILED, result.error, result.downloadedBytes, result.totalBytes)
         }
         currentId.set(null)
+    }
+
+    private fun ensureForeground(title: String = getString(R.string.iptv_downloads), text: String = getString(R.string.iptv_download_queued)) {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (manager.getNotificationChannel(CHANNEL) == null) {
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.iptv_download_channel), NotificationManager.IMPORTANCE_LOW))
+        }
+        val notification = Notification.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .build()
+        try {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } catch (_: Throwable) {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun notify(item: VodDownload) {

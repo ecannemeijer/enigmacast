@@ -2020,8 +2020,8 @@
     <string name="iptv_download_done">İndirildi</string>
     <string name="iptv_download_no_space">Bu depolamada yeterli boş alan yok</string>
     <string name="iptv_download_delete_title">İndirme silinsin mi?</string>
-    <string name="iptv_download_delete_message">%1$s bu TV'den kaldırılsın mı? İndirilen dosya silinir.</string>
+    <string name="iptv_download_delete_message">%1$s bu TV\'den kaldırılsın mı? İndirilen dosya silinir.</string>
     <string name="iptv_download_channel">İndirilenler</string>
-    <string name="iptv_download_season_added">İndirilenler'e %1$d bölüm eklendi</string>
+    <string name="iptv_download_season_added">İndirilenler\'e %1$d bölüm eklendi</string>
     <string name="iptv_download_already">Zaten indirildi</string>
 </resources>

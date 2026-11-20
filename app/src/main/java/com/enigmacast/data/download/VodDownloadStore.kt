@@ -134,6 +134,6 @@ class VodDownloadStore @Inject constructor(
     fun hasRoom(item: VodDownload): Boolean {
         val file = fileFor(item)
         file.parentFile?.mkdirs()
-        return VodDownloadSpace.hasRoom(file.usableSpace, item.totalBytes, item.downloadedBytes)
+        return VodDownloadSpace.hasRoom(VodDownloadSpace.freeBytes(file), item.totalBytes, item.downloadedBytes)
     }
 }

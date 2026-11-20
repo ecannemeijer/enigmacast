@@ -261,7 +261,7 @@ fun MyItemsPanel(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             )
         } else {
-            val focusOn = recordingEntry ?: all.first().id
+            val focusOn = recordingEntry ?: all.firstOrNull()?.id
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),

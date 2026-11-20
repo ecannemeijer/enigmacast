@@ -968,8 +968,8 @@ class XtreamViewModel @Inject constructor(
     }
 
     fun playOffline(item: com.enigmacast.domain.download.VodDownload) {
-        val account = providerAccounts.values.firstOrNull { it.key == item.source } ?: account ?: return
         val url = downloads.fileUri(item) ?: return
+        val account = providerAccounts.values.firstOrNull { it.key == item.source } ?: account ?: M3U_ACCOUNT
         val vodItem = XtreamItem(
             id = item.streamId,
             name = item.title,

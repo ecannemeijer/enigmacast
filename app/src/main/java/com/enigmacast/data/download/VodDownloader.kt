@@ -57,6 +57,9 @@ class VodDownloader(
                 return VodDownloadResult(false, already, 0L, "HTTP ${http.code}", retryable = http.code in 500..599 || http.code == 429)
             }
             val body = http.body ?: return VodDownloadResult(false, already, 0L, "empty")
+            if (isPlaylist(http.header("Content-Type"), url)) {
+                return VodDownloadResult(false, already, 0L, "not_a_file")
+            }
             val fromRange = http.code == 206
             val contentLength = body.contentLength()
             val total = when {
@@ -64,7 +67,7 @@ class VodDownloader(
                 contentLength >= 0L -> contentLength
                 else -> 0L
             }
-            if (!VodDownloadSpace.hasRoom(destination.usableSpace, total, if (fromRange) already else 0L)) {
+            if (!VodDownloadSpace.hasRoom(VodDownloadSpace.freeBytes(destination), total, if (fromRange) already else 0L)) {
                 return VodDownloadResult(false, already, total, "no_space", noSpace = true)
             }
             if (!fromRange && already > 0L) {
@@ -108,6 +111,13 @@ class VodDownloader(
             if (response.code == 458) return true
             val text = response.header("X-Error").orEmpty() + " " + response.message
             return text.contains("max connection", ignoreCase = true)
+        }
+
+        fun isPlaylist(contentType: String?, url: String): Boolean {
+            val mime = contentType.orEmpty().lowercase()
+            if ("mpegurl" in mime || "dash+xml" in mime) return true
+            val path = url.substringBefore('?').lowercase()
+            return path.endsWith(".m3u8") || path.endsWith(".mpd")
         }
     }
 }

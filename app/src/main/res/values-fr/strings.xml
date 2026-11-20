@@ -2020,7 +2020,7 @@
     <string name="iptv_download_paused">En pause</string>
     <string name="iptv_download_failed">Échec du téléchargement</string>
     <string name="iptv_download_done">Téléchargé</string>
-    <string name="iptv_download_no_space">Pas assez d'espace libre sur ce stockage</string>
+    <string name="iptv_download_no_space">Pas assez d\'espace libre sur ce stockage</string>
     <string name="iptv_download_delete_title">Supprimer le téléchargement ?</string>
     <string name="iptv_download_delete_message">Retirer %1$s de ce téléviseur ? Le fichier téléchargé sera supprimé.</string>
     <string name="iptv_download_channel">Téléchargements</string>

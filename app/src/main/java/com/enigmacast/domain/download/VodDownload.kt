@@ -53,4 +53,10 @@ object VodDownloadSpace {
 
     fun hasRoom(freeBytes: Long, totalBytes: Long, downloadedBytes: Long): Boolean =
         freeBytes >= neededBytes(totalBytes, downloadedBytes)
+
+    /** Free space of the volume [file] lives on, even when the file itself does not exist yet. */
+    fun freeBytes(file: java.io.File): Long {
+        val target = generateSequence(file) { it.parentFile }.firstOrNull { it.exists() } ?: file
+        return target.usableSpace
+    }
 }
