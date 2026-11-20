@@ -22,10 +22,12 @@ class AppLanguageTest {
     }
 
     @Test
-    fun germanItalianAndFrenchTagsSelectTheirLanguage() {
+    fun germanItalianFrenchTurkishAndPolishTagsSelectTheirLanguage() {
         assertEquals(AppLanguage.GERMAN, AppLanguage.fromTag("de-AT"))
         assertEquals(AppLanguage.ITALIAN, AppLanguage.fromTag("it"))
         assertEquals(AppLanguage.FRENCH, AppLanguage.fromTag("fr_BE"))
-        assertEquals(listOf("en", "nl", "de", "it", "fr"), AppLanguage.entries.map { it.tag })
+        assertEquals(AppLanguage.TURKISH, AppLanguage.fromTag("tr"))
+        assertEquals(AppLanguage.POLISH, AppLanguage.fromTag("pl-PL"))
+        assertEquals(listOf("en", "nl", "de", "it", "fr", "tr", "pl"), AppLanguage.entries.map { it.tag })
     }
 }
