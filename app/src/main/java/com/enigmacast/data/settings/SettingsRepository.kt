@@ -90,7 +90,7 @@ class SettingsRepository @Inject constructor(
     }
 
     private fun decode(raw: String?): AppSettings {
-        val parsed = raw?.let { runCatching { SkinDefaults.decodeSettings(openWebifJson, AppSettings.serializer(), it) }.getOrDefault(AppSettings()) } ?: AppSettings()
+        val parsed = SettingsBootstrap.parse(raw)
         return ChannelMemory.migrate(SecretFields.fill(parsed, secrets::read))
     }
 }

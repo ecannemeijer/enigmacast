@@ -328,10 +328,15 @@ data class AppSettings(
     val navigationSounds: Boolean = true,
     /**
      * How much motion the TV interface uses. Missing in older settings, so Premium applies.
-     * Performance keeps the same layout with shorter motion and no glow.
+     * A first install uses Performance instead ([firstInstall]). Performance keeps the same
+     * layout with shorter motion and no glow.
      */
     val motionQuality: MotionQuality = MotionQuality.PREMIUM,
-    /** Fast mode: the menu, focus and scrolling jump instead of animating. Auto: on for low-end devices. */
+    /**
+     * Fast mode: the menu, focus and scrolling jump instead of animating. Auto: on for low-end
+     * devices. Missing in older settings, so Auto applies. A first install uses On ([firstInstall]).
+     * This is not playback "Snel starten" ([PlaybackSettings.fastStart] / FLAG_DETECT_ACCESS_UNITS).
+     */
     val fastMode: FastMode = FastMode.AUTO,
     /** Settings › IPTV: where the IPTV page gets its lists. Logins of a playlist are in the SecretStore. */
     val iptvSource: IptvSourceMode = IptvSourceMode.XSTREAMITY,
@@ -367,6 +372,18 @@ data class AppSettings(
 ) {
     fun activeReceiver(): ReceiverConfig? {
         return receivers.firstOrNull { it.id == activeReceiverId } ?: receivers.firstOrNull()
+    }
+
+    companion object {
+        /**
+         * Defaults written when this TV has never stored settings. Existing files keep the
+         * field defaults (Beweging = Premium, Snelle modus = Automatisch) even when those
+         * keys are missing from the JSON.
+         */
+        fun firstInstall(): AppSettings = AppSettings(
+            motionQuality = MotionQuality.PERFORMANCE,
+            fastMode = FastMode.ON,
+        )
     }
 }
 
