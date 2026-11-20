@@ -293,6 +293,7 @@ class SkinPreviewActivity : ComponentActivity() {
     }
 
 
+    /** Debug menu chrome. Locks stay off: the app is freeware, and PremiumGate already unlocks every item in Free mode. */
     @Composable
     private fun MenuPreview(flyout: String) {
         val homeFocus = remember { FocusRequester() }
@@ -330,9 +331,9 @@ class SkinPreviewActivity : ComponentActivity() {
                     DashFlyout(
                         entries = listOf(
                             DashFlyoutEntry("live", stringResource(R.string.nav_live), false),
-                            DashFlyoutEntry("guide", stringResource(R.string.nav_guide), true),
-                            DashFlyoutEntry("movies", stringResource(R.string.nav_movies), true),
-                            DashFlyoutEntry("series", stringResource(R.string.nav_series), true),
+                            DashFlyoutEntry("guide", stringResource(R.string.nav_guide), false),
+                            DashFlyoutEntry("movies", stringResource(R.string.nav_movies), false),
+                            DashFlyoutEntry("series", stringResource(R.string.nav_series), false),
                             DashFlyoutEntry("radio", stringResource(R.string.nav_radio), false),
                         ),
                         active = "live",
@@ -348,16 +349,15 @@ class SkinPreviewActivity : ComponentActivity() {
                     label = stringResource(R.string.nav_iptv),
                     selected = showIptv,
                     onClick = {},
-                    locked = true,
                     modifier = Modifier.focusRequester(iptvFocus),
                 )
                 if (showIptv) {
                     DashFlyout(
                         entries = listOf(
-                            DashFlyoutEntry("live", stringResource(R.string.xtream_live), true),
-                            DashFlyoutEntry("guide", stringResource(R.string.nav_guide), true),
-                            DashFlyoutEntry("movies", stringResource(R.string.xtream_movies), true),
-                            DashFlyoutEntry("series", stringResource(R.string.xtream_series), true),
+                            DashFlyoutEntry("live", stringResource(R.string.xtream_live), false),
+                            DashFlyoutEntry("guide", stringResource(R.string.nav_guide), false),
+                            DashFlyoutEntry("movies", stringResource(R.string.xtream_movies), false),
+                            DashFlyoutEntry("series", stringResource(R.string.xtream_series), false),
                         ),
                         active = "live",
                         entryFocus = flyoutFocus,
@@ -367,10 +367,10 @@ class SkinPreviewActivity : ComponentActivity() {
                         onChoose = { _ -> },
                     )
                 }
-                NavItem(icon = NavIconStyle.Sport, label = stringResource(R.string.nav_sport), selected = false, onClick = {}, locked = true)
+                NavItem(icon = NavIconStyle.Sport, label = stringResource(R.string.nav_sport), selected = false, onClick = {})
                 NavItem(icon = NavIconStyle.Search, label = stringResource(R.string.nav_search), selected = false, onClick = {})
                 NavItem(icon = NavIconStyle.MyItems, label = stringResource(R.string.nav_my_items), selected = false, onClick = {}, iconMotion = NavIconMotion.BOUNCE)
-                NavItem(icon = NavIconStyle.Torrent, label = stringResource(R.string.nav_torrent), selected = false, onClick = {}, locked = true)
+                NavItem(icon = NavIconStyle.Torrent, label = stringResource(R.string.nav_torrent), selected = false, onClick = {})
                 Spacer(Modifier.weight(1f))
                 NavItem(icon = NavIconStyle.Settings, label = stringResource(R.string.nav_settings), selected = false, onClick = {}, iconMotion = NavIconMotion.PULSE)
                 Text(
