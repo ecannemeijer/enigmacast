@@ -47,6 +47,17 @@ import com.enigmacast.ui.animation.travelTween
 import com.enigmacast.ui.theme.EnigmaColors
 import kotlin.math.roundToInt
 
+/**
+ * Width of the left rail. [Collapsed] fits the icons; [Expanded] is 15 % narrower than the
+ * original 200 dp, still wide enough for the longest label in EN/NL/DE/IT/FR/TR/PL at 13 sp
+ * (Polish "Moje przedmioty") and the IPTV flyout at 12 sp with a lock (Polish "Telewizja na żywo")
+ * in every bundled skin font, plus the EnigmaCast wordmark.
+ */
+object DrawerWidth {
+    val Collapsed = 72.dp
+    val Expanded = 170.dp
+}
+
 private val CursorShape get() = skinShape(8.dp)
 
 private fun drawerShape(endRadius: androidx.compose.ui.unit.Dp) =
@@ -83,7 +94,7 @@ fun EnigmaNavigationDrawer(
     // Animated values are read in layout/placement only: the menu sliding open or the highlight
     // gliding no longer recomposes the menu (and its items) on every frame.
     val width = animateDpAsState(
-        targetValue = if (expanded) 200.dp else 72.dp,
+        targetValue = if (expanded) DrawerWidth.Expanded else DrawerWidth.Collapsed,
         animationSpec = if (spec.animate) tween(spec.sidebarMs) else snap(),
         label = "drawerWidth",
     )

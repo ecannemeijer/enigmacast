@@ -49,7 +49,7 @@ object SkinNav {
             edgeWidth = 1.dp,
             endRadius = 18.dp * skin.cornerScale,
             itemSpacing = 4.dp,
-            horizontalPadding = 8.dp,
+            horizontalPadding = 6.dp,
             verticalPadding = 12.dp,
             cursorFill = p.focusBrush ?: listOf(p.focus),
             cursorEdge = when (skin.focusStyle) {

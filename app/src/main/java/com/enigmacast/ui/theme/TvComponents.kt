@@ -142,7 +142,7 @@ fun NavItem(
             if (it.isFocused) onFocus()
             else if (cursor?.owner == token) cursor.visible = false
         },
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 7.dp),
         onPlaced = { coords ->
             val rail = cursor ?: return@CompactListRow
             rail.owner = token
@@ -212,8 +212,8 @@ fun NavItem(
                 },
         )
         if (labelAlpha > 0.02f) {
-            Spacer(Modifier.width(8.dp))
-            Column {
+            Spacer(Modifier.width(6.dp))
+            Column(Modifier.weight(1f)) {
             Text(
                 label,
                 color = LocalContentColor.current,

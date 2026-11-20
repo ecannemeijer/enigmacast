@@ -350,12 +350,24 @@ fun ProfileChip(model: ProfileViewModel, expanded: Boolean, modifier: Modifier =
     val p = state.active
     val focus = rememberTvFocus()
     Row(
-        modifier.padding(start = 6.dp, bottom = 8.dp).then(focusLook(focus.focused, skinShape(10.dp))).tvClick(focus) { model.openMenu() }.padding(4.dp),
+        modifier
+            .fillMaxWidth()
+            .padding(start = 6.dp, bottom = 8.dp)
+            .then(focusLook(focus.focused, skinShape(10.dp)))
+            .tvClick(focus) { model.openMenu() }
+            .padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ProfileAvatar(p, 30.dp)
-        if (expanded) Text(p.name, color = EnigmaColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 120.dp))
+        if (expanded) Text(
+            p.name,
+            color = EnigmaColors.Text,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

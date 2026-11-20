@@ -1,6 +1,24 @@
-﻿package com.enigmacast
+package com.enigmacast
 
+import android.content.Intent
 import android.os.Bundle
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.enigmacast.ui.components.EnigmaCastLogo
+import com.enigmacast.ui.components.EnigmaNavigationDrawer
+import com.enigmacast.ui.dashboard.DashFlyout
+import com.enigmacast.ui.dashboard.DashFlyoutEntry
+import com.enigmacast.ui.theme.NavIconMotion
+import com.enigmacast.ui.theme.NavIconStyle
+import com.enigmacast.ui.theme.NavItem
+import com.enigmacast.ui.theme.skinCanvas
+import com.enigmacast.ui.theme.skinPane
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -50,10 +68,23 @@ import com.enigmacast.util.UiText
 
 /** Debug-only screen with sample data: a settings card and the channel banner in one skin. */
 class SkinPreviewActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        recreate()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val id = runCatching { OsdSkinId.valueOf(intent.getStringExtra("skin").orEmpty()) }.getOrDefault(OsdSkinId.STANDARD)
         val mode = intent.getStringExtra("mode").orEmpty().lowercase()
+        val lang = intent.getStringExtra("lang")
+        val flyout = intent.getStringExtra("flyout").orEmpty().lowercase()
+        val previewContext = if (lang.isNullOrBlank()) this else {
+            val config = Configuration(resources.configuration)
+            config.setLocale(java.util.Locale.forLanguageTag(lang))
+            createConfigurationContext(config)
+        }
         ActiveSkin.apply(id)
         val now = System.currentTimeMillis() / 1000
         val start = now - 25 * 60
@@ -62,14 +93,17 @@ class SkinPreviewActivity : ComponentActivity() {
             EpgEvent("Studio Sport Eredivisie", "", "", label(start + 45 * 60), label(start + 105 * 60), start + 45 * 60, 60 * 60, false),
         )
         setContent {
+            CompositionLocalProvider(LocalContext provides previewContext) {
             EnigmaCastTheme {
                 when (mode) {
+                    "menu" -> MenuPreview(flyout)
                     "list" -> PliListPreview(now)
                     "epg" -> PliEpgPreview(now, events)
                     "infobar" -> InfobarOnlyPreview(id, events)
                     "chooser" -> ChooserPreview(id)
                     else -> DefaultPreview(id, events, start)
                 }
+            }
             }
         }
     }
@@ -253,6 +287,121 @@ class SkinPreviewActivity : ComponentActivity() {
             Column(Modifier.padding(48.dp).width(980.dp).background(EnigmaColors.Canvas).padding(16.dp)) {
                 SettingsCard(getString(R.string.nav_osd_skins)) {
                     SkinChooser(id, {})
+                }
+            }
+        }
+    }
+
+
+    @Composable
+    private fun MenuPreview(flyout: String) {
+        val homeFocus = remember { FocusRequester() }
+        val tvFocus = remember { FocusRequester() }
+        val iptvFocus = remember { FocusRequester() }
+        val flyoutFocus = remember { FocusRequester() }
+        val showTv = flyout == "tv"
+        val showIptv = flyout == "iptv"
+        LaunchedEffect(flyout) {
+            when {
+                showTv || showIptv -> flyoutFocus.requestFocus()
+                else -> homeFocus.requestFocus()
+            }
+        }
+        Row(Modifier.fillMaxSize().skinCanvas()) {
+            EnigmaNavigationDrawer(expanded = true) {
+                EnigmaCastLogo(expanded = true)
+                NavItem(
+                    icon = NavIconStyle.Home,
+                    label = stringResource(R.string.nav_home),
+                    selected = !showTv && !showIptv,
+                    onClick = {},
+                    modifier = Modifier.focusRequester(homeFocus),
+                    iconMotion = NavIconMotion.PULSE,
+                )
+                NavItem(
+                    icon = NavIconStyle.Enigma,
+                    label = stringResource(R.string.nav_tv),
+                    selected = showTv,
+                    onClick = {},
+                    modifier = Modifier.focusRequester(tvFocus),
+                    iconMotion = NavIconMotion.WOBBLE,
+                )
+                if (showTv) {
+                    DashFlyout(
+                        entries = listOf(
+                            DashFlyoutEntry("live", stringResource(R.string.nav_live), false),
+                            DashFlyoutEntry("guide", stringResource(R.string.nav_guide), true),
+                            DashFlyoutEntry("movies", stringResource(R.string.nav_movies), true),
+                            DashFlyoutEntry("series", stringResource(R.string.nav_series), true),
+                            DashFlyoutEntry("radio", stringResource(R.string.nav_radio), false),
+                        ),
+                        active = "live",
+                        entryFocus = flyoutFocus,
+                        upTo = tvFocus,
+                        downTo = iptvFocus,
+                        onClose = {},
+                        onChoose = { _ -> },
+                    )
+                }
+                NavItem(
+                    icon = NavIconStyle.Iptv,
+                    label = stringResource(R.string.nav_iptv),
+                    selected = showIptv,
+                    onClick = {},
+                    locked = true,
+                    modifier = Modifier.focusRequester(iptvFocus),
+                )
+                if (showIptv) {
+                    DashFlyout(
+                        entries = listOf(
+                            DashFlyoutEntry("live", stringResource(R.string.xtream_live), true),
+                            DashFlyoutEntry("guide", stringResource(R.string.nav_guide), true),
+                            DashFlyoutEntry("movies", stringResource(R.string.xtream_movies), true),
+                            DashFlyoutEntry("series", stringResource(R.string.xtream_series), true),
+                        ),
+                        active = "live",
+                        entryFocus = flyoutFocus,
+                        upTo = iptvFocus,
+                        downTo = FocusRequester.Cancel,
+                        onClose = {},
+                        onChoose = { _ -> },
+                    )
+                }
+                NavItem(icon = NavIconStyle.Sport, label = stringResource(R.string.nav_sport), selected = false, onClick = {}, locked = true)
+                NavItem(icon = NavIconStyle.Search, label = stringResource(R.string.nav_search), selected = false, onClick = {})
+                NavItem(icon = NavIconStyle.MyItems, label = stringResource(R.string.nav_my_items), selected = false, onClick = {}, iconMotion = NavIconMotion.BOUNCE)
+                NavItem(icon = NavIconStyle.Torrent, label = stringResource(R.string.nav_torrent), selected = false, onClick = {}, locked = true)
+                Spacer(Modifier.weight(1f))
+                NavItem(icon = NavIconStyle.Settings, label = stringResource(R.string.nav_settings), selected = false, onClick = {}, iconMotion = NavIconMotion.PULSE)
+                Text(
+                    "1.0.4  ·  build 142",
+                    color = EnigmaColors.Subtle,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                )
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .skinPane()
+                    .padding(start = 12.dp, top = 28.dp, end = 28.dp, bottom = 24.dp),
+            ) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(com.enigmacast.ui.theme.ActiveSkin.current.id.name, color = EnigmaColors.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        repeat(4) {
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .height(140.dp)
+                                    .background(EnigmaColors.Card, RoundedCornerShape(10.dp))
+                                    .border(1.dp, EnigmaColors.CardBorder, RoundedCornerShape(10.dp)),
+                            )
+                        }
+                    }
                 }
             }
         }

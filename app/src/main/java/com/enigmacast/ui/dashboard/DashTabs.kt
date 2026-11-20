@@ -114,7 +114,7 @@ internal data class DashFlyoutEntry<T>(val id: T, val label: String, val locked:
 
 /**
  * Submenu rows inside the drawer, directly under TV or IPTV.
- * The label starts where that item's text starts. Up/Down move, OK opens, Left closes.
+ * The label lines up just under the parent item text. Up/Down move, OK opens, Left closes.
  * Focus starts on the first entry.
  */
 @Composable
@@ -137,7 +137,7 @@ internal fun <T> DashFlyout(
             onClick = { onChoose(entry) },
             selected = current && cursor == null,
             drawFocus = cursor == null,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 34.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 28.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
             onPlaced = { coords ->
                 val rail = cursor ?: return@CompactListRow
                 rail.owner = token
